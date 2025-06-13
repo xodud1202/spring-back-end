@@ -38,3 +38,10 @@ dependencies {
 tasks.named('test') {
     useJUnitPlatform()
 }
+
+bootJar {
+    archiveBaseName.set('spring-back-end')
+    archiveVersion.set('')       // 버전 정보 제거
+    archiveClassifier.set('')    // 분류자(plain 등) 제거
+    archiveFileName.set('spring-back-end.jar')
+}
