@@ -1,11 +1,13 @@
 package com.xodud1202.springbackend.config;
 
+import com.xodud1202.springbackend.security.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
 public class SecurityConfig {
@@ -20,7 +22,8 @@ public class SecurityConfig {
             // 그 외 모든 요청은 인증 필요
             .anyRequest().authenticated()
           )
-          .formLogin(Customizer.withDefaults());
+          .addFilterBefore(new JwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class)
+          .httpBasic(Customizer.withDefaults());
 
         return http.build();
     }
