@@ -16,7 +16,7 @@ public class SecurityConfig {
           .csrf(AbstractHttpConfigurer::disable)
           .authorizeHttpRequests(auth -> auth
             // /hello, /api, /api/** 전체를 인증 없이 허용
-            .requestMatchers("/hello", "/api", "/api/**").permitAll()
+            .requestMatchers("/hello", "/api", "/api/**", "/backoffice/login").permitAll()
             // 그 외 모든 요청은 인증 필요
             .anyRequest().authenticated()
           )
