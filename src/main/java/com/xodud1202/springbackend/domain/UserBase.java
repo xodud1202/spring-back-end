@@ -17,25 +17,38 @@ import java.util.Collections;
 
 @Data
 @Entity
-@Table(name = "TB_USER")
+@Table(name = "USER_BASE")
 public class UserBase implements UserDetails {
     
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private Long usrNo;
 
-    @Column(unique = true, nullable = false)
-    private String username;
+    @Column(name = "LOGIN_ID", unique = true, nullable = false)
+    private String loginId;
+
+    @Column(name="PWD", nullable = false)
+    private String pwd;
 
     @Column(nullable = false)
-    private String password;
+    private String userNm;
 
     @Column(nullable = false)
-    private String role = "ROLE_USER"; // 기본 역할
+    private String usrGradeCd = "10"; // 기본 역할
+
+    @Override
+    public String getUsername() {
+        return loginId;
+    }
+
+    @Override
+    public String getPassword() {
+        return pwd;
+    }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return Collections.singletonList(new SimpleGrantedAuthority(role));
+        return Collections.singletonList(new SimpleGrantedAuthority(usrGradeCd));
     }
 
     @Override

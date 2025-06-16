@@ -2,6 +2,8 @@ package com.xodud1202.springbackend.security;
 
 import java.util.Date;
 
+import io.jsonwebtoken.io.Decoders;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -14,7 +16,10 @@ import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.SignatureException;
 import io.jsonwebtoken.UnsupportedJwtException;
+import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
+
+import javax.crypto.SecretKey;
 
 @Slf4j
 @Component
@@ -26,6 +31,15 @@ public class JwtTokenProvider {
     @Value("${jwt.expiration}")
     private int jwtExpirationInMs;
 
+//    private SecretKey signingKey;
+
+//    @PostConstruct
+//    public void init() {
+//        // Base64로 인코딩된 secret을 바이트로 디코딩하고, 키 객체 생성
+//        byte[] keyBytes = Decoders.BASE64.decode(jwtSecret);
+//        this.signingKey = Keys.hmacShaKeyFor(keyBytes);
+//    }
+
     public String generateToken(Authentication authentication) {
         UserDetails userDetails = (UserDetails) authentication.getPrincipal();
         Date now = new Date();
@@ -33,9 +47,10 @@ public class JwtTokenProvider {
 
         return Jwts.builder()
                 .setSubject(userDetails.getUsername())
-                .setIssuedAt(new Date())
+                .setIssuedAt(now)
                 .setExpiration(expiryDate)
                 .signWith(SignatureAlgorithm.HS512, jwtSecret)
+//                .signWith(signingKey, SignatureAlgorithm.HS512)
                 .compact();
     }
 

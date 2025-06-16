@@ -9,5 +9,5 @@ import com.xodud1202.springbackend.domain.UserBase;
 
 @Repository
 public interface UserRepository extends JpaRepository<UserBase, Long> {
-    Optional<UserBase> findByUsername(String username);
+    Optional<UserBase> findByLoginId(String loginId);
 }
