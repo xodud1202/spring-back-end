@@ -22,8 +22,8 @@ public class CommonController {
 
 	@PostMapping("/backoffice/login")
     public ResponseEntity<Map<String, String>> login(@RequestBody UserBase param) {
-            if ("xodud1202".equals(param.getId()) && "qwer".equals(param.getPassword())) {
-                    String token = JwtUtil.generateToken(param.getId());
+            if ("xodud1202".equals(param.getUsername()) && "qwer".equals(param.getPassword())) {
+                    String token = JwtUtil.generateToken(param.getUsername());
                     Map<String, String> result = new HashMap<>();
                     result.put("token", token);
                     return ResponseEntity.ok(result);
