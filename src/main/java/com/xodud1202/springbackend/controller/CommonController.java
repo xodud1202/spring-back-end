@@ -20,7 +20,7 @@ public class CommonController {
 		return result;
 	}
 
-	@PostMapping("/backoffice/login")
+	/*@PostMapping("/backoffice/login")
     public ResponseEntity<Map<String, String>> login(@RequestBody UserBase param) {
             if ("xodud1202".equals(param.getUsername()) && "qwer".equals(param.getPassword())) {
                     String token = JwtUtil.generateToken(param.getUsername());
@@ -29,5 +29,5 @@ public class CommonController {
                     return ResponseEntity.ok(result);
             }
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-    }
+    }*/
 }

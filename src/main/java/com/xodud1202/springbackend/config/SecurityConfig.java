@@ -37,8 +37,9 @@ public class SecurityConfig {
     
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        http
-                .userDetailsService(userDetailsService)  // 추가
+        final String[] authorizeUrlArray = new String[] {"/hello", "/api/**", "/backoffice/login", "/shop/login"};
+
+        http.userDetailsService(userDetailsService)  // 추가
                 // CSRF 비활성화
                 .csrf(AbstractHttpConfigurer::disable)
                 // 세션을 Stateless로 설정
@@ -47,16 +48,10 @@ public class SecurityConfig {
                 )
                 // 인가 규칙 정의
                 .authorizeHttpRequests(authorize ->
-                        authorize
-                                .requestMatchers("/hello", "/api", "/auth/**").permitAll()
-                                .anyRequest().authenticated()
+                        authorize.requestMatchers(authorizeUrlArray).permitAll().anyRequest().authenticated()
                 )
                 // 커스텀 필터 추가
-                .addFilterBefore(
-                        jwtAuthenticationFilter(),
-                        UsernamePasswordAuthenticationFilter.class
-                )
-        ;
+                .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
         
         return http.build();
     }

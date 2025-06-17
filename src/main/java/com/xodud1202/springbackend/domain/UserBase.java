@@ -36,6 +36,8 @@ public class UserBase implements UserDetails {
     @Column(nullable = false)
     private String usrGradeCd = "10"; // 기본 역할
 
+    private String jwtToken;
+
     @Override
     public String getUsername() {
         return loginId;
