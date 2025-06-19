@@ -36,15 +36,23 @@ public class UserBase implements UserDetails {
 
     @Column(nullable = false)
     private String usrGradeCd = "10"; // 기본 역할
-    
-    @Column(name = "JWT_TOKEN")
-    private String jwtToken;
+
+    @Column(name = "UPD_NO")
+    private Long updNo;
+
+    @Column(name="ACCESS_DT")
+    private Date accessDt;
+
+    @Column(name = "UPD_DT")
+    private Date updDt;
     
     @Column(name = "REFRESH_TOKEN")
-    private String refreshToken;
+    private String refreshToken;        // 자동로그인 refreshToken
     
     @Column(name = "REFRESH_TOKEN_EXPIRY")
-    private Date refreshTokenExpiry;
+    private Date refreshTokenExpiry;    // 자동로그인 refreshToken 만료기한
+
+    private String jwtToken;            // 현재 jwt accessToken
 
     @Override
     public String getUsername() {

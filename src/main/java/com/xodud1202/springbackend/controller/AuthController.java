@@ -1,12 +1,14 @@
 package com.xodud1202.springbackend.controller;
 
 import com.xodud1202.springbackend.domain.LoginRequest;
+import com.xodud1202.springbackend.domain.RefreshTokenRequest;
 import com.xodud1202.springbackend.domain.UserBase;
 import com.xodud1202.springbackend.repository.UserRepository;
 import com.xodud1202.springbackend.security.JwtTokenProvider;
 import com.xodud1202.springbackend.service.CustomUserDetailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -31,6 +34,9 @@ public class AuthController {
 	private final JwtTokenProvider tokenProvider;
 	private final CustomUserDetailService userDetailService;
 	private final UserRepository userRepository;
+
+	@Value("${jwt.refresh-token-expiration}")
+    private long jwtRefreshTokenExpirationInMs;
 	
 	@PostMapping("/backoffice/login")
 	public ResponseEntity<?> authenticateUser(@RequestBody LoginRequest loginRequest) {
@@ -60,7 +66,6 @@ public class AuthController {
 			
 			// 사용자 정보 가져오기
 			UserBase user = existingUser.get();
-			user.setPwd(null);       // 비밀번호 정보는 제외
 			user.setJwtToken(accessToken);
 			
 			Map<String, Object> response = new HashMap<>();
@@ -70,16 +75,26 @@ public class AuthController {
 			// 로그인 유지를 선택한 경우 Refresh Token 생성
 			if (loginRequest.isRememberMe()) {
 				String refreshToken = tokenProvider.generateRefreshToken(user.getUsername());
-				Date refreshTokenExpiry = new Date(System.currentTimeMillis() + 2592000000L); // 30일
-				
-				// 사용자 정보에 Refresh Token 저장
+				Date refreshTokenExpiry = new Date(System.currentTimeMillis() + jwtRefreshTokenExpirationInMs); // refresh token 만료일정
+
+				// 사용자 정보에 Refresh Token 저장 (메모리 객체에만 설정)
 				user.setRefreshToken(refreshToken);
 				user.setRefreshTokenExpiry(refreshTokenExpiry);
-				userRepository.save(user);
-				
+
+				// DB에는 필요한 필드만 업데이트
+				userRepository.updateRefreshToken(
+					user.getUsrNo(),
+					refreshToken,
+					user.getRefreshTokenExpiry(),
+					new Date(), // AccessDt (마지막 로그인 일시 현재시간 등록)
+					user.getUsrNo(), // 현재 로그인한 사용자의 usrNo를 updNo로 설정
+					new Date()       // 현재 시간을 updDt로 설정
+				);
+
 				response.put("refreshToken", refreshToken);
 			}
-			
+
+			user.setPwd(null);       // 비밀번호 정보는 제외
 			response.put("userInfo", user);
 			
 			return ResponseEntity.ok(response);
@@ -98,7 +113,7 @@ public class AuthController {
 		}
 	}
 	
-	@PostMapping("/backoffice/refresh-token")
+	@PostMapping("/token/backoffice/refresh-token")
 	public ResponseEntity<?> refreshToken(@RequestBody RefreshTokenRequest request) {
 		// Refresh Token 검증
 		String refreshToken = request.getRefreshToken();

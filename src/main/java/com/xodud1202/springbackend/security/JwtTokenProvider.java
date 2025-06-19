@@ -17,10 +17,10 @@ public class JwtTokenProvider {
     private String jwtSecret;
     
     @Value("${jwt.access-token-expiration}")
-    private int jwtAccessTokenExpirationInMs;
+    private long jwtAccessTokenExpirationInMs;
     
     @Value("${jwt.refresh-token-expiration}")
-    private int jwtRefreshTokenExpirationInMs;
+    private long jwtRefreshTokenExpirationInMs;
     
     // Access Token 생성
     public String generateAccessToken(Authentication authentication) {

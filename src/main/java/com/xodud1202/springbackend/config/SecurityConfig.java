@@ -37,7 +37,7 @@ public class SecurityConfig {
     
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        final String[] authorizeUrlArray = new String[] {"/hello", "/api/**", "/backoffice/login", "/shop/login"};
+        final String[] authorizeUrlArray = new String[] {"/hello", "/api/**", "/token/**", "/backoffice/login", "/shop/login"};
 
         http.userDetailsService(userDetailsService)  // 추가
                 // CSRF 비활성화
