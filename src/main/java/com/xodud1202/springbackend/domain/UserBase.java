@@ -14,6 +14,7 @@ import lombok.Data;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 
 @Data
 @Entity
@@ -35,8 +36,15 @@ public class UserBase implements UserDetails {
 
     @Column(nullable = false)
     private String usrGradeCd = "10"; // 기본 역할
-
+    
+    @Column(name = "JWT_TOKEN")
     private String jwtToken;
+    
+    @Column(name = "REFRESH_TOKEN")
+    private String refreshToken;
+    
+    @Column(name = "REFRESH_TOKEN_EXPIRY")
+    private Date refreshTokenExpiry;
 
     @Override
     public String getUsername() {
