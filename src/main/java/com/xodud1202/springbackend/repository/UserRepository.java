@@ -14,10 +14,21 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public interface UserRepository extends JpaRepository<UserBase, Long> {
+    /**
+     * Finds a user by their login ID.
+     * @param loginId the login ID of the user to be retrieved
+     * @return an {@code Optional} containing the {@code UserBase} if a user with the given login ID exists;
+     *         otherwise, an empty {@code Optional}
+     */
     Optional<UserBase> findByLoginId(String loginId);
 
     @Modifying
     @Transactional
     @Query("UPDATE UserBase u SET u.refreshToken = :refreshToken, u.refreshTokenExpiry = :refreshTokenExpiry, u.updNo = :updNo, u.updDt = :updDt, u.accessDt = :accessDt WHERE u.usrNo = :usrNo")
     void updateRefreshToken(@Param("usrNo") Long usrNo, @Param("refreshToken") String refreshToken, @Param("refreshTokenExpiry") Date refreshTokenExpiry, @Param("accessDt") Date accessDt, @Param("updNo") Long updNo, @Param("updDt") Date updDt);
+    
+    @Modifying
+    @Transactional
+    @Query("UPDATE UserBase u SET u.refreshToken = NULL, u.refreshTokenExpiry = NULL, u.updNo = :usrNo, u.updDt = CURRENT_TIMESTAMP WHERE u.usrNo = :usrNo")
+    void clearRefreshToken(@Param("usrNo") Long usrNo);
 }

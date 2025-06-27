@@ -1,7 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-
     <property name="LOG_PATH" value="${LOG_FILE_PATH:-D:/react_project/spring-back-end/logs}" />
+
+    <!-- JPA SQL 전용 콘솔 출력 (깔끔한 형태) -->
+    <appender name="JPA_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %highlight(%-5level) %cyan(%logger{15}) :%n%msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 일반 콘솔 출력 -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
 
     <appender name="ROLLING" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>${LOG_PATH}/spring-back-end.log</file>
@@ -14,8 +27,27 @@
         </encoder>
     </appender>
 
+    <!-- 애플리케이션 로그 -->
+    <logger name="com.xodud1202.springbackend" level="DEBUG"/>
+
+    <!-- JPA SQL 로그 - 1번만 출력 -->
+    <logger name="org.hibernate.SQL" level="DEBUG" additivity="false">
+        <appender-ref ref="JPA_CONSOLE"/>
+        <appender-ref ref="ROLLING"/>
+    </logger>
+
+    <!-- 파라미터 바인딩 로그 - 바로 이어서 출력 -->
+    <logger name="org.hibernate.orm.jdbc.bind" level="TRACE" additivity="false">
+        <appender-ref ref="JPA_CONSOLE"/>
+        <appender-ref ref="ROLLING"/>
+    </logger>
+
+    <!-- 불필요한 로그 숨김 -->
+    <logger name="org.hibernate.orm.jdbc.extract" level="INFO"/>
+    <logger name="org.hibernate.type" level="INFO"/>
+
     <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
         <appender-ref ref="ROLLING"/>
     </root>
-
 </configuration>

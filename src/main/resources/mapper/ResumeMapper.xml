@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+		"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.xodud1202.springbackend.mapper.ResumeMapper">
+
+	<resultMap id="experienceWithDetails" type="com.xodud1202.springbackend.domain.resume.ResumeExperienceBase">
+		<id property="experienceNo" column="EXPERIENCE_NO"/>
+		<result property="companyNm" column="COMPANY_NM"/>
+		<result property="employmentType" column="EMPLOYMENT_TYPE"/>
+		<result property="position" column="POSITION"/>
+		<result property="duty" column="DUTY"/>
+		<result property="workStartDt" column="WORK_START_DT"/>
+		<result property="workEndDt" column="WORK_END_DT"/>
+
+		<collection property="resumeExperienceDetailList"
+		            javaType="java.util.List"
+		            ofType="com.xodud1202.springbackend.domain.resume.ResumeExperienceDetail">
+			<result property="workTitle" column="WORK_TITLE"/>
+			<result property="workDesc" column="WORK_DESC"/>
+			<result property="workStartDt" column="WORK_DTL_START_DT"/>
+			<result property="workEndDt" column="WORK_DTL_END_DT"/>
+		</collection>
+	</resultMap>
+
+	<!-- 이력서 경력 리스트 조회 -->
+	<select id="getResumeExperienceWithDetails" resultMap="experienceWithDetails">
+		/* ResumeMapper.getResumeExperienceWithDetails: 이력서 경력 리스트 조회 */
+		SELECT REB.EXPERIENCE_NO
+		     , REB.COMPANY_NM
+		     , FN_GET_CODE_NM('EMPLOYMENT_TYPE', REB.EMPLOYMENT_TYPE_CD) AS EMPLOYMENT_TYPE
+		     , REB.POSITION
+		     , REB.DUTY
+		     , DATE_FORMAT(REB.WORK_START_DT, '%Y.%m') AS WORK_START_DT
+		     , DATE_FORMAT(REB.WORK_END_DT, '%Y.%m') AS WORK_END_DT
+		     , RED.WORK_TITLE
+		     , RED.WORK_DESC
+		     , DATE_FORMAT(RED.WORK_START_DT, '%Y.%m') AS WORK_DTL_START_DT
+		     , DATE_FORMAT(RED.WORK_END_DT, '%Y.%m') AS WORK_DTL_END_DT
+		  FROM RESUME_EXPERIENCE_BASE REB
+		 INNER JOIN RESUME_EXPERIENCE_DETAIL RED
+		    ON RED.EXPERIENCE_NO = REB.EXPERIENCE_NO
+		 WHERE REB.USR_NO = #{usrNo}
+		   AND REB.DEL_YN = 'N'
+		   AND RED.DEL_YN = 'N'
+		 ORDER BY REB.WORK_START_DT DESC, RED.SORT_SEQ
+	</select>
+
+	<!-- 이력서 기타 경력 및 자격 조회 -->
+	<select id="getResumeOtherExperienceList" resultType="com.xodud1202.springbackend.domain.resume.ResumeOtherExperience">
+		/* ResumeMapper.getResumeOtherExperienceList: 이력서 기타 경력 및 자격 조회 */
+		SELECT EXPERIENCE_TITLE
+		     , EXPERIENCE_SUB_TITLE
+		     , EXPERIENCE_DESC
+		     , DATE_FORMAT(ROE.EXPERIENCE_START_DT, '%Y.%m') AS EXPERIENCE_START_DT
+		     , DATE_FORMAT(ROE.EXPERIENCE_END_DT, '%Y.%m')   AS EXPERIENCE_END_DT
+		  FROM RESUME_OTHER_EXPERIENCE ROE
+		 WHERE ROE.DEL_YN = 'N'
+		   AND ROE.USR_NO = #{usrNo}
+		 ORDER BY SORT_SEQ
+	</select>
+</mapper>
