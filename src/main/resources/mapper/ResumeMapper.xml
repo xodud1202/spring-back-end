@@ -59,4 +59,20 @@
 		   AND ROE.USR_NO = #{usrNo}
 		 ORDER BY SORT_SEQ
 	</select>
+
+	<!-- 이력서 학력 리스트 조회 -->
+	<select id="getResumeEducationList" resultType="com.xodud1202.springbackend.domain.resume.ResumeEducation">
+		/* ResumeMapper.getResumeEducationList: 이력서 학력 리스트 조회 */
+		SELECT EDUCATION_NM
+		     , DEPARTMENT
+		     , EDUCATION_SCORE
+		     , FN_GET_CODE_NM('EDUCATION_STAT', EDUCATION_STAT_CD) AS EDUCATION_STAT
+		     , DATE_FORMAT(EDUCATION_START_DT, '%Y.%m') AS EDUCATION_START_DT
+		     , DATE_FORMAT(EDUCATION_END_DT, '%Y.%m') AS EDUCATION_END_DT
+		     , LOGO_PATH
+		  FROM RESUME_EDUCATION A
+		 WHERE USR_NO = #{usrNo}
+		   AND DEL_YN = 'N'
+		 ORDER BY EDUCATION_START_DT DESC
+	</select>
 </mapper>

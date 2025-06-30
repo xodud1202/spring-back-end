@@ -1,9 +1,6 @@
 package com.xodud1202.springbackend.service;
 
-import com.xodud1202.springbackend.domain.resume.ResumeBase;
-import com.xodud1202.springbackend.domain.resume.ResumeExperienceBase;
-import com.xodud1202.springbackend.domain.resume.ResumeIntroduce;
-import com.xodud1202.springbackend.domain.resume.ResumeOtherExperience;
+import com.xodud1202.springbackend.domain.resume.*;
 import com.xodud1202.springbackend.mapper.ResumeMapper;
 import com.xodud1202.springbackend.repository.ResumeRepository;
 import jakarta.persistence.EntityManager;
@@ -83,5 +80,9 @@ public class ResumeService {
 	
 	public List<ResumeOtherExperience> getResumeOtherExperienceList(Long usrNo) {
 		return resumeMapper.getResumeOtherExperienceList(usrNo);
+	}
+	
+	public List<ResumeEducation> getResumeEducationList(Long usrNo) {
+		return resumeMapper.getResumeEducationList(usrNo);
 	}
 }

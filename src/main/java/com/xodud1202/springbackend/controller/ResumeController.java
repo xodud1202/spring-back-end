@@ -39,6 +39,7 @@ public class ResumeController {
 				// 이력서 자기소개서 조회
 				response.put("resumeIntroduceList", resumeService.getResumeIntroduceByUsrNo(usrNo));
 				response.put("resumeExperienceList", resumeService.getResumeExperienceWithDetails(usrNo));
+				response.put("resumeEducationList", resumeService.getResumeEducationList(usrNo));
 				response.put("resumeOtherExperienceList", resumeService.getResumeOtherExperienceList(usrNo));
 			} else {
 				response.put("result", "NOT_FOUND");

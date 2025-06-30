@@ -5,12 +5,14 @@ import com.xodud1202.springbackend.domain.resume.ResumeIntroduce;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.Query;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Repository
 public class ResumeRepository {
 	
@@ -28,6 +30,7 @@ public class ResumeRepository {
                  , RB.FACE_IMG_PATH
                  , RB.SKILLS
                  , RB.ADDR
+                 , RB.LAST_PAY
               FROM USER_BASE UB
              INNER JOIN RESUME_BASE RB
                 ON UB.USR_NO = RB.USR_NO
@@ -40,9 +43,12 @@ public class ResumeRepository {
 		query.setParameter("loginId", loginId);
 		
 		try {
+			log.info("check 111 : ");
 			ResumeBase result = (ResumeBase) query.getSingleResult();
+			log.info("check 222 : {}", result);
 			return Optional.of(result);
 		} catch (Exception e) {
+			log.error(e.getMessage(), e);
 			return Optional.empty();
 		}
 	}

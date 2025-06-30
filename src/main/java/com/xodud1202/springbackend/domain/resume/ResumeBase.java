@@ -22,7 +22,8 @@ import java.util.List;
 						@ColumnResult(name = "PORTFOLIO", type = String.class),
 						@ColumnResult(name = "FACE_IMG_PATH", type = String.class),
 						@ColumnResult(name = "SKILLS", type = String.class),
-						@ColumnResult(name = "ADDR", type = String.class)
+						@ColumnResult(name = "ADDR", type = String.class),
+						@ColumnResult(name = "LAST_PAY", type = Long.class)
 				}
 		)
 )
@@ -30,6 +31,7 @@ import java.util.List;
 public class ResumeBase {
 	@Id
 	private Long usrNo;
+	private Long lastPay;
 	private String userNm;
 	private String subTitle;
 	private String mobile;
@@ -43,7 +45,7 @@ public class ResumeBase {
 	// 생성자 추가
 	public ResumeBase(Long usrNo, String userNm, String subTitle, String mobile,
 	                  String email, String portfolio, String faceImgPath,
-	                  String skills, String addr) {
+	                  String skills, String addr, Long lastPay) {
 		this.usrNo = usrNo;
 		this.userNm = userNm;
 		this.subTitle = subTitle;
@@ -53,5 +55,6 @@ public class ResumeBase {
 		this.faceImgPath = faceImgPath;
 		this.skills = skills;
 		this.addr = addr;
+		this.lastPay = lastPay;
 	}
 }
