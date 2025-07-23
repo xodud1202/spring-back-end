@@ -25,13 +25,10 @@ public class ResumeService {
 	private final ResumeMapper resumeMapper;
 	
 	/**
-	 * Retrieves a {@code ResumeBase} entity based on the provided login ID.
-	 * The method fetches the resume associated with the specified login ID from the repository.
-	 * If a resume is found, it processes the {@code skills} field into a list of individual skills
-	 * and sets this list in the {@code skillList} property before returning the result.
-	 * @param loginId the login ID of the user whose resume is to be retrieved
-	 * @return an {@code Optional} containing the {@code ResumeBase} with the processed {@code skillList}
-	 *         if the resume is found, or an empty {@code Optional} if no resume exists for the given login ID
+	 * 주어진 사용자 로그인 ID를 기반으로 이력서 정보를 조회합니다.
+	 * 반환된 이력서는 스킬을 파싱하여 스킬 리스트로 변환된 결과를 포함합니다.
+	 * @param loginId 사용자 로그인 ID
+	 * @return 로그인 ID에 해당하는 이력서 정보. 데이터가 없으면 빈 Optional을 반환
 	 */
 	public Optional<ResumeBase> getResumeByLoginId(String loginId) {
 		Optional<ResumeBase> resumeOpt = resumeRepository.findResumeByLoginId(loginId);
@@ -55,24 +52,20 @@ public class ResumeService {
 	}
 	
 	/**
-	 * Retrieves a list of {@code ResumeIntroduce} entities associated with a given user number.
-	 * The method fetches the user's resume introductions from the underlying repository, filtering by user number
-	 * and ensuring only non-deleted records are returned.
-	 * @param usrNo the unique identifier of the user whose resume introductions are to be retrieved
-	 * @return a list of {@code ResumeIntroduce} entities associated with the specified user number,
-	 *         or an empty list if no matching records are found
+	 * 주어진 사용자 번호를 기반으로 사용자와 관련된 자기소개 리스트를 조회합니다.
+	 * 이 메서드는 삭제 상태가 아닌 자기소개 데이터를 정렬 순서에 따라 반환합니다.
+	 * @param usrNo 사용자 고유 번호
+	 * @return 사용자와 관련된 자기소개 리스트. 만약 데이터가 없거나 오류가 발생하면 빈 리스트를 반환
 	 */
 	public List<ResumeIntroduce> getResumeIntroduceByUsrNo(Long usrNo) {
 		return resumeRepository.findResumeIntroduceByUsrNo(usrNo);
 	}
 	
 	/**
-	 * Retrieves a list of {@code ResumeExperienceBase} entities with detailed information for a specific user.
-	 * The method fetches the work experiences associated with the provided user number, including company details,
-	 * employment type, position, duties, and associated experience details.
-	 * @param usrNo the unique identifier of the user whose resume experiences are to be retrieved
-	 * @return a list of {@code ResumeExperienceBase} entities that contains the user's work experience details,
-	 *         or an empty list if no matching records are found
+	 * 주어진 사용자 번호로 사용자의 이력서 경험과 관련 상세 정보를 조회합니다.
+	 * 이 메서드는 사용자 번호를 기준으로 매퍼를 통해 데이터를 가져옵니다.
+	 * @param usrNo 사용자 고유 번호
+	 * @return 사용자와 관련된 이력서 경험 정보 목록. 만약 해당 사용자의 이력서 경험이 없을 경우 빈 리스트 반환
 	 */
 	public List<ResumeExperienceBase> getResumeExperienceWithDetails(Long usrNo) {
 		return resumeMapper.getResumeExperienceWithDetails(usrNo);

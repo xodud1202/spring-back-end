@@ -43,9 +43,7 @@ public class ResumeRepository {
 		query.setParameter("loginId", loginId);
 		
 		try {
-			log.info("check 111 : ");
 			ResumeBase result = (ResumeBase) query.getSingleResult();
-			log.info("check 222 : {}", result);
 			return Optional.of(result);
 		} catch (Exception e) {
 			log.error(e.getMessage(), e);

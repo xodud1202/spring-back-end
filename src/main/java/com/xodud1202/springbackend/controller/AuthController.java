@@ -126,11 +126,9 @@ public class AuthController {
 		Map<String, String> response = new HashMap<>();
 		String accessToken = request.getAccessToken();
 		String accessTokenValidResult = tokenProvider.validateCheckToken(accessToken);
-		log.info("check accessTokenValidResult ::: {}", accessTokenValidResult);
 		if (!"OK".equals(accessTokenValidResult) && !"EXPIRED".equals(accessTokenValidResult) ) {
 			response.put("result", "INVALID_TOKEN");
 			response.put("resultMsg", "유효하지 않은 Access Token 토큰입니다.");
-			log.info("check response1 ::: {}", response);
 			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
 		} else if ("EXPIRED".equals(accessTokenValidResult) && !StringUtil.isNullOrEmpty(request.getRefreshToken())) {
 			// accessToken이 만료되었으나 refreshToken이 있을 경우
@@ -141,7 +139,6 @@ public class AuthController {
 			// refreshToken이 만료 전인지 확인.
 			Optional<UserBase> chkUserInfo = userBaseService.findUserBaseByLoginIdAndRefreshTokenAndExpiredCheck(user);
 			if (chkUserInfo.isEmpty()) {
-				log.info("check response2 ::: {}", response);
 				response.put("result", "EXPIRED_TOKEN");
 				response.put("resultMsg", "유효하지 않은 Access Token 토큰입니다.");
 				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
@@ -153,8 +150,6 @@ public class AuthController {
 		response.put("result", "OK");
 		response.put("resultMsg", "OK");
 		response.put("accessToken", tokenProvider.generateAccessTokenByLoginId(request.getLoginId()));
-		
-		log.info("check response3 ::: {}", response);
 		
 		return ResponseEntity.ok(response);
 	}

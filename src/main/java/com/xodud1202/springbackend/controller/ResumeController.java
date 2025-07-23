@@ -23,6 +23,15 @@ public class ResumeController {
 	
 	private final ResumeService resumeService;
 	
+	/**
+	 * 지정된 로그인 ID를 기반으로 사용자의 이력서 정보를 조회합니다.
+	 * 이력서 정보에는 기본 정보, 자기소개서 목록, 경력 세부 정보, 교육 정보, 기타 경력 정보가 포함됩니다.
+	 * 이력서 정보가 존재하지 않을 경우 "NOT_FOUND" 결과를 반환하며,
+	 * 서버 오류가 발생할 경우 "ERROR" 결과를 반환합니다.
+	 *
+	 * @param loginId 사용자의 이력서 정보를 조회하기 위한 로그인 ID
+	 * @return 이력서 정보, 처리 결과 상태, 및 오류 메시지가 포함된 {@code ResponseEntity}
+	 */
 	@GetMapping("/api/resume/info")
 	public ResponseEntity<Map<String, Object>> getResumeInfo(@RequestParam @NotBlank(message = "로그인 ID는 필수입니다.")  String loginId) {
 		Map<String, Object> response = new HashMap<>();
