@@ -46,11 +46,11 @@ public class UserBase implements UserDetails {
 	@Column(name = "REG_DT")
 	private Date regDt;
 	
-	@Column(name = "UPD_NO")
-	private Long updNo;
+	@Column(name = "UDT_NO")
+	private Long udtNo;
 	
-	@Column(name = "UPD_DT")
-	private Date updDt;
+	@Column(name = "UDT_DT")
+	private Date udtDt;
 	
 	@Column(name = "REFRESH_TOKEN")
 	private String refreshToken;        // 자동로그인 refreshToken

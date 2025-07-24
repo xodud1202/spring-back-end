@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import com.xodud1202.springbackend.domain.admin.resume.ResumePO;
+import com.xodud1202.springbackend.domain.admin.resume.ResumeVO;
 import com.xodud1202.springbackend.domain.resume.*;
 import com.xodud1202.springbackend.mapper.ResumeMapper;
 import com.xodud1202.springbackend.repository.ResumeRepository;
@@ -77,5 +79,9 @@ public class ResumeService {
 	
 	public List<ResumeEducation> getResumeEducationList(Long usrNo) {
 		return resumeMapper.getResumeEducationList(usrNo);
+	}
+	
+	public List<ResumeVO> getAdminResumeList(ResumePO param) {
+		return resumeMapper.getAdminResumeList(param);
 	}
 }

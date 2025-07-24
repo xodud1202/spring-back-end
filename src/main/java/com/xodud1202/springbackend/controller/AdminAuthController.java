@@ -31,7 +31,7 @@ import java.util.Optional;
 @Slf4j
 @RestController
 @RequiredArgsConstructor
-public class AuthController {
+public class AdminAuthController {
 	
 	private final AuthenticationManager authenticationManager;
 	private final JwtTokenProvider tokenProvider;
@@ -91,8 +91,8 @@ public class AuthController {
 					user.getRefreshToken(),
 					user.getRefreshTokenExpiry(),
 					new Date(), // AccessDt (마지막 로그인 일시 현재시간 등록)
-					user.getUsrNo(), // 현재 로그인한 사용자의 usrNo를 updNo로 설정
-					new Date()       // 현재 시간을 updDt로 설정
+					user.getUsrNo(), // 현재 로그인한 사용자의 usrNo를 udtNo로 설정
+					new Date()       // 현재 시간을 udtDt로 설정
 				);
 
 				response.put("refreshToken", refreshToken);

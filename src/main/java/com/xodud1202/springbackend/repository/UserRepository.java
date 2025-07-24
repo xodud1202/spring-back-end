@@ -24,11 +24,11 @@ public interface UserRepository extends JpaRepository<UserBase, Long> {
 
     @Modifying
     @Transactional
-    @Query("UPDATE UserBase u SET u.refreshToken = :refreshToken, u.refreshTokenExpiry = :refreshTokenExpiry, u.updNo = :updNo, u.updDt = :updDt, u.accessDt = :accessDt WHERE u.usrNo = :usrNo")
-    void updateRefreshToken(@Param("usrNo") Long usrNo, @Param("refreshToken") String refreshToken, @Param("refreshTokenExpiry") Date refreshTokenExpiry, @Param("accessDt") Date accessDt, @Param("updNo") Long updNo, @Param("updDt") Date updDt);
+    @Query("UPDATE UserBase u SET u.refreshToken = :refreshToken, u.refreshTokenExpiry = :refreshTokenExpiry, u.udtNo = :udtNo, u.udtDt = :udtDt, u.accessDt = :accessDt WHERE u.usrNo = :usrNo")
+    void updateRefreshToken(@Param("usrNo") Long usrNo, @Param("refreshToken") String refreshToken, @Param("refreshTokenExpiry") Date refreshTokenExpiry, @Param("accessDt") Date accessDt, @Param("udtNo") Long udtNo, @Param("udtDt") Date udtDt);
     
     @Modifying
     @Transactional
-    @Query("UPDATE UserBase u SET u.refreshToken = NULL, u.refreshTokenExpiry = NULL, u.updNo = :usrNo, u.updDt = CURRENT_TIMESTAMP WHERE u.usrNo = :usrNo")
+    @Query("UPDATE UserBase u SET u.refreshToken = NULL, u.refreshTokenExpiry = NULL, u.udtNo = :usrNo, u.udtDt = CURRENT_TIMESTAMP WHERE u.usrNo = :usrNo")
     void clearRefreshToken(@Param("usrNo") Long usrNo);
 }
