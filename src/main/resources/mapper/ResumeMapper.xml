@@ -102,13 +102,13 @@
 		<if test="searchValue != null and searchValue != ''">
 			<choose>
 				<when test="searchGb == 'usrNo'">
-		   AND UB.USR_NO = #{usrNo}
+		   AND UB.USR_NO = #{searchValue}
 				</when>
 				<when test="searchGb == 'userNm'">
-		   AND UB.USER_NM LIKE #{userNm} || '%'
+		   AND UB.USER_NM LIKE CONCAT(#{searchValue}, '%')
 				</when>
 				<when test="searchGb == 'loginId'">
-		   AND UB.USER_NM LIKE #{loginId} || '%'
+		   AND UB.LOGIN_ID LIKE CONCAT(#{searchValue}, '%')
 				</when>
 			</choose>
 		</if>
