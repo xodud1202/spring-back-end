@@ -32,7 +32,7 @@ public class UserBaseEntity implements UserDetails {
 	@Column(name = "PWD", nullable = false)
 	private String pwd;
 	
-	@Column(name = "USER_NM", nullable = false)
+	@Column(name = "USER_NM")
 	private String userNm;
 	
 	@Column(name = "USR_GRADE_CD", nullable = false)

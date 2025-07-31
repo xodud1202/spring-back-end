@@ -39,7 +39,6 @@ public class ResumeController {
 		try {
 			// 이력서 메인 정보 조회
 			Optional<ResumeBaseEntity> resume = resumeService.getResumeByLoginId(loginId);
-			log.info("check resume ::: {}", resume);
 			if (resume.isPresent()) {
 				ResumeBaseEntity resumeBase = resume.get();
 				Long usrNo = resumeBase.getUsrNo();

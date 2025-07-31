@@ -55,12 +55,13 @@ public class ResumeService {
 	 * @return 로그인 ID에 해당하는 이력서 정보. 데이터가 없으면 빈 Optional을 반환
 	 */
 	public Optional<ResumeBaseEntity> getResumeByLoginId(String loginId) {
-		ResumeBaseEntity resume = resumeBaseRepository.findByUserBaseLoginIdAndUserBaseUsrStatCdAndDelYn(loginId, "02", "N");
-		log.info("check resume ::: {}", resume);
-		
-		if (resume != null) {
+		Optional<ResumeBaseEntity> resumeOpt = resumeBaseRepository.findByUserBaseLoginIdAndUserBaseUsrStatCdAndDelYn(loginId, "02", "N");
+		if (resumeOpt.isPresent()) {
+			ResumeBaseEntity resume = resumeOpt.get();
+			
 			// skills를 skillList로 변환
 			resume.setSkillList(this.setSkillListFromSkillsResumeBase(resume.getSkills()));
+			
 			return Optional.of(resume);
 		}
 		

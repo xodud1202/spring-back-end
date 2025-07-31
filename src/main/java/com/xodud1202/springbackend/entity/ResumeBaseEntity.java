@@ -10,14 +10,13 @@ import java.util.List;
 @Entity
 @NoArgsConstructor
 @Table(name = "RESUME_BASE")
-@IdClass(ResumeBaseEntity.class)
 public class ResumeBaseEntity {
 	@Id
 	@Column(name = "USR_NO")
 	private Long usrNo;
 	
 	@Column(name = "USER_NM")
-	private Integer userNm;
+	private String userNm;
 	
 	@Column(name = "SUB_TITLE")
 	private String subTitle;

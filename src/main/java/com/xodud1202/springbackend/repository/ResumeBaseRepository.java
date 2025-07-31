@@ -9,7 +9,7 @@ import java.util.Optional;
 @Repository
 public interface ResumeBaseRepository extends JpaRepository<ResumeBaseEntity, Long> {
 	
-	ResumeBaseEntity findByUserBaseLoginIdAndUserBaseUsrStatCdAndDelYn(String loginId, String usrStatCd, String delYn);
+	Optional<ResumeBaseEntity> findByUserBaseLoginIdAndUserBaseUsrStatCdAndDelYn(String loginId, String usrStatCd, String delYn);
 	
 	ResumeBaseEntity findByUsrNoAndDelYn(Long usrNo, String delYn);
 }
