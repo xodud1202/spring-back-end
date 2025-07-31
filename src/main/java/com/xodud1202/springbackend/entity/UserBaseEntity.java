@@ -1,4 +1,4 @@
-package com.xodud1202.springbackend.domain;
+package com.xodud1202.springbackend.entity;
 
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -19,9 +19,10 @@ import java.util.Date;
 @Data
 @Entity
 @Table(name = "USER_BASE")
-public class UserBase implements UserDetails {
+public class UserBaseEntity implements UserDetails {
 	
 	@Id
+	@Column(name = "USR_NO")
 	@GeneratedValue( strategy = GenerationType.IDENTITY)
 	private Long usrNo;
 	
@@ -34,8 +35,11 @@ public class UserBase implements UserDetails {
 	@Column(name = "USER_NM", nullable = false)
 	private String userNm;
 	
-	@Column(nullable = false)
+	@Column(name = "USR_GRADE_CD", nullable = false)
 	private String usrGradeCd = "10"; // 기본 역할
+	
+	@Column(name = "USR_STAT_CD")
+	private String usrStatCd;
 	
 	@Column(name = "ACCESS_DT")
 	private Date accessDt;

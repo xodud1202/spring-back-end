@@ -2,8 +2,10 @@ package com.xodud1202.springbackend.domain.admin.resume;
 
 import com.xodud1202.springbackend.domain.common.CommonVO;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 @Data
+@EqualsAndHashCode(callSuper = true)
 public class ResumeVO extends CommonVO {
 	private Long usrNo;
 	private String loginId;

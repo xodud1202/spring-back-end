@@ -3,7 +3,7 @@ package com.xodud1202.springbackend.controller;
 import ch.qos.logback.core.util.StringUtil;
 import com.xodud1202.springbackend.domain.LoginRequest;
 import com.xodud1202.springbackend.domain.RefreshTokenRequest;
-import com.xodud1202.springbackend.domain.UserBase;
+import com.xodud1202.springbackend.entity.UserBaseEntity;
 import com.xodud1202.springbackend.repository.UserRepository;
 import com.xodud1202.springbackend.security.JwtTokenProvider;
 import com.xodud1202.springbackend.service.CustomUserDetailService;
@@ -46,7 +46,7 @@ public class AdminAuthController {
 	public ResponseEntity<?> authenticateUser(@RequestBody LoginRequest loginRequest) {
 		try {
 			// 먼저 사용자가 존재하는지 확인
-			Optional<UserBase> existingUser = userBaseService.loadUserByLoginId(loginRequest.getLoginId());
+			Optional<UserBaseEntity> existingUser = userBaseService.loadUserByLoginId(loginRequest.getLoginId());
 			if (existingUser.isEmpty()) {
 				// 사용자가 존재하지 않는 경우
 				Map<String, String> response = new HashMap<>();
@@ -69,7 +69,7 @@ public class AdminAuthController {
 			String accessToken = tokenProvider.generateAccessToken(authentication);
 			
 			// 사용자 정보 가져오기
-			UserBase user = existingUser.get();
+			UserBaseEntity user = existingUser.get();
 			user.setJwtToken(accessToken);
 			
 			Map<String, Object> response = new HashMap<>();
@@ -132,12 +132,12 @@ public class AdminAuthController {
 			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
 		} else if ("EXPIRED".equals(accessTokenValidResult) && !StringUtil.isNullOrEmpty(request.getRefreshToken())) {
 			// accessToken이 만료되었으나 refreshToken이 있을 경우
-			UserBase user = new UserBase();
+			UserBaseEntity user = new UserBaseEntity();
 			user.setRefreshToken(request.getRefreshToken());
 			user.setLoginId(request.getLoginId());
 			
 			// refreshToken이 만료 전인지 확인.
-			Optional<UserBase> chkUserInfo = userBaseService.findUserBaseByLoginIdAndRefreshTokenAndExpiredCheck(user);
+			Optional<UserBaseEntity> chkUserInfo = userBaseService.findUserBaseByLoginIdAndRefreshTokenAndExpiredCheck(user);
 			if (chkUserInfo.isEmpty()) {
 				response.put("result", "EXPIRED_TOKEN");
 				response.put("resultMsg", "유효하지 않은 Access Token 토큰입니다.");
@@ -169,7 +169,7 @@ public class AdminAuthController {
 		String username = tokenProvider.getUsernameFromJWT(refreshToken);
 		
 		// 사용자 정보 조회
-		Optional<UserBase> userOpt = userBaseService.loadUserByLoginId(username);
+		Optional<UserBaseEntity> userOpt = userBaseService.loadUserByLoginId(username);
 		if (userOpt.isEmpty()) {
 			Map<String, String> response = new HashMap<>();
 			response.put("result", "USER_NOT_FOUND");
@@ -177,7 +177,7 @@ public class AdminAuthController {
 			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
 		}
 		
-		UserBase user = userOpt.get();
+		UserBaseEntity user = userOpt.get();
 		
 		// DB에 저장된 Refresh Token과 비교
 		if (!refreshToken.equals(user.getRefreshToken())) {

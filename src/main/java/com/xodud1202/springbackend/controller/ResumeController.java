@@ -1,6 +1,6 @@
 package com.xodud1202.springbackend.controller;
 
-import com.xodud1202.springbackend.domain.resume.ResumeBase;
+import com.xodud1202.springbackend.entity.ResumeBaseEntity;
 import com.xodud1202.springbackend.service.ResumeService;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
@@ -38,9 +38,10 @@ public class ResumeController {
 		
 		try {
 			// 이력서 메인 정보 조회
-			Optional<ResumeBase> resume = resumeService.getResumeByLoginId(loginId);
+			Optional<ResumeBaseEntity> resume = resumeService.getResumeByLoginId(loginId);
+			log.info("check resume ::: {}", resume);
 			if (resume.isPresent()) {
-				ResumeBase resumeBase = resume.get();
+				ResumeBaseEntity resumeBase = resume.get();
 				Long usrNo = resumeBase.getUsrNo();
 				
 				response.put("result", "OK");

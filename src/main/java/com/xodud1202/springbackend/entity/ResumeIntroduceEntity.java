@@ -1,6 +1,7 @@
 // src/main/java/com/xodud1202/springbackend/domain/resume/ResumeIntroduce.java
-package com.xodud1202.springbackend.domain.resume;
+package com.xodud1202.springbackend.entity;
 
+import com.xodud1202.springbackend.domain.resume.ResumeIntroduceId;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -10,7 +11,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(name = "RESUME_INTRODUCE")
 @IdClass(ResumeIntroduceId.class)
-public class ResumeIntroduce {
+public class ResumeIntroduceEntity {
 	@Id
 	@Column(name = "USR_NO")
 	private Long usrNo;

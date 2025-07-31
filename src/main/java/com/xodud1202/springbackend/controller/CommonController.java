@@ -1,9 +1,5 @@
 package com.xodud1202.springbackend.controller;
 
-import com.xodud1202.springbackend.domain.UserBase;
-import com.xodud1202.springbackend.security.JwtUtil;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
