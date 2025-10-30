@@ -42,7 +42,7 @@ public class AdminAuthController {
 	@Value("${jwt.refresh-token-expiration}")
     private long jwtRefreshTokenExpirationInMs;
 	
-	@PostMapping("/backoffice/login")
+	@PostMapping("/api/backoffice/login")
 	public ResponseEntity<?> authenticateUser(@RequestBody LoginRequest loginRequest) {
 		try {
 			// 먼저 사용자가 존재하는지 확인
@@ -120,7 +120,7 @@ public class AdminAuthController {
 		}
 	}
 	
-	@GetMapping("/token/backoffice/access-token")
+	@GetMapping("/api/token/backoffice/access-token")
 	public ResponseEntity<?> token(RefreshTokenRequest request) {
 		// AccessToken 사용 가능 여부 확인
 		Map<String, String> response = new HashMap<>();

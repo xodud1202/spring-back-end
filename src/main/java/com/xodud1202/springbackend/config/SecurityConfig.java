@@ -34,10 +34,9 @@ public class SecurityConfig {
         return new JwtAuthenticationFilter(tokenProvider, userDetailsService);
     }
     
-    
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        final String[] authorizeUrlArray = new String[] {"/hello", "/api/**", "/token/**", "/backoffice/login", "/shop/login"};
+        final String[] authorizeUrlArray = new String[] {"/hello", "/api/**", "/shop/login"};
 
         http.userDetailsService(userDetailsService)  // 추가
                 // CSRF 비활성화
