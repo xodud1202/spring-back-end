@@ -3,7 +3,6 @@
 		"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
 <mapper namespace="com.xodud1202.springbackend.mapper.ResumeMapper">
-
 	<resultMap id="experienceWithDetails" type="com.xodud1202.springbackend.domain.resume.ResumeExperienceBase">
 		<id property="experienceNo" column="EXPERIENCE_NO"/>
 		<result property="companyNm" column="COMPANY_NM"/>

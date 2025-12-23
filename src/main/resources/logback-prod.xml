@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
 
-    <property name="LOG_PATH" value="${LOG_FILE_PATH:-/opt/workspace/spring-back-end/logs}" />
+    <property name="LOG_PATH" value="${LOG_FILE_PATH:-/opt/spring-back-end/logs}" />
 
     <appender name="ROLLING" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>${LOG_PATH}/spring-back-end.log</file>
