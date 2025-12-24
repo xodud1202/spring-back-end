@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-    <property name="LOG_PATH" value="${LOG_FILE_PATH:-D:/react_project/bin/logs/spring-back-end}" />
+    <property name="LOG_PATH" value="${LOG_FILE_PATH:-D:/react_project_bin/bin/logs/spring-back-end}" />
 
     <!-- JPA SQL 전용 콘솔 출력 (깔끔한 형태) -->
     <appender name="JPA_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
