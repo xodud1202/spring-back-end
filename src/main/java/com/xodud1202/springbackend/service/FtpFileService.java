@@ -33,8 +33,18 @@ public class FtpFileService {
 			ftpClient.setFileType(FTP.BINARY_FILE_TYPE);
 			
 			// resume 업로드 경로 사용
-			String uploadDir = ftpProperties.getUploadResumeTargetPath();
+			String uploadDir = ftpProperties.getUploadResumeFaceImgTargetPath();
 			ftpClient.changeWorkingDirectory(uploadDir);
+
+			// usrNo 폴더 확인 및 생성 로직 추가
+			if (!ftpClient.changeWorkingDirectory(usrNo)) {
+				// 폴더가 없으면 생성 시도
+				if (ftpClient.makeDirectory(usrNo)) {
+					ftpClient.changeWorkingDirectory(usrNo);
+				} else {
+					throw new IOException("FTP 사용자 폴더 생성 실패: " + usrNo);
+				}
+			}
 			
 			// 파일명 생성
 			String originalFilename = file.getOriginalFilename();
@@ -51,8 +61,7 @@ public class FtpFileService {
 			}
 			
 			// 웹에서 접근 가능한 URL 반환
-			return ftpProperties.getUploadResumeView() + "/" + fileName;
-			
+			return ftpProperties.getUploadResumeFaceImgView() + "/" + usrNo + "/" + fileName;
 		} finally {
 			if (ftpClient.isConnected()) {
 				ftpClient.logout();

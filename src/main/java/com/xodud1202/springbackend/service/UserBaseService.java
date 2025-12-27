@@ -17,11 +17,12 @@ public class UserBaseService {
 	private EntityManager em;
 	
 	private final UserRepository userRepository;
-	
+
 	/**
-	 * Retrieves a user by their login ID.
-	 * @param loginId the login ID of the user to be retrieved
-	 * @return an {@code Optional} containing the {@code UserBase} if found, or an empty {@code Optional} if no user exists with the provided login ID
+	 * 주어진 로그인 ID를 기반으로 사용자를 조회합니다.
+	 * @param loginId 조회할 사용자의 로그인 ID
+	 * @return 주어진 로그인 ID와 일치하는 {@code UserBaseEntity}를 포함하는 {@code Optional}.
+	 *         사용자를 찾을 수 없는 경우 빈 {@code Optional}을 반환합니다.
 	 */
 	public Optional<UserBaseEntity> loadUserByLoginId(String loginId) {
 		return userRepository.findByLoginId(loginId);

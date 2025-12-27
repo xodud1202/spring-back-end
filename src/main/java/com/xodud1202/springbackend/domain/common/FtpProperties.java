@@ -21,8 +21,8 @@ public class FtpProperties {
 	private String uploadDefaultView;
 	
 	// resume upload 설정
-	private String uploadResumeTargetPath;
 	private int uploadResumeMaxSize;
 	private String uploadResumeAllowExtension;
-	private String uploadResumeView;
+	private String uploadResumeFaceImgTargetPath;
+	private String uploadResumeFaceImgView;
 }

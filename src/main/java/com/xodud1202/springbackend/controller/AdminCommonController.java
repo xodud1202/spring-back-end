@@ -71,7 +71,7 @@ public class AdminCommonController {
 			// 성공 응답
 			Map<String, String> response = new HashMap<>();
 			response.put("faceImgPath", imageUrl);
-			response.put("message", "이미지 업로드 성공");
+			response.put("message", "이미지 업로드가 완료되었습니다.");
 			
 			return ResponseEntity.ok(response);
 			

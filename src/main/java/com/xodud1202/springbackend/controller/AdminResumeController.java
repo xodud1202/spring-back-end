@@ -8,11 +8,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Validated
@@ -31,10 +30,22 @@ public class AdminResumeController {
 	public ResponseEntity<List<ResumeVO>> getResumeInfo(ResumePO param) {
 		return ResponseEntity.ok(resumeService.getAdminResumeList(param));
 	}
-	
-	
+
+	/**
+	 * 주어진 사용자 번호에 해당하는 이력서 기본 정보를 조회합니다.
+	 * 이력서 기본 정보에는 사용자 이름, 부제목, 연락처, 이메일, 포트폴리오 링크, 최근 급여, 사진 경로,
+	 * 스킬 정보, 주소 등이 포함됩니다. 만약 해당 사용자 번호에 대한 데이터가 존재하지 않을 경우,
+	 * 빈 {@code ResponseEntity}가 반환됩니다.
+	 * @param usrNo 조회할 사용자의 고유 번호
+	 * @return 지정된 사용자 번호에 해당하는 이력서 기본 정보를 포함하는 {@code ResponseEntity} 객체
+	 */
 	@GetMapping("/api/admin/resume/{usrNo}")
 	public ResponseEntity<ResumeBaseEntity> getResumeInfo(@PathVariable("usrNo") Long usrNo) {
 		return ResponseEntity.ok(resumeService.getResumeBaseByUsrNo(usrNo));
+	}
+
+	@PutMapping("/api/admin/resume/{usrNo}")
+	public ResponseEntity<Map<String, String>> updateResumeInfo(@RequestBody ResumeBaseEntity updatedResume) {
+		return ResponseEntity.ok(resumeService.updateResumeBaseByUsrNo(updatedResume));
 	}
 }
