@@ -17,7 +17,7 @@ public class ResumeBaseEntity {
 	
 	@Column(name = "USER_NM")
 	private String userNm;
-	
+
 	@Column(name = "SUB_TITLE")
 	private String subTitle;
 	
