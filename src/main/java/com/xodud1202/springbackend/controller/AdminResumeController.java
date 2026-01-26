@@ -3,6 +3,7 @@ package com.xodud1202.springbackend.controller;
 import com.xodud1202.springbackend.domain.admin.resume.ResumePO;
 import com.xodud1202.springbackend.domain.admin.resume.ResumeVO;
 import com.xodud1202.springbackend.entity.ResumeBaseEntity;
+import com.xodud1202.springbackend.entity.ResumeIntroduceEntity;
 import com.xodud1202.springbackend.service.ResumeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 
 @Slf4j
 @Validated
@@ -39,7 +41,35 @@ public class AdminResumeController {
 	 * @param usrNo 조회할 사용자의 고유 번호
 	 * @return 지정된 사용자 번호에 해당하는 이력서 기본 정보를 포함하는 {@code ResponseEntity} 객체
 	 */
-	@GetMapping("/api/admin/resume/{usrNo}")
+	
+	@GetMapping("/api/admin/resume/introduce/{usrNo}")
+	public ResponseEntity<Map<String, Object>> getResumeIntroduce(@PathVariable("usrNo") Long usrNo) {
+		Map<String, Object> response = new HashMap<>();
+		List<ResumeIntroduceEntity> introduceList = resumeService.getResumeIntroduceByUsrNo(usrNo);
+
+		if (introduceList != null && !introduceList.isEmpty()) {
+			ResumeIntroduceEntity introduce = introduceList.get(0);
+			response.put("usrNo", introduce.getUsrNo());
+			response.put("sortSeq", introduce.getSortSeq());
+			response.put("introduceTitle", introduce.getIntroduceTitle());
+			response.put("introduce", introduce.getIntroduce());
+		} else {
+			response.put("usrNo", usrNo);
+			response.put("introduce", "");
+		}
+
+		return ResponseEntity.ok(response);
+	}
+	@PutMapping("/api/admin/resume/introduce/{usrNo}")
+	public ResponseEntity<Map<String, String>> updateResumeIntroduce(@PathVariable("usrNo") Long usrNo, @RequestBody Map<String, Object> body) {
+		String introduce = "";
+		if (body != null && body.get("introduce") != null) {
+			introduce = String.valueOf(body.get("introduce"));
+		}
+
+		return ResponseEntity.ok(resumeService.updateResumeIntroduceByUsrNo(usrNo, introduce));
+	}
+@GetMapping("/api/admin/resume/{usrNo}")
 	public ResponseEntity<ResumeBaseEntity> getResumeInfo(@PathVariable("usrNo") Long usrNo) {
 		return ResponseEntity.ok(resumeService.getResumeBaseByUsrNo(usrNo));
 	}
@@ -49,3 +79,4 @@ public class AdminResumeController {
 		return ResponseEntity.ok(resumeService.updateResumeBaseByUsrNo(updatedResume));
 	}
 }
+

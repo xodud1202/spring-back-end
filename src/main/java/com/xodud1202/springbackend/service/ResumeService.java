@@ -105,7 +105,37 @@ public class ResumeService {
 	public List<ResumeIntroduceEntity> getResumeIntroduceByUsrNo(Long usrNo) {
 		return resumeIntroduceRepository.findByUsrNoAndDelYnOrderBySortSeq(usrNo, "N");
 	}
-	
+
+	public Map<String, String> updateResumeIntroduceByUsrNo(Long usrNo, String introduce) {
+		Map<String, String> result = new HashMap<>();
+
+		try {
+			List<ResumeIntroduceEntity> introduceList = resumeIntroduceRepository.findByUsrNoAndDelYnOrderBySortSeq(usrNo, "N");
+			ResumeIntroduceEntity entity;
+
+			if (introduceList != null && !introduceList.isEmpty()) {
+				entity = introduceList.get(0);
+			} else {
+				entity = new ResumeIntroduceEntity();
+				entity.setUsrNo(usrNo);
+				entity.setSortSeq(1);
+				entity.setDelYn("N");
+			}
+
+			entity.setIntroduce(introduce);
+
+			resumeIntroduceRepository.save(entity);
+
+			result.put("result", "success");
+			result.put("message", "자기소개가 성공적으로 수정되었습니다.");
+		} catch (Exception e) {
+			log.error("자기소개 수정 중 오류 발생: ", e);
+			result.put("result", "error");
+			result.put("message", "서버 오류가 발생했습니다.");
+		}
+
+		return result;
+	}	
 	/**
 	 * 주어진 사용자 번호로 사용자의 이력서 경험과 관련 상세 정보를 조회합니다.
 	 * 이 메서드는 사용자 번호를 기준으로 매퍼를 통해 데이터를 가져옵니다.
