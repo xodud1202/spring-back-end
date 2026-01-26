@@ -106,21 +106,22 @@ public class ResumeService {
 		return resumeIntroduceRepository.findByUsrNoAndDelYnOrderBySortSeq(usrNo, "N");
 	}
 
+	private ResumeIntroduceEntity createDefaultIntroduce(Long usrNo) {
+		ResumeIntroduceEntity entity = new ResumeIntroduceEntity();
+		entity.setUsrNo(usrNo);
+		entity.setSortSeq(1);
+		entity.setDelYn("N");
+		return entity;
+	}
+
 	public Map<String, String> updateResumeIntroduceByUsrNo(Long usrNo, String introduce) {
 		Map<String, String> result = new HashMap<>();
 
 		try {
 			List<ResumeIntroduceEntity> introduceList = resumeIntroduceRepository.findByUsrNoAndDelYnOrderBySortSeq(usrNo, "N");
-			ResumeIntroduceEntity entity;
-
-			if (introduceList != null && !introduceList.isEmpty()) {
-				entity = introduceList.get(0);
-			} else {
-				entity = new ResumeIntroduceEntity();
-				entity.setUsrNo(usrNo);
-				entity.setSortSeq(1);
-				entity.setDelYn("N");
-			}
+			ResumeIntroduceEntity entity = introduceList.isEmpty()
+					? createDefaultIntroduce(usrNo)
+					: introduceList.get(0);
 
 			entity.setIntroduce(introduce);
 

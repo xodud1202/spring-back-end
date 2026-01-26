@@ -11,9 +11,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
+import java.util.Objects;
 
 @Slf4j
 @Validated
@@ -34,14 +35,10 @@ public class AdminResumeController {
 	}
 
 	/**
-	 * 주어진 사용자 번호에 해당하는 이력서 기본 정보를 조회합니다.
-	 * 이력서 기본 정보에는 사용자 이름, 부제목, 연락처, 이메일, 포트폴리오 링크, 최근 급여, 사진 경로,
-	 * 스킬 정보, 주소 등이 포함됩니다. 만약 해당 사용자 번호에 대한 데이터가 존재하지 않을 경우,
-	 * 빈 {@code ResponseEntity}가 반환됩니다.
+	 * 주어진 사용자 번호에 해당하는 자기소개 정보를 조회합니다.
 	 * @param usrNo 조회할 사용자의 고유 번호
-	 * @return 지정된 사용자 번호에 해당하는 이력서 기본 정보를 포함하는 {@code ResponseEntity} 객체
+	 * @return 지정된 사용자 번호에 해당하는 자기소개 정보를 포함하는 {@code ResponseEntity} 객체
 	 */
-	
 	@GetMapping("/api/admin/resume/introduce/{usrNo}")
 	public ResponseEntity<Map<String, Object>> getResumeIntroduce(@PathVariable("usrNo") Long usrNo) {
 		Map<String, Object> response = new HashMap<>();
@@ -60,16 +57,28 @@ public class AdminResumeController {
 
 		return ResponseEntity.ok(response);
 	}
+
+	/**
+	 * 주어진 사용자 번호에 해당하는 자기소개 정보를 저장합니다.
+	 * @param usrNo 조회할 사용자의 고유 번호
+	 * @param body 자기소개 내용이 포함된 요청 본문
+	 * @return 저장 처리 결과를 포함하는 {@code ResponseEntity} 객체
+	 */
 	@PutMapping("/api/admin/resume/introduce/{usrNo}")
 	public ResponseEntity<Map<String, String>> updateResumeIntroduce(@PathVariable("usrNo") Long usrNo, @RequestBody Map<String, Object> body) {
-		String introduce = "";
-		if (body != null && body.get("introduce") != null) {
-			introduce = String.valueOf(body.get("introduce"));
-		}
-
+		String introduce = Objects.toString(body == null ? null : body.get("introduce"), "");
 		return ResponseEntity.ok(resumeService.updateResumeIntroduceByUsrNo(usrNo, introduce));
 	}
-@GetMapping("/api/admin/resume/{usrNo}")
+
+	/**
+	 * 주어진 사용자 번호에 해당하는 이력서 기본 정보를 조회합니다.
+	 * 이력서 기본 정보에는 사용자 이름, 부제목, 연락처, 이메일, 포트폴리오 링크, 최근 급여, 사진 경로,
+	 * 스킬 정보, 주소 등이 포함됩니다. 만약 해당 사용자 번호에 대한 데이터가 존재하지 않을 경우,
+	 * 빈 {@code ResponseEntity}가 반환됩니다.
+	 * @param usrNo 조회할 사용자의 고유 번호
+	 * @return 지정된 사용자 번호에 해당하는 이력서 기본 정보를 포함하는 {@code ResponseEntity} 객체
+	 */
+	@GetMapping("/api/admin/resume/{usrNo}")
 	public ResponseEntity<ResumeBaseEntity> getResumeInfo(@PathVariable("usrNo") Long usrNo) {
 		return ResponseEntity.ok(resumeService.getResumeBaseByUsrNo(usrNo));
 	}
