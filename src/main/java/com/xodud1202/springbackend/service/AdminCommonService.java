@@ -2,6 +2,8 @@ package com.xodud1202.springbackend.service;
 
 import com.xodud1202.springbackend.domain.admin.common.AdminMenuLnb;
 import com.xodud1202.springbackend.domain.admin.common.MenuBase;
+import com.xodud1202.springbackend.domain.common.CommonCodeVO;
+import com.xodud1202.springbackend.mapper.CommonMapper;
 import com.xodud1202.springbackend.repository.MenuBaseRepository;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
@@ -16,6 +18,7 @@ import java.util.stream.Collectors;
 public class AdminCommonService {
 	
 	private final MenuBaseRepository menuBaseRepository;
+	private final CommonMapper commonMapper;
 	
 	/**
 	 * MenuBase 객체를 AdminMenuLnb 객체로 변환합니다.
@@ -83,5 +86,9 @@ public class AdminCommonService {
 		
 		// lnb 메뉴 리스트 tree 생성
 		return buildLnbMenuTree(menuList);
+	}
+
+	public List<CommonCodeVO> getCommonCodeList(String grpCd) {
+		return commonMapper.getCommonCodeList(grpCd);
 	}
 }

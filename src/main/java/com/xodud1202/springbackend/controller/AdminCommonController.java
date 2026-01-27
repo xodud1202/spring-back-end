@@ -1,6 +1,7 @@
 package com.xodud1202.springbackend.controller;
 
 import com.xodud1202.springbackend.domain.admin.common.AdminMenuLnb;
+import com.xodud1202.springbackend.domain.common.CommonCodeVO;
 import com.xodud1202.springbackend.domain.common.FtpProperties;
 import com.xodud1202.springbackend.service.AdminCommonService;
 import com.xodud1202.springbackend.service.FtpFileService;
@@ -32,6 +33,11 @@ public class AdminCommonController {
 	@GetMapping("/api/admin/menu/list")
 	public ResponseEntity<List<AdminMenuLnb>> getResumeInfo() {
 		return ResponseEntity.ok(adminCommonService.getAdminMenuLnbInfo());
+	}
+
+	@GetMapping("/api/admin/common/code")
+	public ResponseEntity<List<CommonCodeVO>> getCommonCodeList(@RequestParam("grpCd") String grpCd) {
+		return ResponseEntity.ok(adminCommonService.getCommonCodeList(grpCd));
 	}
 	
 	@PostMapping("/api/upload/image")
