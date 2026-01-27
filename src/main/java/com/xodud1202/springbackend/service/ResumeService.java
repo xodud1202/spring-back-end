@@ -146,6 +146,97 @@ public class ResumeService {
 	public List<ResumeExperienceBase> getResumeExperienceWithDetails(Long usrNo) {
 		return resumeMapper.getResumeExperienceWithDetails(usrNo);
 	}
+
+	public List<ResumeExperienceBase> getAdminResumeExperienceList(Long usrNo) {
+		return resumeMapper.getAdminResumeExperienceList(usrNo);
+	}
+
+	public Map<String, String> saveResumeExperience(Long usrNo, ResumeExperienceBase param) {
+		Map<String, String> result = new HashMap<>();
+
+		if (param == null) {
+			result.put("result", "fail");
+			result.put("message", "요청 데이터가 없습니다.");
+			return result;
+		}
+
+		param.setUsrNo(usrNo);
+
+		if (StringUtils.isBlank(param.getCompanyNm())
+				|| StringUtils.isBlank(param.getEmploymentTypeCd())
+				|| StringUtils.isBlank(param.getPosition())
+				|| StringUtils.isBlank(param.getDuty())) {
+			result.put("result", "fail");
+			result.put("message", "필수 항목을 입력하세요.");
+			return result;
+		}
+
+		try {
+			boolean isNew = param.getExperienceNo() == null;
+
+			if (isNew) {
+				resumeMapper.insertResumeExperienceBase(param);
+			} else {
+				resumeMapper.updateResumeExperienceBase(param);
+			}
+
+			Long experienceNo = param.getExperienceNo();
+			List<com.xodud1202.springbackend.domain.resume.ResumeExperienceDetail> detailList = param.getResumeExperienceDetailList();
+
+			if (detailList != null) {
+				resumeMapper.softDeleteResumeExperienceDetail(experienceNo, usrNo);
+
+				List<com.xodud1202.springbackend.domain.resume.ResumeExperienceDetail> filteredList = new ArrayList<>();
+				int seq = 1;
+				for (com.xodud1202.springbackend.domain.resume.ResumeExperienceDetail detail : detailList) {
+					if (detail == null || StringUtils.isBlank(detail.getWorkTitle())) {
+						continue;
+					}
+					if (detail.getSortSeq() == null) {
+						detail.setSortSeq(seq);
+					}
+					seq += 1;
+					filteredList.add(detail);
+				}
+
+				if (!filteredList.isEmpty()) {
+					resumeMapper.insertResumeExperienceDetails(experienceNo, usrNo, filteredList);
+				}
+			}
+
+			result.put("result", "success");
+			result.put("message", isNew ? "경력이 등록되었습니다." : "경력이 수정되었습니다.");
+		} catch (Exception e) {
+			log.error("경력 저장 중 오류 발생: ", e);
+			result.put("result", "error");
+			result.put("message", "서버 오류가 발생했습니다.");
+		}
+
+		return result;
+	}
+
+	public Map<String, String> deleteResumeExperience(Long usrNo, Long experienceNo) {
+		Map<String, String> result = new HashMap<>();
+
+		if (experienceNo == null) {
+			result.put("result", "fail");
+			result.put("message", "경력 번호가 없습니다.");
+			return result;
+		}
+
+		try {
+			resumeMapper.softDeleteResumeExperienceBase(experienceNo, usrNo);
+			resumeMapper.softDeleteResumeExperienceDetail(experienceNo, usrNo);
+			result.put("result", "success");
+			result.put("message", "경력이 삭제되었습니다.");
+		} catch (Exception e) {
+			log.error("경력 삭제 중 오류 발생: ", e);
+			result.put("result", "error");
+			result.put("message", "서버 오류가 발생했습니다.");
+		}
+
+		return result;
+	}
 	
 	/**
 	 * 주어진 사용자 번호를 기반으로 사용자의 기타 이력 정보 목록을 조회합니다.

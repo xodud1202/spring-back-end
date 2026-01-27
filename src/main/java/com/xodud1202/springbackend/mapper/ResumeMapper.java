@@ -13,6 +13,12 @@ import java.util.List;
 @Mapper
 public interface ResumeMapper {
 	List<ResumeExperienceBase> getResumeExperienceWithDetails(@Param("usrNo") Long usrNo);
+	List<ResumeExperienceBase> getAdminResumeExperienceList(@Param("usrNo") Long usrNo);
+	int insertResumeExperienceBase(ResumeExperienceBase param);
+	int updateResumeExperienceBase(ResumeExperienceBase param);
+	int softDeleteResumeExperienceBase(@Param("experienceNo") Long experienceNo, @Param("usrNo") Long usrNo);
+	int softDeleteResumeExperienceDetail(@Param("experienceNo") Long experienceNo, @Param("usrNo") Long usrNo);
+	int insertResumeExperienceDetails(@Param("experienceNo") Long experienceNo, @Param("usrNo") Long usrNo, @Param("detailList") List<com.xodud1202.springbackend.domain.resume.ResumeExperienceDetail> detailList);
 	List<ResumeOtherExperience> getResumeOtherExperienceList(@Param("usrNo") Long usrNo);
 	List<ResumeEducation> getResumeEducationList(@Param("usrNo") Long usrNo);
 	List<ResumeVO> getAdminResumeList(ResumePO param);

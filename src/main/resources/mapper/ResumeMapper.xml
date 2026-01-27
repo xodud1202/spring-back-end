@@ -22,6 +22,27 @@
 		</collection>
 	</resultMap>
 
+	<resultMap id="adminExperienceWithDetails" type="com.xodud1202.springbackend.domain.resume.ResumeExperienceBase">
+		<id property="experienceNo" column="EXPERIENCE_NO"/>
+		<result property="companyNm" column="COMPANY_NM"/>
+		<result property="employmentTypeCd" column="EMPLOYMENT_TYPE_CD"/>
+		<result property="position" column="POSITION"/>
+		<result property="duty" column="DUTY"/>
+		<result property="workStartDt" column="WORK_START_DT"/>
+		<result property="workEndDt" column="WORK_END_DT"/>
+
+		<collection property="resumeExperienceDetailList"
+		            javaType="java.util.List"
+		            ofType="com.xodud1202.springbackend.domain.resume.ResumeExperienceDetail"
+		            notNullColumn="WORK_TITLE">
+			<result property="workTitle" column="WORK_TITLE"/>
+			<result property="workDesc" column="WORK_DESC"/>
+			<result property="workStartDt" column="WORK_DTL_START_DT"/>
+			<result property="workEndDt" column="WORK_DTL_END_DT"/>
+			<result property="sortSeq" column="SORT_SEQ"/>
+		</collection>
+	</resultMap>
+
 	<!-- 이력서 경력 리스트 조회 -->
 	<select id="getResumeExperienceWithDetails" resultMap="experienceWithDetails">
 		/* ResumeMapper.getResumeExperienceWithDetails: 이력서 경력 리스트 조회 */
@@ -44,6 +65,138 @@
 		   AND RED.DEL_YN = 'N'
 		 ORDER BY REB.WORK_START_DT DESC, RED.SORT_SEQ
 	</select>
+
+	<!-- 관리자 이력서 경력 리스트 조회 -->
+	<select id="getAdminResumeExperienceList" resultMap="adminExperienceWithDetails">
+		/* ResumeMapper.getAdminResumeExperienceList: 관리자 이력서 경력 리스트 조회 */
+		SELECT REB.EXPERIENCE_NO
+		     , REB.COMPANY_NM
+		     , REB.EMPLOYMENT_TYPE_CD
+		     , REB.POSITION
+		     , REB.DUTY
+		     , DATE_FORMAT(REB.WORK_START_DT, '%Y-%m') AS WORK_START_DT
+		     , DATE_FORMAT(REB.WORK_END_DT, '%Y-%m') AS WORK_END_DT
+		     , RED.WORK_TITLE
+		     , RED.WORK_DESC
+		     , DATE_FORMAT(RED.WORK_START_DT, '%Y-%m') AS WORK_DTL_START_DT
+		     , DATE_FORMAT(RED.WORK_END_DT, '%Y-%m') AS WORK_DTL_END_DT
+		     , RED.SORT_SEQ
+		  FROM RESUME_EXPERIENCE_BASE REB
+		  LEFT JOIN RESUME_EXPERIENCE_DETAIL RED
+		    ON RED.EXPERIENCE_NO = REB.EXPERIENCE_NO
+		   AND RED.DEL_YN = 'N'
+		 WHERE REB.USR_NO = #{usrNo}
+		   AND REB.DEL_YN = 'N'
+		 ORDER BY REB.WORK_START_DT DESC, RED.SORT_SEQ
+	</select>
+
+	<!-- 관리자 이력서 경력 기본 정보 등록 -->
+	<insert id="insertResumeExperienceBase" useGeneratedKeys="true" keyProperty="experienceNo">
+		/* ResumeMapper.insertResumeExperienceBase: 관리자 이력서 경력 기본 정보 등록 */
+		INSERT INTO RESUME_EXPERIENCE_BASE
+		(USR_NO, COMPANY_NM, EMPLOYMENT_TYPE_CD, POSITION, DUTY, WORK_START_DT, WORK_END_DT, DEL_YN, REG_NO, UDT_NO)
+		VALUES
+		(#{usrNo}
+		, #{companyNm}
+		, #{employmentTypeCd}
+		, #{position}
+		, #{duty}
+		, <choose>
+			<when test="workStartDt != null and workStartDt != ''">
+				STR_TO_DATE(CONCAT(#{workStartDt}, '-01'), '%Y-%m-%d')
+			</when>
+			<otherwise>NULL</otherwise>
+		  </choose>
+		, <choose>
+			<when test="workEndDt != null and workEndDt != ''">
+				STR_TO_DATE(CONCAT(#{workEndDt}, '-01'), '%Y-%m-%d')
+			</when>
+			<otherwise>NULL</otherwise>
+		  </choose>
+		, 'N'
+		, #{usrNo}
+		, #{usrNo}
+		)
+	</insert>
+
+	<!-- 관리자 이력서 경력 기본 정보 수정 -->
+	<update id="updateResumeExperienceBase">
+		/* ResumeMapper.updateResumeExperienceBase: 관리자 이력서 경력 기본 정보 수정 */
+		UPDATE RESUME_EXPERIENCE_BASE
+		   SET COMPANY_NM = #{companyNm}
+		     , EMPLOYMENT_TYPE_CD = #{employmentTypeCd}
+		     , POSITION = #{position}
+		     , DUTY = #{duty}
+		     , WORK_START_DT = <choose>
+				<when test="workStartDt != null and workStartDt != ''">
+					STR_TO_DATE(CONCAT(#{workStartDt}, '-01'), '%Y-%m-%d')
+				</when>
+				<otherwise>NULL</otherwise>
+			   </choose>
+		     , WORK_END_DT = <choose>
+				<when test="workEndDt != null and workEndDt != ''">
+					STR_TO_DATE(CONCAT(#{workEndDt}, '-01'), '%Y-%m-%d')
+				</when>
+				<otherwise>NULL</otherwise>
+			   </choose>
+		     , UDT_NO = #{usrNo}
+		     , UDT_DT = NOW()
+		 WHERE EXPERIENCE_NO = #{experienceNo}
+		   AND USR_NO = #{usrNo}
+	</update>
+
+	<!-- 관리자 이력서 경력 기본 정보 삭제 처리 -->
+	<update id="softDeleteResumeExperienceBase">
+		/* ResumeMapper.softDeleteResumeExperienceBase: 관리자 이력서 경력 기본 정보 삭제 처리 */
+		UPDATE RESUME_EXPERIENCE_BASE
+		   SET DEL_YN = 'Y'
+		     , UDT_NO = #{usrNo}
+		     , UDT_DT = NOW()
+		 WHERE EXPERIENCE_NO = #{experienceNo}
+		   AND USR_NO = #{usrNo}
+		   AND DEL_YN = 'N'
+	</update>
+
+	<!-- 관리자 이력서 경력 상세 삭제 처리 -->
+	<update id="softDeleteResumeExperienceDetail">
+		/* ResumeMapper.softDeleteResumeExperienceDetail: 관리자 이력서 경력 상세 삭제 처리 */
+		UPDATE RESUME_EXPERIENCE_DETAIL
+		   SET DEL_YN = 'Y'
+		     , UDT_NO = #{usrNo}
+		     , UDT_DT = NOW()
+		 WHERE EXPERIENCE_NO = #{experienceNo}
+		   AND DEL_YN = 'N'
+	</update>
+
+	<!-- 관리자 이력서 경력 상세 등록 -->
+	<insert id="insertResumeExperienceDetails">
+		/* ResumeMapper.insertResumeExperienceDetails: 관리자 이력서 경력 상세 등록 */
+		INSERT INTO RESUME_EXPERIENCE_DETAIL
+		(EXPERIENCE_NO, SORT_SEQ, WORK_TITLE, WORK_START_DT, WORK_END_DT, WORK_DESC, DEL_YN, REG_NO, UDT_NO)
+		VALUES
+		<foreach collection="detailList" item="detail" separator=",">
+			(#{experienceNo}
+			, #{detail.sortSeq}
+			, #{detail.workTitle}
+			, <choose>
+				<when test="detail.workStartDt != null and detail.workStartDt != ''">
+					STR_TO_DATE(CONCAT(#{detail.workStartDt}, '-01'), '%Y-%m-%d')
+				</when>
+				<otherwise>NULL</otherwise>
+			  </choose>
+			, <choose>
+				<when test="detail.workEndDt != null and detail.workEndDt != ''">
+					STR_TO_DATE(CONCAT(#{detail.workEndDt}, '-01'), '%Y-%m-%d')
+				</when>
+				<otherwise>NULL</otherwise>
+			  </choose>
+			, #{detail.workDesc}
+			, 'N'
+			, #{usrNo}
+			, #{usrNo}
+			)
+		</foreach>
+	</insert>
 
 	<!-- 이력서 기타 경력 및 자격 조회 -->
 	<select id="getResumeOtherExperienceList" resultType="com.xodud1202.springbackend.domain.resume.ResumeOtherExperience">
