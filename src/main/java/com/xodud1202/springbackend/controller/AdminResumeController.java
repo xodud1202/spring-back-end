@@ -4,6 +4,7 @@ import com.xodud1202.springbackend.domain.admin.resume.ResumePO;
 import com.xodud1202.springbackend.domain.admin.resume.ResumeVO;
 import com.xodud1202.springbackend.domain.resume.ResumeEducation;
 import com.xodud1202.springbackend.domain.resume.ResumeExperienceBase;
+import com.xodud1202.springbackend.domain.resume.ResumeOtherExperience;
 import com.xodud1202.springbackend.entity.ResumeBaseEntity;
 import com.xodud1202.springbackend.entity.ResumeIntroduceEntity;
 import com.xodud1202.springbackend.service.ResumeService;
@@ -122,6 +123,40 @@ public class AdminResumeController {
 	public ResponseEntity<Map<String, String>> deleteResumeEducation(@PathVariable("usrNo") Long usrNo,
 	                                                                 @RequestParam("educationNo") Long educationNo) {
 		return ResponseEntity.ok(resumeService.deleteResumeEducation(usrNo, educationNo));
+	}
+
+	/**
+	 * 주어진 사용자 번호에 해당하는 기타 항목 정보를 조회합니다.
+	 * @param usrNo 조회할 사용자의 고유 번호
+	 * @return 기타 항목 정보 리스트를 포함하는 {@code ResponseEntity} 객체
+	 */
+	@GetMapping("/api/admin/resume/other-experience/{usrNo}")
+	public ResponseEntity<List<ResumeOtherExperience>> getResumeOtherExperience(@PathVariable("usrNo") Long usrNo) {
+		return ResponseEntity.ok(resumeService.getAdminResumeOtherExperienceList(usrNo));
+	}
+
+	/**
+	 * 주어진 사용자 번호에 해당하는 기타 항목 정보를 저장합니다.
+	 * @param usrNo 조회할 사용자의 고유 번호
+	 * @param body 기타 항목 정보가 포함된 요청 본문
+	 * @return 저장 처리 결과를 포함하는 {@code ResponseEntity} 객체
+	 */
+	@PutMapping("/api/admin/resume/other-experience/{usrNo}")
+	public ResponseEntity<Map<String, String>> updateResumeOtherExperience(@PathVariable("usrNo") Long usrNo,
+	                                                                       @RequestBody ResumeOtherExperience body) {
+		return ResponseEntity.ok(resumeService.saveResumeOtherExperience(usrNo, body));
+	}
+
+	/**
+	 * 주어진 사용자 번호와 기타 항목 번호에 해당하는 정보를 삭제 처리합니다.
+	 * @param usrNo 조회할 사용자의 고유 번호
+	 * @param otherExperienceNo 삭제할 기타 항목 번호
+	 * @return 삭제 처리 결과를 포함하는 {@code ResponseEntity} 객체
+	 */
+	@DeleteMapping("/api/admin/resume/other-experience/{usrNo}")
+	public ResponseEntity<Map<String, String>> deleteResumeOtherExperience(@PathVariable("usrNo") Long usrNo,
+	                                                                       @RequestParam("otherExperienceNo") Long otherExperienceNo) {
+		return ResponseEntity.ok(resumeService.deleteResumeOtherExperience(usrNo, otherExperienceNo));
 	}
 }
 

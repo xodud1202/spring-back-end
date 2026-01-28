@@ -4,9 +4,10 @@ import lombok.Data;
 
 @Data
 public class ResumeOtherExperience {
+	private Long otherExperienceNo;
 	private Long usrNo;
 	
-	private int sortSeq;
+	private Integer sortSeq;
 	
 	private String experienceTitle;
 	private String experienceSubTitle;

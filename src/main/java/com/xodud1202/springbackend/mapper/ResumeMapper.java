@@ -23,6 +23,10 @@ public interface ResumeMapper {
 	int softDeleteResumeExperienceDetailByIds(@Param("experienceNo") Long experienceNo, @Param("usrNo") Long usrNo, @Param("detailIds") List<Long> detailIds);
 	int insertResumeExperienceDetails(@Param("experienceNo") Long experienceNo, @Param("usrNo") Long usrNo, @Param("detailList") List<com.xodud1202.springbackend.domain.resume.ResumeExperienceDetail> detailList);
 	List<ResumeOtherExperience> getResumeOtherExperienceList(@Param("usrNo") Long usrNo);
+	List<ResumeOtherExperience> getAdminResumeOtherExperienceList(@Param("usrNo") Long usrNo);
+	int insertResumeOtherExperience(ResumeOtherExperience param);
+	int updateResumeOtherExperience(ResumeOtherExperience param);
+	int softDeleteResumeOtherExperience(@Param("usrNo") Long usrNo, @Param("otherExperienceNo") Long otherExperienceNo);
 	List<ResumeEducation> getResumeEducationList(@Param("usrNo") Long usrNo);
 	List<ResumeEducation> getAdminResumeEducationList(@Param("usrNo") Long usrNo);
 	int insertResumeEducation(ResumeEducation param);

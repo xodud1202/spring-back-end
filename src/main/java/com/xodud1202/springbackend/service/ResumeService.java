@@ -316,6 +316,124 @@ public class ResumeService {
 	public List<ResumeOtherExperience> getResumeOtherExperienceList(Long usrNo) {
 		return resumeMapper.getResumeOtherExperienceList(usrNo);
 	}
+
+	/**
+	 * 주어진 사용자 번호를 기반으로 관리자용 기타 이력 정보 목록을 조회합니다.
+	 * @param usrNo 사용자 고유 번호
+	 * @return 관리자용 기타 이력 정보 목록. 데이터가 없을 경우 빈 리스트 반환
+	 */
+	public List<ResumeOtherExperience> getAdminResumeOtherExperienceList(Long usrNo) {
+		return resumeMapper.getAdminResumeOtherExperienceList(usrNo);
+	}
+
+	/**
+	 * 기타 이력의 정렬순서가 없을 경우 기존 데이터를 기반으로 정렬순서를 결정합니다.
+	 * @param usrNo 사용자 고유 번호
+	 * @param param 저장 대상 기타 이력 정보
+	 * @return 결정된 정렬순서 값
+	 */
+	private Integer resolveOtherExperienceSortSeq(Long usrNo, ResumeOtherExperience param) {
+		List<ResumeOtherExperience> list = resumeMapper.getAdminResumeOtherExperienceList(usrNo);
+		if (param.getOtherExperienceNo() != null) {
+			Optional<ResumeOtherExperience> existing = list.stream()
+					.filter(item -> Objects.equals(item.getOtherExperienceNo(), param.getOtherExperienceNo()))
+					.findFirst();
+			if (existing.isPresent() && existing.get().getSortSeq() != null) {
+				return existing.get().getSortSeq();
+			}
+		}
+
+		int maxSeq = list.stream()
+				.map(ResumeOtherExperience::getSortSeq)
+				.filter(Objects::nonNull)
+				.max(Integer::compareTo)
+				.orElse(0);
+		return maxSeq + 1;
+	}
+
+	/**
+	 * 관리자용 기타 이력 정보를 저장합니다.
+	 * @param usrNo 사용자 고유 번호
+	 * @param param 저장할 기타 이력 정보
+	 * @return 저장 처리 결과
+	 */
+	public Map<String, String> saveResumeOtherExperience(Long usrNo, ResumeOtherExperience param) {
+		Map<String, String> result = new HashMap<>();
+
+		if (param == null) {
+			result.put("result", "fail");
+			result.put("message", "요청 데이터가 없습니다.");
+			return result;
+		}
+
+		param.setUsrNo(usrNo);
+
+		if (StringUtils.isBlank(param.getExperienceTitle()) || StringUtils.isBlank(param.getExperienceSubTitle())) {
+			result.put("result", "fail");
+			result.put("message", "경험명과 타이틀은 필수 입력입니다.");
+			return result;
+		}
+
+		if (param.getSortSeq() == null) {
+			param.setSortSeq(resolveOtherExperienceSortSeq(usrNo, param));
+		}
+
+		try {
+			boolean isNew = param.getOtherExperienceNo() == null;
+			int affected = isNew
+					? resumeMapper.insertResumeOtherExperience(param)
+					: resumeMapper.updateResumeOtherExperience(param);
+
+			if (!isNew && affected < 1) {
+				result.put("result", "fail");
+				result.put("message", "기타 항목 수정 대상이 없습니다.");
+				return result;
+			}
+
+			result.put("result", "success");
+			result.put("message", isNew ? "기타 항목이 등록되었습니다." : "기타 항목이 수정되었습니다.");
+		} catch (Exception e) {
+			log.error("기타 항목 저장 중 오류 발생: ", e);
+			result.put("result", "error");
+			result.put("message", "서버 오류가 발생했습니다.");
+		}
+
+		return result;
+	}
+
+	/**
+	 * 관리자용 기타 이력 정보를 삭제 처리합니다.
+	 * @param usrNo 사용자 고유 번호
+	 * @param otherExperienceNo 삭제 대상 기타 이력 번호
+	 * @return 삭제 처리 결과
+	 */
+	public Map<String, String> deleteResumeOtherExperience(Long usrNo, Long otherExperienceNo) {
+		Map<String, String> result = new HashMap<>();
+
+		if (otherExperienceNo == null) {
+			result.put("result", "fail");
+			result.put("message", "삭제 대상 정보가 없습니다.");
+			return result;
+		}
+
+		try {
+			int affected = resumeMapper.softDeleteResumeOtherExperience(usrNo, otherExperienceNo);
+			if (affected < 1) {
+				result.put("result", "fail");
+				result.put("message", "기타 항목 삭제 대상이 없습니다.");
+				return result;
+			}
+
+			result.put("result", "success");
+			result.put("message", "기타 항목이 삭제되었습니다.");
+		} catch (Exception e) {
+			log.error("기타 항목 삭제 중 오류 발생: ", e);
+			result.put("result", "error");
+			result.put("message", "서버 오류가 발생했습니다.");
+		}
+
+		return result;
+	}
 	
 	/**
 	 * 주어진 사용자 번호를 기반으로 사용자의 학력 정보 목록을 조회합니다.

@@ -274,6 +274,91 @@
 		 ORDER BY SORT_SEQ
 	</select>
 
+	<!-- 관리자 이력서 기타 경력 및 자격 조회 -->
+	<select id="getAdminResumeOtherExperienceList" resultType="com.xodud1202.springbackend.domain.resume.ResumeOtherExperience">
+		/* ResumeMapper.getAdminResumeOtherExperienceList: 관리자 이력서 기타 경력 및 자격 조회 */
+		SELECT OTHER_EXPERIENCE_NO
+		     , USR_NO
+		     , SORT_SEQ
+		     , EXPERIENCE_TITLE
+		     , EXPERIENCE_SUB_TITLE
+		     , EXPERIENCE_DESC
+		     , DATE_FORMAT(ROE.EXPERIENCE_START_DT, '%Y-%m') AS EXPERIENCE_START_DT
+		     , DATE_FORMAT(ROE.EXPERIENCE_END_DT, '%Y-%m')   AS EXPERIENCE_END_DT
+		  FROM RESUME_OTHER_EXPERIENCE ROE
+		 WHERE ROE.DEL_YN = 'N'
+		   AND ROE.USR_NO = #{usrNo}
+		 ORDER BY SORT_SEQ
+	</select>
+
+	<!-- 관리자 이력서 기타 경력 및 자격 등록 -->
+	<insert id="insertResumeOtherExperience" useGeneratedKeys="true" keyProperty="otherExperienceNo">
+		/* ResumeMapper.insertResumeOtherExperience: 관리자 이력서 기타 경력 및 자격 등록 */
+		INSERT INTO RESUME_OTHER_EXPERIENCE
+		(USR_NO, SORT_SEQ, EXPERIENCE_TITLE, EXPERIENCE_START_DT, EXPERIENCE_END_DT, EXPERIENCE_SUB_TITLE, EXPERIENCE_DESC, DEL_YN, REG_NO, UDT_NO)
+		VALUES
+		(#{usrNo}
+		, #{sortSeq}
+		, #{experienceTitle}
+		, <choose>
+			<when test="experienceStartDt != null and experienceStartDt != ''">
+				STR_TO_DATE(CONCAT(#{experienceStartDt}, '-01'), '%Y-%m-%d')
+			</when>
+			<otherwise>NULL</otherwise>
+		  </choose>
+		, <choose>
+			<when test="experienceEndDt != null and experienceEndDt != ''">
+				STR_TO_DATE(CONCAT(#{experienceEndDt}, '-01'), '%Y-%m-%d')
+			</when>
+			<otherwise>NULL</otherwise>
+		  </choose>
+		, #{experienceSubTitle}
+		, #{experienceDesc}
+		, 'N'
+		, #{usrNo}
+		, #{usrNo}
+		)
+	</insert>
+
+	<!-- 관리자 이력서 기타 경력 및 자격 수정 -->
+	<update id="updateResumeOtherExperience">
+		/* ResumeMapper.updateResumeOtherExperience: 관리자 이력서 기타 경력 및 자격 수정 */
+		UPDATE RESUME_OTHER_EXPERIENCE
+		   SET SORT_SEQ = #{sortSeq}
+		     , EXPERIENCE_TITLE = #{experienceTitle}
+		     , EXPERIENCE_SUB_TITLE = #{experienceSubTitle}
+		     , EXPERIENCE_DESC = #{experienceDesc}
+		     , EXPERIENCE_START_DT = <choose>
+				<when test="experienceStartDt != null and experienceStartDt != ''">
+					STR_TO_DATE(CONCAT(#{experienceStartDt}, '-01'), '%Y-%m-%d')
+				</when>
+				<otherwise>NULL</otherwise>
+			   </choose>
+		     , EXPERIENCE_END_DT = <choose>
+				<when test="experienceEndDt != null and experienceEndDt != ''">
+					STR_TO_DATE(CONCAT(#{experienceEndDt}, '-01'), '%Y-%m-%d')
+				</when>
+				<otherwise>NULL</otherwise>
+			   </choose>
+		     , UDT_NO = #{usrNo}
+		     , UDT_DT = NOW()
+		 WHERE OTHER_EXPERIENCE_NO = #{otherExperienceNo}
+		   AND USR_NO = #{usrNo}
+		   AND DEL_YN = 'N'
+	</update>
+
+	<!-- 관리자 이력서 기타 경력 및 자격 삭제 -->
+	<update id="softDeleteResumeOtherExperience">
+		/* ResumeMapper.softDeleteResumeOtherExperience: 관리자 이력서 기타 경력 및 자격 삭제 */
+		UPDATE RESUME_OTHER_EXPERIENCE
+		   SET DEL_YN = 'Y'
+		     , UDT_NO = #{usrNo}
+		     , UDT_DT = NOW()
+		 WHERE OTHER_EXPERIENCE_NO = #{otherExperienceNo}
+		   AND USR_NO = #{usrNo}
+		   AND DEL_YN = 'N'
+	</update>
+
 	<!-- 이력서 학력 리스트 조회 -->
 	<select id="getResumeEducationList" resultType="com.xodud1202.springbackend.domain.resume.ResumeEducation">
 		/* ResumeMapper.getResumeEducationList: 이력서 학력 리스트 조회 */
