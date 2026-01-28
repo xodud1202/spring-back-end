@@ -15,7 +15,13 @@ import java.io.InputStream;
 public class FtpFileService {
 	
 	private final FtpProperties ftpProperties;
-	
+
+	/**
+	 * 이력서 이미지 파일을 FTP 서버에 업로드하고 접근 가능한 URL을 반환합니다.
+	 * @param file 업로드할 파일
+	 * @param usrNo 사용자 번호
+	 * @return 업로드된 파일의 접근 URL
+	 */
 	public String uploadResumeImage(MultipartFile file, String usrNo) throws IOException {
 		FTPClient ftpClient = new FTPClient();
 		
@@ -47,9 +53,7 @@ public class FtpFileService {
 			}
 			
 			// 파일명 생성
-			String originalFilename = file.getOriginalFilename();
-			String extension = originalFilename.substring(originalFilename.lastIndexOf("."));
-			String fileName = usrNo + "_" + System.currentTimeMillis() + extension;
+			String fileName = buildFileName(file, usrNo);
 			
 			// 파일 업로드
 			try (InputStream inputStream = file.getInputStream()) {
@@ -68,5 +72,17 @@ public class FtpFileService {
 				ftpClient.disconnect();
 			}
 		}
+	}
+
+	/**
+	 * 업로드할 파일명을 생성합니다.
+	 * @param file 업로드 대상 파일
+	 * @param usrNo 사용자 번호
+	 * @return 생성된 파일명
+	 */
+	private String buildFileName(MultipartFile file, String usrNo) {
+		String originalFilename = file.getOriginalFilename();
+		String extension = originalFilename.substring(originalFilename.lastIndexOf("."));
+		return usrNo + "_" + System.currentTimeMillis() + extension;
 	}
 }
