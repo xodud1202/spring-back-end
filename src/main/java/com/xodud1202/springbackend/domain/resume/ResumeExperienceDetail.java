@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 public class ResumeExperienceDetail {
+	private Long experienceDtlNo;
 	private Long usrNo;
 	private String workTitle;
 	private String workDesc;

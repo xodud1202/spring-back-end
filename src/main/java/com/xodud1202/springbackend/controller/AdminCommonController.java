@@ -89,4 +89,48 @@ public class AdminCommonController {
 					.body(Map.of("error", "이미지 업로드 실패: " + e.getMessage()));
 		}
 	}
+
+	@PostMapping("/api/upload/education-logo")
+	public ResponseEntity<?> uploadEducationLogo(
+			@RequestParam("image") MultipartFile image,
+			@RequestParam("usrNo") String usrNo
+	) {
+		try {
+			if (image.isEmpty()) {
+				return ResponseEntity.badRequest().body(Map.of("error", "이미지 파일이 없습니다."));
+			}
+
+			long maxSizeInBytes = (long) ftpProperties.getUploadResumeMaxSize() * 1024 * 1024;
+			if (image.getSize() > maxSizeInBytes) {
+				return ResponseEntity.badRequest()
+						.body(Map.of("error", "파일 크기가 " + ftpProperties.getUploadResumeMaxSize() + "MB를 초과합니다."));
+			}
+
+			String originalFilename = image.getOriginalFilename();
+			if (originalFilename == null) {
+				return ResponseEntity.badRequest().body(Map.of("error", "파일명이 올바르지 않습니다."));
+			}
+
+			String extension = originalFilename.substring(originalFilename.lastIndexOf(".") + 1).toLowerCase();
+			String allowedExtensions = ftpProperties.getUploadResumeAllowExtension();
+			if (!allowedExtensions.contains(extension)) {
+				return ResponseEntity.badRequest()
+						.body(Map.of("error", "허용되지 않은 파일 형식입니다. 허용 형식: " + allowedExtensions));
+			}
+
+			String imageUrl = ftpFileService.uploadResumeImage(image, usrNo);
+
+			Map<String, String> response = new HashMap<>();
+			response.put("logoPath", imageUrl);
+			response.put("message", "이미지 업로드가 완료되었습니다.");
+
+			return ResponseEntity.ok(response);
+		} catch (IOException e) {
+			return ResponseEntity.internalServerError()
+					.body(Map.of("error", "FTP 업로드 실패: " + e.getMessage()));
+		} catch (Exception e) {
+			return ResponseEntity.internalServerError()
+					.body(Map.of("error", "이미지 업로드 실패: " + e.getMessage()));
+		}
+	}
 }

@@ -4,6 +4,7 @@ import com.xodud1202.springbackend.domain.admin.resume.ResumePO;
 import com.xodud1202.springbackend.domain.admin.resume.ResumeVO;
 import com.xodud1202.springbackend.domain.resume.ResumeEducation;
 import com.xodud1202.springbackend.domain.resume.ResumeExperienceBase;
+import com.xodud1202.springbackend.domain.resume.ResumeExperienceDetail;
 import com.xodud1202.springbackend.domain.resume.ResumeOtherExperience;
 import com.xodud1202.springbackend.entity.ResumeBaseEntity;
 import com.xodud1202.springbackend.entity.ResumeIntroduceEntity;
@@ -20,6 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.stream.Collectors;
+
+import java.nio.charset.Charset;
 
 @Service
 @Slf4j
@@ -106,6 +109,33 @@ public class ResumeService {
 		return resumeIntroduceRepository.findByUsrNoAndDelYnOrderBySortSeq(usrNo, "N");
 	}
 
+	private String normalizeText(String value) {
+		return value == null ? "" : value.trim();
+	}
+
+	private String normalizeDate(String value) {
+		return value == null ? "" : value.trim();
+	}
+
+	private boolean isDetailChanged(ResumeExperienceDetail incoming, ResumeExperienceDetail existing) {
+		if (existing == null) {
+			return true;
+		}
+		if (!normalizeText(incoming.getWorkTitle()).equals(normalizeText(existing.getWorkTitle()))) {
+			return true;
+		}
+		if (!normalizeText(incoming.getWorkDesc()).equals(normalizeText(existing.getWorkDesc()))) {
+			return true;
+		}
+		if (!normalizeDate(incoming.getWorkStartDt()).equals(normalizeDate(existing.getWorkStartDt()))) {
+			return true;
+		}
+		if (!normalizeDate(incoming.getWorkEndDt()).equals(normalizeDate(existing.getWorkEndDt()))) {
+			return true;
+		}
+		return !Objects.equals(incoming.getSortSeq(), existing.getSortSeq());
+	}
+
 	private ResumeIntroduceEntity createDefaultIntroduce(Long usrNo) {
 		ResumeIntroduceEntity entity = new ResumeIntroduceEntity();
 		entity.setUsrNo(usrNo);
@@ -181,14 +211,12 @@ public class ResumeService {
 			}
 
 			Long experienceNo = param.getExperienceNo();
-			List<com.xodud1202.springbackend.domain.resume.ResumeExperienceDetail> detailList = param.getResumeExperienceDetailList();
+			List<ResumeExperienceDetail> detailList = param.getResumeExperienceDetailList();
 
 			if (detailList != null) {
-				resumeMapper.softDeleteResumeExperienceDetail(experienceNo, usrNo);
-
-				List<com.xodud1202.springbackend.domain.resume.ResumeExperienceDetail> filteredList = new ArrayList<>();
+				List<ResumeExperienceDetail> filteredList = new ArrayList<>();
 				int seq = 1;
-				for (com.xodud1202.springbackend.domain.resume.ResumeExperienceDetail detail : detailList) {
+				for (ResumeExperienceDetail detail : detailList) {
 					if (detail == null || StringUtils.isBlank(detail.getWorkTitle())) {
 						continue;
 					}
@@ -199,8 +227,49 @@ public class ResumeService {
 					filteredList.add(detail);
 				}
 
-				if (!filteredList.isEmpty()) {
-					resumeMapper.insertResumeExperienceDetails(experienceNo, usrNo, filteredList);
+				if (isNew) {
+					if (!filteredList.isEmpty()) {
+						resumeMapper.insertResumeExperienceDetails(experienceNo, usrNo, filteredList);
+					}
+				} else {
+					List<ResumeExperienceDetail> existingList = resumeMapper.getResumeExperienceDetailList(experienceNo, usrNo);
+					Map<Long, ResumeExperienceDetail> existingMap = existingList.stream()
+							.filter(detail -> detail.getExperienceDtlNo() != null)
+							.collect(Collectors.toMap(ResumeExperienceDetail::getExperienceDtlNo, detail -> detail));
+
+					Set<Long> incomingIds = filteredList.stream()
+							.map(ResumeExperienceDetail::getExperienceDtlNo)
+							.filter(Objects::nonNull)
+							.collect(Collectors.toSet());
+
+					List<Long> deleteIds = existingMap.keySet().stream()
+							.filter(id -> !incomingIds.contains(id))
+							.collect(Collectors.toList());
+
+					if (!deleteIds.isEmpty()) {
+						resumeMapper.softDeleteResumeExperienceDetailByIds(experienceNo, usrNo, deleteIds);
+					}
+
+					List<ResumeExperienceDetail> insertList = new ArrayList<>();
+					for (ResumeExperienceDetail detail : filteredList) {
+						Long detailNo = detail.getExperienceDtlNo();
+						if (detailNo == null) {
+							insertList.add(detail);
+							continue;
+						}
+						ResumeExperienceDetail existing = existingMap.get(detailNo);
+						if (existing == null) {
+							insertList.add(detail);
+							continue;
+						}
+						if (isDetailChanged(detail, existing)) {
+							resumeMapper.updateResumeExperienceDetail(experienceNo, usrNo, detail);
+						}
+					}
+
+					if (!insertList.isEmpty()) {
+						resumeMapper.insertResumeExperienceDetails(experienceNo, usrNo, insertList);
+					}
 				}
 			}
 
@@ -256,6 +325,88 @@ public class ResumeService {
 	 */
 	public List<ResumeEducation> getResumeEducationList(Long usrNo) {
 		return resumeMapper.getResumeEducationList(usrNo);
+	}
+
+	public List<ResumeEducation> getAdminResumeEducationList(Long usrNo) {
+		log.info("file.encoding={}", System.getProperty("file.encoding"));
+		log.info("sun.jnu.encoding={}", System.getProperty("sun.jnu.encoding"));
+		log.info("defaultCharset={}", Charset.defaultCharset());
+		return resumeMapper.getAdminResumeEducationList(usrNo);
+	}
+
+	public Map<String, String> saveResumeEducation(Long usrNo, ResumeEducation param) {
+		Map<String, String> result = new HashMap<>();
+
+		if (param == null) {
+			result.put("result", "fail");
+			result.put("message", "요청 데이터가 없습니다.");
+			return result;
+		}
+
+		param.setUsrNo(usrNo);
+
+		if (StringUtils.isBlank(param.getEducationNm())
+				|| StringUtils.isBlank(param.getDepartment())
+				|| StringUtils.isBlank(param.getEducationStatCd())
+				|| StringUtils.isBlank(param.getEducationStartDt())) {
+			result.put("result", "fail");
+			result.put("message", "필수 항목을 입력하세요.");
+			return result;
+		}
+
+		try {
+			boolean isNew = param.getEducationNo() == null;
+			int affected;
+
+			if (isNew) {
+				affected = resumeMapper.insertResumeEducation(param);
+			} else {
+				affected = resumeMapper.updateResumeEducation(param);
+			}
+
+			if (affected < 1 && !isNew) {
+				result.put("result", "fail");
+				result.put("message", "학력 수정 대상이 없습니다.");
+				return result;
+			}
+
+			result.put("result", "success");
+			result.put("message", isNew ? "학력이 등록되었습니다." : "학력이 수정되었습니다.");
+		} catch (Exception e) {
+			log.error("학력 저장 중 오류 발생: ", e);
+			result.put("result", "error");
+			result.put("message", "서버 오류가 발생했습니다.");
+		}
+
+		return result;
+	}
+
+	public Map<String, String> deleteResumeEducation(Long usrNo, Long educationNo) {
+		Map<String, String> result = new HashMap<>();
+
+		if (educationNo == null) {
+			result.put("result", "fail");
+			result.put("message", "삭제 대상 정보가 없습니다.");
+			return result;
+		}
+
+		try {
+			int affected = resumeMapper.softDeleteResumeEducation(usrNo, educationNo);
+			if (affected < 1) {
+				result.put("result", "fail");
+				result.put("message", "학력 삭제 대상이 없습니다.");
+				return result;
+			}
+
+			result.put("result", "success");
+			result.put("message", "학력이 삭제되었습니다.");
+		} catch (Exception e) {
+			log.error("학력 삭제 중 오류 발생: ", e);
+			result.put("result", "error");
+			result.put("message", "서버 오류가 발생했습니다.");
+		}
+
+		return result;
 	}
 	
 	/**

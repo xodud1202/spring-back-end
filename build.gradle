@@ -57,3 +57,8 @@ bootJar {
     archiveClassifier.set('')    // 분류자(plain 등) 제거
     archiveFileName.set('spring-back-end.jar')
 }
+
+bootRun {                                                                                                                
+    jvmArgs "-Dfile.encoding=UTF-8", "-Dsun.jnu.encoding=UTF-8"
+    systemProperty "spring.profiles.active", "local"
+}

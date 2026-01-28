@@ -4,11 +4,13 @@ import lombok.Data;
 
 @Data
 public class ResumeEducation {
+	private Long educationNo;
 	private Long usrNo;
 	
 	private String educationNm;
 	private String department;
 	private String educationScore;
+	private String educationStatCd;
 	private String educationStat;
 	private String educationStartDt;
 	private String educationEndDt;

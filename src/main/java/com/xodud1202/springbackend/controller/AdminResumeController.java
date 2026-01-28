@@ -2,6 +2,7 @@ package com.xodud1202.springbackend.controller;
 
 import com.xodud1202.springbackend.domain.admin.resume.ResumePO;
 import com.xodud1202.springbackend.domain.admin.resume.ResumeVO;
+import com.xodud1202.springbackend.domain.resume.ResumeEducation;
 import com.xodud1202.springbackend.domain.resume.ResumeExperienceBase;
 import com.xodud1202.springbackend.entity.ResumeBaseEntity;
 import com.xodud1202.springbackend.entity.ResumeIntroduceEntity;
@@ -104,6 +105,23 @@ public class AdminResumeController {
 	public ResponseEntity<Map<String, String>> deleteResumeExperience(@PathVariable("usrNo") Long usrNo,
 	                                                                  @PathVariable("experienceNo") Long experienceNo) {
 		return ResponseEntity.ok(resumeService.deleteResumeExperience(usrNo, experienceNo));
+	}
+
+	@GetMapping("/api/admin/resume/education/{usrNo}")
+	public ResponseEntity<List<ResumeEducation>> getResumeEducation(@PathVariable("usrNo") Long usrNo) {
+		return ResponseEntity.ok(resumeService.getAdminResumeEducationList(usrNo));
+	}
+
+	@PutMapping("/api/admin/resume/education/{usrNo}")
+	public ResponseEntity<Map<String, String>> updateResumeEducation(@PathVariable("usrNo") Long usrNo,
+	                                                                 @RequestBody ResumeEducation body) {
+		return ResponseEntity.ok(resumeService.saveResumeEducation(usrNo, body));
+	}
+
+	@DeleteMapping("/api/admin/resume/education/{usrNo}")
+	public ResponseEntity<Map<String, String>> deleteResumeEducation(@PathVariable("usrNo") Long usrNo,
+	                                                                 @RequestParam("educationNo") Long educationNo) {
+		return ResponseEntity.ok(resumeService.deleteResumeEducation(usrNo, educationNo));
 	}
 }
 

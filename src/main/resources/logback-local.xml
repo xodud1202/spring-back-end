@@ -5,6 +5,7 @@
     <!-- JPA SQL 전용 콘솔 출력 (깔끔한 형태) -->
     <appender name="JPA_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
+            <charset>UTF-8</charset>
             <pattern>%d{HH:mm:ss.SSS} %highlight(%-5level) %cyan(%logger{15}) :%n%msg%n</pattern>
         </encoder>
     </appender>
@@ -12,6 +13,7 @@
     <!-- 일반 콘솔 출력 -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
+            <charset>UTF-8</charset>
             <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
         </encoder>
     </appender>
@@ -23,6 +25,7 @@
             <maxHistory>30</maxHistory>
         </rollingPolicy>
         <encoder>
+            <charset>UTF-8</charset>
             <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
         </encoder>
     </appender>
