@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+		"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.xodud1202.springbackend.mapper.BoardMapper">
+	<select id="getAdminBoardList" resultType="com.xodud1202.springbackend.domain.admin.board.BoardVO">
+		SELECT BI.BOARD_NO
+		     , BI.BOARD_DIV_CD
+		     , CD1.CD_NM AS BOARD_DIV_NM
+		     , BI.BOARD_DETAIL_DIV_CD
+		     , CD2.CD_NM AS BOARD_DETAIL_DIV_NM
+		     , BI.TITLE
+		     , BI.VIEW_YN
+		     , BI.READ_CNT
+		     , BI.REG_DT
+		     , BI.UDT_DT
+		  FROM BOARD_INFO BI
+		  LEFT JOIN COMMON_CODE CD1
+		    ON CD1.GRP_CD = 'BOARD_DIV'
+		   AND CD1.CD = BI.BOARD_DIV_CD
+		  LEFT JOIN COMMON_CODE CD2
+		    ON CD2.GRP_CD = 'BOARD_DETAIL_DIV'
+		   AND CD2.CD = BI.BOARD_DETAIL_DIV_CD
+		 WHERE BI.DEL_YN = 'N'
+		   AND BI.BOARD_DIV_CD = 'BOARD_DIV_12'
+		<if test="boardDetailDivCd != null and boardDetailDivCd != ''">
+		   AND BI.BOARD_DETAIL_DIV_CD = #{boardDetailDivCd}
+		</if>
+		<if test="title != null and title != ''">
+		   AND BI.TITLE LIKE CONCAT('%', #{title}, '%')
+		</if>
+		 ORDER BY BI.BOARD_NO DESC
+		 LIMIT #{pageSize} OFFSET #{offset}
+	</select>
+
+	<select id="getAdminBoardCount" resultType="int">
+		SELECT COUNT(1)
+		  FROM BOARD_INFO BI
+		 WHERE BI.DEL_YN = 'N'
+		   AND BI.BOARD_DIV_CD = 'BOARD_DIV_12'
+		<if test="boardDetailDivCd != null and boardDetailDivCd != ''">
+		   AND BI.BOARD_DETAIL_DIV_CD = #{boardDetailDivCd}
+		</if>
+		<if test="title != null and title != ''">
+		   AND BI.TITLE LIKE CONCAT('%', #{title}, '%')
+		</if>
+	</select>
+</mapper>
