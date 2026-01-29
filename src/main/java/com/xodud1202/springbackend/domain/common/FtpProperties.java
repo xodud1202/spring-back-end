@@ -25,6 +25,8 @@ public class FtpProperties {
 	private String uploadResumeAllowExtension;
 	private String uploadResumeFaceImgTargetPath;
 	private String uploadResumeFaceImgView;
+	private String uploadResumeEducationTargetPath;
+	private String uploadResumeEducationView;
 
 	// board upload 설정
 	private int uploadBoardMaxSize;

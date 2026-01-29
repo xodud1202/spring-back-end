@@ -65,7 +65,7 @@ public class AdminCommonController {
 			@RequestParam("image") MultipartFile image,
 			@RequestParam("usrNo") String usrNo
 	) {
-		return handleResumeImageUpload(image, usrNo, "logoPath");
+		return handleResumeEducationLogoUpload(image, usrNo);
 	}
 
 	/**
@@ -86,6 +86,34 @@ public class AdminCommonController {
 
 			Map<String, String> response = new HashMap<>();
 			response.put(responseKey, imageUrl);
+			response.put("message", "이미지 업로드가 완료되었습니다.");
+			return ResponseEntity.ok(response);
+		} catch (IOException e) {
+			return ResponseEntity.internalServerError()
+					.body(Map.of("error", "FTP 업로드 실패: " + e.getMessage()));
+		} catch (Exception e) {
+			return ResponseEntity.internalServerError()
+					.body(Map.of("error", "이미지 업로드 실패: " + e.getMessage()));
+		}
+	}
+
+	/**
+	 * 학력 로고 이미지 업로드를 처리합니다.
+	 * @param image 업로드할 이미지 파일
+	 * @param usrNo 사용자 번호
+	 * @return 업로드 처리 결과
+	 */
+	private ResponseEntity<?> handleResumeEducationLogoUpload(MultipartFile image, String usrNo) {
+		try {
+			String validationError = validateResumeImage(image);
+			if (validationError != null) {
+				return ResponseEntity.badRequest().body(Map.of("error", validationError));
+			}
+
+			String imageUrl = ftpFileService.uploadResumeEducationLogo(image, usrNo);
+
+			Map<String, String> response = new HashMap<>();
+			response.put("logoPath", imageUrl);
 			response.put("message", "이미지 업로드가 완료되었습니다.");
 			return ResponseEntity.ok(response);
 		} catch (IOException e) {
