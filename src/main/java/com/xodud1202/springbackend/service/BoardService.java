@@ -15,6 +15,7 @@ import java.util.Map;
 public class BoardService {
 	private final BoardMapper boardMapper;
 
+	// 관리자 게시판 목록을 페이징 조건으로 조회합니다.
 	public Map<String, Object> getAdminBoardList(BoardPO param) {
 		int page = param.getPage() == null || param.getPage() < 1 ? 1 : param.getPage();
 		int pageSize = 20;
@@ -33,5 +34,10 @@ public class BoardService {
 		result.put("page", page);
 		result.put("pageSize", pageSize);
 		return result;
+	}
+
+	// 관리자 게시판 상세 정보를 조회합니다.
+	public BoardVO getAdminBoardDetail(BoardPO param) {
+		return boardMapper.getAdminBoardDetail(param);
 	}
 }

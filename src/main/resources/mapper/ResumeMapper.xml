@@ -500,5 +500,28 @@
 			</choose>
 		</if>
 		 ORDER BY UB.USR_NO DESC
+		 LIMIT #{pageSize} OFFSET #{offset}
+	</select>
+
+	<select id="getAdminResumeCount" resultType="int">
+		SELECT COUNT(1)
+		  FROM USER_BASE UB
+		     , RESUME_BASE RB
+		 WHERE UB.USR_NO = RB.USR_NO
+		   AND UB.USR_STAT_CD = '02'
+		   AND RB.DEL_YN = 'N'
+		<if test="searchValue != null and searchValue != ''">
+			<choose>
+				<when test="searchGb == 'usrNo'">
+		   AND UB.USR_NO = #{searchValue}
+				</when>
+				<when test="searchGb == 'userNm'">
+		   AND UB.USER_NM LIKE CONCAT(#{searchValue}, '%')
+				</when>
+				<when test="searchGb == 'loginId'">
+		   AND UB.LOGIN_ID LIKE CONCAT(#{searchValue}, '%')
+				</when>
+			</choose>
+		</if>
 	</select>
 </mapper>

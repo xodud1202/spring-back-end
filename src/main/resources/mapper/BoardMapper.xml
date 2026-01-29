@@ -45,4 +45,28 @@
 		   AND BI.TITLE LIKE CONCAT('%', #{title}, '%')
 		</if>
 	</select>
+
+	<select id="getAdminBoardDetail" resultType="com.xodud1202.springbackend.domain.admin.board.BoardVO">
+		SELECT BI.BOARD_NO
+		     , BI.BOARD_DIV_CD
+		     , CD1.CD_NM AS BOARD_DIV_NM
+		     , BI.BOARD_DETAIL_DIV_CD
+		     , CD2.CD_NM AS BOARD_DETAIL_DIV_NM
+		     , BI.TITLE
+		     , BI.CONTENT
+		     , BI.VIEW_YN
+		     , BI.READ_CNT
+		     , BI.REG_DT
+		     , BI.UDT_DT
+		  FROM BOARD_INFO BI
+		  LEFT JOIN COMMON_CODE CD1
+		    ON CD1.GRP_CD = 'BOARD_DIV'
+		   AND CD1.CD = BI.BOARD_DIV_CD
+		  LEFT JOIN COMMON_CODE CD2
+		    ON CD2.GRP_CD = 'BOARD_DETAIL_DIV'
+		   AND CD2.CD = BI.BOARD_DETAIL_DIV_CD
+		 WHERE BI.DEL_YN = 'N'
+		   AND BI.BOARD_DIV_CD = 'BOARD_DIV_12'
+		   AND BI.BOARD_NO = #{boardNo}
+	</select>
 </mapper>

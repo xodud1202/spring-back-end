@@ -13,6 +13,7 @@ public class BoardVO extends CommonVO {
 	private String boardDetailDivCd;
 	private String boardDetailDivNm;
 	private String title;
+	private String content;
 	private String viewYn;
 	private Long readCnt;
 }

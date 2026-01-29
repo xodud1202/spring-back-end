@@ -33,4 +33,5 @@ public interface ResumeMapper {
 	int updateResumeEducation(ResumeEducation param);
 	int softDeleteResumeEducation(@Param("usrNo") Long usrNo, @Param("educationNo") Long educationNo);
 	List<ResumeVO> getAdminResumeList(ResumePO param);
+	int getAdminResumeCount(ResumePO param);
 }

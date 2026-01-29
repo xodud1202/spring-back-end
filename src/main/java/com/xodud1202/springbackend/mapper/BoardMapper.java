@@ -7,4 +7,5 @@ import java.util.List;
 public interface BoardMapper {
 	List<BoardVO> getAdminBoardList(BoardPO param);
 	int getAdminBoardCount(BoardPO param);
+	BoardVO getAdminBoardDetail(BoardPO param);
 }

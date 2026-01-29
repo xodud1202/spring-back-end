@@ -528,13 +528,28 @@ public class ResumeService {
 	}
 	
 	/**
-	 * 관리자에 의해 조회 가능한 이력서 목록을 반환합니다.
-	 * 이 메서드는 매개변수로 받은 조건을 기반으로 필터링된 이력서 리스트를 반환합니다.
+	 * 관리자용 이력서 목록을 페이징 조건과 함께 조회합니다.
 	 * @param param 이력서 목록 조회 조건을 담고 있는 ResumePO 객체
-	 * @return 조건에 따라 필터링된 이력서 목록. 만약 데이터가 없을 경우 빈 리스트 반환
+	 * @return 목록, 총 건수, 페이지 정보를 포함한 결과 맵
 	 */
-	public List<ResumeVO> getAdminResumeList(ResumePO param) {
-		return resumeMapper.getAdminResumeList(param);
+	public Map<String, Object> getAdminResumeList(ResumePO param) {
+		int page = param.getPage() == null || param.getPage() < 1 ? 1 : param.getPage();
+		int pageSize = 20;
+		int offset = (page - 1) * pageSize;
+
+		param.setPage(page);
+		param.setPageSize(pageSize);
+		param.setOffset(offset);
+
+		List<ResumeVO> list = resumeMapper.getAdminResumeList(param);
+		int totalCount = resumeMapper.getAdminResumeCount(param);
+
+		Map<String, Object> result = new HashMap<>();
+		result.put("list", list);
+		result.put("totalCount", totalCount);
+		result.put("page", page);
+		result.put("pageSize", pageSize);
+		return result;
 	}
 	
 	/**

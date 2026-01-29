@@ -1,7 +1,6 @@
 package com.xodud1202.springbackend.controller;
 
 import com.xodud1202.springbackend.domain.admin.resume.ResumePO;
-import com.xodud1202.springbackend.domain.admin.resume.ResumeVO;
 import com.xodud1202.springbackend.domain.resume.ResumeEducation;
 import com.xodud1202.springbackend.domain.resume.ResumeExperienceBase;
 import com.xodud1202.springbackend.domain.resume.ResumeOtherExperience;
@@ -33,7 +32,7 @@ public class AdminResumeController {
 	 * @return 이력서 목록을 담고 있는 {@code ResponseEntity} 객체
 	 */
 	@GetMapping("/api/admin/resume/list")
-	public ResponseEntity<List<ResumeVO>> getResumeInfo(ResumePO param) {
+	public ResponseEntity<Map<String, Object>> getResumeInfo(ResumePO param) {
 		return ResponseEntity.ok(resumeService.getAdminResumeList(param));
 	}
 
