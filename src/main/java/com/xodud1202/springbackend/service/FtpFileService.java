@@ -84,6 +84,22 @@ public class FtpFileService {
 	}
 
 	/**
+	 * 에디터 이미지 파일을 FTP 서버에 업로드하고 접근 가능한 URL을 반환합니다.
+	 * @param file 업로드할 파일
+	 * @return 업로드된 파일의 접근 URL
+	 */
+	public String uploadEditorImage(MultipartFile file) throws IOException {
+		String dateFolder = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+		return uploadImageToFtp(
+				file,
+				ftpProperties.getUploadEditorTargetPath(),
+				ftpProperties.getUploadEditorView(),
+				new String[] { dateFolder },
+				"editor"
+		);
+	}
+
+	/**
 	 * FTP에 이미지 파일을 업로드하고 접근 가능한 URL을 반환합니다.
 	 * @param file 업로드할 파일
 	 * @param targetPath 업로드 대상 기본 경로
