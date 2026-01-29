@@ -10,6 +10,9 @@ public class BoardPO {
 	private String boardDetailDivCd;
 	private String title;
 	private String content;
+	// 등록자/수정자 번호를 전달합니다.
+	private Long regNo;
+	private Long udtNo;
 	private Integer page;
 	private Integer pageSize;
 	private Integer offset;

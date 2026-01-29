@@ -10,4 +10,5 @@ public interface BoardMapper {
 	BoardVO getAdminBoardDetail(BoardPO param);
 	int updateAdminBoard(BoardPO param);
 	int insertAdminBoard(BoardPO param);
+	int deleteAdminBoard(BoardPO param);
 }

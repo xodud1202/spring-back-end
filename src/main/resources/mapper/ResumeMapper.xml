@@ -97,29 +97,44 @@
 	<!-- 관리자 이력서 경력 기본 정보 등록 -->
 	<insert id="insertResumeExperienceBase" useGeneratedKeys="true" keyProperty="experienceNo">
 		/* ResumeMapper.insertResumeExperienceBase: 관리자 이력서 경력 기본 정보 등록 */
-		INSERT INTO RESUME_EXPERIENCE_BASE
-		(USR_NO, COMPANY_NM, EMPLOYMENT_TYPE_CD, POSITION, DUTY, WORK_START_DT, WORK_END_DT, DEL_YN, REG_NO, UDT_NO)
-		VALUES
-		(#{usrNo}
-		, #{companyNm}
-		, #{employmentTypeCd}
-		, #{position}
-		, #{duty}
-		, <choose>
-			<when test="workStartDt != null and workStartDt != ''">
-				STR_TO_DATE(CONCAT(#{workStartDt}, '-01'), '%Y-%m-%d')
-			</when>
-			<otherwise>NULL</otherwise>
-		  </choose>
-		, <choose>
-			<when test="workEndDt != null and workEndDt != ''">
-				STR_TO_DATE(CONCAT(#{workEndDt}, '-01'), '%Y-%m-%d')
-			</when>
-			<otherwise>NULL</otherwise>
-		  </choose>
-		, 'N'
-		, #{usrNo}
-		, #{usrNo}
+		INSERT INTO RESUME_EXPERIENCE_BASE (
+		       USR_NO
+		     , COMPANY_NM
+		     , EMPLOYMENT_TYPE_CD
+		     , POSITION
+		     , DUTY
+		     , WORK_START_DT
+		     , WORK_END_DT
+		     , DEL_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{usrNo}
+		     , #{companyNm}
+		     , #{employmentTypeCd}
+		     , #{position}
+		     , #{duty}
+		     ,
+			<choose>
+				<when test="workStartDt != null and workStartDt != ''">
+		       STR_TO_DATE(CONCAT(#{workStartDt}, '-01'), '%Y-%m-%d')
+				</when>
+				<otherwise>
+		       NULL
+				</otherwise>
+			</choose>
+		     ,
+			<choose>
+					<when test="workEndDt != null and workEndDt != ''">
+		       STR_TO_DATE(CONCAT(#{workEndDt}, '-01'), '%Y-%m-%d')
+					</when>
+					<otherwise>
+		       NULL
+					</otherwise>
+				</choose>
+		     , 'N'
+		     , #{usrNo}
+		     , #{usrNo}
 		)
 	</insert>
 
@@ -233,30 +248,37 @@
 	<!-- 관리자 이력서 경력 상세 등록 -->
 	<insert id="insertResumeExperienceDetails">
 		/* ResumeMapper.insertResumeExperienceDetails: 관리자 이력서 경력 상세 등록 */
-		INSERT INTO RESUME_EXPERIENCE_DETAIL
-		(EXPERIENCE_NO, SORT_SEQ, WORK_TITLE, WORK_START_DT, WORK_END_DT, WORK_DESC, DEL_YN, REG_NO, UDT_NO)
-		VALUES
+		INSERT INTO RESUME_EXPERIENCE_DETAIL (
+		       EXPERIENCE_NO
+		     , SORT_SEQ
+		     , WORK_TITLE
+		     , WORK_START_DT
+		     , WORK_END_DT
+		     , WORK_DESC
+		     , DEL_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES
 		<foreach collection="detailList" item="detail" separator=",">
-			(#{experienceNo}
-			, #{detail.sortSeq}
-			, #{detail.workTitle}
-			, <choose>
-				<when test="detail.workStartDt != null and detail.workStartDt != ''">
-					STR_TO_DATE(CONCAT(#{detail.workStartDt}, '-01'), '%Y-%m-%d')
-				</when>
+		(
+		       #{experienceNo}
+		     , #{detail.sortSeq}
+		     , #{detail.workTitle}
+		     ,
+			<choose>
+				<when test="detail.workStartDt != null and detail.workStartDt != ''">STR_TO_DATE(CONCAT(#{detail.workStartDt}, '-01'), '%Y-%m-%d')</when>
 				<otherwise>NULL</otherwise>
-			  </choose>
-			, <choose>
-				<when test="detail.workEndDt != null and detail.workEndDt != ''">
-					STR_TO_DATE(CONCAT(#{detail.workEndDt}, '-01'), '%Y-%m-%d')
-				</when>
+			</choose>
+		     ,
+			<choose>
+				<when test="detail.workEndDt != null and detail.workEndDt != ''">STR_TO_DATE(CONCAT(#{detail.workEndDt}, '-01'), '%Y-%m-%d')</when>
 				<otherwise>NULL</otherwise>
-			  </choose>
-			, #{detail.workDesc}
-			, 'N'
-			, #{usrNo}
-			, #{usrNo}
-			)
+			</choose>
+		     , #{detail.workDesc}
+		     , 'N'
+		     , #{usrNo}
+		     , #{usrNo}
+		)
 		</foreach>
 	</insert>
 
@@ -294,29 +316,36 @@
 	<!-- 관리자 이력서 기타 경력 및 자격 등록 -->
 	<insert id="insertResumeOtherExperience" useGeneratedKeys="true" keyProperty="otherExperienceNo">
 		/* ResumeMapper.insertResumeOtherExperience: 관리자 이력서 기타 경력 및 자격 등록 */
-		INSERT INTO RESUME_OTHER_EXPERIENCE
-		(USR_NO, SORT_SEQ, EXPERIENCE_TITLE, EXPERIENCE_START_DT, EXPERIENCE_END_DT, EXPERIENCE_SUB_TITLE, EXPERIENCE_DESC, DEL_YN, REG_NO, UDT_NO)
-		VALUES
-		(#{usrNo}
-		, #{sortSeq}
-		, #{experienceTitle}
-		, <choose>
-			<when test="experienceStartDt != null and experienceStartDt != ''">
-				STR_TO_DATE(CONCAT(#{experienceStartDt}, '-01'), '%Y-%m-%d')
-			</when>
+		INSERT INTO RESUME_OTHER_EXPERIENCE (
+		       USR_NO
+		     , SORT_SEQ
+		     , EXPERIENCE_TITLE
+		     , EXPERIENCE_START_DT
+		     , EXPERIENCE_END_DT
+		     , EXPERIENCE_SUB_TITLE
+		     , EXPERIENCE_DESC
+		     , DEL_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{usrNo}
+		     , #{sortSeq}
+		     , #{experienceTitle}
+		     , 
+		<choose>
+			<when test="experienceStartDt != null and experienceStartDt != ''">STR_TO_DATE(CONCAT(#{experienceStartDt}, '-01'), '%Y-%m-%d')</when>
 			<otherwise>NULL</otherwise>
-		  </choose>
-		, <choose>
-			<when test="experienceEndDt != null and experienceEndDt != ''">
-				STR_TO_DATE(CONCAT(#{experienceEndDt}, '-01'), '%Y-%m-%d')
-			</when>
+		</choose>
+		     , 
+		<choose>
+			<when test="experienceEndDt != null and experienceEndDt != ''">STR_TO_DATE(CONCAT(#{experienceEndDt}, '-01'), '%Y-%m-%d')</when>
 			<otherwise>NULL</otherwise>
-		  </choose>
-		, #{experienceSubTitle}
-		, #{experienceDesc}
-		, 'N'
-		, #{usrNo}
-		, #{usrNo}
+		</choose>
+		     , #{experienceSubTitle}
+		     , #{experienceDesc}
+		     , 'N'
+		     , #{usrNo}
+		     , #{usrNo}
 		)
 	</insert>
 
@@ -396,30 +425,38 @@
 	<!-- 관리자 이력서 학력 등록 -->
 	<insert id="insertResumeEducation" useGeneratedKeys="true" keyProperty="educationNo">
 		/* ResumeMapper.insertResumeEducation: 관리자 이력서 학력 등록 */
-		INSERT INTO RESUME_EDUCATION
-		(USR_NO, EDUCATION_NM, DEPARTMENT, EDUCATION_SCORE, EDUCATION_STAT_CD, EDUCATION_START_DT, EDUCATION_END_DT, LOGO_PATH, DEL_YN, REG_NO, UDT_NO)
-		VALUES
-		(#{usrNo}
-		, #{educationNm}
-		, #{department}
-		, #{educationScore}
-		, #{educationStatCd}
-		, <choose>
-			<when test="educationStartDt != null and educationStartDt != ''">
-				STR_TO_DATE(CONCAT(#{educationStartDt}, '-01'), '%Y-%m-%d')
-			</when>
+		INSERT INTO RESUME_EDUCATION (
+		       USR_NO
+		     , EDUCATION_NM
+		     , DEPARTMENT
+		     , EDUCATION_SCORE
+		     , EDUCATION_STAT_CD
+		     , EDUCATION_START_DT
+		     , EDUCATION_END_DT
+		     , LOGO_PATH
+		     , DEL_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{usrNo}
+		     , #{educationNm}
+		     , #{department}
+		     , #{educationScore}
+		     , #{educationStatCd}
+		     ,
+		<choose>
+			<when test="educationStartDt != null and educationStartDt != ''">STR_TO_DATE(CONCAT(#{educationStartDt}, '-01'), '%Y-%m-%d')</when>
 			<otherwise>NULL</otherwise>
-		  </choose>
-		, <choose>
-			<when test="educationEndDt != null and educationEndDt != ''">
-				STR_TO_DATE(CONCAT(#{educationEndDt}, '-01'), '%Y-%m-%d')
-			</when>
+		</choose>
+		     ,
+		<choose>
+			<when test="educationEndDt != null and educationEndDt != ''">STR_TO_DATE(CONCAT(#{educationEndDt}, '-01'), '%Y-%m-%d')</when>
 			<otherwise>NULL</otherwise>
-		  </choose>
-		, #{logoPath}
-		, 'N'
-		, #{usrNo}
-		, #{usrNo}
+		</choose>
+		     , #{logoPath}
+		     , 'N'
+		     , #{usrNo}
+		     , #{usrNo}
 		)
 	</insert>
 

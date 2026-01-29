@@ -39,4 +39,10 @@ public class AdminBoardController {
 	public ResponseEntity<Object> createBoard(@RequestBody BoardPO param) {
 		return ResponseEntity.ok(boardService.insertAdminBoard(param));
 	}
+
+	// 관리자 게시글을 삭제 처리합니다.
+	@PostMapping("/api/admin/board/delete")
+	public ResponseEntity<Object> deleteBoard(@RequestBody BoardPO param) {
+		return ResponseEntity.ok(boardService.deleteAdminBoard(param));
+	}
 }

@@ -50,4 +50,9 @@ public class BoardService {
 	public int insertAdminBoard(BoardPO param) {
 		return boardMapper.insertAdminBoard(param);
 	}
+
+	// 관리자 게시글을 삭제 처리합니다.
+	public int deleteAdminBoard(BoardPO param) {
+		return boardMapper.deleteAdminBoard(param);
+	}
 }
