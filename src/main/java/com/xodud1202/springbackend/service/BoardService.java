@@ -40,4 +40,14 @@ public class BoardService {
 	public BoardVO getAdminBoardDetail(BoardPO param) {
 		return boardMapper.getAdminBoardDetail(param);
 	}
+
+	// 관리자 게시판 정보를 수정합니다.
+	public int updateAdminBoard(BoardPO param) {
+		return boardMapper.updateAdminBoard(param);
+	}
+
+	// 관리자 게시글을 등록합니다.
+	public int insertAdminBoard(BoardPO param) {
+		return boardMapper.insertAdminBoard(param);
+	}
 }

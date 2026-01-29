@@ -8,4 +8,6 @@ public interface BoardMapper {
 	List<BoardVO> getAdminBoardList(BoardPO param);
 	int getAdminBoardCount(BoardPO param);
 	BoardVO getAdminBoardDetail(BoardPO param);
+	int updateAdminBoard(BoardPO param);
+	int insertAdminBoard(BoardPO param);
 }

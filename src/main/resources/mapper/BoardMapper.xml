@@ -69,4 +69,30 @@
 		   AND BI.BOARD_DIV_CD = 'BOARD_DIV_12'
 		   AND BI.BOARD_NO = #{boardNo}
 	</select>
+
+	<update id="updateAdminBoard">
+		UPDATE BOARD_INFO
+		   <set>
+		   		<if test="boardDetailDivCd != null and boardDetailDivCd != ''">
+		   			BOARD_DETAIL_DIV_CD = #{boardDetailDivCd},
+		   		</if>
+		   		<if test="title != null">
+		   			TITLE = #{title},
+		   		</if>
+		   		<if test="content != null">
+		   			CONTENT = #{content},
+		   		</if>
+		   		UDT_DT = NOW()
+		   </set>
+		 WHERE BOARD_NO = #{boardNo}
+		   AND DEL_YN = 'N'
+		   AND BOARD_DIV_CD = 'BOARD_DIV_12'
+	</update>
+
+	<insert id="insertAdminBoard">
+		INSERT INTO BOARD_INFO
+			(BOARD_DIV_CD, BOARD_DETAIL_DIV_CD, TITLE, CONTENT, VIEW_YN, READ_CNT, DEL_YN, REG_DT, UDT_DT)
+		VALUES
+			('BOARD_DIV_12', #{boardDetailDivCd}, #{title}, #{content}, 'Y', 0, 'N', NOW(), NOW())
+	</insert>
 </mapper>

@@ -9,6 +9,7 @@ public class BoardPO {
 	
 	private String boardDetailDivCd;
 	private String title;
+	private String content;
 	private Integer page;
 	private Integer pageSize;
 	private Integer offset;
