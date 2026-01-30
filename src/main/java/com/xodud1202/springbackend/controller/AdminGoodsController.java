@@ -4,9 +4,12 @@ import com.xodud1202.springbackend.domain.admin.goods.GoodsPO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsDetailVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsMerchVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSavePO;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeOrderSavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeSavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeVO;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryVO;
+import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
 import com.xodud1202.springbackend.service.GoodsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -72,6 +75,42 @@ public class AdminGoodsController {
 			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
 		}
 		return ResponseEntity.ok(goodsService.updateAdminGoods(param));
+	}
+
+	// 카테고리 목록을 조회합니다.
+	@GetMapping("/api/admin/category/list")
+	public ResponseEntity<List<CategoryVO>> getCategoryList(@RequestParam(required = false) Integer categoryLevel,
+			@RequestParam(required = false) String parentCategoryId) {
+		return ResponseEntity.ok(goodsService.getCategoryList(categoryLevel, parentCategoryId));
+	}
+
+	// 관리자 상품 카테고리 목록을 조회합니다.
+	@GetMapping("/api/admin/goods/category/list")
+	public ResponseEntity<List<GoodsCategoryVO>> getGoodsCategoryList(@RequestParam String goodsId) {
+		if (goodsId == null || goodsId.trim().isEmpty()) {
+			return ResponseEntity.badRequest().body(List.of());
+		}
+		return ResponseEntity.ok(goodsService.getAdminGoodsCategoryList(goodsId));
+	}
+
+	// 관리자 상품 카테고리를 단건 저장합니다.
+	@PostMapping("/api/admin/goods/category/save")
+	public ResponseEntity<Object> saveGoodsCategory(@RequestBody GoodsCategorySavePO param) {
+		String validationMessage = goodsService.validateGoodsCategorySave(param);
+		if (validationMessage != null) {
+			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
+		}
+		return ResponseEntity.ok(goodsService.saveAdminGoodsCategory(param));
+	}
+
+	// 관리자 상품 카테고리를 단건 삭제합니다.
+	@PostMapping("/api/admin/goods/category/delete")
+	public ResponseEntity<Object> deleteGoodsCategory(@RequestBody GoodsCategorySavePO param) {
+		String validationMessage = goodsService.validateGoodsCategoryDelete(param);
+		if (validationMessage != null) {
+			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
+		}
+		return ResponseEntity.ok(goodsService.deleteAdminGoodsCategory(param));
 	}
 
 	// 관리자 상품 사이즈 목록을 조회합니다.

@@ -2,6 +2,8 @@ package com.xodud1202.springbackend.domain.admin.goods;
 
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 public class GoodsSavePO {
 	private String goodsId;
@@ -18,6 +20,7 @@ public class GoodsSavePO {
 	private String erpStyleCd;
 	private String erpColorCd;
 	private String erpMerchCd;
+	private List<GoodsCategoryItem> categoryList;
 	private Long regNo;
 	private Long udtNo;
 }

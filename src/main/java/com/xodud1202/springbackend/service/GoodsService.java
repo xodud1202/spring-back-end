@@ -2,6 +2,11 @@ package com.xodud1202.springbackend.service;
 
 import com.xodud1202.springbackend.domain.admin.goods.GoodsPO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsDetailVO;
+import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryItem;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySavePO;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySaveItem;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsMerchVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeOrderItem;
@@ -62,12 +67,16 @@ public class GoodsService {
 		if (param != null && param.getUdtNo() == null) {
 			param.setUdtNo(param.getRegNo());
 		}
-		return goodsMapper.insertAdminGoods(param);
+		int result = goodsMapper.insertAdminGoods(param);
+		saveAdminGoodsCategories(param);
+		return result;
 	}
 
 	// 관리자 상품을 수정합니다.
 	public int updateAdminGoods(GoodsSavePO param) {
-		return goodsMapper.updateAdminGoods(param);
+		int result = goodsMapper.updateAdminGoods(param);
+		saveAdminGoodsCategories(param);
+		return result;
 	}
 
 	// 상품 등록 필수값을 검증합니다.
@@ -275,6 +284,121 @@ public class GoodsService {
 			param.setStockQty(current.getStockQty());
 		}
 		return isNew ? goodsMapper.insertAdminGoodsSize(param) : goodsMapper.updateAdminGoodsSize(param);
+	}
+
+	// 카테고리 목록을 조회합니다.
+	public List<CategoryVO> getCategoryList(Integer categoryLevel, String parentCategoryId) {
+		return goodsMapper.getCategoryList(categoryLevel, parentCategoryId);
+	}
+
+	// 관리자 상품 카테고리 목록을 조회합니다.
+	public List<GoodsCategoryVO> getAdminGoodsCategoryList(String goodsId) {
+		if (isBlank(goodsId)) {
+			return List.of();
+		}
+		return goodsMapper.getAdminGoodsCategoryList(goodsId);
+	}
+
+	// 관리자 상품 카테고리 단건 저장 요청을 검증합니다.
+	public String validateGoodsCategorySave(GoodsCategorySavePO param) {
+		if (param == null) {
+			return "요청 데이터가 없습니다.";
+		}
+		if (isBlank(param.getGoodsId())) {
+			return "상품코드를 확인해주세요.";
+		}
+		if (isBlank(param.getCategoryId())) {
+			return "카테고리를 선택해주세요.";
+		}
+		if (param.getUdtNo() == null) {
+			return "수정자 정보를 확인해주세요.";
+		}
+		int childCount = goodsMapper.countCategoryChildren(param.getCategoryId());
+		if (childCount > 0) {
+			return "카테고리를 선택해주세요.";
+		}
+		return null;
+	}
+
+	// 관리자 상품 카테고리를 단건 저장합니다.
+	public int saveAdminGoodsCategory(GoodsCategorySavePO param) {
+		if (param.getDispOrd() == null) {
+			param.setDispOrd(0);
+		}
+		if (param.getRegNo() == null) {
+			param.setRegNo(param.getUdtNo());
+		}
+		String originCategoryId = param.getOriginCategoryId();
+		if (!isBlank(originCategoryId) && !originCategoryId.equals(param.getCategoryId())) {
+			GoodsCategorySavePO deleteParam = new GoodsCategorySavePO();
+			deleteParam.setGoodsId(param.getGoodsId());
+			deleteParam.setCategoryId(originCategoryId);
+			goodsMapper.deleteAdminGoodsCategory(deleteParam);
+		}
+		int exists = goodsMapper.countAdminGoodsCategory(param.getGoodsId(), param.getCategoryId());
+		if (exists > 0) {
+			return goodsMapper.updateAdminGoodsCategory(param);
+		}
+		return goodsMapper.insertAdminGoodsCategory(param);
+	}
+
+	// 관리자 상품 카테고리 단건 삭제 요청을 검증합니다.
+	public String validateGoodsCategoryDelete(GoodsCategorySavePO param) {
+		if (param == null) {
+			return "요청 데이터가 없습니다.";
+		}
+		if (isBlank(param.getGoodsId())) {
+			return "상품코드를 확인해주세요.";
+		}
+		if (isBlank(param.getCategoryId())) {
+			return "카테고리를 선택해주세요.";
+		}
+		if (param.getUdtNo() == null) {
+			return "수정자 정보를 확인해주세요.";
+		}
+		return null;
+	}
+
+	// 관리자 상품 카테고리를 단건 삭제합니다.
+	public int deleteAdminGoodsCategory(GoodsCategorySavePO param) {
+		return goodsMapper.deleteAdminGoodsCategory(param);
+	}
+
+	// 관리자 상품 카테고리를 저장합니다.
+	public void saveAdminGoodsCategories(GoodsSavePO param) {
+		if (param == null || param.getCategoryList() == null) {
+			return;
+		}
+		String goodsId = param.getGoodsId();
+		if (isBlank(goodsId)) {
+			return;
+		}
+		Long writerNo = param.getUdtNo() != null ? param.getUdtNo() : param.getRegNo();
+		if (writerNo == null) {
+			return;
+		}
+		List<GoodsCategoryItem> categoryList = param.getCategoryList();
+		goodsMapper.deleteAdminGoodsCategoryByGoodsId(goodsId);
+		if (categoryList.isEmpty()) {
+			return;
+		}
+		List<GoodsCategorySaveItem> saveItems = new java.util.ArrayList<>();
+		for (int index = 0; index < categoryList.size(); index += 1) {
+			GoodsCategoryItem item = categoryList.get(index);
+			if (item == null || isBlank(item.getCategoryId())) {
+				continue;
+			}
+			GoodsCategorySaveItem saveItem = new GoodsCategorySaveItem();
+			saveItem.setGoodsId(goodsId);
+			saveItem.setCategoryId(item.getCategoryId());
+			saveItem.setDispOrd(item.getDispOrd() != null ? item.getDispOrd() : index + 1);
+			saveItem.setRegNo(writerNo);
+			saveItem.setUdtNo(writerNo);
+			saveItems.add(saveItem);
+		}
+		if (!saveItems.isEmpty()) {
+			goodsMapper.insertAdminGoodsCategoryList(saveItems);
+		}
 	}
 
 	// 관리자 상품 사이즈 삭제 요청을 검증합니다.

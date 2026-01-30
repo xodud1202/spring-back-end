@@ -8,6 +8,10 @@ import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeOrderSavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeSavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsVO;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySaveItem;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySavePO;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryVO;
+import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -32,6 +36,33 @@ public interface GoodsMapper {
 
 	// 관리자 상품을 수정합니다.
 	int updateAdminGoods(GoodsSavePO param);
+
+	// 카테고리 목록을 조회합니다.
+	List<CategoryVO> getCategoryList(@Param("categoryLevel") Integer categoryLevel, @Param("parentCategoryId") String parentCategoryId);
+
+	// 관리자 상품 카테고리 목록을 조회합니다.
+	List<GoodsCategoryVO> getAdminGoodsCategoryList(@Param("goodsId") String goodsId);
+
+	// 카테고리 하위 건수를 조회합니다.
+	int countCategoryChildren(@Param("categoryId") String categoryId);
+
+	// 관리자 상품 카테고리를 단건 삭제합니다.
+	int deleteAdminGoodsCategory(GoodsCategorySavePO param);
+
+	// 관리자 상품 카테고리를 삭제합니다.
+	int deleteAdminGoodsCategoryByGoodsId(@Param("goodsId") String goodsId);
+
+	// 관리자 상품 카테고리를 등록합니다.
+	int insertAdminGoodsCategoryList(List<GoodsCategorySaveItem> list);
+
+	// 관리자 상품 카테고리를 단건 등록합니다.
+	int insertAdminGoodsCategory(GoodsCategorySavePO param);
+
+	// 관리자 상품 카테고리를 단건 수정합니다.
+	int updateAdminGoodsCategory(GoodsCategorySavePO param);
+
+	// 관리자 상품 카테고리 건수를 조회합니다.
+	int countAdminGoodsCategory(@Param("goodsId") String goodsId, @Param("categoryId") String categoryId);
 
 	// 관리자 상품 사이즈 목록을 조회합니다.
 	List<GoodsSizeVO> getAdminGoodsSizeList(@Param("goodsId") String goodsId);
