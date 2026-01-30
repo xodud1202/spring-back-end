@@ -248,4 +248,21 @@
 		   AND SIZE_ID = #{sizeId}
 	</update>
 
+	<update id="updateAdminGoodsSizeOrder">
+		/* GoodsMapper.updateAdminGoodsSizeOrder: 관리자 상품 사이즈 순서 저장 */
+		UPDATE GOODS_SIZE
+		   SET DISP_ORD = CASE SIZE_ID
+		<foreach collection="orders" item="order">
+			WHEN #{order.sizeId} THEN #{order.dispOrd}
+		</foreach>
+			END
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE GOODS_ID = #{goodsId}
+		   AND SIZE_ID IN
+		<foreach collection="orders" item="order" open="(" separator="," close=")">
+			#{order.sizeId}
+		</foreach>
+	</update>
+
 </mapper>

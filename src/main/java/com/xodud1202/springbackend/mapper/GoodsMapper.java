@@ -4,6 +4,7 @@ import com.xodud1202.springbackend.domain.admin.goods.GoodsPO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsDetailVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsMerchVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSavePO;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeOrderSavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeSavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsVO;
@@ -46,4 +47,7 @@ public interface GoodsMapper {
 
 	// 관리자 상품 사이즈를 삭제 처리합니다.
 	int deleteAdminGoodsSize(GoodsSizeSavePO param);
+
+	// 관리자 상품 사이즈 순서를 저장합니다.
+	int updateAdminGoodsSizeOrder(GoodsSizeOrderSavePO param);
 }

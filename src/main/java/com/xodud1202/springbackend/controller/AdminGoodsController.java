@@ -4,6 +4,7 @@ import com.xodud1202.springbackend.domain.admin.goods.GoodsPO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsDetailVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsMerchVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSavePO;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeOrderSavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeSavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeVO;
 import com.xodud1202.springbackend.service.GoodsService;
@@ -111,5 +112,15 @@ public class AdminGoodsController {
 			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
 		}
 		return ResponseEntity.ok(goodsService.deleteAdminGoodsSize(param));
+	}
+
+	// 관리자 상품 사이즈 순서를 저장합니다.
+	@PostMapping("/api/admin/goods/size/order/save")
+	public ResponseEntity<Object> saveGoodsSizeOrder(@RequestBody GoodsSizeOrderSavePO param) {
+		String validationMessage = goodsService.validateGoodsSizeOrderSave(param);
+		if (validationMessage != null) {
+			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
+		}
+		return ResponseEntity.ok(goodsService.updateAdminGoodsSizeOrder(param));
 	}
 }

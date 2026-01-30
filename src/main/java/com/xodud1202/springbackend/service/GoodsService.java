@@ -4,6 +4,8 @@ import com.xodud1202.springbackend.domain.admin.goods.GoodsPO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsDetailVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsMerchVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSavePO;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeOrderItem;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeOrderSavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeSavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsVO;
@@ -295,5 +297,33 @@ public class GoodsService {
 	// 관리자 상품 사이즈를 삭제 처리합니다.
 	public int deleteAdminGoodsSize(GoodsSizeSavePO param) {
 		return goodsMapper.deleteAdminGoodsSize(param);
+	}
+
+	// 관리자 상품 사이즈 순서 저장 요청을 검증합니다.
+	public String validateGoodsSizeOrderSave(GoodsSizeOrderSavePO param) {
+		if (param == null) {
+			return "요청 데이터가 없습니다.";
+		}
+		if (isBlank(param.getGoodsId())) {
+			return "상품코드를 확인해주세요.";
+		}
+		if (param.getUdtNo() == null) {
+			return "수정자 정보를 확인해주세요.";
+		}
+		List<GoodsSizeOrderItem> orders = param.getOrders();
+		if (orders == null || orders.isEmpty()) {
+			return "저장할 순서 정보가 없습니다.";
+		}
+		for (GoodsSizeOrderItem item : orders) {
+			if (item == null || isBlank(item.getSizeId()) || item.getDispOrd() == null) {
+				return "순서 정보가 올바르지 않습니다.";
+			}
+		}
+		return null;
+	}
+
+	// 관리자 상품 사이즈 순서를 저장합니다.
+	public int updateAdminGoodsSizeOrder(GoodsSizeOrderSavePO param) {
+		return goodsMapper.updateAdminGoodsSizeOrder(param);
 	}
 }
