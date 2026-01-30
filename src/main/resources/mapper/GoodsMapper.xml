@@ -1,0 +1,251 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+		"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.xodud1202.springbackend.mapper.GoodsMapper">
+	<select id="getAdminGoodsList" resultType="com.xodud1202.springbackend.domain.admin.goods.GoodsVO">
+		/* GoodsMapper.getAdminGoodsList: 관리자 상품 목록 조회 */
+		SELECT GB.GOODS_ID
+		     , GB.ERP_STYLE_CD
+		     , GB.GOODS_NM
+		     , GB.GOODS_STAT_CD
+		     , CS.CD_NM AS GOODS_STAT_NM
+		     , GB.GOODS_DIV_CD
+		     , CD.CD_NM AS GOODS_DIV_NM
+		     , GB.SHOW_YN
+		     , GB.REG_DT
+		     , GB.UDT_DT
+		  FROM GOODS_BASE GB
+		  LEFT JOIN COMMON_CODE CD
+		    ON CD.GRP_CD = 'GOODS_DIV'
+		   AND CD.CD = GB.GOODS_DIV_CD
+		  LEFT JOIN COMMON_CODE CS
+		    ON CS.GRP_CD = 'GOODS_STAT'
+		   AND CS.CD = GB.GOODS_STAT_CD
+		 WHERE 1 = 1
+		<if test="goodsStatCd != null and goodsStatCd != ''">
+		   AND GB.GOODS_STAT_CD = #{goodsStatCd}
+		</if>
+		<if test="goodsDivCd != null and goodsDivCd != ''">
+		   AND GB.GOODS_DIV_CD = #{goodsDivCd}
+		</if>
+		<if test="showYn != null and showYn != ''">
+		   AND GB.SHOW_YN = #{showYn}
+		</if>
+		<if test="searchValue != null and searchValue != ''">
+			<choose>
+				<when test="searchGb == 'goodsId'">
+		   AND GB.GOODS_ID LIKE CONCAT(#{searchValue}, '%')
+				</when>
+				<when test="searchGb == 'erpStyleCd'">
+		   AND GB.ERP_STYLE_CD LIKE CONCAT(#{searchValue}, '%')
+				</when>
+				<when test="searchGb == 'goodsNm' and searchKeyword != null and searchKeyword != ''">
+		   AND MATCH(GB.GOODS_NM) AGAINST(#{searchKeyword} IN BOOLEAN MODE)
+				</when>
+			</choose>
+		</if>
+		 ORDER BY GB.REG_DT DESC
+		 LIMIT #{pageSize} OFFSET #{offset}
+	</select>
+
+	<select id="getAdminGoodsCount" resultType="int">
+		/* GoodsMapper.getAdminGoodsCount: 관리자 상품 목록 조회 수 */
+		SELECT COUNT(1)
+		  FROM GOODS_BASE GB
+		 WHERE 1 = 1
+		<if test="goodsStatCd != null and goodsStatCd != ''">
+		   AND GB.GOODS_STAT_CD = #{goodsStatCd}
+		</if>
+		<if test="goodsDivCd != null and goodsDivCd != ''">
+		   AND GB.GOODS_DIV_CD = #{goodsDivCd}
+		</if>
+		<if test="showYn != null and showYn != ''">
+		   AND GB.SHOW_YN = #{showYn}
+		</if>
+		<if test="searchValue != null and searchValue != ''">
+			<choose>
+				<when test="searchGb == 'goodsId'">
+		   AND GB.GOODS_ID LIKE CONCAT(#{searchValue}, '%')
+				</when>
+				<when test="searchGb == 'erpStyleCd'">
+		   AND GB.ERP_STYLE_CD LIKE CONCAT(#{searchValue}, '%')
+				</when>
+				<when test="searchGb == 'goodsNm' and searchKeyword != null and searchKeyword != ''">
+		   AND MATCH(GB.GOODS_NM) AGAINST(#{searchKeyword} IN BOOLEAN MODE)
+				</when>
+			</choose>
+		</if>
+	</select>
+
+	<select id="getGoodsMerchList" resultType="com.xodud1202.springbackend.domain.admin.goods.GoodsMerchVO">
+		/* GoodsMapper.getGoodsMerchList: 상품 분류 목록 조회 */
+		SELECT GOODS_MERCH_ID
+		     , GOODS_MERCH_NM
+		  FROM GOODS_MERCH_BASE
+		 ORDER BY GOODS_MERCH_ID
+	</select>
+
+	<select id="getAdminGoodsDetail" resultType="com.xodud1202.springbackend.domain.admin.goods.GoodsDetailVO">
+		/* GoodsMapper.getAdminGoodsDetail: 관리자 상품 상세 조회 */
+		SELECT GOODS_ID
+		     , GOODS_DIV_CD
+		     , GOODS_STAT_CD
+		     , GOODS_NM
+		     , GOODS_GROUP_ID
+		     , GOODS_MERCH_ID
+		     , SUPPLY_AMT
+		     , SALE_AMT
+		     , SHOW_YN
+		     , ERP_SUPPLY_AMT
+		     , ERP_COST_AMT
+		     , ERP_STYLE_CD
+		     , ERP_COLOR_CD
+		     , ERP_MERCH_CD
+		  FROM GOODS_BASE
+		 WHERE GOODS_ID = #{goodsId}
+	</select>
+
+	<insert id="insertAdminGoods">
+		/* GoodsMapper.insertAdminGoods: 관리자 상품 등록 */
+		INSERT INTO GOODS_BASE (
+		       GOODS_ID
+		     , GOODS_DIV_CD
+		     , GOODS_STAT_CD
+		     , GOODS_NM
+		     , GOODS_GROUP_ID
+		     , GOODS_MERCH_ID
+		     , SUPPLY_AMT
+		     , SALE_AMT
+		     , SHOW_YN
+		     , ERP_SUPPLY_AMT
+		     , ERP_COST_AMT
+		     , ERP_STYLE_CD
+		     , ERP_COLOR_CD
+		     , ERP_MERCH_CD
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{goodsId}
+		     , #{goodsDivCd}
+		     , #{goodsStatCd}
+		     , #{goodsNm}
+		     , #{goodsGroupId}
+		     , #{goodsMerchId}
+		     , #{supplyAmt}
+		     , #{saleAmt}
+		     , #{showYn}
+		     , #{erpSupplyAmt}
+		     , #{erpCostAmt}
+		     , #{erpStyleCd}
+		     , #{erpColorCd}
+		     , #{erpMerchCd}
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+
+	<update id="updateAdminGoods">
+		/* GoodsMapper.updateAdminGoods: 관리자 상품 수정 */
+		UPDATE GOODS_BASE
+		   SET GOODS_DIV_CD = #{goodsDivCd}
+		     , GOODS_STAT_CD = #{goodsStatCd}
+		     , GOODS_NM = #{goodsNm}
+		     , GOODS_GROUP_ID = #{goodsGroupId}
+		     , GOODS_MERCH_ID = #{goodsMerchId}
+		     , SUPPLY_AMT = #{supplyAmt}
+		     , SALE_AMT = #{saleAmt}
+		     , SHOW_YN = #{showYn}
+		     , ERP_SUPPLY_AMT = #{erpSupplyAmt}
+		     , ERP_COST_AMT = #{erpCostAmt}
+		     , ERP_STYLE_CD = #{erpStyleCd}
+		     , ERP_COLOR_CD = #{erpColorCd}
+		     , ERP_MERCH_CD = #{erpMerchCd}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE GOODS_ID = #{goodsId}
+	</update>
+
+	<select id="getAdminGoodsSizeList" resultType="com.xodud1202.springbackend.domain.admin.goods.GoodsSizeVO">
+		/* GoodsMapper.getAdminGoodsSizeList: 관리자 상품 사이즈 목록 조회 */
+		SELECT GOODS_ID
+		     , SIZE_ID
+		     , STOCK_QTY
+		     , ADD_AMT
+		     , ERP_SYNC_YN
+		     , ERP_SIZE_CD
+		     , DISP_ORD
+		     , DEL_YN
+		  FROM GOODS_SIZE
+		 WHERE GOODS_ID = #{goodsId}
+		   AND DEL_YN = 'N'
+		 ORDER BY DISP_ORD ASC, SIZE_ID ASC
+	</select>
+
+	<select id="getAdminGoodsSizeDetail" resultType="com.xodud1202.springbackend.domain.admin.goods.GoodsSizeVO">
+		/* GoodsMapper.getAdminGoodsSizeDetail: 관리자 상품 사이즈 단건 조회 */
+		SELECT GOODS_ID
+		     , SIZE_ID
+		     , STOCK_QTY
+		     , ADD_AMT
+		     , ERP_SYNC_YN
+		     , ERP_SIZE_CD
+		     , DISP_ORD
+		     , DEL_YN
+		  FROM GOODS_SIZE
+		 WHERE GOODS_ID = #{goodsId}
+		   AND SIZE_ID = #{sizeId}
+	</select>
+
+	<insert id="insertAdminGoodsSize">
+		/* GoodsMapper.insertAdminGoodsSize: 관리자 상품 사이즈 등록 */
+		INSERT INTO GOODS_SIZE (
+		       GOODS_ID
+		     , SIZE_ID
+		     , STOCK_QTY
+		     , ADD_AMT
+		     , ERP_SYNC_YN
+		     , ERP_SIZE_CD
+		     , DISP_ORD
+		     , DEL_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{goodsId}
+		     , #{sizeId}
+		     , #{stockQty}
+		     , #{addAmt}
+		     , #{erpSyncYn}
+		     , #{erpSizeCd}
+		     , #{dispOrd}
+		     , #{delYn}
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+
+	<update id="updateAdminGoodsSize">
+		/* GoodsMapper.updateAdminGoodsSize: 관리자 상품 사이즈 수정 */
+		UPDATE GOODS_SIZE
+		   SET SIZE_ID = #{sizeId}
+		     , STOCK_QTY = #{stockQty}
+		     , ADD_AMT = #{addAmt}
+		     , ERP_SYNC_YN = #{erpSyncYn}
+		     , DISP_ORD = #{dispOrd}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE GOODS_ID = #{goodsId}
+		   AND SIZE_ID = #{originSizeId}
+	</update>
+
+	<update id="deleteAdminGoodsSize">
+		/* GoodsMapper.deleteAdminGoodsSize: 관리자 상품 사이즈 삭제 */
+		UPDATE GOODS_SIZE
+		   SET DEL_YN = 'Y'
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE GOODS_ID = #{goodsId}
+		   AND SIZE_ID = #{sizeId}
+	</update>
+
+</mapper>
