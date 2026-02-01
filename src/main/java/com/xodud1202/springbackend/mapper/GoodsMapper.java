@@ -11,6 +11,8 @@ import com.xodud1202.springbackend.domain.admin.goods.GoodsVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySaveItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryVO;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsDescSaveItem;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsDescVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsImageSavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsImageVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsImageOrderSavePO;
@@ -102,4 +104,16 @@ public interface GoodsMapper {
 
 	// 관리자 상품 이미지 순서를 저장합니다.
 	int updateAdminGoodsImageOrder(GoodsImageOrderSavePO param);
+
+	// 관리자 상품 상세 설명 목록을 조회합니다.
+	List<GoodsDescVO> getAdminGoodsDescList(@Param("goodsId") String goodsId);
+
+	// 관리자 상품 상세 설명 건수를 조회합니다.
+	int countAdminGoodsDesc(@Param("goodsId") String goodsId, @Param("deviceGbCd") String deviceGbCd);
+
+	// 관리자 상품 상세 설명을 등록합니다.
+	int insertAdminGoodsDesc(GoodsDescSaveItem param);
+
+	// 관리자 상품 상세 설명을 수정합니다.
+	int updateAdminGoodsDesc(GoodsDescSaveItem param);
 }

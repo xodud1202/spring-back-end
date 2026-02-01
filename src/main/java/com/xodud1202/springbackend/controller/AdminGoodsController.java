@@ -3,6 +3,8 @@ package com.xodud1202.springbackend.controller;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsPO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsDetailVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsMerchVO;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsDescSavePO;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsDescVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsImageSavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsImageVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsImageOrderSavePO;
@@ -214,5 +216,24 @@ public class AdminGoodsController {
 			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
 		}
 		return ResponseEntity.ok(goodsService.updateAdminGoodsImageOrder(param));
+	}
+
+	// 관리자 상품 상세 설명을 조회합니다.
+	@GetMapping("/api/admin/goods/desc/list")
+	public ResponseEntity<List<GoodsDescVO>> getGoodsDescList(@RequestParam String goodsId) {
+		if (goodsId == null || goodsId.trim().isEmpty()) {
+			return ResponseEntity.badRequest().body(List.of());
+		}
+		return ResponseEntity.ok(goodsService.getAdminGoodsDescList(goodsId));
+	}
+
+	// 관리자 상품 상세 설명을 저장합니다.
+	@PostMapping("/api/admin/goods/desc/save")
+	public ResponseEntity<Object> saveGoodsDesc(@RequestBody GoodsDescSavePO param) {
+		String validationMessage = goodsService.validateGoodsDescSave(param);
+		if (validationMessage != null) {
+			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
+		}
+		return ResponseEntity.ok(goodsService.saveAdminGoodsDesc(param));
 	}
 }

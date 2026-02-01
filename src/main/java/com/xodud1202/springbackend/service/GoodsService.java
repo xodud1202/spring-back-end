@@ -7,6 +7,9 @@ import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySaveItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryVO;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsDescSaveItem;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsDescSavePO;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsDescVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsImageSavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsImageVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsImageOrderItem;
@@ -601,6 +604,61 @@ public class GoodsService {
 	// 관리자 상품 이미지 순서를 저장합니다.
 	public int updateAdminGoodsImageOrder(GoodsImageOrderSavePO param) {
 		return goodsMapper.updateAdminGoodsImageOrder(param);
+	}
+
+	// 관리자 상품 상세 설명 목록을 조회합니다.
+	public List<GoodsDescVO> getAdminGoodsDescList(String goodsId) {
+		if (isBlank(goodsId)) {
+			return List.of();
+		}
+		return goodsMapper.getAdminGoodsDescList(goodsId);
+	}
+
+	// 관리자 상품 상세 설명 저장 요청을 검증합니다.
+	public String validateGoodsDescSave(GoodsDescSavePO param) {
+		if (param == null) {
+			return "요청 데이터가 없습니다.";
+		}
+		if (isBlank(param.getGoodsId())) {
+			return "상품코드를 확인해주세요.";
+		}
+		if (param.getUdtNo() == null) {
+			return "수정자 정보를 확인해주세요.";
+		}
+		List<GoodsDescSaveItem> list = param.getList();
+		if (list == null || list.isEmpty()) {
+			return "저장할 상세 정보가 없습니다.";
+		}
+		for (GoodsDescSaveItem item : list) {
+			if (item == null || isBlank(item.getDeviceGbCd())) {
+				return "디바이스 구분을 확인해주세요.";
+			}
+		}
+		return null;
+	}
+
+	// 관리자 상품 상세 설명을 저장합니다.
+	public int saveAdminGoodsDesc(GoodsDescSavePO param) {
+		int result = 0;
+		Long regNo = param.getRegNo() != null ? param.getRegNo() : param.getUdtNo();
+		for (GoodsDescSaveItem item : param.getList()) {
+			if (item == null || isBlank(item.getDeviceGbCd())) {
+				continue;
+			}
+			item.setGoodsId(param.getGoodsId());
+			item.setUdtNo(param.getUdtNo());
+			item.setRegNo(regNo);
+			if (item.getGoodsDesc() == null) {
+				item.setGoodsDesc("");
+			}
+			int count = goodsMapper.countAdminGoodsDesc(param.getGoodsId(), item.getDeviceGbCd());
+			if (count > 0) {
+				result += goodsMapper.updateAdminGoodsDesc(item);
+			} else {
+				result += goodsMapper.insertAdminGoodsDesc(item);
+			}
+		}
+		return result;
 	}
 
 	// 상품 이미지 URL에서 파일명을 추출합니다.

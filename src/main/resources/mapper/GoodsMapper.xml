@@ -460,4 +460,48 @@
 		</foreach>
 	</update>
 
+	<select id="getAdminGoodsDescList" resultType="com.xodud1202.springbackend.domain.admin.goods.GoodsDescVO">
+		/* GoodsMapper.getAdminGoodsDescList: 관리자 상품 상세 설명 목록 조회 */
+		SELECT GOODS_ID
+		     , DEVICE_GB_CD
+		     , GOODS_DESC
+		  FROM GOODS_DESC
+		 WHERE GOODS_ID = #{goodsId}
+	</select>
+
+	<select id="countAdminGoodsDesc" resultType="int">
+		/* GoodsMapper.countAdminGoodsDesc: 관리자 상품 상세 설명 건수 조회 */
+		SELECT COUNT(1)
+		  FROM GOODS_DESC
+		 WHERE GOODS_ID = #{goodsId}
+		   AND DEVICE_GB_CD = #{deviceGbCd}
+	</select>
+
+	<insert id="insertAdminGoodsDesc">
+		/* GoodsMapper.insertAdminGoodsDesc: 관리자 상품 상세 설명 등록 */
+		INSERT INTO GOODS_DESC (
+		       GOODS_ID
+		     , DEVICE_GB_CD
+		     , GOODS_DESC
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{goodsId}
+		     , #{deviceGbCd}
+		     , #{goodsDesc}
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+
+	<update id="updateAdminGoodsDesc">
+		/* GoodsMapper.updateAdminGoodsDesc: 관리자 상품 상세 설명 수정 */
+		UPDATE GOODS_DESC
+		   SET GOODS_DESC = #{goodsDesc}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE GOODS_ID = #{goodsId}
+		   AND DEVICE_GB_CD = #{deviceGbCd}
+	</update>
+
 </mapper>
