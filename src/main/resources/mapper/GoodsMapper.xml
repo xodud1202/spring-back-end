@@ -391,4 +391,73 @@
 		</foreach>
 	</update>
 
+	<select id="getAdminGoodsImageList" resultType="com.xodud1202.springbackend.domain.admin.goods.GoodsImageVO">
+		/* GoodsMapper.getAdminGoodsImageList: 관리자 상품 이미지 목록 조회 */
+		SELECT IMG_NO
+		     , GOODS_ID
+		     , DISP_ORD
+		     , IMG_PATH
+		  FROM GOODS_IMG
+		 WHERE GOODS_ID = #{goodsId}
+		 ORDER BY DISP_ORD ASC, IMG_NO ASC
+	</select>
+
+	<select id="getAdminGoodsImageByNo" resultType="com.xodud1202.springbackend.domain.admin.goods.GoodsImageVO">
+		/* GoodsMapper.getAdminGoodsImageByNo: 관리자 상품 이미지 단건 조회 */
+		SELECT IMG_NO
+		     , GOODS_ID
+		     , DISP_ORD
+		     , IMG_PATH
+		  FROM GOODS_IMG
+		 WHERE IMG_NO = #{imgNo}
+	</select>
+
+	<select id="getAdminGoodsImageMaxDispOrd" resultType="int">
+		/* GoodsMapper.getAdminGoodsImageMaxDispOrd: 관리자 상품 이미지 정렬순서 최대값 조회 */
+		SELECT COALESCE(MAX(DISP_ORD), 0)
+		  FROM GOODS_IMG
+		 WHERE GOODS_ID = #{goodsId}
+	</select>
+
+	<insert id="insertAdminGoodsImage">
+		/* GoodsMapper.insertAdminGoodsImage: 관리자 상품 이미지 등록 */
+		INSERT INTO GOODS_IMG (
+		       GOODS_ID
+		     , DISP_ORD
+		     , IMG_PATH
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{goodsId}
+		     , #{dispOrd}
+		     , #{imgPath}
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+
+	<delete id="deleteAdminGoodsImage">
+		/* GoodsMapper.deleteAdminGoodsImage: 관리자 상품 이미지 삭제 */
+		DELETE
+		  FROM GOODS_IMG
+		 WHERE IMG_NO = #{imgNo}
+	</delete>
+
+	<update id="updateAdminGoodsImageOrder">
+		/* GoodsMapper.updateAdminGoodsImageOrder: 관리자 상품 이미지 순서 저장 */
+		UPDATE GOODS_IMG
+		   SET DISP_ORD = CASE IMG_NO
+		<foreach collection="orders" item="order">
+			WHEN #{order.imgNo} THEN #{order.dispOrd}
+		</foreach>
+			END
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE GOODS_ID = #{goodsId}
+		   AND IMG_NO IN
+		<foreach collection="orders" item="order" open="(" separator="," close=")">
+			#{order.imgNo}
+		</foreach>
+	</update>
+
 </mapper>

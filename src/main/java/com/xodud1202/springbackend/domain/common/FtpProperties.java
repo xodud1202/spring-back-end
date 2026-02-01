@@ -39,4 +39,10 @@ public class FtpProperties {
 	private String uploadEditorAllowExtension;
 	private String uploadEditorTargetPath;
 	private String uploadEditorView;
+
+	// goods upload 설정
+	private int uploadGoodsMaxSize;
+	private String uploadGoodsAllowExtension;
+	private String uploadGoodsTargetPath;
+	private String uploadGoodsView;
 }

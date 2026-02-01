@@ -3,6 +3,9 @@ package com.xodud1202.springbackend.controller;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsPO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsDetailVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsMerchVO;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsImageSavePO;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsImageVO;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsImageOrderSavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeOrderSavePO;
@@ -20,7 +23,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -161,5 +166,53 @@ public class AdminGoodsController {
 			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
 		}
 		return ResponseEntity.ok(goodsService.updateAdminGoodsSizeOrder(param));
+	}
+
+	// 관리자 상품 이미지 목록을 조회합니다.
+	@GetMapping("/api/admin/goods/image/list")
+	public ResponseEntity<List<GoodsImageVO>> getGoodsImageList(@RequestParam String goodsId) {
+		if (goodsId == null || goodsId.trim().isEmpty()) {
+			return ResponseEntity.badRequest().body(List.of());
+		}
+		return ResponseEntity.ok(goodsService.getAdminGoodsImageList(goodsId));
+	}
+
+	// 관리자 상품 이미지를 업로드합니다.
+	@PostMapping("/api/admin/goods/image/upload")
+	public ResponseEntity<Object> uploadGoodsImage(
+			@RequestParam("image") MultipartFile image,
+			@RequestParam String goodsId,
+			@RequestParam Long regNo) {
+		String validationMessage = goodsService.validateGoodsImageUpload(goodsId, image, regNo);
+		if (validationMessage != null) {
+			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
+		}
+		try {
+			GoodsImageVO uploaded = goodsService.uploadAdminGoodsImage(goodsId, image, regNo);
+			return ResponseEntity.ok(uploaded);
+		} catch (IOException e) {
+			log.error("상품 이미지 업로드 실패", e);
+			return ResponseEntity.internalServerError().body(Map.of("message", "이미지 업로드에 실패했습니다."));
+		}
+	}
+
+	// 관리자 상품 이미지를 삭제합니다.
+	@PostMapping("/api/admin/goods/image/delete")
+	public ResponseEntity<Object> deleteGoodsImage(@RequestBody GoodsImageSavePO param) {
+		String validationMessage = goodsService.validateGoodsImageDelete(param);
+		if (validationMessage != null) {
+			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
+		}
+		return ResponseEntity.ok(goodsService.deleteAdminGoodsImage(param));
+	}
+
+	// 관리자 상품 이미지 순서를 저장합니다.
+	@PostMapping("/api/admin/goods/image/order/save")
+	public ResponseEntity<Object> saveGoodsImageOrder(@RequestBody GoodsImageOrderSavePO param) {
+		String validationMessage = goodsService.validateGoodsImageOrderSave(param);
+		if (validationMessage != null) {
+			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
+		}
+		return ResponseEntity.ok(goodsService.updateAdminGoodsImageOrder(param));
 	}
 }

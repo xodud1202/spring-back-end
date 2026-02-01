@@ -7,6 +7,10 @@ import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySaveItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryVO;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsImageSavePO;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsImageVO;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsImageOrderItem;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsImageOrderSavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsMerchVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeOrderItem;
@@ -17,7 +21,11 @@ import com.xodud1202.springbackend.domain.admin.goods.GoodsVO;
 import com.xodud1202.springbackend.mapper.GoodsMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +34,9 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class GoodsService {
 	private final GoodsMapper goodsMapper;
+	private final FtpFileService ftpFileService;
+	private static final int GOODS_IMAGE_MIN_SIZE = 500;
+	private static final int GOODS_IMAGE_MAX_SIZE = 1500;
 
 	// 관리자 상품 목록을 페이징 조건으로 조회합니다.
 	public Map<String, Object> getAdminGoodsList(GoodsPO param) {
@@ -449,5 +460,158 @@ public class GoodsService {
 	// 관리자 상품 사이즈 순서를 저장합니다.
 	public int updateAdminGoodsSizeOrder(GoodsSizeOrderSavePO param) {
 		return goodsMapper.updateAdminGoodsSizeOrder(param);
+	}
+
+	// 관리자 상품 이미지 목록을 조회합니다.
+	public List<GoodsImageVO> getAdminGoodsImageList(String goodsId) {
+		if (isBlank(goodsId)) {
+			return List.of();
+		}
+		List<GoodsImageVO> list = goodsMapper.getAdminGoodsImageList(goodsId);
+		for (GoodsImageVO item : list) {
+			if (item == null) {
+				continue;
+			}
+			String imgPath = item.getImgPath();
+			if (imgPath != null && (imgPath.startsWith("http://") || imgPath.startsWith("https://"))) {
+				item.setImgUrl(imgPath);
+				continue;
+			}
+			item.setImgUrl(ftpFileService.buildGoodsImageUrl(goodsId, imgPath));
+		}
+		return list;
+	}
+
+	// 상품 이미지 업로드 요청을 검증합니다.
+	public String validateGoodsImageUpload(String goodsId, MultipartFile image, Long regNo) {
+		if (isBlank(goodsId)) {
+			return "상품코드를 확인해주세요.";
+		}
+		if (regNo == null) {
+			return "등록자 정보를 확인해주세요.";
+		}
+		if (image == null || image.isEmpty()) {
+			return "이미지를 선택해주세요.";
+		}
+		String contentType = image.getContentType();
+		if (contentType == null || !contentType.startsWith("image/")) {
+			return "이미지 파일만 업로드할 수 있습니다.";
+		}
+		try {
+			BufferedImage bufferedImage = ImageIO.read(image.getInputStream());
+			if (bufferedImage == null) {
+				return "이미지 파일을 확인해주세요.";
+			}
+			int width = bufferedImage.getWidth();
+			int height = bufferedImage.getHeight();
+			if (width != height) {
+				return "정사각형 이미지만 업로드할 수 있습니다.";
+			}
+			if (width < GOODS_IMAGE_MIN_SIZE || width > GOODS_IMAGE_MAX_SIZE) {
+				return "이미지 크기는 500x500 ~ 1500x1500px만 가능합니다.";
+			}
+		} catch (IOException e) {
+			return "이미지 파일을 확인해주세요.";
+		}
+		return null;
+	}
+
+	// 관리자 상품 이미지를 등록합니다.
+	public GoodsImageVO uploadAdminGoodsImage(String goodsId, MultipartFile image, Long regNo) throws IOException {
+		String imageUrl = ftpFileService.uploadGoodsImage(image, goodsId, String.valueOf(regNo));
+
+		int maxDispOrd = goodsMapper.getAdminGoodsImageMaxDispOrd(goodsId);
+		GoodsImageSavePO savePO = new GoodsImageSavePO();
+		savePO.setGoodsId(goodsId);
+		savePO.setDispOrd(maxDispOrd + 1);
+		savePO.setImgPath(imageUrl);
+		savePO.setRegNo(regNo);
+		savePO.setUdtNo(regNo);
+		goodsMapper.insertAdminGoodsImage(savePO);
+
+		GoodsImageVO result = new GoodsImageVO();
+		result.setGoodsId(goodsId);
+		result.setImgPath(imageUrl);
+		result.setDispOrd(maxDispOrd + 1);
+		result.setImgUrl(imageUrl);
+		return result;
+	}
+
+	// 관리자 상품 이미지 삭제 요청을 검증합니다.
+	public String validateGoodsImageDelete(GoodsImageSavePO param) {
+		if (param == null) {
+			return "요청 데이터가 없습니다.";
+		}
+		if (isBlank(param.getGoodsId())) {
+			return "상품코드를 확인해주세요.";
+		}
+		if (param.getImgNo() == null) {
+			return "이미지 정보를 확인해주세요.";
+		}
+		if (param.getUdtNo() == null) {
+			return "수정자 정보를 확인해주세요.";
+		}
+		return null;
+	}
+
+	// 관리자 상품 이미지를 삭제합니다.
+	public int deleteAdminGoodsImage(GoodsImageSavePO param) {
+		GoodsImageVO current = goodsMapper.getAdminGoodsImageByNo(param.getImgNo());
+		if (current == null || isBlank(current.getGoodsId())) {
+			return 0;
+		}
+		if (!current.getGoodsId().equals(param.getGoodsId())) {
+			return 0;
+		}
+		int result = goodsMapper.deleteAdminGoodsImage(param.getImgNo());
+		String fileName = extractFileName(current.getImgPath());
+		if (!isBlank(fileName)) {
+			try {
+				ftpFileService.deleteGoodsImage(current.getGoodsId(), fileName);
+			} catch (IOException e) {
+				// FTP 삭제 실패는 무시합니다.
+			}
+		}
+		return result;
+	}
+
+	// 관리자 상품 이미지 순서 저장 요청을 검증합니다.
+	public String validateGoodsImageOrderSave(GoodsImageOrderSavePO param) {
+		if (param == null) {
+			return "요청 데이터가 없습니다.";
+		}
+		if (isBlank(param.getGoodsId())) {
+			return "상품코드를 확인해주세요.";
+		}
+		if (param.getUdtNo() == null) {
+			return "수정자 정보를 확인해주세요.";
+		}
+		List<GoodsImageOrderItem> orders = param.getOrders();
+		if (orders == null || orders.isEmpty()) {
+			return "저장할 순서 정보가 없습니다.";
+		}
+		for (GoodsImageOrderItem item : orders) {
+			if (item == null || item.getImgNo() == null || item.getDispOrd() == null) {
+				return "순서 정보가 올바르지 않습니다.";
+			}
+		}
+		return null;
+	}
+
+	// 관리자 상품 이미지 순서를 저장합니다.
+	public int updateAdminGoodsImageOrder(GoodsImageOrderSavePO param) {
+		return goodsMapper.updateAdminGoodsImageOrder(param);
+	}
+
+	// 상품 이미지 URL에서 파일명을 추출합니다.
+	private String extractFileName(String imgPath) {
+		if (isBlank(imgPath)) {
+			return null;
+		}
+		int index = imgPath.lastIndexOf('/');
+		if (index < 0 || index >= imgPath.length() - 1) {
+			return imgPath;
+		}
+		return imgPath.substring(index + 1);
 	}
 }
