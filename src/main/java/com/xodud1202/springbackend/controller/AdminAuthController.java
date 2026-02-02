@@ -1,6 +1,5 @@
 package com.xodud1202.springbackend.controller;
 
-import ch.qos.logback.core.util.StringUtil;
 import com.xodud1202.springbackend.domain.LoginRequest;
 import com.xodud1202.springbackend.domain.RefreshTokenRequest;
 import com.xodud1202.springbackend.entity.UserBaseEntity;
@@ -8,21 +7,30 @@ import com.xodud1202.springbackend.repository.UserRepository;
 import com.xodud1202.springbackend.security.JwtTokenProvider;
 import com.xodud1202.springbackend.service.CustomUserDetailService;
 import com.xodud1202.springbackend.service.UserBaseService;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Duration;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -42,17 +50,20 @@ public class AdminAuthController {
 	@Value("${jwt.refresh-token-expiration}")
     private long jwtRefreshTokenExpirationInMs;
 	
+	@Value("${jwt.cookie-secure:false}")
+	private boolean jwtCookieSecure;
+	
 	@PostMapping("/api/backoffice/login")
-	public ResponseEntity<?> authenticateUser(@RequestBody LoginRequest loginRequest) {
+	public ResponseEntity<?> authenticateUser(@RequestBody LoginRequest loginRequest, HttpServletResponse response) {
 		try {
 			// 먼저 사용자가 존재하는지 확인
 			Optional<UserBaseEntity> existingUser = userBaseService.loadUserByLoginId(loginRequest.getLoginId());
 			if (existingUser.isEmpty()) {
 				// 사용자가 존재하지 않는 경우
-				Map<String, String> response = new HashMap<>();
-				response.put("result", "NOT_FOUND_ID");
-				response.put("resultMsg", "계정정보가 존재하지 않습니다.");
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+				Map<String, String> payload = new HashMap<>();
+				payload.put("result", "NOT_FOUND_ID");
+				payload.put("resultMsg", "계정정보가 존재하지 않습니다.");
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(payload);
 			}
 			
 			// 사용자가 존재하면 비밀번호 검증 시도
@@ -72,97 +83,140 @@ public class AdminAuthController {
 			UserBaseEntity user = existingUser.get();
 			user.setJwtToken(accessToken);
 			
-			Map<String, Object> response = new HashMap<>();
-			response.put("result", "OK");
-			response.put("accessToken", accessToken);
+			// 로그인 결과를 담을 응답 맵
+			Map<String, Object> payload = new HashMap<>();
+			payload.put("result", "OK");
+			payload.put("accessToken", accessToken);
 			
 			// 로그인 유지를 선택한 경우 Refresh Token 생성
 			if (loginRequest.isRememberMe()) {
 				String refreshToken = tokenProvider.generateRefreshToken(user.getUsername());
-				Date refreshTokenExpiry = new Date(System.currentTimeMillis() + jwtRefreshTokenExpirationInMs); // refresh token 만료일정
+				Date refreshTokenExpiry = new Date(System.currentTimeMillis() + jwtRefreshTokenExpirationInMs);
 
-				// 사용자 정보에 Refresh Token 저장 (메모리 객체에만 설정)
 				user.setRefreshToken(refreshToken);
 				user.setRefreshTokenExpiry(refreshTokenExpiry);
 
-				// DB에는 필요한 필드만 업데이트
 				userRepository.updateRefreshToken(
 					user.getUsrNo(),
 					user.getRefreshToken(),
 					user.getRefreshTokenExpiry(),
-					new Date(), // AccessDt (마지막 로그인 일시 현재시간 등록)
-					user.getUsrNo(), // 현재 로그인한 사용자의 usrNo를 udtNo로 설정
-					new Date()       // 현재 시간을 udtDt로 설정
+					new Date(),
+					user.getUsrNo(),
+					new Date()
 				);
 
-				response.put("refreshToken", refreshToken);
+				setRefreshTokenCookie(response, refreshToken);
 			} else {
-				// USER_BASE의 REFRESH_TOKEN과 만료일시 초기화
 				userRepository.clearRefreshToken(user.getUsrNo());
+				clearRefreshTokenCookie(response);
 			}
 
 			user.setPwd(null);       // 비밀번호 정보는 제외
-			response.put("userInfo", user);
+			// 반환할 사용자 정보를 설정
+			payload.put("userInfo", user);
 			
-			return ResponseEntity.ok(response);
+			return ResponseEntity.ok(payload);
 		} catch (BadCredentialsException e) {
 			// 비밀번호가 일치하지 않는 경우
-			Map<String, String> response = new HashMap<>();
-			response.put("result", "NOT_CORRECT_PW");
-			response.put("resultMsg", "비밀번호가 일치하지 않습니다.");
-			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+			Map<String, String> payload = new HashMap<>();
+			payload.put("result", "NOT_CORRECT_PW");
+			payload.put("resultMsg", "비밀번호가 일치하지 않습니다.");
+			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(payload);
 		} catch (Exception e) {
 			// 기타 예외 처리
-			Map<String, String> response = new HashMap<>();
-			response.put("result", "ERROR");
-			response.put("resultMsg", e.getMessage());
-			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+			Map<String, String> payload = new HashMap<>();
+			payload.put("result", "ERROR");
+			payload.put("resultMsg", e.getMessage());
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(payload);
 		}
 	}
 	
 	@GetMapping("/api/token/backoffice/access-token")
-	public ResponseEntity<?> token(RefreshTokenRequest request) {
-		// AccessToken 사용 가능 여부 확인
-		Map<String, String> response = new HashMap<>();
-		String accessToken = request.getAccessToken();
-		String accessTokenValidResult = tokenProvider.validateCheckToken(accessToken);
-		if (!"OK".equals(accessTokenValidResult) && !"EXPIRED".equals(accessTokenValidResult) ) {
-			response.put("result", "INVALID_TOKEN");
-			response.put("resultMsg", "유효하지 않은 Access Token 토큰입니다.");
-			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
-		} else if ("EXPIRED".equals(accessTokenValidResult) && !StringUtil.isNullOrEmpty(request.getRefreshToken())) {
-			// accessToken이 만료되었으나 refreshToken이 있을 경우
-			UserBaseEntity user = new UserBaseEntity();
-			user.setRefreshToken(request.getRefreshToken());
-			user.setLoginId(request.getLoginId());
-			
-			// refreshToken이 만료 전인지 확인.
-			Optional<UserBaseEntity> chkUserInfo = userBaseService.findUserBaseByLoginIdAndRefreshTokenAndExpiredCheck(user);
-			if (chkUserInfo.isEmpty()) {
-				response.put("result", "EXPIRED_TOKEN");
-				response.put("resultMsg", "유효하지 않은 Access Token 토큰입니다.");
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
-			}
+	public ResponseEntity<?> token(
+			HttpServletRequest request,
+			HttpServletResponse response,
+			@RequestParam(value = "loginId", required = false) String loginIdParam
+	) {
+		// 액세스 토큰 검증 흐름: 토큰 유효, 만료, 부적합 처리
+		Map<String, String> result = new HashMap<>();
+		String accessToken = extractAccessTokenFromHeader(request);
+		String validationResult = tokenProvider.validateCheckToken(accessToken);
+
+		if ("OK".equals(validationResult) && StringUtils.hasText(accessToken)) {
+			result.put("result", "OK");
+			result.put("resultMsg", "OK");
+			result.put("accessToken", accessToken);
+			return ResponseEntity.ok(result);
 		}
-		
-		// accessTokenValidResult OK이거나, accessToken 은 만료되었으나 refreshToken은 만료가 아닐 경우
-		// 신규 accessToken을 생성하여 30분짜리 token을 재생성한다.
-		response.put("result", "OK");
-		response.put("resultMsg", "OK");
-		response.put("accessToken", tokenProvider.generateAccessTokenByLoginId(request.getLoginId()));
-		
-		return ResponseEntity.ok(response);
+
+		if (!"EXPIRED".equals(validationResult)) {
+			clearRefreshTokenCookie(response);
+			result.put("result", "INVALID_TOKEN");
+			result.put("resultMsg", "유효하지 않은 Access Token 토큰입니다.");
+			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(result);
+		}
+
+		String refreshToken = extractRefreshTokenFromCookies(request);
+		if (!StringUtils.hasText(refreshToken)) {
+			clearRefreshTokenCookie(response);
+			result.put("result", "INVALID_REFRESH_TOKEN");
+			result.put("resultMsg", "유효하지 않은 리프레시 토큰입니다.");
+			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(result);
+		}
+
+		String loginId = StringUtils.hasText(loginIdParam) ? loginIdParam : resolveLoginIdFromToken(refreshToken);
+		if (!StringUtils.hasText(loginId)) {
+			clearRefreshTokenCookie(response);
+			result.put("result", "INVALID_REFRESH_TOKEN");
+			result.put("resultMsg", "리프레시 토큰의 사용자 정보를 확인할 수 없습니다.");
+			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(result);
+		}
+
+		UserBaseEntity candidate = new UserBaseEntity();
+		candidate.setLoginId(loginId);
+		candidate.setRefreshToken(refreshToken);
+
+		Optional<UserBaseEntity> chkUserInfo = userBaseService.findUserBaseByLoginIdAndRefreshTokenAndExpiredCheck(candidate);
+		if (chkUserInfo.isEmpty()) {
+			clearRefreshTokenCookie(response);
+			result.put("result", "EXPIRED_TOKEN");
+			result.put("resultMsg", "유효하지 않은 Access Token 토큰입니다.");
+			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(result);
+		}
+
+		UserBaseEntity user = chkUserInfo.get();
+		String newAccessToken = tokenProvider.generateAccessTokenByLoginId(loginId);
+
+		String rotatedRefreshToken = tokenProvider.generateRefreshToken(loginId);
+		Date newRefreshExpiry = new Date(System.currentTimeMillis() + jwtRefreshTokenExpirationInMs);
+		user.setRefreshToken(rotatedRefreshToken);
+		user.setRefreshTokenExpiry(newRefreshExpiry);
+		userRepository.updateRefreshToken(
+			user.getUsrNo(),
+			user.getRefreshToken(),
+			user.getRefreshTokenExpiry(),
+			new Date(),
+			user.getUsrNo(),
+			new Date()
+		);
+		setRefreshTokenCookie(response, rotatedRefreshToken);
+
+		result.put("result", "OK");
+		result.put("resultMsg", "OK");
+		result.put("accessToken", newAccessToken);
+		return ResponseEntity.ok(result);
 	}
 	
 	@PostMapping("/token/backoffice/refresh-token")
-	public ResponseEntity<?> refreshToken(@RequestBody RefreshTokenRequest request) {
+	public ResponseEntity<?> refreshToken(@RequestBody RefreshTokenRequest request, HttpServletResponse response) {
+		// refreshToken을 통해 accessToken을 새로 발급
 		// Refresh Token 검증
 		String refreshToken = request.getRefreshToken();
 		if (!tokenProvider.validateToken(refreshToken)) {
-			Map<String, String> response = new HashMap<>();
-			response.put("result", "INVALID_TOKEN");
-			response.put("resultMsg", "유효하지 않은 리프레시 토큰입니다.");
-			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+			Map<String, String> payload = new HashMap<>();
+			payload.put("result", "INVALID_TOKEN");
+			payload.put("resultMsg", "유효하지 않은 리프레시 토큰입니다.");
+			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(payload);
 		}
 		
 		// 토큰에서 사용자아이디 추출
@@ -171,38 +225,125 @@ public class AdminAuthController {
 		// 사용자 정보 조회
 		Optional<UserBaseEntity> userOpt = userBaseService.loadUserByLoginId(username);
 		if (userOpt.isEmpty()) {
-			Map<String, String> response = new HashMap<>();
-			response.put("result", "USER_NOT_FOUND");
-			response.put("resultMsg", "사용자를 찾을 수 없습니다.");
-			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+			Map<String, String> payload = new HashMap<>();
+			payload.put("result", "USER_NOT_FOUND");
+			payload.put("resultMsg", "사용자를 찾을 수 없습니다.");
+			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(payload);
 		}
 		
 		UserBaseEntity user = userOpt.get();
 		
 		// DB에 저장된 Refresh Token과 비교
 		if (!refreshToken.equals(user.getRefreshToken())) {
-			Map<String, String> response = new HashMap<>();
-			response.put("result", "TOKEN_MISMATCH");
-			response.put("resultMsg", "토큰이 일치하지 않습니다.");
-			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+			Map<String, String> payload = new HashMap<>();
+			payload.put("result", "TOKEN_MISMATCH");
+			payload.put("resultMsg", "토큰이 일치하지 않습니다.");
+			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(payload);
 		}
 		
 		// Refresh Token 만료 시간 확인
 		if (user.getRefreshTokenExpiry().before(new Date())) {
-			Map<String, String> response = new HashMap<>();
-			response.put("result", "TOKEN_EXPIRED");
-			response.put("resultMsg", "리프레시 토큰이 만료되었습니다.");
-			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
+			Map<String, String> payload = new HashMap<>();
+			payload.put("result", "TOKEN_EXPIRED");
+			payload.put("resultMsg", "리프레시 토큰이 만료되었습니다.");
+			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(payload);
 		}
 		
 		// 새 Access Token 생성
 		Authentication authentication = new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
 		String newAccessToken = tokenProvider.generateAccessToken(authentication);
 		
-		Map<String, Object> response = new HashMap<>();
-		response.put("result", "OK");
-		response.put("accessToken", newAccessToken);
+		String rotatedRefreshToken = tokenProvider.generateRefreshToken(username);
+		Date newRefreshExpiry = new Date(System.currentTimeMillis() + jwtRefreshTokenExpirationInMs);
+		user.setRefreshToken(rotatedRefreshToken);
+		user.setRefreshTokenExpiry(newRefreshExpiry);
+		userRepository.updateRefreshToken(
+			user.getUsrNo(),
+			user.getRefreshToken(),
+			user.getRefreshTokenExpiry(),
+			new Date(),
+			user.getUsrNo(),
+			new Date()
+		);
+		setRefreshTokenCookie(response, rotatedRefreshToken);
 		
-		return ResponseEntity.ok(response);
+		Map<String, Object> result = new HashMap<>();
+		result.put("result", "OK");
+		result.put("accessToken", newAccessToken);
+		
+		return ResponseEntity.ok(result);
+	}
+
+	@PostMapping("/api/backoffice/logout")
+	public ResponseEntity<?> logout(HttpServletRequest request, HttpServletResponse response) {
+		String refreshToken = extractRefreshTokenFromCookies(request);
+		if (StringUtils.hasText(refreshToken)) {
+			String loginId = resolveLoginIdFromToken(refreshToken);
+			if (StringUtils.hasText(loginId)) {
+				userBaseService.loadUserByLoginId(loginId)
+						.ifPresent(user -> userRepository.clearRefreshToken(user.getUsrNo()));
+			}
+		}
+
+		clearRefreshTokenCookie(response);
+		Map<String, String> result = new HashMap<>();
+		result.put("result", "OK");
+		result.put("resultMsg", "로그아웃 처리되었습니다.");
+		return ResponseEntity.ok(result);
+	}
+
+	// refreshToken을 httpOnly 쿠키로 클라이언트에 전송합니다.
+	private void setRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
+		ResponseCookie cookie = ResponseCookie.from("refreshToken", refreshToken)
+				.httpOnly(true)
+				.secure(jwtCookieSecure)
+				.path("/")
+				.maxAge(Duration.ofMillis(jwtRefreshTokenExpirationInMs))
+				.sameSite("Strict")
+				.build();
+		response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+	}
+
+	// 쿠키를 비우기 위한 TTL 0 설정
+	private void clearRefreshTokenCookie(HttpServletResponse response) {
+		ResponseCookie cookie = ResponseCookie.from("refreshToken", "")
+				.httpOnly(true)
+				.secure(jwtCookieSecure)
+				.path("/")
+				.maxAge(Duration.ZERO)
+				.sameSite("Strict")
+				.build();
+		response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+	}
+
+	// Authorization 헤더에서 Bearer 토큰을 추출합니다.
+	private String extractAccessTokenFromHeader(HttpServletRequest request) {
+		String bearerToken = request.getHeader(HttpHeaders.AUTHORIZATION);
+		if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
+			return bearerToken.substring(7);
+		}
+		return null;
+	}
+
+	// 쿠키 목록에서 refreshToken 값을 찾습니다.
+	private String extractRefreshTokenFromCookies(HttpServletRequest request) {
+		if (request.getCookies() == null) {
+			return null;
+		}
+		return Arrays.stream(request.getCookies())
+				.filter(cookie -> "refreshToken".equals(cookie.getName()))
+				.findFirst()
+				.map(Cookie::getValue)
+				.orElse(null);
+	}
+
+	// 토큰에서 loginId를 파싱합니다.
+	private String resolveLoginIdFromToken(String refreshToken) {
+		try {
+			return tokenProvider.getUsernameFromJWT(refreshToken);
+		} catch (Exception ex) {
+			log.warn("refresh token parsing failed", ex);
+			return null;
+		}
 	}
 }
