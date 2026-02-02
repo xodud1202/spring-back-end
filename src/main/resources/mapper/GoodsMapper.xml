@@ -6,6 +6,8 @@
 	<select id="getAdminGoodsList" resultType="com.xodud1202.springbackend.domain.admin.goods.GoodsVO">
 		/* GoodsMapper.getAdminGoodsList: 관리자 상품 목록 조회 */
 		SELECT GB.GOODS_ID
+		     , GB.BRAND_NO
+		     , BB.BRAND_NM AS BRAND_NM
 		     , GB.ERP_STYLE_CD
 		     , GB.GOODS_NM
 		     , GB.GOODS_STAT_CD
@@ -16,6 +18,8 @@
 		     , GB.REG_DT
 		     , GB.UDT_DT
 		  FROM GOODS_BASE GB
+		  LEFT JOIN BRAND_BASE BB
+		    ON BB.BRAND_NO = GB.BRAND_NO
 		  LEFT JOIN COMMON_CODE CD
 		    ON CD.GRP_CD = 'GOODS_DIV'
 		   AND CD.CD = GB.GOODS_DIV_CD
@@ -31,6 +35,9 @@
 		</if>
 		<if test="showYn != null and showYn != ''">
 		   AND GB.SHOW_YN = #{showYn}
+		</if>
+		<if test="brandNo != null and brandNo != ''">
+		   AND GB.BRAND_NO = #{brandNo}
 		</if>
 		<if test="searchValue != null and searchValue != ''">
 			<choose>
@@ -63,6 +70,9 @@
 		<if test="showYn != null and showYn != ''">
 		   AND GB.SHOW_YN = #{showYn}
 		</if>
+		<if test="brandNo != null and brandNo != ''">
+		   AND GB.BRAND_NO = #{brandNo}
+		</if>
 		<if test="searchValue != null and searchValue != ''">
 			<choose>
 				<when test="searchGb == 'goodsId'">
@@ -84,6 +94,16 @@
 		     , GOODS_MERCH_NM
 		  FROM GOODS_MERCH_BASE
 		 ORDER BY GOODS_MERCH_ID
+	</select>
+
+	<select id="getBrandList" resultType="com.xodud1202.springbackend.domain.admin.brand.BrandVO">
+		/* GoodsMapper.getBrandList: 브랜드 목록 조회 */
+		SELECT BRAND_NO
+		     , BRAND_NM
+		  FROM BRAND_BASE
+		 WHERE USE_YN = 'Y'
+		   AND DEL_YN = 'N'
+		 ORDER BY DISP_ORD ASC, BRAND_NO ASC
 	</select>
 
 	<select id="getAdminGoodsDetail" resultType="com.xodud1202.springbackend.domain.admin.goods.GoodsDetailVO">
@@ -110,6 +130,7 @@
 		/* GoodsMapper.insertAdminGoods: 관리자 상품 등록 */
 		INSERT INTO GOODS_BASE (
 		       GOODS_ID
+		     , BRAND_NO
 		     , GOODS_DIV_CD
 		     , GOODS_STAT_CD
 		     , GOODS_NM
@@ -127,6 +148,7 @@
 		     , UDT_NO
 		) VALUES (
 		       #{goodsId}
+		     , #{brandNo}
 		     , #{goodsDivCd}
 		     , #{goodsStatCd}
 		     , #{goodsNm}

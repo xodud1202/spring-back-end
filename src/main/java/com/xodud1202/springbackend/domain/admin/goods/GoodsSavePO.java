@@ -4,9 +4,11 @@ import lombok.Data;
 
 import java.util.List;
 
+// 관리자 상품 저장 요청 데이터를 정의합니다.
 @Data
 public class GoodsSavePO {
 	private String goodsId;
+	private Integer brandNo;
 	private String goodsDivCd;
 	private String goodsStatCd;
 	private String goodsNm;

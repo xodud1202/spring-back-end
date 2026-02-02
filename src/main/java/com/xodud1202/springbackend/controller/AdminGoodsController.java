@@ -1,5 +1,6 @@
 package com.xodud1202.springbackend.controller;
 
+import com.xodud1202.springbackend.domain.admin.brand.BrandVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsPO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsDetailVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsMerchVO;
@@ -35,6 +36,7 @@ import java.util.Map;
 @Validated
 @RestController
 @RequiredArgsConstructor
+// 관리자 상품 API를 제공합니다.
 public class AdminGoodsController {
 	private final GoodsService goodsService;
 
@@ -48,6 +50,12 @@ public class AdminGoodsController {
 	@GetMapping("/api/admin/goods/merch/list")
 	public ResponseEntity<List<GoodsMerchVO>> getGoodsMerchList() {
 		return ResponseEntity.ok(goodsService.getGoodsMerchList());
+	}
+
+	// 브랜드 목록을 조회합니다.
+	@GetMapping("/api/admin/brand/list")
+	public ResponseEntity<List<BrandVO>> getBrandList() {
+		return ResponseEntity.ok(goodsService.getBrandList());
 	}
 
 	// 관리자 상품 상세 정보를 조회합니다.

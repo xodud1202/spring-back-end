@@ -1,5 +1,6 @@
 package com.xodud1202.springbackend.service;
 
+import com.xodud1202.springbackend.domain.admin.brand.BrandVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsPO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsDetailVO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
@@ -35,6 +36,7 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+// 관리자 상품 관련 비즈니스 로직을 처리합니다.
 public class GoodsService {
 	private final GoodsMapper goodsMapper;
 	private final FtpFileService ftpFileService;
@@ -66,6 +68,11 @@ public class GoodsService {
 	// 상품 분류 목록을 조회합니다.
 	public List<GoodsMerchVO> getGoodsMerchList() {
 		return goodsMapper.getGoodsMerchList();
+	}
+
+	// 브랜드 목록을 조회합니다.
+	public List<BrandVO> getBrandList() {
+		return goodsMapper.getBrandList();
 	}
 
 	// 관리자 상품 상세 정보를 조회합니다.
@@ -100,6 +107,9 @@ public class GoodsService {
 		}
 		if (isBlank(param.getGoodsId())) {
 			return "상품코드를 입력해주세요.";
+		}
+		if (param.getBrandNo() == null) {
+			return "브랜드를 선택해주세요.";
 		}
 		if (isBlank(param.getGoodsDivCd())) {
 			return "상품구분을 선택해주세요.";

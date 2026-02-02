@@ -1,5 +1,6 @@
 package com.xodud1202.springbackend.mapper;
 
+import com.xodud1202.springbackend.domain.admin.brand.BrandVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsPO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsDetailVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsMerchVO;
@@ -23,6 +24,7 @@ import org.apache.ibatis.annotations.Param;
 import java.util.List;
 
 @Mapper
+// 관리자 상품 관련 매퍼를 정의합니다.
 public interface GoodsMapper {
 	// 관리자 상품 목록을 조회합니다.
 	List<GoodsVO> getAdminGoodsList(GoodsPO param);
@@ -32,6 +34,9 @@ public interface GoodsMapper {
 
 	// 상품 분류 목록을 조회합니다.
 	List<GoodsMerchVO> getGoodsMerchList();
+
+	// 브랜드 목록을 조회합니다.
+	List<BrandVO> getBrandList();
 
 	// 관리자 상품 상세 정보를 조회합니다.
 	GoodsDetailVO getAdminGoodsDetail(@Param("goodsId") String goodsId);

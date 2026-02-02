@@ -4,10 +4,13 @@ import com.xodud1202.springbackend.domain.common.CommonVO;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+// 관리자 상품 목록 응답 데이터를 정의합니다.
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class GoodsVO extends CommonVO {
 	private String goodsId;
+	private Integer brandNo;
+	private String brandNm;
 	private String erpStyleCd;
 	private String goodsNm;
 	private String goodsStatCd;
