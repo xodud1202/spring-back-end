@@ -58,4 +58,10 @@ public class BrandService {
 		// 기존 브랜드 정보를 수정합니다.
 		return brandMapper.updateAdminBrand(param);
 	}
+
+	// 관리자 브랜드를 삭제합니다.
+	public int deleteAdminBrand(BrandPO param) {
+		// 기존 브랜드 정보를 삭제 처리합니다.
+		return brandMapper.deleteAdminBrand(param);
+	}
 }

@@ -21,4 +21,6 @@ public interface BrandMapper {
 
 	// 관리자 브랜드를 수정합니다.
 	int updateAdminBrand(BrandPO param);
+	// 관리자 브랜드 삭제를 처리합니다.
+	int deleteAdminBrand(BrandPO param);
 }

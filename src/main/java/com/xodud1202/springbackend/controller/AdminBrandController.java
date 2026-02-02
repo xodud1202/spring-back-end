@@ -44,4 +44,11 @@ public class AdminBrandController {
 		// 브랜드 수정 결과를 반환합니다.
 		return ResponseEntity.ok(brandService.updateAdminBrand(param));
 	}
+
+	// 관리자 브랜드를 삭제합니다.
+	@PostMapping("/api/admin/brand/admin/delete")
+	public ResponseEntity<Object> deleteAdminBrand(@RequestBody BrandPO param) {
+		// 브랜드 삭제 결과를 반환합니다.
+		return ResponseEntity.ok(brandService.deleteAdminBrand(param));
+	}
 }
