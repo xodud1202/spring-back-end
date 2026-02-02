@@ -81,6 +81,20 @@ public class AdminCommonController {
 	}
 
 	/**
+	 * 브랜드 로고 이미지 업로드를 처리합니다.
+	 * @param image 업로드할 이미지 파일
+	 * @param brandNo 브랜드 번호
+	 * @return 업로드 처리 결과
+	 */
+	@PostMapping("/api/upload/brand-logo")
+	public ResponseEntity<?> uploadBrandLogo(
+			@RequestParam("image") MultipartFile image,
+			@RequestParam("brandNo") String brandNo
+	) {
+		return handleBrandLogoUpload(image, brandNo);
+	}
+
+	/**
 	 * 이력서 이미지 업로드를 공통 처리합니다.
 	 * @param image 업로드할 이미지 파일
 	 * @param usrNo 사용자 번호
@@ -165,6 +179,34 @@ public class AdminCommonController {
 	}
 
 	/**
+	 * 브랜드 로고 이미지 업로드를 처리합니다.
+	 * @param image 업로드할 이미지 파일
+	 * @param brandNo 브랜드 번호
+	 * @return 업로드 처리 결과
+	 */
+	private ResponseEntity<?> handleBrandLogoUpload(MultipartFile image, String brandNo) {
+		try {
+			String validationError = validateBrandLogoImage(image, brandNo);
+			if (validationError != null) {
+				return ResponseEntity.badRequest().body(Map.of("error", validationError));
+			}
+
+			String imageUrl = ftpFileService.uploadBrandLogo(image, brandNo);
+
+			Map<String, String> response = new HashMap<>();
+			response.put("brandLogoPath", imageUrl);
+			response.put("message", "이미지 업로드가 완료되었습니다.");
+			return ResponseEntity.ok(response);
+		} catch (IOException e) {
+			return ResponseEntity.internalServerError()
+					.body(Map.of("error", "FTP 업로드 실패: " + e.getMessage()));
+		} catch (Exception e) {
+			return ResponseEntity.internalServerError()
+					.body(Map.of("error", "이미지 업로드 실패: " + e.getMessage()));
+		}
+	}
+
+	/**
 	 * 이미지 업로드 유효성 검사를 수행합니다.
 	 * @param image 업로드할 이미지 파일
 	 * @return 오류 메시지(정상일 경우 null)
@@ -217,6 +259,40 @@ public class AdminCommonController {
 		String allowedExtensions = ftpProperties.getUploadEditorAllowExtension();
 		if (!allowedExtensions.contains(extension)) {
 			return "허용되지 않은 파일 형식입니다. 허용 형식: " + allowedExtensions;
+		}
+
+		return null;
+	}
+
+	/**
+	 * 브랜드 로고 이미지 업로드 유효성 검사를 수행합니다.
+	 * @param image 업로드할 이미지 파일
+	 * @param brandNo 브랜드 번호
+	 * @return 오류 메시지(정상일 경우 null)
+	 */
+	private String validateBrandLogoImage(MultipartFile image, String brandNo) {
+		if (brandNo == null || brandNo.trim().isEmpty()) {
+			return "브랜드 번호가 없습니다.";
+		}
+
+		if (image.isEmpty()) {
+			return "이미지 파일이 없습니다.";
+		}
+
+		long maxSizeInBytes = (long) ftpProperties.getUploadBrandMaxSize() * 1024 * 1024;
+		if (image.getSize() > maxSizeInBytes) {
+			return "파일 크기가 " + ftpProperties.getUploadBrandMaxSize() + "MB를 초과합니다.";
+		}
+
+		String originalFilename = image.getOriginalFilename();
+		if (originalFilename == null) {
+			return "파일명이 올바르지 않습니다.";
+		}
+
+		String extension = originalFilename.substring(originalFilename.lastIndexOf(".") + 1).toLowerCase();
+		String allowedExtensions = ftpProperties.getUploadBrandAllowExtension();
+		if (!allowedExtensions.contains(extension)) {
+			return "허용되지 않는 파일 형식입니다. 허용 형식: " + allowedExtensions;
 		}
 
 		return null;

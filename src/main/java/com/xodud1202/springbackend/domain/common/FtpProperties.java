@@ -45,4 +45,10 @@ public class FtpProperties {
 	private String uploadGoodsAllowExtension;
 	private String uploadGoodsTargetPath;
 	private String uploadGoodsView;
+
+	// brand upload 설정
+	private int uploadBrandMaxSize;
+	private String uploadBrandAllowExtension;
+	private String uploadBrandTargetPath;
+	private String uploadBrandViewBase;
 }

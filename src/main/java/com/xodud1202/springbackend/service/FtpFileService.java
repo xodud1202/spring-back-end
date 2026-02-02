@@ -10,6 +10,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 @Service
@@ -114,6 +115,53 @@ public class FtpFileService {
 				new String[] { goodsId },
 				regNo
 		);
+	}
+
+	/**
+	 * 브랜드 로고 이미지를 FTP 서버에 업로드하고 조회 가능한 URL을 반환합니다.
+	 * @param file 업로드할 이미지 파일
+	 * @param brandNo 브랜드 번호
+	 * @return 업로드된 이미지의 URL
+	 */
+	public String uploadBrandLogo(MultipartFile file, String brandNo) throws IOException {
+		FTPClient ftpClient = new FTPClient();
+
+		try {
+			// FTP 서버 연결
+			ftpClient.connect(ftpProperties.getHost(), ftpProperties.getPort());
+			boolean login = ftpClient.login(ftpProperties.getUsername(), ftpProperties.getPwd());
+
+			if (!login) {
+				throw new IOException("FTP 로그인 실패");
+			}
+
+			// 설정
+			ftpClient.enterLocalPassiveMode();
+			ftpClient.setFileType(FTP.BINARY_FILE_TYPE);
+
+			// 업로드 경로 이동
+			String targetPath = ftpProperties.getUploadBrandTargetPath();
+			ftpClient.changeWorkingDirectory(targetPath);
+
+			// 파일명 생성
+			String fileName = buildBrandLogoFileName(file, brandNo);
+
+			// 파일 업로드
+			try (InputStream inputStream = file.getInputStream()) {
+				boolean uploaded = ftpClient.storeFile(fileName, inputStream);
+
+				if (!uploaded) {
+					throw new IOException("FTP 파일 업로드 실패");
+				}
+			}
+
+			return buildBrandLogoUrl(fileName);
+		} finally {
+			if (ftpClient.isConnected()) {
+				ftpClient.logout();
+				ftpClient.disconnect();
+			}
+		}
 	}
 
 	/**
@@ -259,5 +307,32 @@ public class FtpFileService {
 		String originalFilename = file.getOriginalFilename();
 		String extension = originalFilename.substring(originalFilename.lastIndexOf("."));
 		return folderKey + "_" + System.currentTimeMillis() + extension;
+	}
+
+	/**
+	 * 브랜드 로고 파일명을 생성합니다.
+	 * @param file 업로드 파일
+	 * @param brandNo 브랜드 번호
+	 * @return 브랜드 번호_시분초밀리초.확장자 형식의 파일명
+	 */
+	private String buildBrandLogoFileName(MultipartFile file, String brandNo) {
+		String originalFilename = file.getOriginalFilename();
+		String extension = originalFilename.substring(originalFilename.lastIndexOf("."));
+		String timeKey = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS"));
+		String normalizedBrandNo = brandNo.trim();
+		return normalizedBrandNo + "_" + timeKey + extension;
+	}
+
+	/**
+	 * 브랜드 로고 조회 URL을 생성합니다.
+	 * @param fileName 업로드된 파일명
+	 * @return 조회 가능한 URL
+	 */
+	private String buildBrandLogoUrl(String fileName) {
+		String viewBase = ftpProperties.getUploadBrandViewBase();
+		String targetPath = ftpProperties.getUploadBrandTargetPath();
+		String normalizedViewBase = viewBase.endsWith("/") ? viewBase.substring(0, viewBase.length() - 1) : viewBase;
+		String normalizedTargetPath = targetPath.startsWith("/") ? targetPath : "/" + targetPath;
+		return normalizedViewBase + normalizedTargetPath + "/" + fileName;
 	}
 }
