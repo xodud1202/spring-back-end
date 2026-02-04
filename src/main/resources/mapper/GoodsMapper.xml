@@ -195,6 +195,7 @@
 		     , CATEGORY_LEVEL
 		     , CATEGORY_NM
 		     , DISP_ORD
+		     , SHOW_YN
 		  FROM CATEGORY
 		 WHERE SHOW_YN = 'Y'
 		<if test="categoryLevel != null">
@@ -204,6 +205,111 @@
 		   AND PARENT_CATEGORY_ID = #{parentCategoryId}
 		</if>
 		 ORDER BY DISP_ORD ASC, CATEGORY_ID ASC
+	</select>
+
+	<select id="getAdminCategoryTreeList" resultType="com.xodud1202.springbackend.domain.admin.category.CategoryVO">
+		/* GoodsMapper.getAdminCategoryTreeList: 관리자 카테고리 트리 목록 조회 */
+		SELECT C1.CATEGORY_ID
+		     , C1.PARENT_CATEGORY_ID
+		     , C1.CATEGORY_LEVEL
+		     , C1.CATEGORY_NM
+		     , C1.DISP_ORD
+		     , C1.SHOW_YN
+		     , (
+		        SELECT COUNT(1)
+		          FROM CATEGORY C2
+		         WHERE C2.PARENT_CATEGORY_ID = C1.CATEGORY_ID
+		       ) AS CHILD_COUNT
+		  FROM CATEGORY C1
+		 ORDER BY C1.CATEGORY_LEVEL ASC, C1.DISP_ORD ASC, C1.CATEGORY_ID ASC
+	</select>
+
+	<select id="getAdminCategoryDetail" resultType="com.xodud1202.springbackend.domain.admin.category.CategoryVO">
+		/* GoodsMapper.getAdminCategoryDetail: 관리자 카테고리 상세 조회 */
+		SELECT CATEGORY_ID
+		     , PARENT_CATEGORY_ID
+		     , CATEGORY_LEVEL
+		     , CATEGORY_NM
+		     , DISP_ORD
+		     , SHOW_YN
+		  FROM CATEGORY
+		 WHERE CATEGORY_ID = #{categoryId}
+	</select>
+
+	<select id="getAdminCategoryMaxDispOrd" resultType="int">
+		/* GoodsMapper.getAdminCategoryMaxDispOrd: 관리자 카테고리 정렬 순서 최대값 조회 */
+		SELECT COALESCE(MAX(DISP_ORD), 0)
+		  FROM CATEGORY
+		 WHERE PARENT_CATEGORY_ID = #{parentCategoryId}
+	</select>
+
+	<select id="getAdminCategoryMaxId" resultType="string">
+		/* GoodsMapper.getAdminCategoryMaxId: 관리자 카테고리 최대 코드 조회 */
+		SELECT MAX(CATEGORY_ID)
+		  FROM CATEGORY
+		 WHERE PARENT_CATEGORY_ID = #{parentCategoryId}
+	</select>
+
+	<insert id="insertAdminCategory">
+		/* GoodsMapper.insertAdminCategory: 관리자 카테고리 등록 */
+		INSERT INTO CATEGORY (
+		       CATEGORY_ID
+		     , PARENT_CATEGORY_ID
+		     , CATEGORY_LEVEL
+		     , CATEGORY_NM
+		     , DISP_ORD
+		     , SHOW_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{categoryId}
+		     , #{parentCategoryId}
+		     , #{categoryLevel}
+		     , #{categoryNm}
+		     , #{dispOrd}
+		     , #{showYn}
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+
+	<update id="updateAdminCategory">
+		/* GoodsMapper.updateAdminCategory: 관리자 카테고리 수정 */
+		UPDATE CATEGORY
+		   SET CATEGORY_NM = #{categoryNm}
+		     , DISP_ORD = #{dispOrd}
+		     , SHOW_YN = #{showYn}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE CATEGORY_ID = #{categoryId}
+	</update>
+
+	<delete id="deleteAdminCategory">
+		/* GoodsMapper.deleteAdminCategory: 관리자 카테고리 삭제 처리 */
+		DELETE
+		  FROM CATEGORY
+		 WHERE CATEGORY_ID = #{categoryId}
+	</delete>
+
+	<select id="countAdminCategoryChildren" resultType="int">
+		/* GoodsMapper.countAdminCategoryChildren: 관리자 카테고리 하위 건수 조회 */
+		SELECT COUNT(1)
+		  FROM CATEGORY
+		 WHERE PARENT_CATEGORY_ID = #{categoryId}
+	</select>
+
+	<select id="countAdminCategoryById" resultType="int">
+		/* GoodsMapper.countAdminCategoryById: 관리자 카테고리 중복 건수 조회 */
+		SELECT COUNT(1)
+		  FROM CATEGORY
+		 WHERE CATEGORY_ID = #{categoryId}
+	</select>
+
+	<select id="countAdminCategoryGoods" resultType="int">
+		/* GoodsMapper.countAdminCategoryGoods: 관리자 카테고리 상품 사용 건수 조회 */
+		SELECT COUNT(1)
+		  FROM GOODS_CATEGORY
+		 WHERE CATEGORY_ID = #{categoryId}
 	</select>
 
 	<select id="getAdminGoodsCategoryList" resultType="com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryVO">

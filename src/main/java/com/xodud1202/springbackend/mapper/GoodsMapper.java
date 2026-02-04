@@ -17,6 +17,7 @@ import com.xodud1202.springbackend.domain.admin.goods.GoodsDescVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsImageSavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsImageVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsImageOrderSavePO;
+import com.xodud1202.springbackend.domain.admin.category.CategorySavePO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -49,6 +50,36 @@ public interface GoodsMapper {
 
 	// 카테고리 목록을 조회합니다.
 	List<CategoryVO> getCategoryList(@Param("categoryLevel") Integer categoryLevel, @Param("parentCategoryId") String parentCategoryId);
+
+	// 관리자 카테고리 트리 목록을 조회합니다.
+	List<CategoryVO> getAdminCategoryTreeList();
+
+	// 관리자 카테고리 상세를 조회합니다.
+	CategoryVO getAdminCategoryDetail(@Param("categoryId") String categoryId);
+
+	// 관리자 카테고리 최대 정렬 순서를 조회합니다.
+	Integer getAdminCategoryMaxDispOrd(@Param("parentCategoryId") String parentCategoryId);
+
+	// 관리자 카테고리 최대 코드값을 조회합니다.
+	String getAdminCategoryMaxId(@Param("parentCategoryId") String parentCategoryId);
+
+	// 관리자 카테고리를 등록합니다.
+	int insertAdminCategory(CategorySavePO param);
+
+	// 관리자 카테고리를 수정합니다.
+	int updateAdminCategory(CategorySavePO param);
+
+	// 관리자 카테고리를 삭제 처리합니다.
+	int deleteAdminCategory(CategorySavePO param);
+
+	// 관리자 카테고리 하위 건수를 조회합니다.
+	int countAdminCategoryChildren(@Param("categoryId") String categoryId);
+
+	// 관리자 카테고리 중복 여부를 조회합니다.
+	int countAdminCategoryById(@Param("categoryId") String categoryId);
+
+	// 관리자 카테고리 사용 여부를 조회합니다.
+	int countAdminCategoryGoods(@Param("categoryId") String categoryId);
 
 	// 관리자 상품 카테고리 목록을 조회합니다.
 	List<GoodsCategoryVO> getAdminGoodsCategoryList(@Param("goodsId") String goodsId);

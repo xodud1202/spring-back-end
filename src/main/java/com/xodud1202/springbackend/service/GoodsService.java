@@ -3,6 +3,7 @@ package com.xodud1202.springbackend.service;
 import com.xodud1202.springbackend.domain.admin.brand.BrandVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsPO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsDetailVO;
+import com.xodud1202.springbackend.domain.admin.category.CategorySavePO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySavePO;
@@ -313,6 +314,165 @@ public class GoodsService {
 	// 카테고리 목록을 조회합니다.
 	public List<CategoryVO> getCategoryList(Integer categoryLevel, String parentCategoryId) {
 		return goodsMapper.getCategoryList(categoryLevel, parentCategoryId);
+	}
+
+	// 관리자 카테고리 트리 목록을 조회합니다.
+	public List<CategoryVO> getAdminCategoryTreeList() {
+		// 전체 카테고리 목록을 조회합니다.
+		return goodsMapper.getAdminCategoryTreeList();
+	}
+
+	// 관리자 카테고리 상세를 조회합니다.
+	public CategoryVO getAdminCategoryDetail(String categoryId) {
+		// 카테고리 아이디가 없으면 조회하지 않습니다.
+		if (isBlank(categoryId)) {
+			return null;
+		}
+		// 카테고리 상세 정보를 조회합니다.
+		return goodsMapper.getAdminCategoryDetail(categoryId);
+	}
+
+	// 관리자 카테고리 등록 요청을 검증합니다.
+	public String validateAdminCategoryCreate(CategorySavePO param) {
+		// 요청 데이터 유효성을 확인합니다.
+		if (param == null) {
+			return "요청 데이터가 없습니다.";
+		}
+		if (isBlank(param.getCategoryId())) {
+			return "카테고리 코드를 입력해주세요.";
+		}
+		if (isBlank(param.getCategoryNm())) {
+			return "카테고리명을 입력해주세요.";
+		}
+		if (param.getRegNo() == null) {
+			return "등록자 정보를 확인해주세요.";
+		}
+		int exists = goodsMapper.countAdminCategoryById(param.getCategoryId());
+		if (exists > 0) {
+			return "이미 등록된 카테고리 코드입니다.";
+		}
+		if (!isBlank(param.getParentCategoryId())) {
+			CategoryVO parent = goodsMapper.getAdminCategoryDetail(param.getParentCategoryId());
+			if (parent == null) {
+				return "상위 카테고리를 확인해주세요.";
+			}
+		}
+		return null;
+	}
+
+	// 관리자 카테고리 다음 코드를 생성합니다.
+	public String getNextAdminCategoryId(String parentCategoryId) {
+		// 상위 카테고리 공백값을 정리합니다.
+		String resolvedParentId = isBlank(parentCategoryId) ? "0" : parentCategoryId;
+		String maxCategoryId = goodsMapper.getAdminCategoryMaxId(resolvedParentId);
+		if (isBlank(maxCategoryId)) {
+			// 하위 카테고리가 없으면 상위 코드 + 0001을 반환합니다.
+			return "0".equals(resolvedParentId) ? "0001" : resolvedParentId + "0001";
+		}
+		String prefix = maxCategoryId.length() > 4 ? maxCategoryId.substring(0, maxCategoryId.length() - 4) : "";
+		String suffix = maxCategoryId.length() >= 4 ? maxCategoryId.substring(maxCategoryId.length() - 4) : maxCategoryId;
+		int nextNumber;
+		try {
+			nextNumber = Integer.parseInt(suffix) + 1;
+		} catch (NumberFormatException e) {
+			nextNumber = 1;
+		}
+		String nextSuffix = String.format("%04d", nextNumber);
+		return prefix + nextSuffix;
+	}
+
+	// 관리자 카테고리 수정 요청을 검증합니다.
+	public String validateAdminCategoryUpdate(CategorySavePO param) {
+		// 요청 데이터 유효성을 확인합니다.
+		if (param == null) {
+			return "요청 데이터가 없습니다.";
+		}
+		if (isBlank(param.getCategoryId())) {
+			return "카테고리 코드를 확인해주세요.";
+		}
+		if (isBlank(param.getCategoryNm())) {
+			return "카테고리명을 입력해주세요.";
+		}
+		if (param.getUdtNo() == null) {
+			return "수정자 정보를 확인해주세요.";
+		}
+		CategoryVO current = goodsMapper.getAdminCategoryDetail(param.getCategoryId());
+		if (current == null) {
+			return "카테고리 정보를 확인해주세요.";
+		}
+		return null;
+	}
+
+	// 관리자 카테고리 삭제 요청을 검증합니다.
+	public String validateAdminCategoryDelete(CategorySavePO param) {
+		// 요청 데이터 유효성을 확인합니다.
+		if (param == null) {
+			return "요청 데이터가 없습니다.";
+		}
+		if (isBlank(param.getCategoryId())) {
+			return "카테고리 코드를 확인해주세요.";
+		}
+		if (param.getUdtNo() == null) {
+			return "수정자 정보를 확인해주세요.";
+		}
+		int childCount = goodsMapper.countAdminCategoryChildren(param.getCategoryId());
+		if (childCount > 0) {
+			return "하위 카테고리가 존재하여 삭제할 수 없습니다.";
+		}
+		int goodsCount = goodsMapper.countAdminCategoryGoods(param.getCategoryId());
+		if (goodsCount > 0) {
+			return "상품에 연결된 카테고리는 삭제할 수 없습니다.";
+		}
+		return null;
+	}
+
+	// 관리자 카테고리를 등록합니다.
+	public int createAdminCategory(CategorySavePO param) {
+		// 상위 카테고리 공백값을 정리합니다.
+		if (isBlank(param.getParentCategoryId())) {
+			param.setParentCategoryId("0");
+		}
+		// 상위 카테고리에 따라 레벨을 계산합니다.
+		Integer categoryLevel = 1;
+		if (!isBlank(param.getParentCategoryId())) {
+			CategoryVO parent = goodsMapper.getAdminCategoryDetail(param.getParentCategoryId());
+			categoryLevel = parent != null && parent.getCategoryLevel() != null ? parent.getCategoryLevel() + 1 : 1;
+		}
+		param.setCategoryLevel(categoryLevel);
+		// 정렬 순서를 설정합니다.
+		if (param.getDispOrd() == null) {
+			Integer maxDispOrd = goodsMapper.getAdminCategoryMaxDispOrd(param.getParentCategoryId());
+			param.setDispOrd(maxDispOrd != null ? maxDispOrd + 1 : 1);
+		}
+		// 노출 여부 기본값을 설정합니다.
+		if (isBlank(param.getShowYn())) {
+			param.setShowYn("Y");
+		}
+		// 수정자를 등록자로 설정합니다.
+		if (param.getUdtNo() == null) {
+			param.setUdtNo(param.getRegNo());
+		}
+		return goodsMapper.insertAdminCategory(param);
+	}
+
+	// 관리자 카테고리를 수정합니다.
+	public int updateAdminCategory(CategorySavePO param) {
+		// 정렬 순서 기본값을 유지합니다.
+		if (param.getDispOrd() == null) {
+			CategoryVO current = goodsMapper.getAdminCategoryDetail(param.getCategoryId());
+			param.setDispOrd(current != null ? current.getDispOrd() : 0);
+		}
+		// 노출 여부 기본값을 설정합니다.
+		if (isBlank(param.getShowYn())) {
+			param.setShowYn("Y");
+		}
+		return goodsMapper.updateAdminCategory(param);
+	}
+
+	// 관리자 카테고리를 삭제 처리합니다.
+	public int deleteAdminCategory(CategorySavePO param) {
+		// 삭제 처리를 수행합니다.
+		return goodsMapper.deleteAdminCategory(param);
 	}
 
 	// 관리자 상품 카테고리 목록을 조회합니다.
