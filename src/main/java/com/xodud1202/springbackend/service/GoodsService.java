@@ -356,6 +356,9 @@ public class GoodsService {
 			if (parent == null) {
 				return "상위 카테고리를 확인해주세요.";
 			}
+			if (parent.getCategoryLevel() != null && parent.getCategoryLevel() >= 3) {
+				return "3레벨 카테고리에는 하위 카테고리를 추가할 수 없습니다.";
+			}
 		}
 		return null;
 	}
