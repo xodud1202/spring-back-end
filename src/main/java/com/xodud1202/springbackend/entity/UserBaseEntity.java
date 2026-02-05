@@ -17,6 +17,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 
+// 사용자 기본 정보를 저장하는 엔티티입니다.
 @Data
 @Entity
 @Table(name = "USER_BASE")
@@ -56,14 +57,6 @@ public class UserBaseEntity implements UserDetails {
 	
 	@Column(name = "UDT_DT")
 	private Date udtDt;
-	
-	@Column(name = "REFRESH_TOKEN")
-	private String refreshToken;        // 자동로그인 refreshToken
-	
-	@Column(name = "REFRESH_TOKEN_EXPIRY")
-	private Date refreshTokenExpiry;    // 자동로그인 refreshToken 만료기한
-	
-	private String jwtToken;            // 현재 jwt accessToken
 	
 	@Override
 	public String getUsername() {

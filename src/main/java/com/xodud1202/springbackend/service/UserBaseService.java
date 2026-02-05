@@ -1,21 +1,18 @@
 package com.xodud1202.springbackend.service;
 
+import com.xodud1202.springbackend.domain.admin.common.UserInfoVO;
 import com.xodud1202.springbackend.entity.UserBaseEntity;
 import com.xodud1202.springbackend.repository.UserRepository;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
 
+// 사용자 기본 정보를 조회하는 서비스입니다.
 @Service
 @RequiredArgsConstructor
 public class UserBaseService {
-	
-	@PersistenceContext
-	private EntityManager em;
-	
+
 	private final UserRepository userRepository;
 
 	/**
@@ -27,20 +24,25 @@ public class UserBaseService {
 	public Optional<UserBaseEntity> loadUserByLoginId(String loginId) {
 		return userRepository.findByLoginId(loginId);
 	}
-	
+
 	/**
-	 * Retrieves a {@code UserBase} entity based on the provided login ID, refresh token, and expiration check.
-	 * The method performs a query to find a user whose login ID matches, refresh token matches,
-	 * and whose refresh token has not expired.
-	 * @param user the {@code UserBase} object containing the login ID and refresh token to be used for the query
-	 * @return an {@code Optional} containing the {@code UserBase} if a match is found, or an empty {@code Optional} if no match exists
+	 * 사용자 번호로 사용자 정보를 조회합니다.
+	 * @param usrNo 사용자 번호
+	 * @return 사용자 정보 결과
 	 */
-	public Optional<UserBaseEntity> findUserBaseByLoginIdAndRefreshTokenAndExpiredCheck(UserBaseEntity user) {
-		String ql = "SELECT u FROM UserBaseEntity u WHERE u.loginId = :loginId AND u.refreshToken = :refreshToken AND u.refreshTokenExpiry > CURRENT_TIMESTAMP";
-		UserBaseEntity result = em.createQuery(ql, UserBaseEntity.class)
-				.setParameter("loginId", user.getLoginId())
-				.setParameter("refreshToken", user.getRefreshToken())
-				.getResultStream().findFirst().orElse(null);
-		return Optional.ofNullable(result);
+	public Optional<UserInfoVO> getUserInfoByUsrNo(Long usrNo) {
+		if (usrNo == null) {
+			return Optional.empty();
+		}
+		return userRepository.findById(usrNo)
+				.map(user -> {
+					UserInfoVO info = new UserInfoVO();
+					info.setUsrNo(user.getUsrNo());
+					info.setLoginId(user.getLoginId());
+					info.setUserNm(user.getUserNm());
+					info.setUsrGradeCd(user.getUsrGradeCd());
+					info.setUsrStatCd(user.getUsrStatCd());
+					return info;
+				});
 	}
 }
