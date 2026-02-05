@@ -18,6 +18,8 @@ import com.xodud1202.springbackend.domain.admin.goods.GoodsImageSavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsImageVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsImageOrderSavePO;
 import com.xodud1202.springbackend.domain.admin.category.CategorySavePO;
+import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsSavePO;
+import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsVO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -104,6 +106,27 @@ public interface GoodsMapper {
 
 	// 관리자 상품 카테고리 건수를 조회합니다.
 	int countAdminGoodsCategory(@Param("goodsId") String goodsId, @Param("categoryId") String categoryId);
+
+	// 카테고리별 상품 목록을 조회합니다.
+	List<CategoryGoodsVO> getAdminCategoryGoodsList(@Param("categoryId") String categoryId);
+
+	// 카테고리 상품 단건을 등록합니다.
+	int insertCategoryGoods(CategoryGoodsSavePO param);
+
+	// 카테고리 상품 정렬 순서를 수정합니다.
+	int updateCategoryGoodsDispOrd(CategoryGoodsSavePO param);
+
+	// 카테고리 상품 단건을 삭제합니다.
+	int deleteCategoryGoods(CategoryGoodsSavePO param);
+
+	// 카테고리 상품 존재 여부를 조회합니다.
+	int countCategoryGoods(@Param("categoryId") String categoryId, @Param("goodsId") String goodsId);
+
+	// 하위 카테고리 상품 존재 여부를 조회합니다.
+	int countCategoryGoodsInChildren(@Param("parentCategoryId") String parentCategoryId, @Param("goodsId") String goodsId);
+
+	// 카테고리 하위 목록을 조회합니다.
+	List<CategoryVO> getCategoryChildren(@Param("parentCategoryId") String parentCategoryId);
 
 	// 관리자 상품 사이즈 목록을 조회합니다.
 	List<GoodsSizeVO> getAdminGoodsSizeList(@Param("goodsId") String goodsId);

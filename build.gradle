@@ -45,6 +45,7 @@ dependencies {
     implementation 'com.github.vertical-blank:sql-formatter:2.0.4'
     implementation 'org.apache.commons:commons-lang3:3.18.0'
     implementation 'commons-net:commons-net:3.9.0'
+    implementation 'org.apache.poi:poi-ooxml:5.4.0'
 }
 
 tasks.named('test') {

@@ -4,6 +4,12 @@ import com.xodud1202.springbackend.domain.admin.brand.BrandVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsPO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsDetailVO;
 import com.xodud1202.springbackend.domain.admin.category.CategorySavePO;
+import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsDeletePO;
+import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsOrderItem;
+import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsOrderSavePO;
+import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsRegisterPO;
+import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsSavePO;
+import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsVO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySavePO;
@@ -25,12 +31,23 @@ import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsVO;
 import com.xodud1202.springbackend.mapper.GoodsMapper;
 import lombok.RequiredArgsConstructor;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.io.ByteArrayOutputStream;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,7 +64,11 @@ public class GoodsService {
 	// 관리자 상품 목록을 페이징 조건으로 조회합니다.
 	public Map<String, Object> getAdminGoodsList(GoodsPO param) {
 		int page = param.getPage() == null || param.getPage() < 1 ? 1 : param.getPage();
+		// 페이지 사이즈 기본값과 최대값을 설정합니다.
 		int pageSize = 20;
+		if (param.getPageSize() != null && param.getPageSize() > 0) {
+			pageSize = Math.min(param.getPageSize(), 200);
+		}
 		int offset = (page - 1) * pageSize;
 
 		param.setPage(page);
@@ -56,6 +77,8 @@ public class GoodsService {
 		param.setSearchKeyword(buildGoodsNameSearchKeyword(param));
 
 		List<GoodsVO> list = goodsMapper.getAdminGoodsList(param);
+		// 상품 이미지 URL을 세팅합니다.
+		applyGoodsImageUrls(list);
 		int totalCount = goodsMapper.getAdminGoodsCount(param);
 
 		Map<String, Object> result = new HashMap<>();
@@ -367,11 +390,27 @@ public class GoodsService {
 	public String getNextAdminCategoryId(String parentCategoryId) {
 		// 상위 카테고리 공백값을 정리합니다.
 		String resolvedParentId = isBlank(parentCategoryId) ? "0" : parentCategoryId;
+		// 최상위 카테고리 여부를 판단합니다.
+		boolean isRootCategory = "0".equals(resolvedParentId);
+		// 동일 상위 카테고리 기준 최대 코드를 조회합니다.
 		String maxCategoryId = goodsMapper.getAdminCategoryMaxId(resolvedParentId);
 		if (isBlank(maxCategoryId)) {
-			// 하위 카테고리가 없으면 상위 코드 + 0001을 반환합니다.
-			return "0".equals(resolvedParentId) ? "0001" : resolvedParentId + "0001";
+			// 최상위는 2자리, 하위는 4자리로 시작합니다.
+			return isRootCategory ? "01" : resolvedParentId + "0001";
 		}
+		if (isRootCategory) {
+			// 최상위 카테고리는 마지막 2자리 기준으로 증가합니다.
+			String suffix = maxCategoryId.length() >= 2 ? maxCategoryId.substring(maxCategoryId.length() - 2) : maxCategoryId;
+			int nextNumber;
+			try {
+				nextNumber = Integer.parseInt(suffix) + 1;
+			} catch (NumberFormatException e) {
+				nextNumber = 1;
+			}
+			String nextSuffix = String.format("%02d", nextNumber);
+			return nextSuffix;
+		}
+		// 하위 카테고리는 4자리 단위로 증가합니다.
 		String prefix = maxCategoryId.length() > 4 ? maxCategoryId.substring(0, maxCategoryId.length() - 4) : "";
 		String suffix = maxCategoryId.length() >= 4 ? maxCategoryId.substring(maxCategoryId.length() - 4) : maxCategoryId;
 		int nextNumber;
@@ -476,6 +515,569 @@ public class GoodsService {
 	public int deleteAdminCategory(CategorySavePO param) {
 		// 삭제 처리를 수행합니다.
 		return goodsMapper.deleteAdminCategory(param);
+	}
+
+	// 카테고리별 상품 목록을 조회합니다.
+	public List<CategoryGoodsVO> getAdminCategoryGoodsList(String categoryId) {
+		// 카테고리 코드가 없으면 빈 목록을 반환합니다.
+		if (isBlank(categoryId)) {
+			return List.of();
+		}
+		// 카테고리별 상품 목록을 조회합니다.
+		List<CategoryGoodsVO> list = goodsMapper.getAdminCategoryGoodsList(categoryId);
+		// 상품 이미지 URL을 세팅합니다.
+		applyCategoryGoodsImageUrls(list);
+		return list;
+	}
+
+	// 카테고리 상품 정렬 순서 저장 요청을 검증합니다.
+	public String validateCategoryGoodsOrderSave(CategoryGoodsOrderSavePO param) {
+		// 요청 데이터 유효성을 확인합니다.
+		if (param == null) {
+			return "요청 데이터가 없습니다.";
+		}
+		if (isBlank(param.getCategoryId())) {
+			return "카테고리 코드를 확인해주세요.";
+		}
+		if (param.getUdtNo() == null) {
+			return "수정자 정보를 확인해주세요.";
+		}
+		List<CategoryGoodsOrderItem> orders = param.getOrders();
+		if (orders == null || orders.isEmpty()) {
+			return "저장할 순서 정보가 없습니다.";
+		}
+		for (CategoryGoodsOrderItem item : orders) {
+			if (item == null || isBlank(item.getGoodsId()) || item.getDispOrd() == null) {
+				return "순서 정보가 올바르지 않습니다.";
+			}
+		}
+		return null;
+	}
+
+	// 카테고리 상품 정렬 순서를 저장합니다.
+	@Transactional
+	public int saveCategoryGoodsOrder(CategoryGoodsOrderSavePO param) {
+		// 요청 데이터가 없으면 처리하지 않습니다.
+		if (param == null) {
+			return 0;
+		}
+		int updated = 0;
+		// 정렬 순서를 순회하며 저장합니다.
+		for (CategoryGoodsOrderItem item : param.getOrders()) {
+			if (item == null) {
+				continue;
+			}
+			CategoryGoodsSavePO savePO = new CategoryGoodsSavePO();
+			savePO.setCategoryId(param.getCategoryId());
+			savePO.setGoodsId(item.getGoodsId());
+			savePO.setDispOrd(item.getDispOrd());
+			savePO.setUdtNo(param.getUdtNo());
+			updated += goodsMapper.updateCategoryGoodsDispOrd(savePO);
+		}
+		return updated;
+	}
+
+	// 카테고리 상품 등록 요청을 검증합니다.
+	public String validateCategoryGoodsRegister(CategoryGoodsRegisterPO param) {
+		// 요청 데이터 유효성을 확인합니다.
+		if (param == null) {
+			return "요청 데이터가 없습니다.";
+		}
+		if (isBlank(param.getCategoryId())) {
+			return "카테고리를 선택해주세요.";
+		}
+		if (param.getRegNo() == null) {
+			return "등록자 정보를 확인해주세요.";
+		}
+		if (param.getUdtNo() == null) {
+			return "수정자 정보를 확인해주세요.";
+		}
+		if (param.getGoodsIds() == null || param.getGoodsIds().isEmpty()) {
+			return "등록할 상품을 선택해주세요.";
+		}
+		return null;
+	}
+
+	// 카테고리 상품을 등록합니다.
+	@Transactional
+	public int registerCategoryGoods(CategoryGoodsRegisterPO param) {
+		// 요청 데이터가 없으면 처리하지 않습니다.
+		if (param == null) {
+			return 0;
+		}
+		// 카테고리 정보를 조회합니다.
+		CategoryVO category = goodsMapper.getAdminCategoryDetail(param.getCategoryId());
+		if (category == null) {
+			return 0;
+		}
+		int inserted = 0;
+		// 저장일자 기반 정렬 순서를 생성합니다.
+		Integer dispOrd = buildTodayDispOrd();
+		// 상위 카테고리 목록을 조회합니다.
+		List<CategoryVO> parents = getCategoryParents(category.getCategoryId());
+		// 상품 목록을 순회하며 등록합니다.
+		for (String goodsId : param.getGoodsIds()) {
+			if (isBlank(goodsId)) {
+				continue;
+			}
+			// 대상 카테고리에 상품을 등록합니다.
+			if (insertCategoryGoodsIfNotExists(category.getCategoryId(), goodsId, dispOrd, param.getRegNo(), param.getUdtNo())) {
+				inserted += 1;
+			}
+			// 상위 카테고리에도 등록합니다.
+			for (CategoryVO parent : parents) {
+				if (parent == null) {
+					continue;
+				}
+				if (insertCategoryGoodsIfNotExists(parent.getCategoryId(), goodsId, dispOrd, param.getRegNo(), param.getUdtNo())) {
+					inserted += 1;
+				}
+			}
+		}
+		return inserted;
+	}
+
+	// 카테고리 상품 삭제 요청을 검증합니다.
+	public String validateCategoryGoodsDelete(CategoryGoodsDeletePO param) {
+		// 요청 데이터 유효성을 확인합니다.
+		if (param == null) {
+			return "요청 데이터가 없습니다.";
+		}
+		if (isBlank(param.getCategoryId())) {
+			return "카테고리를 선택해주세요.";
+		}
+		if (param.getUdtNo() == null) {
+			return "수정자 정보를 확인해주세요.";
+		}
+		if (param.getGoodsIds() == null || param.getGoodsIds().isEmpty()) {
+			return "삭제할 상품을 선택해주세요.";
+		}
+		return null;
+	}
+
+	// 카테고리 상품을 삭제합니다.
+	@Transactional
+	public int deleteCategoryGoods(CategoryGoodsDeletePO param) {
+		// 요청 데이터가 없으면 처리하지 않습니다.
+		if (param == null) {
+			return 0;
+		}
+		int deleted = 0;
+		// 삭제 대상 카테고리를 조회합니다.
+		CategoryVO category = goodsMapper.getAdminCategoryDetail(param.getCategoryId());
+		if (category == null) {
+			return 0;
+		}
+		// 상품 목록을 순회하며 삭제합니다.
+		for (String goodsId : param.getGoodsIds()) {
+			if (isBlank(goodsId)) {
+				continue;
+			}
+			deleted += deleteCategoryGoodsWithHierarchy(category, goodsId, param.getUdtNo());
+		}
+		return deleted;
+	}
+
+	// 카테고리 상품 엑셀 업로드 요청을 검증합니다.
+	public String validateCategoryGoodsExcelUpload(MultipartFile file, Long regNo, Long udtNo) {
+		// 요청 데이터 유효성을 확인합니다.
+		if (file == null || file.isEmpty()) {
+			return "업로드할 엑셀 파일을 선택해주세요.";
+		}
+		if (regNo == null) {
+			return "등록자 정보를 확인해주세요.";
+		}
+		if (udtNo == null) {
+			return "수정자 정보를 확인해주세요.";
+		}
+		return null;
+	}
+
+	// 카테고리 상품 엑셀 업로드를 처리합니다.
+	@Transactional
+	public Map<String, Object> uploadCategoryGoodsExcel(MultipartFile file, Long regNo, Long udtNo) throws IOException {
+		// 업로드 데이터를 파싱합니다.
+		List<CategoryGoodsExcelRow> rows = parseCategoryGoodsExcel(file);
+		int inserted = 0;
+		int updated = 0;
+		// 업로드 데이터를 순회하며 저장합니다.
+		for (CategoryGoodsExcelRow row : rows) {
+			if (row == null) {
+				continue;
+			}
+			// 카테고리 정보를 확인합니다.
+			CategoryVO category = goodsMapper.getAdminCategoryDetail(row.categoryId());
+			if (category == null) {
+				throw new IllegalArgumentException("카테고리 정보를 확인해주세요.");
+			}
+			// 상품 정보를 확인합니다.
+			GoodsDetailVO goods = goodsMapper.getAdminGoodsDetail(row.goodsId());
+			if (goods == null) {
+				throw new IllegalArgumentException("상품 정보를 확인해주세요.");
+			}
+			// 대상 카테고리의 정렬 순서를 저장합니다.
+			boolean exists = goodsMapper.countCategoryGoods(row.categoryId(), row.goodsId()) > 0;
+			if (exists) {
+				CategoryGoodsSavePO updatePO = new CategoryGoodsSavePO();
+				updatePO.setCategoryId(row.categoryId());
+				updatePO.setGoodsId(row.goodsId());
+				updatePO.setDispOrd(row.dispOrd());
+				updatePO.setUdtNo(udtNo);
+				updated += goodsMapper.updateCategoryGoodsDispOrd(updatePO);
+			} else {
+				if (insertCategoryGoodsIfNotExists(row.categoryId(), row.goodsId(), row.dispOrd(), regNo, udtNo)) {
+					inserted += 1;
+				}
+			}
+			// 상위 카테고리에는 신규 등록만 수행합니다.
+			List<CategoryVO> parents = getCategoryParents(row.categoryId());
+			for (CategoryVO parent : parents) {
+				if (parent == null) {
+					continue;
+				}
+				insertCategoryGoodsIfNotExists(parent.getCategoryId(), row.goodsId(), row.dispOrd(), regNo, udtNo);
+			}
+		}
+		Map<String, Object> result = new HashMap<>();
+		result.put("inserted", inserted);
+		result.put("updated", updated);
+		result.put("total", rows.size());
+		return result;
+	}
+
+	// 카테고리 상품 엑셀 다운로드 데이터를 생성합니다.
+	public byte[] buildCategoryGoodsExcel(String categoryId) throws IOException {
+		// 카테고리별 상품 목록을 조회합니다.
+		List<CategoryGoodsVO> list = goodsMapper.getAdminCategoryGoodsList(categoryId);
+		// 엑셀 워크북을 생성합니다.
+		Workbook workbook = new XSSFWorkbook();
+		Sheet sheet = workbook.createSheet("category_goods");
+		// 헤더 행을 생성합니다.
+		Row header = sheet.createRow(0);
+		header.createCell(0).setCellValue("카테고리코드");
+		header.createCell(1).setCellValue("상품코드");
+		header.createCell(2).setCellValue("노출순서");
+		// 데이터 행을 생성합니다.
+		int rowIndex = 1;
+		for (CategoryGoodsVO item : list) {
+			Row row = sheet.createRow(rowIndex);
+			row.createCell(0).setCellValue(item.getCategoryId());
+			row.createCell(1).setCellValue(item.getGoodsId());
+			row.createCell(2).setCellValue(item.getDispOrd() != null ? item.getDispOrd() : 0);
+			rowIndex += 1;
+		}
+		// 엑셀 데이터를 바이트 배열로 반환합니다.
+		try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+			workbook.write(outputStream);
+			workbook.close();
+			return outputStream.toByteArray();
+		}
+	}
+
+	// 카테고리 상위 목록을 조회합니다.
+	private List<CategoryVO> getCategoryParents(String categoryId) {
+		List<CategoryVO> parents = new ArrayList<>();
+		// 상위 카테고리를 순차적으로 조회합니다.
+		String nextParentId = categoryId;
+		for (int index = 0; index < 5; index += 1) {
+			if (isBlank(nextParentId) || "0".equals(nextParentId)) {
+				break;
+			}
+			CategoryVO current = goodsMapper.getAdminCategoryDetail(nextParentId);
+			if (current == null || isBlank(current.getParentCategoryId()) || "0".equals(current.getParentCategoryId())) {
+				break;
+			}
+			CategoryVO parent = goodsMapper.getAdminCategoryDetail(current.getParentCategoryId());
+			if (parent == null) {
+				break;
+			}
+			parents.add(parent);
+			nextParentId = parent.getCategoryId();
+		}
+		return parents;
+	}
+
+	// 카테고리 하위 목록을 재귀적으로 조회합니다.
+	private List<CategoryVO> getCategoryChildrenRecursive(String categoryId) {
+		List<CategoryVO> children = new ArrayList<>();
+		// 하위 카테고리를 조회합니다.
+		List<CategoryVO> directChildren = goodsMapper.getCategoryChildren(categoryId);
+		for (CategoryVO child : directChildren) {
+			if (child == null) {
+				continue;
+			}
+			children.add(child);
+			children.addAll(getCategoryChildrenRecursive(child.getCategoryId()));
+		}
+		return children;
+	}
+
+	// 카테고리 상품 등록 여부를 확인하고 등록합니다.
+	private boolean insertCategoryGoodsIfNotExists(String categoryId, String goodsId, Integer dispOrd, Long regNo, Long udtNo) {
+		// 중복 여부를 확인합니다.
+		if (goodsMapper.countCategoryGoods(categoryId, goodsId) > 0) {
+			return false;
+		}
+		// 등록 정보를 생성합니다.
+		CategoryGoodsSavePO savePO = new CategoryGoodsSavePO();
+		savePO.setCategoryId(categoryId);
+		savePO.setGoodsId(goodsId);
+		savePO.setDispOrd(dispOrd != null ? dispOrd : 0);
+		savePO.setRegNo(regNo);
+		savePO.setUdtNo(udtNo);
+		// 등록을 수행합니다.
+		goodsMapper.insertCategoryGoods(savePO);
+		return true;
+	}
+
+	// 카테고리 상품과 하위/상위 연관 정보를 함께 삭제합니다.
+	private int deleteCategoryGoodsWithHierarchy(CategoryVO category, String goodsId, Long udtNo) {
+		int deleted = 0;
+		// 기본 삭제를 수행합니다.
+		CategoryGoodsSavePO deletePO = new CategoryGoodsSavePO();
+		deletePO.setCategoryId(category.getCategoryId());
+		deletePO.setGoodsId(goodsId);
+		deletePO.setUdtNo(udtNo);
+		deleted += goodsMapper.deleteCategoryGoods(deletePO);
+		Integer level = category.getCategoryLevel();
+		if (level == null) {
+			return deleted;
+		}
+		// 레벨별 삭제 정책을 분기 처리합니다.
+		if (level >= 3) {
+			// 3레벨 삭제 시 상위 카테고리 처리
+			handleParentDeletionForLevel3(category, goodsId, udtNo);
+		} else if (level == 2) {
+			// 2레벨 삭제 시 하위 3레벨 전체 삭제
+			deleted += deleteChildrenGoods(category.getCategoryId(), goodsId, udtNo);
+			// 1레벨 삭제 여부를 확인합니다.
+			handleParentDeletionForLevel2(category, goodsId, udtNo);
+		} else if (level == 1) {
+			// 1레벨 삭제 시 하위 전체 삭제
+			deleted += deleteChildrenGoods(category.getCategoryId(), goodsId, udtNo);
+		}
+		return deleted;
+	}
+
+	// 3레벨 삭제 시 상위 카테고리를 정리합니다.
+	private void handleParentDeletionForLevel3(CategoryVO category, String goodsId, Long udtNo) {
+		// 2레벨 상위 카테고리를 조회합니다.
+		CategoryVO parent = goodsMapper.getAdminCategoryDetail(category.getParentCategoryId());
+		if (parent == null) {
+			return;
+		}
+		// 동일 2레벨 하위에 다른 상품이 없으면 2레벨에서도 삭제합니다.
+		if (goodsMapper.countCategoryGoodsInChildren(parent.getCategoryId(), goodsId) == 0) {
+			CategoryGoodsSavePO deletePO = new CategoryGoodsSavePO();
+			deletePO.setCategoryId(parent.getCategoryId());
+			deletePO.setGoodsId(goodsId);
+			deletePO.setUdtNo(udtNo);
+			goodsMapper.deleteCategoryGoods(deletePO);
+		}
+		// 1레벨 상위 카테고리를 조회합니다.
+		CategoryVO grandParent = goodsMapper.getAdminCategoryDetail(parent.getParentCategoryId());
+		if (grandParent == null) {
+			return;
+		}
+		// 동일 1레벨 하위에 다른 상품이 없으면 1레벨에서도 삭제합니다.
+		if (goodsMapper.countCategoryGoodsInChildren(grandParent.getCategoryId(), goodsId) == 0) {
+			CategoryGoodsSavePO deletePO = new CategoryGoodsSavePO();
+			deletePO.setCategoryId(grandParent.getCategoryId());
+			deletePO.setGoodsId(goodsId);
+			deletePO.setUdtNo(udtNo);
+			goodsMapper.deleteCategoryGoods(deletePO);
+		}
+	}
+
+	// 2레벨 삭제 시 1레벨 삭제 여부를 확인합니다.
+	private void handleParentDeletionForLevel2(CategoryVO category, String goodsId, Long udtNo) {
+		// 1레벨 상위 카테고리를 조회합니다.
+		CategoryVO parent = goodsMapper.getAdminCategoryDetail(category.getParentCategoryId());
+		if (parent == null) {
+			return;
+		}
+		// 동일 1레벨 하위에 다른 상품이 없으면 1레벨에서도 삭제합니다.
+		if (goodsMapper.countCategoryGoodsInChildren(parent.getCategoryId(), goodsId) == 0) {
+			CategoryGoodsSavePO deletePO = new CategoryGoodsSavePO();
+			deletePO.setCategoryId(parent.getCategoryId());
+			deletePO.setGoodsId(goodsId);
+			deletePO.setUdtNo(udtNo);
+			goodsMapper.deleteCategoryGoods(deletePO);
+		}
+	}
+
+	// 하위 카테고리의 상품 정보를 삭제합니다.
+	private int deleteChildrenGoods(String parentCategoryId, String goodsId, Long udtNo) {
+		int deleted = 0;
+		// 하위 카테고리를 재귀적으로 조회합니다.
+		List<CategoryVO> children = getCategoryChildrenRecursive(parentCategoryId);
+		for (CategoryVO child : children) {
+			if (child == null) {
+				continue;
+			}
+			CategoryGoodsSavePO deletePO = new CategoryGoodsSavePO();
+			deletePO.setCategoryId(child.getCategoryId());
+			deletePO.setGoodsId(goodsId);
+			deletePO.setUdtNo(udtNo);
+			deleted += goodsMapper.deleteCategoryGoods(deletePO);
+		}
+		return deleted;
+	}
+
+	// 오늘 기준 정렬 순서를 생성합니다.
+	private Integer buildTodayDispOrd() {
+		// YYYYMMDD 형식으로 정렬 순서를 생성합니다.
+		DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMdd");
+		String formatted = LocalDate.now().format(formatter);
+		return Integer.parseInt(formatted);
+	}
+
+	// 상품 목록에 이미지 URL을 세팅합니다.
+	private void applyGoodsImageUrls(List<GoodsVO> list) {
+		if (list == null || list.isEmpty()) {
+			return;
+		}
+		for (GoodsVO item : list) {
+			if (item == null) {
+				continue;
+			}
+			String imgPath = item.getImgPath();
+			if (isBlank(imgPath)) {
+				continue;
+			}
+			if (imgPath.startsWith("http://") || imgPath.startsWith("https://")) {
+				item.setImgUrl(imgPath);
+				continue;
+			}
+			item.setImgUrl(ftpFileService.buildGoodsImageUrl(item.getGoodsId(), imgPath));
+		}
+	}
+
+	// 카테고리 상품 목록에 이미지 URL을 세팅합니다.
+	private void applyCategoryGoodsImageUrls(List<CategoryGoodsVO> list) {
+		if (list == null || list.isEmpty()) {
+			return;
+		}
+		for (CategoryGoodsVO item : list) {
+			if (item == null) {
+				continue;
+			}
+			String imgPath = item.getImgPath();
+			if (isBlank(imgPath)) {
+				continue;
+			}
+			if (imgPath.startsWith("http://") || imgPath.startsWith("https://")) {
+				item.setImgUrl(imgPath);
+				continue;
+			}
+			item.setImgUrl(ftpFileService.buildGoodsImageUrl(item.getGoodsId(), imgPath));
+		}
+	}
+
+	// 엑셀 업로드 행 정보를 전달합니다.
+	private static class CategoryGoodsExcelRow {
+		// 카테고리코드입니다.
+		private final String categoryId;
+		// 상품코드입니다.
+		private final String goodsId;
+		// 정렬순서입니다.
+		private final Integer dispOrd;
+
+		// 엑셀 업로드 행을 생성합니다.
+		private CategoryGoodsExcelRow(String categoryId, String goodsId, Integer dispOrd) {
+			this.categoryId = categoryId;
+			this.goodsId = goodsId;
+			this.dispOrd = dispOrd;
+		}
+
+		// 카테고리코드를 반환합니다.
+		public String categoryId() {
+			return categoryId;
+		}
+
+		// 상품코드를 반환합니다.
+		public String goodsId() {
+			return goodsId;
+		}
+
+		// 정렬순서를 반환합니다.
+		public Integer dispOrd() {
+			return dispOrd;
+		}
+	}
+
+	// 카테고리 상품 엑셀 파일을 파싱합니다.
+	private List<CategoryGoodsExcelRow> parseCategoryGoodsExcel(MultipartFile file) throws IOException {
+		List<CategoryGoodsExcelRow> rows = new ArrayList<>();
+		// 엑셀 워크북을 로드합니다.
+		try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
+			Sheet sheet = workbook.getSheetAt(0);
+			if (sheet == null) {
+				throw new IllegalArgumentException("엑셀 데이터를 확인해주세요.");
+			}
+			// 헤더 정보를 확인합니다.
+			Row header = sheet.getRow(0);
+			if (header == null
+				|| !"카테고리코드".equals(getCellString(header.getCell(0)))
+				|| !"상품코드".equals(getCellString(header.getCell(1)))
+				|| !"노출순서".equals(getCellString(header.getCell(2)))) {
+				throw new IllegalArgumentException("엑셀 헤더 형식을 확인해주세요.");
+			}
+			// 데이터 행을 파싱합니다.
+			int lastRow = sheet.getLastRowNum();
+			for (int rowIndex = 1; rowIndex <= lastRow; rowIndex += 1) {
+				Row row = sheet.getRow(rowIndex);
+				if (row == null) {
+					throw new IllegalArgumentException("엑셀 데이터에 빈 행이 존재합니다.");
+				}
+				String categoryId = getCellString(row.getCell(0));
+				String goodsId = getCellString(row.getCell(1));
+				Integer dispOrd = getCellInteger(row.getCell(2));
+				if (isBlank(categoryId) || isBlank(goodsId) || dispOrd == null) {
+					throw new IllegalArgumentException("엑셀 데이터에 빈값이 존재합니다.");
+				}
+				rows.add(new CategoryGoodsExcelRow(categoryId, goodsId, dispOrd));
+			}
+		}
+		return rows;
+	}
+
+	// 엑셀 셀 문자열 값을 반환합니다.
+	private String getCellString(Cell cell) {
+		if (cell == null) {
+			return "";
+		}
+		String value;
+		try {
+			value = cell.getStringCellValue();
+		} catch (Exception e) {
+			try {
+				value = String.valueOf((long) cell.getNumericCellValue());
+			} catch (Exception ex) {
+				value = "";
+			}
+		}
+		return value != null ? value.trim() : "";
+	}
+
+	// 엑셀 셀 정수 값을 반환합니다.
+	private Integer getCellInteger(Cell cell) {
+		if (cell == null) {
+			return null;
+		}
+		try {
+			return (int) cell.getNumericCellValue();
+		} catch (Exception e) {
+			String text = getCellString(cell);
+			if (isBlank(text)) {
+				return null;
+			}
+			try {
+				return Integer.parseInt(text);
+			} catch (NumberFormatException ex) {
+				return null;
+			}
+		}
 	}
 
 	// 관리자 상품 카테고리 목록을 조회합니다.

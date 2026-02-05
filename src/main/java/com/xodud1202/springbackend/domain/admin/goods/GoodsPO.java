@@ -15,10 +15,14 @@ public class GoodsPO {
 	private String goodsStatCd;
 	// 상품 분류 코드입니다.
 	private String goodsDivCd;
+	// 상품 분류 아이디입니다.
+	private String goodsMerchId;
 	// 노출 여부 값입니다.
 	private String showYn;
 	// 브랜드 번호입니다.
 	private String brandNo;
+	// 카테고리 코드입니다.
+	private String categoryId;
 	// 페이지 번호입니다.
 	private Integer page;
 	// 페이지 당 건수입니다.

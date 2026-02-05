@@ -18,4 +18,8 @@ public class GoodsVO extends CommonVO {
 	private String goodsDivCd;
 	private String goodsDivNm;
 	private String showYn;
+	// 상품 이미지 경로입니다.
+	private String imgPath;
+	// 상품 이미지 URL입니다.
+	private String imgUrl;
 }
