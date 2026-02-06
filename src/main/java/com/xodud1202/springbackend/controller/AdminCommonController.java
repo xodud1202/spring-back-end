@@ -1,6 +1,7 @@
 package com.xodud1202.springbackend.controller;
 
 import com.xodud1202.springbackend.domain.admin.common.AdminMenuLnb;
+import com.xodud1202.springbackend.domain.admin.common.CommonCodeManagePO;
 import com.xodud1202.springbackend.domain.common.CommonCodeVO;
 import com.xodud1202.springbackend.domain.common.FtpProperties;
 import com.xodud1202.springbackend.service.AdminCommonService;
@@ -11,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -38,6 +40,58 @@ public class AdminCommonController {
 	@GetMapping("/api/admin/common/code")
 	public ResponseEntity<List<CommonCodeVO>> getCommonCodeList(@RequestParam("grpCd") String grpCd) {
 		return ResponseEntity.ok(adminCommonService.getCommonCodeList(grpCd));
+	}
+
+	/**
+	 * 관리자 상위 공통 코드 목록을 조회합니다.
+	 * @param grpCd 그룹코드 검색어(코드값 완전일치)
+	 * @param grpCdNm 그룹코드명 검색어(접두어 일치)
+	 * @return 상위 공통 코드 목록
+	 */
+	@GetMapping("/api/admin/common/code/manage/group/list")
+	public ResponseEntity<List<CommonCodeVO>> getAdminRootCommonCodeList(
+		@RequestParam(value = "grpCd", required = false) String grpCd,
+		@RequestParam(value = "grpCdNm", required = false) String grpCdNm
+	) {
+		return ResponseEntity.ok(adminCommonService.getAdminRootCommonCodeList(grpCd, grpCdNm));
+	}
+
+	/**
+	 * 관리자 하위 공통 코드 목록을 조회합니다.
+	 * @param grpCd 조회할 상위 그룹코드
+	 * @return 하위 공통 코드 목록
+	 */
+	@GetMapping("/api/admin/common/code/manage/child/list")
+	public ResponseEntity<List<CommonCodeVO>> getAdminChildCommonCodeList(@RequestParam("grpCd") String grpCd) {
+		return ResponseEntity.ok(adminCommonService.getAdminChildCommonCodeList(grpCd));
+	}
+
+	/**
+	 * 관리자 공통 코드를 등록합니다.
+	 * @param param 공통 코드 저장 정보
+	 * @return 등록 결과
+	 */
+	@PostMapping("/api/admin/common/code/manage/create")
+	public ResponseEntity<Object> createAdminCommonCode(@RequestBody CommonCodeManagePO param) {
+		String validationMessage = adminCommonService.validateAdminCommonCodeCreate(param);
+		if (validationMessage != null) {
+			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
+		}
+		return ResponseEntity.ok(adminCommonService.createAdminCommonCode(param));
+	}
+
+	/**
+	 * 관리자 공통 코드를 수정합니다.
+	 * @param param 공통 코드 저장 정보
+	 * @return 수정 결과
+	 */
+	@PostMapping("/api/admin/common/code/manage/update")
+	public ResponseEntity<Object> updateAdminCommonCode(@RequestBody CommonCodeManagePO param) {
+		String validationMessage = adminCommonService.validateAdminCommonCodeUpdate(param);
+		if (validationMessage != null) {
+			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
+		}
+		return ResponseEntity.ok(adminCommonService.updateAdminCommonCode(param));
 	}
 
 	/**

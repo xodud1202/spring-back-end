@@ -8,10 +8,143 @@
 		SELECT GRP_CD
 		     , CD
 		     , CD_NM
+		     , CD_DESC
+		     , USE_YN
 		     , DISP_ORD
+		     , REG_NO
+		     , REG_DT
+		     , UDT_NO
+		     , UDT_DT
 		  FROM COMMON_CODE
 		 WHERE GRP_CD = #{grpCd}
 		   AND USE_YN = 'Y'
 		 ORDER BY DISP_ORD
 	</select>
+
+	<select id="getAdminRootCommonCodeList" resultType="com.xodud1202.springbackend.domain.common.CommonCodeVO">
+		/* CommonMapper.getAdminRootCommonCodeList: 관리자 상위 공통 코드 목록 조회 */
+		SELECT GRP_CD
+		     , CD
+		     , CD_NM
+		     , CD_DESC
+		     , USE_YN
+		     , DISP_ORD
+		     , REG_NO
+		     , REG_DT
+		     , UDT_NO
+		     , UDT_DT
+		  FROM COMMON_CODE
+		 WHERE GRP_CD = 'ROOT'
+		<if test="grpCd != null and grpCd != ''">
+		   AND CD = #{grpCd}
+		</if>
+		<if test="grpCdNm != null and grpCdNm != ''">
+		   AND CD_NM LIKE CONCAT(#{grpCdNm}, '%')
+		</if>
+		 ORDER BY DISP_ORD ASC, CD ASC
+	</select>
+
+	<select id="getAdminChildCommonCodeList" resultType="com.xodud1202.springbackend.domain.common.CommonCodeVO">
+		/* CommonMapper.getAdminChildCommonCodeList: 관리자 하위 공통 코드 목록 조회 */
+		SELECT GRP_CD
+		     , CD
+		     , CD_NM
+		     , CD_DESC
+		     , USE_YN
+		     , DISP_ORD
+		     , REG_NO
+		     , REG_DT
+		     , UDT_NO
+		     , UDT_DT
+		  FROM COMMON_CODE
+		 WHERE GRP_CD = #{grpCd}
+		 ORDER BY DISP_ORD ASC, CD ASC
+	</select>
+
+	<select id="getAdminCommonCodeDetail" resultType="com.xodud1202.springbackend.domain.common.CommonCodeVO">
+		/* CommonMapper.getAdminCommonCodeDetail: 관리자 공통 코드 상세 조회 */
+		SELECT GRP_CD
+		     , CD
+		     , CD_NM
+		     , CD_DESC
+		     , USE_YN
+		     , DISP_ORD
+		     , REG_NO
+		     , REG_DT
+		     , UDT_NO
+		     , UDT_DT
+		  FROM COMMON_CODE
+		 WHERE GRP_CD = #{grpCd}
+		   AND CD = #{cd}
+	</select>
+
+	<select id="countAdminCommonCode" resultType="int">
+		/* CommonMapper.countAdminCommonCode: 관리자 공통 코드 중복 건수 조회 */
+		SELECT COUNT(1)
+		  FROM COMMON_CODE
+		 WHERE GRP_CD = #{grpCd}
+		   AND CD = #{cd}
+	</select>
+
+	<select id="countAdminCommonCodeExcludeOrigin" resultType="int">
+		/* CommonMapper.countAdminCommonCodeExcludeOrigin: 관리자 공통 코드 중복 건수 조회(기존 키 제외) */
+		SELECT COUNT(1)
+		  FROM COMMON_CODE
+		 WHERE GRP_CD = #{grpCd}
+		   AND CD = #{cd}
+		   AND NOT (GRP_CD = #{originGrpCd} AND CD = #{originCd})
+	</select>
+
+	<select id="countAdminCommonCodeByGrpCd" resultType="int">
+		/* CommonMapper.countAdminCommonCodeByGrpCd: 관리자 공통 코드 그룹 건수 조회 */
+		SELECT COUNT(1)
+		  FROM COMMON_CODE
+		 WHERE GRP_CD = #{grpCd}
+	</select>
+
+	<insert id="insertAdminCommonCode">
+		/* CommonMapper.insertAdminCommonCode: 관리자 공통 코드 등록 */
+		INSERT INTO COMMON_CODE (
+		       GRP_CD
+		     , CD
+		     , CD_NM
+		     , CD_DESC
+		     , USE_YN
+		     , DISP_ORD
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{grpCd}
+		     , #{cd}
+		     , #{cdNm}
+		     , #{cdDesc}
+		     , #{useYn}
+		     , #{dispOrd}
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+
+	<update id="updateAdminCommonCode">
+		/* CommonMapper.updateAdminCommonCode: 관리자 공통 코드 수정 */
+		UPDATE COMMON_CODE
+		   SET GRP_CD = #{grpCd}
+		     , CD = #{cd}
+		     , CD_NM = #{cdNm}
+		     , CD_DESC = #{cdDesc}
+		     , USE_YN = #{useYn}
+		     , DISP_ORD = #{dispOrd}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE GRP_CD = #{originGrpCd}
+		   AND CD = #{originCd}
+	</update>
+
+	<update id="updateAdminCommonCodeChildrenGrpCd">
+		/* CommonMapper.updateAdminCommonCodeChildrenGrpCd: 관리자 상위 코드 변경 시 하위 그룹코드 수정 */
+		UPDATE COMMON_CODE
+		   SET GRP_CD = #{nextGrpCd}
+		     , UDT_DT = NOW()
+		 WHERE GRP_CD = #{originGrpCd}
+	</update>
 </mapper>
