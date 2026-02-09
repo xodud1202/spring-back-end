@@ -144,27 +144,34 @@ public class AdminAuthController {
 	@GetMapping("/api/token/backoffice/access-token")
 	public ResponseEntity<?> token(
 			HttpServletRequest request,
-			HttpServletResponse response,
-			@RequestParam(value = "loginId", required = false) String loginIdParam,
-			@RequestParam(value = "usrNo", required = false) Long usrNoParam
+			HttpServletResponse response
 	) {
 		// 액세스 토큰 검증 흐름: 토큰 유효, 만료, 부적합 처리
 		Map<String, String> result = new HashMap<>();
 		String accessToken = extractAccessTokenFromHeader(request);
-		String validationResult = tokenProvider.validateCheckToken(accessToken);
+		// AccessToken이 있는 경우에만 유효성 검사를 수행합니다.
+		if (StringUtils.hasText(accessToken)) {
+			String validationResult = tokenProvider.validateCheckToken(accessToken);
 
-		if ("OK".equals(validationResult) && StringUtils.hasText(accessToken)) {
-			result.put("result", "OK");
-			result.put("resultMsg", "OK");
-			result.put("accessToken", accessToken);
-			return ResponseEntity.ok(result);
-		}
+			// 유효한 AccessToken이 있으면 그대로 반환합니다.
+			if ("OK".equals(validationResult)) {
+				Long usrNo = resolveUsrNoByAccessToken(accessToken);
+				result.put("result", "OK");
+				result.put("resultMsg", "OK");
+				result.put("accessToken", accessToken);
+				if (usrNo != null) {
+					result.put("usrNo", String.valueOf(usrNo));
+				}
+				return ResponseEntity.ok(result);
+			}
 
-		if (!"EXPIRED".equals(validationResult)) {
-			clearRefreshTokenCookie(response);
-			result.put("result", "INVALID_TOKEN");
-			result.put("resultMsg", "유효하지 않은 Access Token 토큰입니다.");
-			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(result);
+			// AccessToken이 만료가 아닌 오류면 리프레시 재발급을 허용하지 않습니다.
+			if (!"EXPIRED".equals(validationResult)) {
+				clearRefreshTokenCookie(response);
+				result.put("result", "INVALID_TOKEN");
+				result.put("resultMsg", "유효하지 않은 Access Token 토큰입니다.");
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(result);
+			}
 		}
 
 		String refreshToken = extractRefreshTokenFromCookies(request);
@@ -192,13 +199,6 @@ public class AdminAuthController {
 			result.put("resultMsg", "유효하지 않은 리프레시 토큰입니다.");
 			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(result);
 		}
-		// usrNo 파라미터가 있으면 토큰 소유자를 검증합니다.
-		if (usrNoParam != null && !usrNoParam.equals(tokenEntity.getUsrNo())) {
-			clearRefreshTokenCookie(response);
-			result.put("result", "INVALID_REFRESH_TOKEN");
-			result.put("resultMsg", "유효하지 않은 리프레시 토큰입니다.");
-			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(result);
-		}
 		// 사용자 정보를 조회합니다.
 		Optional<UserBaseEntity> userOpt = userRepository.findById(tokenEntity.getUsrNo());
 		if (userOpt.isEmpty()) {
@@ -208,7 +208,7 @@ public class AdminAuthController {
 			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(result);
 		}
 		UserBaseEntity user = userOpt.get();
-		String loginId = StringUtils.hasText(loginIdParam) ? loginIdParam : user.getLoginId();
+		String loginId = user.getLoginId();
 		if (!StringUtils.hasText(loginId)) {
 			clearRefreshTokenCookie(response);
 			result.put("result", "INVALID_REFRESH_TOKEN");
@@ -230,6 +230,7 @@ public class AdminAuthController {
 		result.put("result", "OK");
 		result.put("resultMsg", "OK");
 		result.put("accessToken", newAccessToken);
+		result.put("usrNo", String.valueOf(user.getUsrNo()));
 		return ResponseEntity.ok(result);
 	}
 	
@@ -293,6 +294,20 @@ public class AdminAuthController {
 			return bearerToken.substring(7);
 		}
 		return null;
+	}
+
+	// AccessToken의 subject(loginId)로 사용자 번호를 조회합니다.
+	private Long resolveUsrNoByAccessToken(String accessToken) {
+		try {
+			String loginId = tokenProvider.getUsernameFromJWT(accessToken);
+			if (!StringUtils.hasText(loginId)) {
+				return null;
+			}
+			Optional<UserBaseEntity> userOpt = userBaseService.loadUserByLoginId(loginId);
+			return userOpt.map(UserBaseEntity::getUsrNo).orElse(null);
+		} catch (Exception e) {
+			return null;
+		}
 	}
 
 	// 쿠키 목록에서 refreshToken 값을 찾습니다.
