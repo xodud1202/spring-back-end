@@ -22,6 +22,12 @@ public class AdminUserService {
 	private static final int PASSWORD_MIN_LENGTH = 6;
 	// 이름 최소 길이 제한입니다.
 	private static final int USER_NAME_MIN_LENGTH = 2;
+	// 사용자 탈퇴 상태 코드입니다.
+	private static final String USER_STATUS_WITHDRAWAL = "99";
+	// 탈퇴 사용자 로그인 아이디 접두어입니다.
+	private static final String WITHDRAWAL_LOGIN_ID_PREFIX = "withdrawal_";
+	// 탈퇴 처리 시 사용자 개인정보 대체 문자열입니다.
+	private static final String WITHDRAWAL_MASK_VALUE = "-";
 
 	// 관리자 사용자 목록을 조회합니다.
 	public List<UserManageVO> getAdminUserList(String searchGb, String searchValue, String usrStatCd, String usrGradeCd) {
@@ -34,33 +40,10 @@ public class AdminUserService {
 
 	// 관리자 사용자 등록 요청을 검증합니다.
 	public String validateCreateAdminUser(UserManagePO param) {
-		// 요청 데이터 필수값을 검증합니다.
-		if (param == null) {
-			return "요청 데이터를 확인해주세요.";
-		}
-		if (isBlank(param.getLoginId())) {
-			return "ID를 입력해주세요.";
-		}
-		if (isBlank(param.getPwd())) {
-			return "비밀번호를 입력해주세요.";
-		}
-		if (isBlank(param.getUserNm())) {
-			return "이름을 입력해주세요.";
-		}
-		if (isBlank(param.getUsrStatCd())) {
-			return "상태를 선택해주세요.";
-		}
-		if (isBlank(param.getUsrGradeCd())) {
-			return "등급을 선택해주세요.";
-		}
-		if (isBlank(param.getHPhoneNo())) {
-			return "휴대폰번호를 입력해주세요.";
-		}
-		if (isBlank(param.getEmail())) {
-			return "이메일을 입력해주세요.";
-		}
-		if (param.getRegNo() == null) {
-			return "등록자 정보를 확인해주세요.";
+		// 등록 필수 입력값을 검증합니다.
+		String requiredFieldMessage = validateRequiredFieldsForCreate(param);
+		if (requiredFieldMessage != null) {
+			return requiredFieldMessage;
 		}
 		// 입력 형식을 검증합니다.
 		String formatMessage = validateUserFormat(param);
@@ -76,16 +59,68 @@ public class AdminUserService {
 
 	// 관리자 사용자 수정 요청을 검증합니다.
 	public String validateUpdateAdminUser(UserManagePO param) {
-		// 요청 데이터 필수값을 검증합니다.
-		if (param == null) {
-			return "요청 데이터를 확인해주세요.";
+		// 수정 필수 입력값을 검증합니다.
+		String requiredFieldMessage = validateRequiredFieldsForUpdate(param);
+		if (requiredFieldMessage != null) {
+			return requiredFieldMessage;
 		}
-		if (param.getUsrNo() == null) {
+		// 수정 대상 존재 여부를 검증합니다.
+		UserManageVO current = userMapper.getAdminUserDetail(param.getUsrNo());
+		if (current == null) {
 			return "수정 대상을 확인해주세요.";
+		}
+		// 입력 형식을 검증합니다.
+		String formatMessage = validateUserFormat(param);
+		if (formatMessage != null) {
+			return formatMessage;
+		}
+		return null;
+	}
+
+	// 등록 요청의 필수 입력값을 검증합니다.
+	private String validateRequiredFieldsForCreate(UserManagePO param) {
+		// 공통 필수 입력값을 먼저 검증합니다.
+		String commonMessage = validateCommonRequiredFields(param);
+		if (commonMessage != null) {
+			return commonMessage;
+		}
+		// 등록 전용 필수 입력값을 검증합니다.
+		if (isBlank(param.getLoginId())) {
+			return "ID를 입력해주세요.";
 		}
 		if (isBlank(param.getPwd())) {
 			return "비밀번호를 입력해주세요.";
 		}
+		if (param.getRegNo() == null) {
+			return "등록자 정보를 확인해주세요.";
+		}
+		return null;
+	}
+
+	// 수정 요청의 필수 입력값을 검증합니다.
+	private String validateRequiredFieldsForUpdate(UserManagePO param) {
+		// 공통 필수 입력값을 먼저 검증합니다.
+		String commonMessage = validateCommonRequiredFields(param);
+		if (commonMessage != null) {
+			return commonMessage;
+		}
+		// 수정 전용 필수 입력값을 검증합니다.
+		if (param.getUsrNo() == null) {
+			return "수정 대상을 확인해주세요.";
+		}
+		if (param.getUdtNo() == null) {
+			return "수정자 정보를 확인해주세요.";
+		}
+		return null;
+	}
+
+	// 등록/수정 공통 필수 입력값을 검증합니다.
+	private String validateCommonRequiredFields(UserManagePO param) {
+		// 요청 객체 존재 여부를 검증합니다.
+		if (param == null) {
+			return "요청 데이터를 확인해주세요.";
+		}
+		// 화면 공통 필수 입력값을 검증합니다.
 		if (isBlank(param.getUserNm())) {
 			return "이름을 입력해주세요.";
 		}
@@ -100,19 +135,6 @@ public class AdminUserService {
 		}
 		if (isBlank(param.getEmail())) {
 			return "이메일을 입력해주세요.";
-		}
-		if (param.getUdtNo() == null) {
-			return "수정자 정보를 확인해주세요.";
-		}
-		// 수정 대상 존재 여부를 검증합니다.
-		UserManageVO current = userMapper.getAdminUserDetail(param.getUsrNo());
-		if (current == null) {
-			return "수정 대상을 확인해주세요.";
-		}
-		// 입력 형식을 검증합니다.
-		String formatMessage = validateUserFormat(param);
-		if (formatMessage != null) {
-			return formatMessage;
 		}
 		return null;
 	}
@@ -134,9 +156,43 @@ public class AdminUserService {
 	public int updateAdminUser(UserManagePO param) {
 		// 수정 입력값 공백을 정리합니다.
 		normalizeUserParam(param);
-		// 비밀번호를 로그인 정책과 동일하게 BCrypt로 암호화합니다.
-		param.setPwd(passwordEncoder.encode(param.getPwd()));
+		// 탈퇴 상태로 변경되는 경우 로그인 아이디와 개인정보를 치환합니다.
+		applyWithdrawalMaskIfNeeded(param);
+		// 비밀번호가 입력된 경우에만 로그인 정책과 동일하게 BCrypt로 암호화합니다.
+		if (param.getPwd() != null) {
+			param.setPwd(passwordEncoder.encode(param.getPwd()));
+		}
 		return userMapper.updateAdminUser(param);
+	}
+
+	// 탈퇴 상태로 변경되는 경우 로그인 아이디와 개인정보를 치환합니다.
+	private void applyWithdrawalMaskIfNeeded(UserManagePO param) {
+		// 탈퇴 상태가 아니거나 수정 대상이 없으면 치환하지 않습니다.
+		if (param.getUsrNo() == null || !USER_STATUS_WITHDRAWAL.equals(param.getUsrStatCd())) {
+			return;
+		}
+		// 현재 사용자 상태를 조회합니다.
+		UserManageVO current = userMapper.getAdminUserDetail(param.getUsrNo());
+		if (current == null) {
+			return;
+		}
+		// 이미 탈퇴 상태인 경우 재치환하지 않습니다.
+		if (USER_STATUS_WITHDRAWAL.equals(current.getUsrStatCd())) {
+			return;
+		}
+		String loginId = trimToNull(param.getLoginId());
+		// 로그인 아이디가 없는 경우 현재 로그인 아이디를 기준으로 치환합니다.
+		if (loginId == null) {
+			loginId = trimToNull(current.getLoginId());
+		}
+		// 로그인 아이디가 존재하고 접두어가 없으면 접두어를 부여합니다.
+		if (loginId != null && !loginId.startsWith(WITHDRAWAL_LOGIN_ID_PREFIX)) {
+			param.setLoginId(WITHDRAWAL_LOGIN_ID_PREFIX + loginId);
+		}
+		// 탈퇴 시 이름/휴대폰번호/이메일은 '-'로 치환합니다.
+		param.setUserNm(WITHDRAWAL_MASK_VALUE);
+		param.setHPhoneNo(WITHDRAWAL_MASK_VALUE);
+		param.setEmail(WITHDRAWAL_MASK_VALUE);
 	}
 
 	// 사용자 입력 형식을 검증합니다.
@@ -195,4 +251,3 @@ public class AdminUserService {
 		return trimmed.isEmpty() ? null : trimmed;
 	}
 }
-

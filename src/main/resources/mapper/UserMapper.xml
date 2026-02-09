@@ -95,15 +95,19 @@
 	<update id="updateAdminUser">
 		/* UserMapper.updateAdminUser : 관리자 사용자 수정 */
 		UPDATE USER_BASE
-		   SET PWD = #{pwd}
-		     , USER_NM = #{userNm}
-		     , USR_GRADE_CD = #{usrGradeCd}
-		     , usr_stat_cd = #{usrStatCd}
-		     , H_PHONE_NO = #{hPhoneNo}
-		     , EMAIL = #{email}
-		     , udt_no = #{udtNo}
-		     , UDT_DT = NOW()
+		<set>
+			<if test="pwd != null and pwd != ''">
+		     PWD = #{pwd},
+			</if>
+		     LOGIN_ID = #{loginId},
+		     USER_NM = #{userNm},
+		     USR_GRADE_CD = #{usrGradeCd},
+		     usr_stat_cd = #{usrStatCd},
+		     H_PHONE_NO = #{hPhoneNo},
+		     EMAIL = #{email},
+		     udt_no = #{udtNo},
+		     UDT_DT = NOW()
+		</set>
 		 WHERE USR_NO = #{usrNo}
 	</update>
 </mapper>
-
