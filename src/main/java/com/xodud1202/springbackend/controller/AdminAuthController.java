@@ -153,8 +153,8 @@ public class AdminAuthController {
 		if (StringUtils.hasText(accessToken)) {
 			String validationResult = tokenProvider.validateCheckToken(accessToken);
 
-			// 유효한 AccessToken이 있으면 그대로 반환합니다.
-			if ("OK".equals(validationResult)) {
+			// 유효하고 타입이 AccessToken이면 그대로 반환합니다.
+			if ("OK".equals(validationResult) && tokenProvider.isAccessToken(accessToken)) {
 				Long usrNo = resolveUsrNoByAccessToken(accessToken);
 				result.put("result", "OK");
 				result.put("resultMsg", "OK");
@@ -165,17 +165,18 @@ public class AdminAuthController {
 				return ResponseEntity.ok(result);
 			}
 
-			// AccessToken이 만료가 아닌 오류면 리프레시 재발급을 허용하지 않습니다.
-			if (!"EXPIRED".equals(validationResult)) {
-				clearRefreshTokenCookie(response);
-				result.put("result", "INVALID_TOKEN");
-				result.put("resultMsg", "유효하지 않은 Access Token 토큰입니다.");
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(result);
-			}
+			// AccessToken이 만료/오류이거나 타입이 AccessToken이 아닌 경우 refreshToken 유효 시 재발급을 시도합니다.
 		}
 
 		String refreshToken = extractRefreshTokenFromCookies(request);
 		if (!StringUtils.hasText(refreshToken)) {
+			clearRefreshTokenCookie(response);
+			result.put("result", "INVALID_REFRESH_TOKEN");
+			result.put("resultMsg", "유효하지 않은 리프레시 토큰입니다.");
+			return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(result);
+		}
+		// 쿠키 토큰이 RefreshToken 타입인지 확인합니다.
+		if (!tokenProvider.isRefreshToken(refreshToken)) {
 			clearRefreshTokenCookie(response);
 			result.put("result", "INVALID_REFRESH_TOKEN");
 			result.put("resultMsg", "유효하지 않은 리프레시 토큰입니다.");

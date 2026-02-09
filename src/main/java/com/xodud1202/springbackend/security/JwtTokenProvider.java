@@ -64,6 +64,7 @@ public class JwtTokenProvider {
         
         return Jwts.builder()
                 .setSubject(userDetails.getUsername())
+                .claim("tokenType", "ACCESS")
                 .setIssuedAt(now)
                 .setExpiration(expiryDate)
                 .signWith(getSigningKey())
@@ -77,6 +78,7 @@ public class JwtTokenProvider {
         
         return Jwts.builder()
                 .setSubject(username)
+                .claim("tokenType", "REFRESH")
                 .setIssuedAt(now)
                 .setExpiration(expiryDate)
                 .signWith(getSigningKey())
@@ -94,6 +96,35 @@ public class JwtTokenProvider {
         
         // 사용자명을 반환합니다.
         return claims.getSubject();
+    }
+
+    // 토큰에서 타입 클레임을 추출합니다.
+    public String getTokenTypeFromJWT(String token) {
+        Claims claims = Jwts.parserBuilder()
+                .setSigningKey(getSigningKey())
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
+        Object tokenType = claims.get("tokenType");
+        return tokenType != null ? String.valueOf(tokenType) : null;
+    }
+
+    // Access Token 타입인지 확인합니다.
+    public boolean isAccessToken(String token) {
+        try {
+            return "ACCESS".equalsIgnoreCase(getTokenTypeFromJWT(token));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    // Refresh Token 타입인지 확인합니다.
+    public boolean isRefreshToken(String token) {
+        try {
+            return "REFRESH".equalsIgnoreCase(getTokenTypeFromJWT(token));
+        } catch (Exception e) {
+            return false;
+        }
     }
     
     // 토큰 유효성 검증
