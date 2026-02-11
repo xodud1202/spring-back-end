@@ -1,0 +1,301 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+		"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.xodud1202.springbackend.mapper.BannerMapper">
+	<select id="getAdminBannerList" resultType="com.xodud1202.springbackend.domain.admin.banner.BannerVO">
+		/* BannerMapper.getAdminBannerList: 관리자 배너 목록 조회 */
+		SELECT BB.BANNER_NO
+		     , BB.BANNER_DIV_CD
+		     , CC.CD_NM AS BANNER_DIV_NM
+		     , BB.BANNER_NM
+		     , DATE_FORMAT(BB.DISP_START_DT, '%Y-%m-%d %H:%i:%s') AS DISP_START_DT
+		     , DATE_FORMAT(BB.DISP_END_DT, '%Y-%m-%d %H:%i:%s') AS DISP_END_DT
+		     , BB.DISP_ORD
+		     , BB.SHOW_YN
+		     , (
+		         SELECT IBI.IMG_PATH
+		           FROM IMAGE_BANNER_INFO IBI
+		          WHERE IBI.BANNER_NO = BB.BANNER_NO
+		          ORDER BY IBI.DISP_ORD ASC
+		          LIMIT 1
+		       ) AS IMG_PATH
+		     , DATE_FORMAT(BB.REG_DT, '%Y-%m-%d %H:%i:%s') AS REG_DT
+		     , DATE_FORMAT(BB.UDT_DT, '%Y-%m-%d %H:%i:%s') AS UDT_DT
+		  FROM BANNER_BASE BB
+		  LEFT JOIN COMMON_CODE CC
+		    ON CC.GRP_CD = 'BANNER_DIV'
+		   AND CC.CD = BB.BANNER_DIV_CD
+		 WHERE BB.DEL_YN = 'N'
+		<if test="bannerDivCd != null and bannerDivCd != ''">
+		  AND BB.BANNER_DIV_CD = #{bannerDivCd}
+		</if>
+		<if test="showYn != null and showYn != ''">
+		  AND BB.SHOW_YN = #{showYn}
+		</if>
+		<if test="searchValue != null and searchValue != ''">
+		  AND BB.BANNER_NM LIKE CONCAT(#{searchValue}, '%')
+		</if>
+		<if test="searchStartDt != null and searchStartDt != ''">
+		  AND IFNULL(BB.DISP_END_DT, '9999-12-31 23:59:59') &gt;= #{searchStartDt}
+		</if>
+		<if test="searchEndDt != null and searchEndDt != ''">
+		  AND IFNULL(BB.DISP_START_DT, '1000-01-01 00:00:00') &lt;= #{searchEndDt}
+		</if>
+		 ORDER BY BB.DISP_ORD ASC, BB.BANNER_NO DESC
+		 LIMIT #{pageSize} OFFSET #{offset}
+	</select>
+
+	<select id="getAdminBannerCount" resultType="int">
+		/* BannerMapper.getAdminBannerCount: 관리자 배너 목록 건수 조회 */
+		SELECT COUNT(1)
+		  FROM BANNER_BASE BB
+		 WHERE BB.DEL_YN = 'N'
+		<if test="bannerDivCd != null and bannerDivCd != ''">
+		  AND BB.BANNER_DIV_CD = #{bannerDivCd}
+		</if>
+		<if test="showYn != null and showYn != ''">
+		  AND BB.SHOW_YN = #{showYn}
+		</if>
+		<if test="searchValue != null and searchValue != ''">
+		  AND BB.BANNER_NM LIKE CONCAT(#{searchValue}, '%')
+		</if>
+		<if test="searchStartDt != null and searchStartDt != ''">
+		  AND IFNULL(BB.DISP_END_DT, '9999-12-31 23:59:59') &gt;= #{searchStartDt}
+		</if>
+		<if test="searchEndDt != null and searchEndDt != ''">
+		  AND IFNULL(BB.DISP_START_DT, '1000-01-01 00:00:00') &lt;= #{searchEndDt}
+		</if>
+	</select>
+
+	<select id="getAdminBannerDetail" resultType="com.xodud1202.springbackend.domain.admin.banner.BannerDetailVO">
+		/* BannerMapper.getAdminBannerDetail: 관리자 배너 상세 조회 */
+		SELECT BANNER_NO
+		     , BANNER_DIV_CD
+		     , BANNER_NM
+		     , DATE_FORMAT(DISP_START_DT, '%Y-%m-%d %H:%i:%s') AS DISP_START_DT
+		     , DATE_FORMAT(DISP_END_DT, '%Y-%m-%d %H:%i:%s') AS DISP_END_DT
+		     , DISP_ORD
+		     , SHOW_YN
+		  FROM BANNER_BASE
+		 WHERE BANNER_NO = #{bannerNo}
+		   AND DEL_YN = 'N'
+	</select>
+
+	<select id="getBannerImageInfoList" resultType="com.xodud1202.springbackend.domain.admin.banner.BannerImageInfoPO">
+		/* BannerMapper.getBannerImageInfoList: 이미지 배너 정보 조회 */
+		SELECT BANNER_NO
+		     , IMG_PATH
+		     , URL
+		     , BANNER_OPEN_CD
+		     , DISP_ORD
+		     , REG_NO
+		     , UDT_NO
+		  FROM IMAGE_BANNER_INFO
+		 WHERE BANNER_NO = #{bannerNo}
+		 ORDER BY DISP_ORD ASC
+	</select>
+
+	<select id="getBannerTabList" resultType="com.xodud1202.springbackend.domain.admin.banner.BannerTabPO">
+		/* BannerMapper.getBannerTabList: 배너 탭 목록 조회 */
+		SELECT BANNER_TAB_NO
+		     , BANNER_NO
+		     , TAB_NM
+		     , DISP_ORD
+		     , SHOW_YN
+		     , DEL_YN
+		     , REG_NO
+		     , UDT_NO
+		  FROM GOODS_BANNER_TAB
+		 WHERE BANNER_NO = #{bannerNo}
+		   AND DEL_YN = 'N'
+		 ORDER BY DISP_ORD ASC, BANNER_TAB_NO ASC
+	</select>
+
+	<select id="getBannerGoodsList" resultType="com.xodud1202.springbackend.domain.admin.banner.BannerGoodsVO">
+		/* BannerMapper.getBannerGoodsList: 배너 상품 목록 조회 */
+		SELECT GBG.BANNER_NO
+		     , GBG.BANNER_TAB_NO
+		     , GBT.TAB_NM
+		     , GBG.GOODS_ID
+		     , GB.ERP_STYLE_CD
+		     , GB.GOODS_NM
+		     , CS.CD_NM AS GOODS_STAT_NM
+		     , CD.CD_NM AS GOODS_DIV_NM
+		     , (
+		         SELECT GI.IMG_PATH
+		           FROM GOODS_IMG GI
+		          WHERE GI.GOODS_ID = GBG.GOODS_ID
+		          ORDER BY GI.DISP_ORD ASC, GI.IMG_NO ASC
+		          LIMIT 1
+		       ) AS IMG_PATH
+		     , GBG.DISP_ORD
+		     , GBG.SHOW_YN
+		  FROM GOODS_BANNER_GOODS GBG
+		  LEFT JOIN GOODS_BANNER_TAB GBT
+		    ON GBT.BANNER_TAB_NO = GBG.BANNER_TAB_NO
+		   AND GBT.BANNER_NO = GBG.BANNER_NO
+		  JOIN GOODS_BASE GB
+		    ON GB.GOODS_ID = GBG.GOODS_ID
+		  LEFT JOIN COMMON_CODE CS
+		    ON CS.GRP_CD = 'GOODS_STAT'
+		   AND CS.CD = GB.GOODS_STAT_CD
+		  LEFT JOIN COMMON_CODE CD
+		    ON CD.GRP_CD = 'GOODS_DIV'
+		   AND CD.CD = GB.GOODS_DIV_CD
+		 WHERE GBG.BANNER_NO = #{bannerNo}
+		 ORDER BY GBG.BANNER_TAB_NO ASC, GBG.DISP_ORD ASC, GBG.GOODS_ID ASC
+	</select>
+
+	<insert id="insertBannerBase" useGeneratedKeys="true" keyProperty="bannerNo" keyColumn="BANNER_NO">
+		/* BannerMapper.insertBannerBase: 관리자 배너 등록 */
+		INSERT INTO BANNER_BASE (
+		       BANNER_DIV_CD
+		     , BANNER_NM
+		     , DISP_START_DT
+		     , DISP_END_DT
+		     , DISP_ORD
+		     , SHOW_YN
+		     , DEL_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{bannerDivCd}
+		     , #{bannerNm}
+		     , NULLIF(#{dispStartDt}, '')
+		     , NULLIF(#{dispEndDt}, '')
+		     , #{dispOrd}
+		     , #{showYn}
+		     , 'N'
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+
+	<update id="updateBannerBase">
+		/* BannerMapper.updateBannerBase: 관리자 배너 수정 */
+		UPDATE BANNER_BASE
+		   SET BANNER_DIV_CD = #{bannerDivCd}
+		     , BANNER_NM = #{bannerNm}
+		     , DISP_START_DT = NULLIF(#{dispStartDt}, '')
+		     , DISP_END_DT = NULLIF(#{dispEndDt}, '')
+		     , DISP_ORD = #{dispOrd}
+		     , SHOW_YN = #{showYn}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE BANNER_NO = #{bannerNo}
+		   AND DEL_YN = 'N'
+	</update>
+
+	<select id="countBannerByNo" resultType="int">
+		/* BannerMapper.countBannerByNo: 배너 존재 여부 조회 */
+		SELECT COUNT(1)
+		  FROM BANNER_BASE
+		 WHERE BANNER_NO = #{bannerNo}
+		   AND DEL_YN = 'N'
+	</select>
+
+	<delete id="deleteImageBannerInfoByBannerNo">
+		/* BannerMapper.deleteImageBannerInfoByBannerNo: 이미지 배너 정보 삭제 */
+		DELETE
+		  FROM IMAGE_BANNER_INFO
+		 WHERE BANNER_NO = #{bannerNo}
+	</delete>
+
+	<insert id="insertImageBannerInfo">
+		/* BannerMapper.insertImageBannerInfo: 이미지 배너 정보 등록 */
+		INSERT INTO IMAGE_BANNER_INFO (
+		       BANNER_NO
+		     , IMG_PATH
+		     , URL
+		     , BANNER_OPEN_CD
+		     , DISP_ORD
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{bannerNo}
+		     , #{imgPath}
+		     , #{url}
+		     , #{bannerOpenCd}
+		     , #{dispOrd}
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+
+	<delete id="deleteBannerGoodsByBannerNo">
+		/* BannerMapper.deleteBannerGoodsByBannerNo: 배너 상품 삭제 */
+		DELETE
+		  FROM GOODS_BANNER_GOODS
+		 WHERE BANNER_NO = #{bannerNo}
+	</delete>
+
+	<delete id="deleteBannerTabByBannerNo">
+		/* BannerMapper.deleteBannerTabByBannerNo: 배너 탭 삭제 */
+		DELETE
+		  FROM GOODS_BANNER_TAB
+		 WHERE BANNER_NO = #{bannerNo}
+	</delete>
+
+	<insert id="insertBannerTab" useGeneratedKeys="true" keyProperty="bannerTabNo" keyColumn="BANNER_TAB_NO">
+		/* BannerMapper.insertBannerTab: 배너 탭 등록 */
+		INSERT INTO GOODS_BANNER_TAB (
+		       BANNER_NO
+		     , TAB_NM
+		     , DISP_ORD
+		     , SHOW_YN
+		     , DEL_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{bannerNo}
+		     , #{tabNm}
+		     , #{dispOrd}
+		     , #{showYn}
+		     , #{delYn}
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+
+	<insert id="insertBannerGoods">
+		/* BannerMapper.insertBannerGoods: 배너 상품 등록 */
+		INSERT INTO GOODS_BANNER_GOODS (
+		       BANNER_NO
+		     , BANNER_TAB_NO
+		     , GOODS_ID
+		     , DISP_ORD
+		     , SHOW_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{bannerNo}
+		     , #{bannerTabNo}
+		     , #{goodsId}
+		     , #{dispOrd}
+		     , #{showYn}
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+
+	<update id="updateBannerGoodsOrder">
+		/* BannerMapper.updateBannerGoodsOrder: 배너 상품 정렬 순서 저장 */
+		UPDATE GOODS_BANNER_GOODS
+		   SET DISP_ORD = CASE GOODS_ID
+		<foreach collection="orders" item="order">
+			WHEN #{order.goodsId} THEN #{order.dispOrd}
+		</foreach>
+			END
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE BANNER_NO = #{bannerNo}
+		<if test="bannerTabNo != null">
+		   AND BANNER_TAB_NO = #{bannerTabNo}
+		</if>
+		   AND GOODS_ID IN
+		<foreach collection="orders" item="order" open="(" separator="," close=")">
+			#{order.goodsId}
+		</foreach>
+	</update>
+</mapper>

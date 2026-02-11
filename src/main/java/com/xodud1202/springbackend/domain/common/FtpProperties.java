@@ -46,6 +46,12 @@ public class FtpProperties {
 	private String uploadGoodsTargetPath;
 	private String uploadGoodsView;
 
+	// banner upload 설정
+	private int uploadBannerMaxSize;
+	private String uploadBannerAllowExtension;
+	private String uploadBannerTargetPath;
+	private String uploadBannerView;
+
 	// brand upload 설정
 	private int uploadBrandMaxSize;
 	private String uploadBrandAllowExtension;

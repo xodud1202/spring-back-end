@@ -118,6 +118,23 @@ public class FtpFileService {
 	}
 
 	/**
+	 * 배너 이미지 파일을 FTP 서버에 업로드하고 접근 가능한 URL을 반환합니다.
+	 * @param file 업로드할 파일
+	 * @param bannerNo 배너 번호
+	 * @param regNo 등록자 번호
+	 * @return 업로드된 파일의 접근 URL
+	 */
+	public String uploadBannerImage(MultipartFile file, Integer bannerNo, String regNo) throws IOException {
+		return uploadImageToFtp(
+				file,
+				ftpProperties.getUploadBannerTargetPath(),
+				ftpProperties.getUploadBannerView(),
+				new String[] { String.valueOf(bannerNo) },
+				regNo
+		);
+	}
+
+	/**
 	 * 브랜드 로고 이미지를 FTP 서버에 업로드하고 조회 가능한 URL을 반환합니다.
 	 * @param file 업로드할 이미지 파일
 	 * @param brandNo 브랜드 번호
@@ -173,6 +190,19 @@ public class FtpFileService {
 		deleteFileFromFtp(
 				ftpProperties.getUploadGoodsTargetPath(),
 				new String[] { goodsId },
+				fileName
+		);
+	}
+
+	/**
+	 * FTP에서 배너 이미지 파일을 삭제합니다.
+	 * @param bannerNo 배너 번호
+	 * @param fileName 삭제할 파일명
+	 */
+	public void deleteBannerImage(Integer bannerNo, String fileName) throws IOException {
+		deleteFileFromFtp(
+				ftpProperties.getUploadBannerTargetPath(),
+				new String[] { String.valueOf(bannerNo) },
 				fileName
 		);
 	}
