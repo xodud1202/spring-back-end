@@ -1,7 +1,9 @@
 package com.xodud1202.springbackend.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xodud1202.springbackend.domain.admin.banner.BannerDeletePO;
 import com.xodud1202.springbackend.domain.admin.banner.BannerGoodsOrderSavePO;
+import com.xodud1202.springbackend.domain.admin.banner.BannerImageOrderSavePO;
 import com.xodud1202.springbackend.domain.admin.banner.BannerSavePO;
 import com.xodud1202.springbackend.service.BannerService;
 import lombok.RequiredArgsConstructor;
@@ -12,11 +14,13 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 
 @Validated
@@ -60,17 +64,18 @@ public class AdminBannerController {
 	@PostMapping(value = "/api/admin/banner/create", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
 	public ResponseEntity<Object> createBanner(
 		@RequestPart("payload") String payload,
-		@RequestPart(value = "image", required = false) MultipartFile image
+		@RequestPart(value = "images", required = false) List<MultipartFile> images,
+		@RequestPart(value = "imageKeys", required = false) List<String> imageKeys
 	) {
 		try {
 			// 요청 JSON을 객체로 변환합니다.
 			BannerSavePO param = objectMapper.readValue(payload, BannerSavePO.class);
 			// 요청 유효성을 검증합니다.
-			String validationMessage = bannerService.validateBannerCreate(param, image);
+			String validationMessage = bannerService.validateBannerCreate(param, images, imageKeys);
 			if (validationMessage != null) {
 				return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
 			}
-			return ResponseEntity.ok(bannerService.createBanner(param, image));
+			return ResponseEntity.ok(bannerService.createBanner(param, images, imageKeys));
 		} catch (IllegalArgumentException e) {
 			return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
 		} catch (IOException e) {
@@ -82,21 +87,37 @@ public class AdminBannerController {
 	@PostMapping(value = "/api/admin/banner/update", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
 	public ResponseEntity<Object> updateBanner(
 		@RequestPart("payload") String payload,
-		@RequestPart(value = "image", required = false) MultipartFile image
+		@RequestPart(value = "images", required = false) List<MultipartFile> images,
+		@RequestPart(value = "imageKeys", required = false) List<String> imageKeys
 	) {
 		try {
 			// 요청 JSON을 객체로 변환합니다.
 			BannerSavePO param = objectMapper.readValue(payload, BannerSavePO.class);
 			// 요청 유효성을 검증합니다.
-			String validationMessage = bannerService.validateBannerUpdate(param, image);
+			String validationMessage = bannerService.validateBannerUpdate(param, images, imageKeys);
 			if (validationMessage != null) {
 				return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
 			}
-			return ResponseEntity.ok(bannerService.updateBanner(param, image));
+			return ResponseEntity.ok(bannerService.updateBanner(param, images, imageKeys));
 		} catch (IllegalArgumentException e) {
 			return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
 		} catch (IOException e) {
 			return ResponseEntity.internalServerError().body(Map.of("message", "배너 수정 중 오류가 발생했습니다."));
+		}
+	}
+
+	// 관리자 배너를 삭제합니다.
+	@PostMapping("/api/admin/banner/delete")
+	public ResponseEntity<Object> deleteBanner(@RequestBody BannerDeletePO param) {
+		// 요청 유효성을 검증합니다.
+		String validationMessage = bannerService.validateBannerDelete(param);
+		if (validationMessage != null) {
+			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
+		}
+		try {
+			return ResponseEntity.ok(bannerService.deleteBanner(param));
+		} catch (IllegalArgumentException e) {
+			return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
 		}
 	}
 
@@ -109,6 +130,39 @@ public class AdminBannerController {
 			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
 		}
 		return ResponseEntity.ok(bannerService.saveBannerGoodsOrder(param));
+	}
+
+	// 배너 이미지 정렬 순서를 저장합니다.
+	@PostMapping("/api/admin/banner/image/order/save")
+	public ResponseEntity<Object> saveBannerImageOrder(@org.springframework.web.bind.annotation.RequestBody BannerImageOrderSavePO param) {
+		// 요청 유효성을 검증합니다.
+		String validationMessage = bannerService.validateBannerImageOrder(param);
+		if (validationMessage != null) {
+			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
+		}
+		return ResponseEntity.ok(bannerService.saveBannerImageOrder(param));
+	}
+
+	// 배너 이미지를 업로드합니다.
+	@PostMapping(value = "/api/admin/banner/image/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+	public ResponseEntity<Object> uploadBannerImage(
+		@RequestParam("bannerNo") Integer bannerNo,
+		@RequestParam("bannerDivCd") String bannerDivCd,
+		@RequestParam("regNo") Long regNo,
+		@RequestParam("image") MultipartFile image
+	) {
+		// 요청 유효성을 검증합니다.
+		String validationMessage = bannerService.validateBannerImageUpload(bannerNo, bannerDivCd, regNo, image);
+		if (validationMessage != null) {
+			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
+		}
+		try {
+			return ResponseEntity.ok(Map.of("imgPath", bannerService.uploadBannerImage(bannerNo, regNo, image)));
+		} catch (IllegalArgumentException e) {
+			return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+		} catch (IOException e) {
+			return ResponseEntity.internalServerError().body(Map.of("message", "배너 이미지 업로드 중 오류가 발생했습니다."));
+		}
 	}
 
 	// 배너 상품 엑셀을 파싱합니다.

@@ -1,6 +1,8 @@
 package com.xodud1202.springbackend.service;
 
 import com.xodud1202.springbackend.domain.admin.banner.BannerPO;
+import com.xodud1202.springbackend.domain.admin.banner.BannerDeletePO;
+import com.xodud1202.springbackend.domain.admin.banner.BannerImageOrderSavePO;
 import com.xodud1202.springbackend.domain.admin.banner.BannerSavePO;
 import com.xodud1202.springbackend.domain.admin.banner.BannerVO;
 import com.xodud1202.springbackend.mapper.BannerMapper;
@@ -11,6 +13,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
 
 import java.util.Collections;
 import java.util.List;
@@ -18,6 +21,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -110,7 +114,7 @@ class BannerServiceTests {
 		param.setDispEndDt("2026-02-11 10:00:00");
 
 		// 검증을 수행합니다.
-		String message = bannerService.validateBannerCreate(param, null);
+		String message = bannerService.validateBannerCreate(param, null, null);
 
 		// 기간 역전 오류 메시지를 검증합니다.
 		assertEquals("노출 시작일시는 종료일시보다 늦을 수 없습니다.", message);
@@ -130,12 +134,103 @@ class BannerServiceTests {
 		param.setGoodsList(List.of());
 
 		// 분기 검증 전에 공통 검증 결과를 확인합니다.
-		String message = bannerService.validateBannerCreate(param, null);
+		String message = bannerService.validateBannerCreate(param, null, null);
 
 		// 기간 형식 오류가 없는지 확인합니다.
-		assertEquals("상품리스트배너는 상품을 1개 이상 등록해주세요.", message);
+		assertNull(message);
 		assertEquals("2026-02-11 10:20:00", param.getDispStartDt());
 		assertEquals("2026-02-11 11:20:30", param.getDispEndDt());
 		assertNull(param.getBannerNo());
+	}
+
+	@Test
+	@DisplayName("이미지 업로드 검증: 대배너/띠배너 이외 구분은 오류를 반환한다")
+	// 이미지 업로드 검증 시 이미지 배너 구분이 아니면 오류를 반환합니다.
+	void validateBannerImageUpload_returnsErrorWhenBannerDivIsNotImageType() {
+		// 테스트용 업로드 파일을 구성합니다.
+		MockMultipartFile image = new MockMultipartFile(
+			"image",
+			"sample.png",
+			"image/png",
+			new byte[] { 1, 2, 3 }
+		);
+
+		// 이미지 업로드 검증을 수행합니다.
+		String message = bannerService.validateBannerImageUpload(1, "BANNER_DIV_02", 1L, image);
+
+		// 이미지 업로드 가능 배너 구분 검증 메시지를 확인합니다.
+		assertEquals("이미지 업로드는 대배너/띠배너에서만 가능합니다.", message);
+	}
+
+	@Test
+	@DisplayName("이미지 정렬 검증: 정렬 목록이 없으면 오류를 반환한다")
+	// 이미지 정렬 저장 검증 시 정렬 목록이 비어있으면 오류를 반환합니다.
+	void validateBannerImageOrder_returnsErrorWhenOrdersEmpty() {
+		// 정렬 요청 기본 데이터를 구성합니다.
+		BannerImageOrderSavePO param = new BannerImageOrderSavePO();
+		param.setBannerNo(1);
+		param.setUdtNo(1L);
+
+		// 정렬 저장 검증을 수행합니다.
+		String message = bannerService.validateBannerImageOrder(param);
+
+		// 정렬 목록 누락 메시지를 확인합니다.
+		assertEquals("저장할 정렬 정보가 없습니다.", message);
+	}
+
+	@Test
+	@DisplayName("삭제 검증: 배너 번호가 없으면 오류를 반환한다")
+	// 삭제 검증 시 배너 번호가 없으면 오류를 반환합니다.
+	void validateBannerDelete_returnsErrorWhenBannerNoMissing() {
+		// 삭제 요청 기본 데이터를 구성합니다.
+		BannerDeletePO param = new BannerDeletePO();
+		param.setUdtNo(1L);
+
+		// 삭제 검증을 수행합니다.
+		String message = bannerService.validateBannerDelete(param);
+
+		// 배너 번호 누락 메시지를 확인합니다.
+		assertEquals("배너 번호를 확인해주세요.", message);
+	}
+
+	@Test
+	@DisplayName("삭제 처리: 배너가 존재하면 상세를 정리 후 삭제 상태로 변경한다")
+	// 삭제 처리 시 상세 데이터를 정리하고 기본 정보를 삭제 상태로 변경합니다.
+	void deleteBanner_deletesDetailAndMarksBaseDeleted() {
+		// 삭제 요청 기본 데이터를 구성합니다.
+		BannerDeletePO param = new BannerDeletePO();
+		param.setBannerNo(100);
+		param.setUdtNo(1L);
+
+		// 배너 존재 여부/삭제 결과를 목으로 고정합니다.
+		when(bannerMapper.countBannerByNo(100)).thenReturn(1);
+		when(bannerMapper.updateBannerBaseDelete(100, 1L)).thenReturn(1);
+
+		// 삭제를 수행합니다.
+		int deleted = bannerService.deleteBanner(param);
+
+		// 삭제 처리 결과와 매퍼 호출을 검증합니다.
+		assertEquals(1, deleted);
+		verify(bannerMapper, times(1)).deleteImageBannerInfoByBannerNo(100);
+		verify(bannerMapper, times(1)).deleteBannerGoodsByBannerNo(100);
+		verify(bannerMapper, times(1)).deleteBannerTabByBannerNo(100);
+		verify(bannerMapper, times(1)).updateBannerBaseDelete(100, 1L);
+	}
+
+	@Test
+	@DisplayName("삭제 처리: 배너가 없으면 예외를 반환한다")
+	// 삭제 처리 시 배너가 존재하지 않으면 예외를 반환합니다.
+	void deleteBanner_throwsWhenBannerNotFound() {
+		// 삭제 요청 기본 데이터를 구성합니다.
+		BannerDeletePO param = new BannerDeletePO();
+		param.setBannerNo(99999);
+		param.setUdtNo(1L);
+
+		// 배너 미존재 응답을 목으로 고정합니다.
+		when(bannerMapper.countBannerByNo(99999)).thenReturn(0);
+
+		// 삭제 예외를 검증합니다.
+		IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> bannerService.deleteBanner(param));
+		assertEquals("배너 정보를 확인해주세요.", exception.getMessage());
 	}
 }

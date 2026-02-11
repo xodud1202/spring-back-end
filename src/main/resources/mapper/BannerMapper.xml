@@ -84,15 +84,24 @@
 
 	<select id="getBannerImageInfoList" resultType="com.xodud1202.springbackend.domain.admin.banner.BannerImageInfoPO">
 		/* BannerMapper.getBannerImageInfoList: 이미지 배너 정보 조회 */
-		SELECT BANNER_NO
+		SELECT IMAGE_BANNER_NO
+		     , BANNER_NO
+		     , BANNER_NM
 		     , IMG_PATH
 		     , URL
 		     , BANNER_OPEN_CD
 		     , DISP_ORD
+		     , DATE_FORMAT(DISP_START_DT, '%Y-%m-%d %H:%i:%s') AS DISP_START_DT
+		     , DATE_FORMAT(DISP_END_DT, '%Y-%m-%d %H:%i:%s') AS DISP_END_DT
+		     , SHOW_YN
+		     , DEL_YN
 		     , REG_NO
+		     , DATE_FORMAT(REG_DT, '%Y-%m-%d %H:%i:%s') AS REG_DT
 		     , UDT_NO
+		     , DATE_FORMAT(UDT_DT, '%Y-%m-%d %H:%i:%s') AS UDT_DT
 		  FROM IMAGE_BANNER_INFO
 		 WHERE BANNER_NO = #{bannerNo}
+		   AND DEL_YN = 'N'
 		 ORDER BY DISP_ORD ASC
 	</select>
 
@@ -195,6 +204,16 @@
 		   AND DEL_YN = 'N'
 	</select>
 
+	<update id="updateBannerBaseDelete">
+		/* BannerMapper.updateBannerBaseDelete: 배너 기본 정보 삭제 상태 변경 */
+		UPDATE BANNER_BASE
+		   SET DEL_YN = 'Y'
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE BANNER_NO = #{bannerNo}
+		   AND DEL_YN = 'N'
+	</update>
+
 	<delete id="deleteImageBannerInfoByBannerNo">
 		/* BannerMapper.deleteImageBannerInfoByBannerNo: 이미지 배너 정보 삭제 */
 		DELETE
@@ -206,18 +225,28 @@
 		/* BannerMapper.insertImageBannerInfo: 이미지 배너 정보 등록 */
 		INSERT INTO IMAGE_BANNER_INFO (
 		       BANNER_NO
+		     , BANNER_NM
 		     , IMG_PATH
 		     , URL
 		     , BANNER_OPEN_CD
 		     , DISP_ORD
+		     , DISP_START_DT
+		     , DISP_END_DT
+		     , SHOW_YN
+		     , DEL_YN
 		     , REG_NO
 		     , UDT_NO
 		) VALUES (
 		       #{bannerNo}
+		     , #{bannerNm}
 		     , #{imgPath}
 		     , #{url}
 		     , #{bannerOpenCd}
 		     , #{dispOrd}
+		     , NULLIF(#{dispStartDt}, '')
+		     , NULLIF(#{dispEndDt}, '')
+		     , #{showYn}
+		     , #{delYn}
 		     , #{regNo}
 		     , #{udtNo}
 		)
@@ -296,6 +325,23 @@
 		   AND GOODS_ID IN
 		<foreach collection="orders" item="order" open="(" separator="," close=")">
 			#{order.goodsId}
+		</foreach>
+	</update>
+
+	<update id="updateBannerImageOrder">
+		/* BannerMapper.updateBannerImageOrder: 이미지 배너 정렬 순서 저장 */
+		UPDATE IMAGE_BANNER_INFO
+		   SET DISP_ORD = CASE IMAGE_BANNER_NO
+		<foreach collection="orders" item="order">
+			WHEN #{order.imageBannerNo} THEN #{order.dispOrd}
+		</foreach>
+			END
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE BANNER_NO = #{bannerNo}
+		   AND IMAGE_BANNER_NO IN
+		<foreach collection="orders" item="order" open="(" separator="," close=")">
+			#{order.imageBannerNo}
 		</foreach>
 	</update>
 </mapper>

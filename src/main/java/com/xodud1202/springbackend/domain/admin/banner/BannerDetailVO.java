@@ -23,6 +23,8 @@ public class BannerDetailVO {
 	private String showYn;
 	// 이미지 배너 정보입니다.
 	private BannerImageInfoPO imageInfo;
+	// 이미지 배너 목록입니다.
+	private List<BannerImageInfoPO> imageInfoList;
 	// 상품 탭 목록입니다.
 	private List<BannerTabPO> tabList;
 	// 상품 목록입니다.

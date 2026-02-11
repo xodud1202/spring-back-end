@@ -5,6 +5,7 @@ import com.xodud1202.springbackend.domain.admin.banner.BannerGoodsOrderSavePO;
 import com.xodud1202.springbackend.domain.admin.banner.BannerGoodsPO;
 import com.xodud1202.springbackend.domain.admin.banner.BannerGoodsVO;
 import com.xodud1202.springbackend.domain.admin.banner.BannerImageInfoPO;
+import com.xodud1202.springbackend.domain.admin.banner.BannerImageOrderSavePO;
 import com.xodud1202.springbackend.domain.admin.banner.BannerPO;
 import com.xodud1202.springbackend.domain.admin.banner.BannerSavePO;
 import com.xodud1202.springbackend.domain.admin.banner.BannerTabPO;
@@ -44,6 +45,9 @@ public interface BannerMapper {
 	// 배너 존재 여부를 조회합니다.
 	int countBannerByNo(@Param("bannerNo") Integer bannerNo);
 
+	// 배너 기본 정보를 삭제 상태로 변경합니다.
+	int updateBannerBaseDelete(@Param("bannerNo") Integer bannerNo, @Param("udtNo") Long udtNo);
+
 	// 이미지 배너 정보를 삭제합니다.
 	int deleteImageBannerInfoByBannerNo(@Param("bannerNo") Integer bannerNo);
 
@@ -64,4 +68,7 @@ public interface BannerMapper {
 
 	// 배너 상품 정렬 순서를 저장합니다.
 	int updateBannerGoodsOrder(BannerGoodsOrderSavePO param);
+
+	// 이미지 배너 정렬 순서를 저장합니다.
+	int updateBannerImageOrder(BannerImageOrderSavePO param);
 }
