@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+		"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.xodud1202.springbackend.mapper.NewsArticleMapper">
+	<select id="getActiveNewsRssTargetList" resultType="com.xodud1202.springbackend.domain.news.NewsRssTargetVO">
+		/* NewsArticleMapper.getActiveNewsRssTargetList: 활성 언론사/카테고리 RSS URL 목록 조회 */
+		SELECT A.PRESS_NO
+		     , A.PRESS_NM
+		     , B.CATEGORY_CD
+		     , B.CATEGORY_NM
+		     , B.SOURCE_NM
+		     , B.RSS_URL
+		  FROM news.NEWS_PRESS A
+		  JOIN news.NEWS_CATEGORY B
+		    ON A.PRESS_NO = B.PRESS_NO
+		 WHERE A.USE_YN = 'Y'
+		   AND B.USE_YN = 'Y'
+		   AND TRIM(B.RSS_URL) != ''
+		 ORDER BY A.SORT_SEQ ASC, B.SORT_SEQ ASC, B.CATEGORY_CD ASC
+	</select>
+
+	<insert id="insertNewsArticle">
+		/* NewsArticleMapper.insertNewsArticle: 수집 기사 저장(중복 URL/GUID 해시는 무시) */
+		INSERT IGNORE INTO news.NEWS_ARTICLE (
+		       PRESS_NO
+		     , CATEGORY_CD
+		     , ARTICLE_GUID
+		     , ARTICLE_GUID_HASH
+		     , ARTICLE_URL
+		     , ARTICLE_URL_HASH
+		     , ARTICLE_TITLE
+		     , ARTICLE_SUMMARY
+		     , THUMBNAIL_URL
+		     , AUTHOR_NM
+		     , PUBLISHED_DT
+		     , COLLECTED_DT
+		     , RANK_SCORE
+		     , USE_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{pressNo}
+		     , #{categoryCd}
+		     , #{articleGuid}
+		     , NULLIF(#{articleGuidHash}, '')
+		     , #{articleUrl}
+		     , #{articleUrlHash}
+		     , #{articleTitle}
+		     , #{articleSummary}
+		     , #{thumbnailUrl}
+		     , #{authorNm}
+		     , #{publishedDt}
+		     , NOW()
+		     , #{rankScore}
+		     , #{useYn}
+		     , NULL
+		     , NULL
+		)
+	</insert>
+</mapper>
