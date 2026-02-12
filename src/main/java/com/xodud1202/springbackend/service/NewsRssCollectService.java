@@ -87,9 +87,10 @@ public class NewsRssCollectService {
 		boolean hasRequiredMissing = articleUrlOriginal == null || articleTitleOriginal == null;
 
 		// NOT NULL 대상(URL, 제목)만 누락 시 "-"로 치환합니다.
-		String articleGuid = articleGuidOriginal;
 		String articleUrl = valueOrDash(articleUrlOriginal);
 		String articleTitle = valueOrDash(articleTitleOriginal);
+		// GUID 누락 시 URL을 GUID로 대체해 카테고리별 중복 제약을 적용합니다.
+		String articleGuid = articleGuidOriginal == null ? articleUrl : articleGuidOriginal;
 		String articleSummary = articleSummaryOriginal;
 		String thumbnailUrl = thumbnailUrlOriginal;
 		String authorNm = authorNmOriginal;

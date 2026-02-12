@@ -173,6 +173,39 @@ class NewsRssCollectServiceTests {
 		assertNull(captor.getValue().getAuthorNm());
 	}
 
+	@Test
+	@DisplayName("GUID 누락: ARTICLE_GUID가 없으면 ARTICLE_URL로 대체 저장한다")
+	// GUID 누락 시 URL을 GUID로 대체해 중복 제약을 적용하는지 검증합니다.
+	void collectNewsArticles_replacesMissingGuidWithArticleUrl() {
+		// GUID가 비어있는 피드 데이터를 구성합니다.
+		NewsRssTargetVO target = buildTarget(1L, "international", "https://example.com/rss");
+		RssArticleItem item = new RssArticleItem(
+			null,
+			"https://example.com/article/no-guid",
+			"가이드 없는 기사",
+			"요약",
+			null,
+			null,
+			LocalDateTime.of(2026, 2, 12, 17, 30)
+		);
+
+		// 목 응답을 설정합니다.
+		when(newsArticleMapper.getActiveNewsRssTargetList()).thenReturn(List.of(target));
+		when(rssFeedClient.fetchFeed(eq("https://example.com/rss"))).thenReturn(List.of(item));
+		when(newsArticleMapper.insertNewsArticle(any())).thenReturn(1);
+
+		// 수집 배치를 실행합니다.
+		newsRssCollectService.collectNewsArticles();
+
+		// GUID 대체 저장 여부를 검증합니다.
+		ArgumentCaptor<com.xodud1202.springbackend.domain.news.NewsArticleCreatePO> captor =
+			ArgumentCaptor.forClass(com.xodud1202.springbackend.domain.news.NewsArticleCreatePO.class);
+		verify(newsArticleMapper, times(1)).insertNewsArticle(captor.capture());
+		assertEquals("https://example.com/article/no-guid", captor.getValue().getArticleGuid());
+		assertEquals("https://example.com/article/no-guid", captor.getValue().getArticleUrl());
+		assertEquals("Y", captor.getValue().getUseYn());
+	}
+
 	// 테스트용 RSS 대상 데이터를 생성합니다.
 	private NewsRssTargetVO buildTarget(Long pressNo, String categoryCd, String rssUrl) {
 		NewsRssTargetVO target = new NewsRssTargetVO();
