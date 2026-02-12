@@ -20,9 +20,19 @@
 		 ORDER BY A.SORT_SEQ ASC, B.SORT_SEQ ASC, B.CATEGORY_CD ASC
 	</select>
 
+	<update id="resetRankScoreByTarget">
+		/* NewsArticleMapper.resetRankScoreByTarget: 대상 언론사/카테고리 기존 랭킹 점수 초기화 */
+		UPDATE news.NEWS_ARTICLE
+		   SET RANK_SCORE = 999
+		     , UDT_DT = NOW()
+		 WHERE PRESS_NO = #{pressNo}
+		   AND CATEGORY_CD = #{categoryCd}
+		   AND RANK_SCORE &lt; 999
+	</update>
+
 	<insert id="insertNewsArticle">
-		/* NewsArticleMapper.insertNewsArticle: 수집 기사 저장(중복 URL/GUID 해시는 무시) */
-		INSERT IGNORE INTO news.NEWS_ARTICLE (
+		/* NewsArticleMapper.insertNewsArticle: 수집 기사 저장/갱신 */
+		INSERT INTO news.NEWS_ARTICLE (
 		       PRESS_NO
 		     , CATEGORY_CD
 		     , ARTICLE_GUID
@@ -57,5 +67,17 @@
 		     , NULL
 		     , NULL
 		)
+		ON DUPLICATE KEY UPDATE
+		       ARTICLE_GUID_HASH = VALUES(ARTICLE_GUID_HASH)
+		     , ARTICLE_URL = VALUES(ARTICLE_URL)
+		     , ARTICLE_URL_HASH = VALUES(ARTICLE_URL_HASH)
+		     , ARTICLE_TITLE = VALUES(ARTICLE_TITLE)
+		     , ARTICLE_SUMMARY = VALUES(ARTICLE_SUMMARY)
+		     , THUMBNAIL_URL = VALUES(THUMBNAIL_URL)
+		     , AUTHOR_NM = VALUES(AUTHOR_NM)
+		     , PUBLISHED_DT = COALESCE(VALUES(PUBLISHED_DT), PUBLISHED_DT)
+		     , RANK_SCORE = VALUES(RANK_SCORE)
+		     , USE_YN = VALUES(USE_YN)
+		     , UDT_DT = NOW()
 	</insert>
 </mapper>

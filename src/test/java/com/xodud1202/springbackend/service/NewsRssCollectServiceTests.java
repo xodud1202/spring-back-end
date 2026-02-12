@@ -59,6 +59,7 @@ class NewsRssCollectServiceTests {
 		// 목 응답을 설정합니다.
 		when(newsArticleMapper.getActiveNewsRssTargetList()).thenReturn(List.of(target));
 		when(rssFeedClient.fetchFeed(eq("https://example.com/rss"))).thenReturn(feedItems);
+		when(newsArticleMapper.resetRankScoreByTarget(any())).thenReturn(1);
 		when(newsArticleMapper.insertNewsArticle(any())).thenReturn(1);
 
 		// 수집 배치를 실행합니다.
@@ -68,6 +69,7 @@ class NewsRssCollectServiceTests {
 		assertEquals(5, result.getAttemptedArticleCount());
 		assertEquals(5, result.getInsertedArticleCount());
 		assertEquals(0, result.getSkippedArticleCount());
+		verify(newsArticleMapper, times(1)).resetRankScoreByTarget(any());
 		verify(newsArticleMapper, times(5)).insertNewsArticle(any());
 
 		// 첫 번째 저장 데이터의 랭크 점수를 검증합니다.
@@ -92,6 +94,7 @@ class NewsRssCollectServiceTests {
 		when(newsArticleMapper.getActiveNewsRssTargetList()).thenReturn(List.of(failedTarget, successTarget));
 		when(rssFeedClient.fetchFeed(eq("https://example.com/fail"))).thenThrow(new RuntimeException("통신 실패"));
 		when(rssFeedClient.fetchFeed(eq("https://example.com/success"))).thenReturn(successItems);
+		when(newsArticleMapper.resetRankScoreByTarget(any())).thenReturn(1);
 		when(newsArticleMapper.insertNewsArticle(any())).thenReturn(1);
 
 		// 수집 배치를 실행합니다.
@@ -123,6 +126,7 @@ class NewsRssCollectServiceTests {
 		// 목 응답을 설정합니다.
 		when(newsArticleMapper.getActiveNewsRssTargetList()).thenReturn(List.of(target));
 		when(rssFeedClient.fetchFeed(eq("https://example.com/rss"))).thenReturn(List.of(invalidItem));
+		when(newsArticleMapper.resetRankScoreByTarget(any())).thenReturn(1);
 		when(newsArticleMapper.insertNewsArticle(any())).thenReturn(1);
 
 		// 수집 배치를 실행합니다.
@@ -158,6 +162,7 @@ class NewsRssCollectServiceTests {
 		// 목 응답을 설정합니다.
 		when(newsArticleMapper.getActiveNewsRssTargetList()).thenReturn(List.of(target));
 		when(rssFeedClient.fetchFeed(eq("https://example.com/rss"))).thenReturn(List.of(item));
+		when(newsArticleMapper.resetRankScoreByTarget(any())).thenReturn(1);
 		when(newsArticleMapper.insertNewsArticle(any())).thenReturn(1);
 
 		// 수집 배치를 실행합니다.
@@ -192,6 +197,7 @@ class NewsRssCollectServiceTests {
 		// 목 응답을 설정합니다.
 		when(newsArticleMapper.getActiveNewsRssTargetList()).thenReturn(List.of(target));
 		when(rssFeedClient.fetchFeed(eq("https://example.com/rss"))).thenReturn(List.of(item));
+		when(newsArticleMapper.resetRankScoreByTarget(any())).thenReturn(1);
 		when(newsArticleMapper.insertNewsArticle(any())).thenReturn(1);
 
 		// 수집 배치를 실행합니다.
@@ -204,6 +210,43 @@ class NewsRssCollectServiceTests {
 		assertEquals("https://example.com/article/no-guid", captor.getValue().getArticleGuid());
 		assertEquals("https://example.com/article/no-guid", captor.getValue().getArticleUrl());
 		assertEquals("Y", captor.getValue().getUseYn());
+	}
+
+	@Test
+	@DisplayName("랭킹 보정: N이 섞여도 Y 5개가 채워질 때까지 읽고 rank는 순차 증가한다")
+	// 누락 데이터가 포함되어도 USE_YN=Y 5개를 채울 때까지 수집하는지 검증합니다.
+	void collectNewsArticles_fillsFiveActiveArticlesWithSequentialRank() {
+		// 앞 2건은 N, 뒤 5건은 Y가 되도록 데이터를 구성합니다.
+		NewsRssTargetVO target = buildTarget(1L, "economy", "https://example.com/rss");
+		List<RssArticleItem> feedItems = List.of(
+			new RssArticleItem("guid-n1", null, "제목N1", null, null, null, LocalDateTime.of(2026, 2, 12, 12, 0)),
+			new RssArticleItem("guid-n2", "https://example.com/n2", null, null, null, null, LocalDateTime.of(2026, 2, 12, 12, 1)),
+			buildItem("guid-1", "https://example.com/1", "제목1"),
+			buildItem("guid-2", "https://example.com/2", "제목2"),
+			buildItem("guid-3", "https://example.com/3", "제목3"),
+			buildItem("guid-4", "https://example.com/4", "제목4"),
+			buildItem("guid-5", "https://example.com/5", "제목5")
+		);
+
+		// 목 응답을 설정합니다.
+		when(newsArticleMapper.getActiveNewsRssTargetList()).thenReturn(List.of(target));
+		when(rssFeedClient.fetchFeed(eq("https://example.com/rss"))).thenReturn(feedItems);
+		when(newsArticleMapper.resetRankScoreByTarget(any())).thenReturn(1);
+		when(newsArticleMapper.insertNewsArticle(any())).thenReturn(1);
+
+		// 수집 배치를 실행합니다.
+		NewsCollectResultVO result = newsRssCollectService.collectNewsArticles();
+
+		// 7건 처리(1~7 rank), Y 5건 충족 시 종료되는지 검증합니다.
+		assertEquals(7, result.getAttemptedArticleCount());
+		assertEquals(7, result.getInsertedArticleCount());
+		ArgumentCaptor<com.xodud1202.springbackend.domain.news.NewsArticleCreatePO> captor =
+			ArgumentCaptor.forClass(com.xodud1202.springbackend.domain.news.NewsArticleCreatePO.class);
+		verify(newsArticleMapper, times(7)).insertNewsArticle(captor.capture());
+		assertEquals(BigDecimal.valueOf(1), captor.getAllValues().get(0).getRankScore());
+		assertEquals("N", captor.getAllValues().get(0).getUseYn());
+		assertEquals(BigDecimal.valueOf(7), captor.getAllValues().get(6).getRankScore());
+		assertEquals("Y", captor.getAllValues().get(6).getUseYn());
 	}
 
 	// 테스트용 RSS 대상 데이터를 생성합니다.

@@ -20,7 +20,7 @@ import java.util.List;
 @RequiredArgsConstructor
 // 뉴스 RSS를 수집해 기사 테이블에 적재하는 서비스를 제공합니다.
 public class NewsRssCollectService {
-	private static final int MAX_ARTICLE_COUNT_PER_URL = 5;
+	private static final int MAX_ACTIVE_ARTICLE_COUNT_PER_TARGET = 5;
 	private static final String EMPTY_REPLACEMENT = "-";
 
 	private final NewsArticleMapper newsArticleMapper;
@@ -39,15 +39,32 @@ public class NewsRssCollectService {
 		// 대상 URL별로 기사 수집/저장을 수행합니다.
 		for (NewsRssTargetVO target : targetList) {
 			try {
+				// 대상 카테고리의 기존 랭킹 점수를 초기화합니다.
+				NewsArticleCreatePO resetParam = new NewsArticleCreatePO();
+				resetParam.setPressNo(target.getPressNo());
+				resetParam.setCategoryCd(target.getCategoryCd());
+				newsArticleMapper.resetRankScoreByTarget(resetParam);
+
 				List<RssArticleItem> feedItems = rssFeedClient.fetchFeed(target.getRssUrl());
-				int topCount = Math.min(feedItems.size(), MAX_ARTICLE_COUNT_PER_URL);
-				for (int rankIndex = 0; rankIndex < topCount; rankIndex += 1) {
-					RssArticleItem feedItem = feedItems.get(rankIndex);
+				int rankScore = 0;
+				int activeUseYnCount = 0;
+				for (int feedIndex = 0; feedIndex < feedItems.size(); feedIndex += 1) {
+					if (activeUseYnCount >= MAX_ACTIVE_ARTICLE_COUNT_PER_TARGET) {
+						break;
+					}
+					RssArticleItem feedItem = feedItems.get(feedIndex);
+					rankScore += 1;
 					attemptedArticleCount += 1;
 
 					// 저장 가능한 기사 데이터인지 검증 후 저장 요청을 수행합니다.
-					NewsArticleCreatePO saveParam = buildCreateParam(target, feedItem, rankIndex);
-					insertedArticleCount += newsArticleMapper.insertNewsArticle(saveParam);
+					NewsArticleCreatePO saveParam = buildCreateParam(target, feedItem, rankScore);
+					int affectedCount = newsArticleMapper.insertNewsArticle(saveParam);
+					if (affectedCount > 0) {
+						insertedArticleCount += 1;
+					}
+					if ("Y".equals(saveParam.getUseYn())) {
+						activeUseYnCount += 1;
+					}
 				}
 				successTargetCount += 1;
 			} catch (Exception exception) {
@@ -75,7 +92,7 @@ public class NewsRssCollectService {
 	}
 
 	// 기사 원본 데이터를 DB 저장 모델로 변환합니다.
-	private NewsArticleCreatePO buildCreateParam(NewsRssTargetVO target, RssArticleItem item, int rankIndex) {
+	private NewsArticleCreatePO buildCreateParam(NewsRssTargetVO target, RssArticleItem item, int rankScore) {
 		// GUID/URL/제목/요약/저자/발행일을 DB 컬럼 스펙에 맞춰 정규화합니다.
 		String articleGuidOriginal = trimToNull(limitLength(item.guid(), 150));
 		String articleUrlOriginal = trimToNull(limitLength(item.link(), 150));
@@ -95,7 +112,7 @@ public class NewsRssCollectService {
 		String thumbnailUrl = thumbnailUrlOriginal;
 		String authorNm = authorNmOriginal;
 		String articleHashSource = articleUrlOriginal == null
-			? buildMissingArticleHashSource(target, item, rankIndex)
+			? buildMissingArticleHashSource(target, item, rankScore)
 			: articleUrl;
 
 		NewsArticleCreatePO saveParam = new NewsArticleCreatePO();
@@ -110,13 +127,13 @@ public class NewsRssCollectService {
 		saveParam.setThumbnailUrl(thumbnailUrl);
 		saveParam.setAuthorNm(authorNm);
 		saveParam.setPublishedDt(publishedDt);
-		saveParam.setRankScore(BigDecimal.valueOf(rankIndex + 1L));
+		saveParam.setRankScore(BigDecimal.valueOf(rankScore));
 		saveParam.setUseYn(hasRequiredMissing ? "N" : "Y");
 		return saveParam;
 	}
 
 	// 기사 URL 누락 시 중복 방지용 해시 입력값을 생성합니다.
-	private String buildMissingArticleHashSource(NewsRssTargetVO target, RssArticleItem item, int rankIndex) {
+	private String buildMissingArticleHashSource(NewsRssTargetVO target, RssArticleItem item, int rankScore) {
 		StringBuilder builder = new StringBuilder();
 		builder.append("MISSING_URL|");
 		builder.append(target.getPressNo()).append('|');
@@ -126,7 +143,7 @@ public class NewsRssCollectService {
 		builder.append(trimToNull(item.summary())).append('|');
 		builder.append(trimToNull(item.authorNm())).append('|');
 		builder.append(item.publishedDt()).append('|');
-		builder.append(rankIndex + 1L);
+		builder.append(rankScore);
 		return builder.toString();
 	}
 

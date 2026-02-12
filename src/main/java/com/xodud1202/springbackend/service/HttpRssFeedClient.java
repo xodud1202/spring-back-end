@@ -19,6 +19,7 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -26,6 +27,10 @@ import java.util.List;
 // HTTP 기반 RSS/Atom 피드 파싱 기능을 제공합니다.
 public class HttpRssFeedClient implements RssFeedClient {
 	private static final int HTTP_TIMEOUT_SECONDS = 10;
+	private static final DateTimeFormatter RFC_1123_OFFSET_COLON_FORMATTER =
+		DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss XXX", Locale.ENGLISH);
+	private static final DateTimeFormatter RFC_1123_OFFSET_NO_COLON_FORMATTER =
+		DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss Z", Locale.ENGLISH);
 
 	private final HttpClient httpClient = HttpClient.newBuilder().build();
 
@@ -256,6 +261,16 @@ public class HttpRssFeedClient implements RssFeedClient {
 		// RSS RFC-1123 포맷 변환을 우선 시도합니다.
 		try {
 			return ZonedDateTime.parse(normalized, DateTimeFormatter.RFC_1123_DATE_TIME).toLocalDateTime();
+		} catch (Exception ignored) {
+		}
+		// RFC-1123 +09:00 포맷 변환을 시도합니다.
+		try {
+			return OffsetDateTime.parse(normalized, RFC_1123_OFFSET_COLON_FORMATTER).toLocalDateTime();
+		} catch (Exception ignored) {
+		}
+		// RFC-1123 +0900 포맷 변환을 시도합니다.
+		try {
+			return OffsetDateTime.parse(normalized, RFC_1123_OFFSET_NO_COLON_FORMATTER).toLocalDateTime();
 		} catch (Exception ignored) {
 		}
 		// ISO 오프셋 포맷 변환을 시도합니다.
