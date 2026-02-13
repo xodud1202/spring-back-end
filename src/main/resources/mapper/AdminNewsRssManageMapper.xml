@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+		"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.xodud1202.springbackend.mapper.AdminNewsRssManageMapper">
+	<select id="getAdminNewsPressList" resultType="com.xodud1202.springbackend.domain.admin.news.AdminNewsPressRowVO">
+		/* AdminNewsRssManageMapper.getAdminNewsPressList : 관리자 뉴스 언론사 목록 조회 */
+		SELECT PRESS_NO
+		     , PRESS_NM
+		     , USE_YN
+		     , SORT_SEQ
+		  FROM news.NEWS_PRESS
+		 ORDER BY SORT_SEQ ASC, PRESS_NO ASC
+	</select>
+
+	<select id="getAdminNewsCategoryListByPressNo" resultType="com.xodud1202.springbackend.domain.admin.news.AdminNewsCategoryRowVO">
+		/* AdminNewsRssManageMapper.getAdminNewsCategoryListByPressNo : 관리자 뉴스 카테고리 목록 조회 */
+		SELECT PRESS_NO
+		     , CATEGORY_CD
+		     , CATEGORY_NM
+		     , USE_YN
+		     , SORT_SEQ
+		     , SOURCE_NM
+		     , RSS_URL
+		  FROM news.NEWS_CATEGORY
+		 WHERE PRESS_NO = #{pressNo}
+		 ORDER BY SORT_SEQ ASC, CATEGORY_CD ASC
+	</select>
+
+	<insert id="insertAdminNewsPress" useGeneratedKeys="true" keyProperty="pressNo" keyColumn="PRESS_NO">
+		/* AdminNewsRssManageMapper.insertAdminNewsPress : 관리자 뉴스 언론사 등록 */
+		INSERT INTO news.NEWS_PRESS (
+		       PRESS_CD
+		     , PRESS_NM
+		     , USE_YN
+		     , SORT_SEQ
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{pressCd}
+		     , #{pressNm}
+		     , #{useYn}
+		     , #{sortSeq}
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+
+	<update id="updateAdminNewsPress">
+		/* AdminNewsRssManageMapper.updateAdminNewsPress : 관리자 뉴스 언론사 수정 */
+		UPDATE news.NEWS_PRESS
+		   SET PRESS_NM = #{pressNm}
+		     , USE_YN = #{useYn}
+		     , UDT_NO = #{udtNo}
+		 WHERE PRESS_NO = #{pressNo}
+	</update>
+
+	<update id="updateAdminNewsPressSortSeq">
+		/* AdminNewsRssManageMapper.updateAdminNewsPressSortSeq : 관리자 뉴스 언론사 정렬 순서 수정 */
+		UPDATE news.NEWS_PRESS
+		   SET SORT_SEQ = #{sortSeq}
+		     , UDT_NO = #{udtNo}
+		 WHERE PRESS_NO = #{pressNo}
+	</update>
+
+	<delete id="deleteAdminNewsArticleByPressNo">
+		/* AdminNewsRssManageMapper.deleteAdminNewsArticleByPressNo : 관리자 뉴스 언론사별 기사 삭제 */
+		DELETE
+		  FROM news.NEWS_ARTICLE
+		 WHERE PRESS_NO = #{pressNo}
+	</delete>
+
+	<delete id="deleteAdminNewsCategoryByPressNo">
+		/* AdminNewsRssManageMapper.deleteAdminNewsCategoryByPressNo : 관리자 뉴스 언론사별 카테고리 삭제 */
+		DELETE
+		  FROM news.NEWS_CATEGORY
+		 WHERE PRESS_NO = #{pressNo}
+	</delete>
+
+	<delete id="deleteAdminNewsPressByPressNo">
+		/* AdminNewsRssManageMapper.deleteAdminNewsPressByPressNo : 관리자 뉴스 언론사 삭제 */
+		DELETE
+		  FROM news.NEWS_PRESS
+		 WHERE PRESS_NO = #{pressNo}
+	</delete>
+
+	<insert id="insertAdminNewsCategory">
+		/* AdminNewsRssManageMapper.insertAdminNewsCategory : 관리자 뉴스 카테고리 등록 */
+		INSERT INTO news.NEWS_CATEGORY (
+		       PRESS_NO
+		     , CATEGORY_CD
+		     , CATEGORY_NM
+		     , USE_YN
+		     , SORT_SEQ
+		     , SOURCE_NM
+		     , RSS_URL
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{pressNo}
+		     , #{categoryCd}
+		     , #{categoryNm}
+		     , #{useYn}
+		     , #{sortSeq}
+		     , #{sourceNm}
+		     , #{rssUrl}
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+
+	<update id="updateAdminNewsCategory">
+		/* AdminNewsRssManageMapper.updateAdminNewsCategory : 관리자 뉴스 카테고리 수정 */
+		UPDATE news.NEWS_CATEGORY
+		   SET CATEGORY_NM = #{categoryNm}
+		     , USE_YN = #{useYn}
+		     , SOURCE_NM = #{sourceNm}
+		     , RSS_URL = #{rssUrl}
+		     , UDT_NO = #{udtNo}
+		 WHERE PRESS_NO = #{pressNo}
+		   AND CATEGORY_CD = #{categoryCd}
+	</update>
+
+	<update id="updateAdminNewsCategorySortSeq">
+		/* AdminNewsRssManageMapper.updateAdminNewsCategorySortSeq : 관리자 뉴스 카테고리 정렬 순서 수정 */
+		UPDATE news.NEWS_CATEGORY
+		   SET SORT_SEQ = #{sortSeq}
+		     , UDT_NO = #{udtNo}
+		 WHERE PRESS_NO = #{pressNo}
+		   AND CATEGORY_CD = #{categoryCd}
+	</update>
+
+	<delete id="deleteAdminNewsArticleByPressNoAndCategoryCd">
+		/* AdminNewsRssManageMapper.deleteAdminNewsArticleByPressNoAndCategoryCd : 관리자 뉴스 언론사/카테고리별 기사 삭제 */
+		DELETE
+		  FROM news.NEWS_ARTICLE
+		 WHERE PRESS_NO = #{pressNo}
+		   AND CATEGORY_CD = #{categoryCd}
+	</delete>
+
+	<delete id="deleteAdminNewsCategoryByPressNoAndCategoryCd">
+		/* AdminNewsRssManageMapper.deleteAdminNewsCategoryByPressNoAndCategoryCd : 관리자 뉴스 카테고리 삭제 */
+		DELETE
+		  FROM news.NEWS_CATEGORY
+		 WHERE PRESS_NO = #{pressNo}
+		   AND CATEGORY_CD = #{categoryCd}
+	</delete>
+</mapper>
