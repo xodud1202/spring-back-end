@@ -3,6 +3,43 @@
 		"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
 <mapper namespace="com.xodud1202.springbackend.mapper.NewsArticleMapper">
+	<select id="getActivePressList" resultType="com.xodud1202.springbackend.domain.news.NewsPressSummaryVO">
+		/* NewsArticleMapper.getActivePressList: 활성 언론사 목록 조회 */
+		SELECT CAST(PRESS_NO AS CHAR) AS id
+		     , PRESS_NM AS name
+		  FROM news.NEWS_PRESS
+		 WHERE USE_YN = 'Y'
+		 ORDER BY SORT_SEQ ASC, PRESS_NO ASC
+	</select>
+
+	<select id="getActiveCategoryListByPressNo" resultType="com.xodud1202.springbackend.domain.news.NewsCategorySummaryVO">
+		/* NewsArticleMapper.getActiveCategoryListByPressNo: 언론사별 활성 카테고리 목록 조회 */
+		SELECT CATEGORY_CD AS id
+		     , CATEGORY_NM AS name
+		  FROM news.NEWS_CATEGORY
+		 WHERE PRESS_NO = #{pressNo}
+		   AND USE_YN = 'Y'
+		 ORDER BY SORT_SEQ ASC, CATEGORY_CD ASC
+	</select>
+
+	<select id="getTopArticleListByPressNoAndCategoryCd" resultType="com.xodud1202.springbackend.domain.news.NewsTopArticleVO">
+		/* NewsArticleMapper.getTopArticleListByPressNoAndCategoryCd: 언론사/카테고리별 상위 기사 목록 조회 */
+		SELECT CAST(ARTICLE_NO AS CHAR) AS id
+		     , ARTICLE_TITLE AS title
+		     , ARTICLE_URL AS url
+		  FROM news.NEWS_ARTICLE
+		 WHERE PRESS_NO = #{pressNo}
+		   AND CATEGORY_CD = #{categoryCd}
+		   AND USE_YN = 'Y'
+		 ORDER BY
+		       CASE WHEN RANK_SCORE &gt;= 999 THEN 1 ELSE 0 END ASC
+		     , RANK_SCORE ASC
+		     , PUBLISHED_DT DESC
+		     , COLLECTED_DT DESC
+		     , ARTICLE_NO DESC
+		 LIMIT #{limit}
+	</select>
+
 	<select id="getActiveNewsRssTargetList" resultType="com.xodud1202.springbackend.domain.news.NewsRssTargetVO">
 		/* NewsArticleMapper.getActiveNewsRssTargetList: 활성 언론사/카테고리 RSS URL 목록 조회 */
 		SELECT A.PRESS_NO
