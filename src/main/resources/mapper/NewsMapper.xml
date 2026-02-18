@@ -1,0 +1,348 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+		"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.xodud1202.springbackend.mapper.NewsMapper">
+	<select id="getAdminNewsPressOptionList" resultType="com.xodud1202.springbackend.domain.admin.news.AdminNewsPressOptionVO">
+		/* NewsMapper.getAdminNewsPressOptionList : 관리자 뉴스 목록 언론사 옵션 조회 */
+		SELECT PRESS_NO AS pressNo
+		     , PRESS_NM AS pressNm
+		  FROM news.NEWS_PRESS
+		 WHERE USE_YN = 'Y'
+		 ORDER BY SORT_SEQ ASC, PRESS_NO ASC
+	</select>
+
+	<select id="getAdminNewsCategoryOptionList" resultType="com.xodud1202.springbackend.domain.admin.news.AdminNewsCategoryOptionVO">
+		/* NewsMapper.getAdminNewsCategoryOptionList : 관리자 뉴스 목록 카테고리 옵션 조회 */
+		SELECT CATEGORY_CD AS categoryCd
+		     , CATEGORY_NM AS categoryNm
+		  FROM news.NEWS_CATEGORY
+		 WHERE PRESS_NO = #{pressNo}
+		   AND USE_YN = 'Y'
+		 ORDER BY SORT_SEQ ASC, CATEGORY_CD ASC
+	</select>
+
+	<select id="getAdminNewsList" resultType="com.xodud1202.springbackend.domain.admin.news.AdminNewsListRowVO">
+		/* NewsMapper.getAdminNewsList : 관리자 뉴스 목록 조회 */
+		SELECT A.ARTICLE_NO AS articleNo
+		     , A.PRESS_NO AS pressNo
+		     , P.PRESS_NM AS pressNm
+		     , A.CATEGORY_CD AS categoryCd
+		     , C.CATEGORY_NM AS categoryNm
+		     , A.ARTICLE_TITLE AS articleTitle
+		     , A.ARTICLE_URL AS articleUrl
+		     , A.THUMBNAIL_URL AS thumbnailUrl
+		     , A.RANK_SCORE AS rankScore
+		     , A.COLLECTED_DT AS collectedDt
+		  FROM news.NEWS_ARTICLE A
+		  JOIN news.NEWS_PRESS P
+		    ON A.PRESS_NO = P.PRESS_NO
+		  JOIN news.NEWS_CATEGORY C
+		    ON A.PRESS_NO = C.PRESS_NO
+		   AND A.CATEGORY_CD = C.CATEGORY_CD
+		 WHERE A.USE_YN = 'Y'
+		   AND P.USE_YN = 'Y'
+		   AND C.USE_YN = 'Y'
+		   <if test="pressNo != null">
+		   AND A.PRESS_NO = #{pressNo}
+		   </if>
+		   <if test="categoryCd != null and categoryCd != ''">
+		   AND A.CATEGORY_CD = #{categoryCd}
+		   </if>
+		   <if test="collectedFrom != null">
+		   AND A.COLLECTED_DT &gt;= #{collectedFrom}
+		   </if>
+		   <if test="collectedTo != null">
+		   AND A.COLLECTED_DT &lt;= #{collectedTo}
+		   </if>
+		 ORDER BY A.RANK_SCORE ASC
+		        , P.SORT_SEQ ASC
+		        , C.SORT_SEQ ASC
+		        , A.ARTICLE_NO DESC
+		 LIMIT #{pageSize} OFFSET #{offset}
+	</select>
+
+	<select id="getAdminNewsListCount" resultType="int">
+		/* NewsMapper.getAdminNewsListCount : 관리자 뉴스 목록 건수 조회 */
+		SELECT COUNT(1)
+		  FROM news.NEWS_ARTICLE A
+		  JOIN news.NEWS_PRESS P
+		    ON A.PRESS_NO = P.PRESS_NO
+		  JOIN news.NEWS_CATEGORY C
+		    ON A.PRESS_NO = C.PRESS_NO
+		   AND A.CATEGORY_CD = C.CATEGORY_CD
+		 WHERE A.USE_YN = 'Y'
+		   AND P.USE_YN = 'Y'
+		   AND C.USE_YN = 'Y'
+		   <if test="pressNo != null">
+		   AND A.PRESS_NO = #{pressNo}
+		   </if>
+		   <if test="categoryCd != null and categoryCd != ''">
+		   AND A.CATEGORY_CD = #{categoryCd}
+		   </if>
+		   <if test="collectedFrom != null">
+		   AND A.COLLECTED_DT &gt;= #{collectedFrom}
+		   </if>
+		   <if test="collectedTo != null">
+		   AND A.COLLECTED_DT &lt;= #{collectedTo}
+		   </if>
+	</select>
+
+	<select id="getAdminNewsPressManageList" resultType="com.xodud1202.springbackend.domain.admin.news.AdminNewsPressRowVO">
+		/* NewsMapper.getAdminNewsPressManageList : 관리자 뉴스 RSS 언론사 목록 조회 */
+		SELECT PRESS_NO
+		     , PRESS_NM
+		     , USE_YN
+		     , SORT_SEQ
+		  FROM news.NEWS_PRESS
+		 ORDER BY SORT_SEQ ASC, PRESS_NO ASC
+	</select>
+
+	<select id="getAdminNewsCategoryManageListByPressNo" resultType="com.xodud1202.springbackend.domain.admin.news.AdminNewsCategoryRowVO">
+		/* NewsMapper.getAdminNewsCategoryManageListByPressNo : 관리자 뉴스 RSS 카테고리 목록 조회 */
+		SELECT PRESS_NO
+		     , CATEGORY_CD
+		     , CATEGORY_NM
+		     , USE_YN
+		     , SORT_SEQ
+		     , SOURCE_NM
+		     , RSS_URL
+		  FROM news.NEWS_CATEGORY
+		 WHERE PRESS_NO = #{pressNo}
+		 ORDER BY SORT_SEQ ASC, CATEGORY_CD ASC
+	</select>
+
+	<insert id="insertAdminNewsPress" useGeneratedKeys="true" keyProperty="pressNo" keyColumn="PRESS_NO">
+		/* NewsMapper.insertAdminNewsPress : 관리자 뉴스 RSS 언론사 등록 */
+		INSERT INTO news.NEWS_PRESS (
+		       PRESS_CD
+		     , PRESS_NM
+		     , USE_YN
+		     , SORT_SEQ
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{pressCd}
+		     , #{pressNm}
+		     , #{useYn}
+		     , #{sortSeq}
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+
+	<update id="updateAdminNewsPress">
+		/* NewsMapper.updateAdminNewsPress : 관리자 뉴스 RSS 언론사 수정 */
+		UPDATE news.NEWS_PRESS
+		   SET PRESS_NM = #{pressNm}
+		     , USE_YN = #{useYn}
+		     , UDT_NO = #{udtNo}
+		 WHERE PRESS_NO = #{pressNo}
+	</update>
+
+	<update id="updateAdminNewsPressSortSeq">
+		/* NewsMapper.updateAdminNewsPressSortSeq : 관리자 뉴스 RSS 언론사 정렬 순서 수정 */
+		UPDATE news.NEWS_PRESS
+		   SET SORT_SEQ = #{sortSeq}
+		     , UDT_NO = #{udtNo}
+		 WHERE PRESS_NO = #{pressNo}
+	</update>
+
+	<delete id="deleteAdminNewsArticleByPressNo">
+		/* NewsMapper.deleteAdminNewsArticleByPressNo : 관리자 뉴스 RSS 언론사 기사 삭제 */
+		DELETE
+		  FROM news.NEWS_ARTICLE
+		 WHERE PRESS_NO = #{pressNo}
+	</delete>
+
+	<delete id="deleteAdminNewsCategoryByPressNo">
+		/* NewsMapper.deleteAdminNewsCategoryByPressNo : 관리자 뉴스 RSS 언론사 카테고리 삭제 */
+		DELETE
+		  FROM news.NEWS_CATEGORY
+		 WHERE PRESS_NO = #{pressNo}
+	</delete>
+
+	<delete id="deleteAdminNewsPressByPressNo">
+		/* NewsMapper.deleteAdminNewsPressByPressNo : 관리자 뉴스 RSS 언론사 삭제 */
+		DELETE
+		  FROM news.NEWS_PRESS
+		 WHERE PRESS_NO = #{pressNo}
+	</delete>
+
+	<insert id="insertAdminNewsCategory">
+		/* NewsMapper.insertAdminNewsCategory : 관리자 뉴스 RSS 카테고리 등록 */
+		INSERT INTO news.NEWS_CATEGORY (
+		       PRESS_NO
+		     , CATEGORY_CD
+		     , CATEGORY_NM
+		     , USE_YN
+		     , SORT_SEQ
+		     , SOURCE_NM
+		     , RSS_URL
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{pressNo}
+		     , #{categoryCd}
+		     , #{categoryNm}
+		     , #{useYn}
+		     , #{sortSeq}
+		     , #{sourceNm}
+		     , #{rssUrl}
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+
+	<update id="updateAdminNewsCategory">
+		/* NewsMapper.updateAdminNewsCategory : 관리자 뉴스 RSS 카테고리 수정 */
+		UPDATE news.NEWS_CATEGORY
+		   SET CATEGORY_NM = #{categoryNm}
+		     , USE_YN = #{useYn}
+		     , SOURCE_NM = #{sourceNm}
+		     , RSS_URL = #{rssUrl}
+		     , UDT_NO = #{udtNo}
+		 WHERE PRESS_NO = #{pressNo}
+		   AND CATEGORY_CD = #{categoryCd}
+	</update>
+
+	<update id="updateAdminNewsCategorySortSeq">
+		/* NewsMapper.updateAdminNewsCategorySortSeq : 관리자 뉴스 RSS 카테고리 정렬 순서 수정 */
+		UPDATE news.NEWS_CATEGORY
+		   SET SORT_SEQ = #{sortSeq}
+		     , UDT_NO = #{udtNo}
+		 WHERE PRESS_NO = #{pressNo}
+		   AND CATEGORY_CD = #{categoryCd}
+	</update>
+
+	<delete id="deleteAdminNewsArticleByPressNoAndCategoryCd">
+		/* NewsMapper.deleteAdminNewsArticleByPressNoAndCategoryCd : 관리자 뉴스 RSS 카테고리 기사 삭제 */
+		DELETE
+		  FROM news.NEWS_ARTICLE
+		 WHERE PRESS_NO = #{pressNo}
+		   AND CATEGORY_CD = #{categoryCd}
+	</delete>
+
+	<delete id="deleteAdminNewsCategoryByPressNoAndCategoryCd">
+		/* NewsMapper.deleteAdminNewsCategoryByPressNoAndCategoryCd : 관리자 뉴스 RSS 카테고리 삭제 */
+		DELETE
+		  FROM news.NEWS_CATEGORY
+		 WHERE PRESS_NO = #{pressNo}
+		   AND CATEGORY_CD = #{categoryCd}
+	</delete>
+
+	<select id="getActivePressList" resultType="com.xodud1202.springbackend.domain.news.NewsPressSummaryVO">
+		/* NewsMapper.getActivePressList : 활성 뉴스 언론사 목록 조회 */
+		SELECT CAST(PRESS_NO AS CHAR) AS id
+		     , PRESS_NM AS name
+		  FROM news.NEWS_PRESS
+		 WHERE USE_YN = 'Y'
+		 ORDER BY SORT_SEQ ASC, PRESS_NO ASC
+	</select>
+
+	<select id="getActiveCategoryListByPressNo" resultType="com.xodud1202.springbackend.domain.news.NewsCategorySummaryVO">
+		/* NewsMapper.getActiveCategoryListByPressNo : 언론사별 활성 뉴스 카테고리 목록 조회 */
+		SELECT CATEGORY_CD AS id
+		     , CATEGORY_NM AS name
+		  FROM news.NEWS_CATEGORY
+		 WHERE PRESS_NO = #{pressNo}
+		   AND USE_YN = 'Y'
+		 ORDER BY SORT_SEQ ASC, CATEGORY_CD ASC
+	</select>
+
+	<select id="getTopArticleListByPressNoAndCategoryCd" resultType="com.xodud1202.springbackend.domain.news.NewsTopArticleVO">
+		/* NewsMapper.getTopArticleListByPressNoAndCategoryCd : 언론사 카테고리별 상위 기사 목록 조회 */
+		SELECT CAST(ARTICLE_NO AS CHAR) AS id
+		     , ARTICLE_TITLE AS title
+		     , ARTICLE_URL AS url
+		  FROM news.NEWS_ARTICLE
+		 WHERE PRESS_NO = #{pressNo}
+		   AND CATEGORY_CD = #{categoryCd}
+		   AND USE_YN = 'Y'
+		 ORDER BY
+		       CASE WHEN RANK_SCORE &gt;= 999 THEN 1 ELSE 0 END ASC
+		     , RANK_SCORE ASC
+		     , PUBLISHED_DT DESC
+		     , COLLECTED_DT DESC
+		     , ARTICLE_NO DESC
+		 LIMIT #{limit}
+	</select>
+
+	<select id="getActiveNewsRssTargetList" resultType="com.xodud1202.springbackend.domain.news.NewsRssTargetVO">
+		/* NewsMapper.getActiveNewsRssTargetList : 활성 RSS 수집 대상 목록 조회 */
+		SELECT A.PRESS_NO
+		     , A.PRESS_NM
+		     , B.CATEGORY_CD
+		     , B.CATEGORY_NM
+		     , B.SOURCE_NM
+		     , B.RSS_URL
+		  FROM news.NEWS_PRESS A
+		  JOIN news.NEWS_CATEGORY B
+		    ON A.PRESS_NO = B.PRESS_NO
+		 WHERE A.USE_YN = 'Y'
+		   AND B.USE_YN = 'Y'
+		   AND TRIM(B.RSS_URL) != ''
+		 ORDER BY A.SORT_SEQ ASC, B.SORT_SEQ ASC, B.CATEGORY_CD ASC
+	</select>
+
+	<update id="resetRankScoreByTarget">
+		/* NewsMapper.resetRankScoreByTarget : RSS 수집 대상 기사 점수 초기화 */
+		UPDATE news.NEWS_ARTICLE
+		   SET RANK_SCORE = 999
+		     , UDT_DT = NOW()
+		 WHERE PRESS_NO = #{pressNo}
+		   AND CATEGORY_CD = #{categoryCd}
+		   AND RANK_SCORE &lt; 999
+	</update>
+
+	<insert id="insertNewsArticle">
+		/* NewsMapper.insertNewsArticle : RSS 수집 기사 저장 */
+		INSERT INTO news.NEWS_ARTICLE (
+		       PRESS_NO
+		     , CATEGORY_CD
+		     , ARTICLE_GUID
+		     , ARTICLE_GUID_HASH
+		     , ARTICLE_URL
+		     , ARTICLE_URL_HASH
+		     , ARTICLE_TITLE
+		     , ARTICLE_SUMMARY
+		     , THUMBNAIL_URL
+		     , AUTHOR_NM
+		     , PUBLISHED_DT
+		     , COLLECTED_DT
+		     , RANK_SCORE
+		     , USE_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{pressNo}
+		     , #{categoryCd}
+		     , #{articleGuid}
+		     , NULLIF(#{articleGuidHash}, '')
+		     , #{articleUrl}
+		     , #{articleUrlHash}
+		     , #{articleTitle}
+		     , #{articleSummary}
+		     , #{thumbnailUrl}
+		     , #{authorNm}
+		     , #{publishedDt}
+		     , NOW()
+		     , #{rankScore}
+		     , #{useYn}
+		     , NULL
+		     , NULL
+		)
+		ON DUPLICATE KEY UPDATE
+		       ARTICLE_GUID_HASH = VALUES(ARTICLE_GUID_HASH)
+		     , ARTICLE_URL = VALUES(ARTICLE_URL)
+		     , ARTICLE_URL_HASH = VALUES(ARTICLE_URL_HASH)
+		     , ARTICLE_TITLE = VALUES(ARTICLE_TITLE)
+		     , ARTICLE_SUMMARY = VALUES(ARTICLE_SUMMARY)
+		     , THUMBNAIL_URL = VALUES(THUMBNAIL_URL)
+		     , AUTHOR_NM = VALUES(AUTHOR_NM)
+		     , PUBLISHED_DT = COALESCE(VALUES(PUBLISHED_DT), PUBLISHED_DT)
+		     , RANK_SCORE = VALUES(RANK_SCORE)
+		     , USE_YN = VALUES(USE_YN)
+		     , UDT_DT = NOW()
+	</insert>
+</mapper>
