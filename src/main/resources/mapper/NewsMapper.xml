@@ -255,6 +255,7 @@
 		SELECT CAST(ARTICLE_NO AS CHAR) AS id
 		     , ARTICLE_TITLE AS title
 		     , ARTICLE_URL AS url
+		     , DATE_FORMAT(PUBLISHED_DT, '%Y-%m-%d %H:%i:%s') AS publishedDt
 		  FROM news.NEWS_ARTICLE
 		 WHERE PRESS_NO = #{pressNo}
 		   AND CATEGORY_CD = #{categoryCd}
