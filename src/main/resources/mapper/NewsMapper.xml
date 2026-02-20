@@ -285,6 +285,13 @@
 		 ORDER BY A.SORT_SEQ ASC, B.SORT_SEQ ASC, B.CATEGORY_CD ASC
 	</select>
 
+	<delete id="deleteNewsArticleOlderThan7Days">
+		/* NewsMapper.deleteNewsArticleOlderThan7Days : 수집일시 기준 7일 초과 뉴스 기사 삭제 */
+		DELETE
+		  FROM news.NEWS_ARTICLE
+		 WHERE COLLECTED_DT &lt; DATE_SUB(NOW(), INTERVAL 7 DAY)
+	</delete>
+
 	<update id="resetRankScoreByTarget">
 		/* NewsMapper.resetRankScoreByTarget : RSS 수집 대상 기사 점수 초기화 */
 		UPDATE news.NEWS_ARTICLE

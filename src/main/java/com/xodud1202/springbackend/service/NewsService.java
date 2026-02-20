@@ -381,7 +381,12 @@ public class NewsService {
 	}
 
 	// RSS 수집을 수행하고 결과를 반환합니다.
+	@Transactional
 	public NewsCollectResultVO collectNewsArticles() {
+		// 수집 시작 전에 보존 기간(7일)을 초과한 기사를 정리합니다.
+		int deletedOldArticleCount = newsMapper.deleteNewsArticleOlderThan7Days();
+		log.info("뉴스 RSS 수집 전 7일 초과 기사 삭제 완료 deletedOldArticleCount={}", deletedOldArticleCount);
+
 		List<NewsRssTargetVO> targetList = newsMapper.getActiveNewsRssTargetList();
 		int successTargetCount = 0;
 		int failedTargetCount = 0;

@@ -93,6 +93,9 @@ public interface NewsMapper {
 	// RSS 수집 대상 목록을 조회합니다.
 	List<NewsRssTargetVO> getActiveNewsRssTargetList();
 
+	// 수집일시 기준 7일을 초과한 기사 데이터를 삭제합니다.
+	int deleteNewsArticleOlderThan7Days();
+
 	// RSS 수집 대상 기사 점수를 초기화합니다.
 	int resetRankScoreByTarget(NewsArticleCreatePO param);
 
