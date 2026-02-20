@@ -10,6 +10,9 @@ import java.util.List;
 @Entity
 @NoArgsConstructor
 @Table(name = "RESUME_BASE")
+/**
+ * RESUME_BASE 테이블 매핑 엔티티입니다.
+ */
 public class ResumeBaseEntity {
 	@Id
 	@Column(name = "USR_NO")
@@ -45,6 +48,10 @@ public class ResumeBaseEntity {
 	@Column(name = "DEL_YN")
 	private String delYn;
 	
+	/**
+	 * SKILLS 문자열 컬럼을 API 응답용 리스트로 변환해 담는 비영속 필드입니다.
+	 */
+	@Transient
 	private List<String> skillList;
 	
 	@OneToOne
