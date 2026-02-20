@@ -107,7 +107,7 @@ public class HttpRssFeedClient implements RssFeedClient {
 		String title = getChildTextByNames(itemElement, "title");
 		String summary = getChildTextByNames(itemElement, "description", "content");
 		String authorNm = getChildTextByNames(itemElement, "author", "creator");
-		String publishedRaw = getChildTextByNames(itemElement, "pubDate", "published", "updated");
+		String publishedRaw = getChildTextByNames(itemElement, "pubDate", "published", "updated", "date");
 		LocalDateTime publishedDt = parsePublishedDateTime(publishedRaw);
 
 		// 썸네일은 media:thumbnail, enclosure(type=image), media:content 순서로 추출합니다.
