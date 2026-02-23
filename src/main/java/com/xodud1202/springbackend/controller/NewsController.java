@@ -2,6 +2,7 @@ package com.xodud1202.springbackend.controller;
 
 import com.xodud1202.springbackend.domain.news.NewsCategorySummaryVO;
 import com.xodud1202.springbackend.domain.news.NewsPressSummaryVO;
+import com.xodud1202.springbackend.domain.news.NewsSnapshotVO;
 import com.xodud1202.springbackend.domain.news.NewsTopArticleVO;
 import com.xodud1202.springbackend.service.NewsService;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,16 @@ public class NewsController {
 	@GetMapping("/api/news/categories")
 	public ResponseEntity<List<NewsCategorySummaryVO>> getCategoryList(@RequestParam("pressId") String pressId) {
 		return ResponseEntity.ok(newsService.getActiveCategoryList(pressId));
+	}
+
+	// 확장프로그램 초기 진입/언론사 변경용 뉴스 스냅샷을 조회합니다.
+	@GetMapping("/api/news/snapshot")
+	public ResponseEntity<NewsSnapshotVO> getNewsSnapshot(
+		@RequestParam(value = "pressId", required = false) String pressId,
+		@RequestParam(value = "categoryId", required = false) String categoryId,
+		@RequestParam(value = "limit", required = false) Integer limit
+	) {
+		return ResponseEntity.ok(newsService.getNewsSnapshot(pressId, categoryId, limit));
 	}
 
 	// 선택한 언론사/카테고리의 상위 기사 목록을 조회합니다.

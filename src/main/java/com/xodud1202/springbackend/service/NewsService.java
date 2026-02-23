@@ -17,6 +17,7 @@ import com.xodud1202.springbackend.domain.news.NewsCategorySummaryVO;
 import com.xodud1202.springbackend.domain.news.NewsCollectResultVO;
 import com.xodud1202.springbackend.domain.news.NewsPressSummaryVO;
 import com.xodud1202.springbackend.domain.news.NewsRssTargetVO;
+import com.xodud1202.springbackend.domain.news.NewsSnapshotVO;
 import com.xodud1202.springbackend.domain.news.NewsTopArticleVO;
 import com.xodud1202.springbackend.domain.news.RssArticleItem;
 import com.xodud1202.springbackend.mapper.NewsMapper;
@@ -378,6 +379,72 @@ public class NewsService {
 		}
 		int resolvedLimit = resolveTopArticleLimit(limit);
 		return newsMapper.getTopArticleListByPressNoAndCategoryCd(pressNo, categoryCd, resolvedLimit);
+	}
+
+	// 공개 뉴스 화면용 단일 호출 스냅샷 데이터를 조회합니다.
+	public NewsSnapshotVO getNewsSnapshot(String pressId, String categoryId, Integer limit) {
+		// 기본 응답 객체와 기사 조회 건수를 먼저 초기화한다.
+		NewsSnapshotVO response = new NewsSnapshotVO();
+		int resolvedLimit = resolveTopArticleLimit(limit);
+		List<NewsPressSummaryVO> pressList = newsMapper.getActivePressList();
+		response.setPressList(pressList);
+		response.setCategoryList(List.of());
+		response.setArticleList(List.of());
+		response.setSelectedPressId("");
+		response.setSelectedCategoryId("");
+		response.setFallbackAppliedYn("N");
+
+		// 활성 언론사가 없으면 빈 응답을 그대로 반환한다.
+		if (pressList.isEmpty()) {
+			return response;
+		}
+
+		// 요청 언론사/카테고리 입력값을 정규화한다.
+		String requestedPressId = trimToNull(pressId);
+		String requestedCategoryId = trimToNull(categoryId);
+		boolean fallbackApplied = false;
+
+		// 요청 언론사가 활성 목록에 존재하면 사용하고, 아니면 1순위 언론사를 선택한다.
+		String resolvedPressId = requestedPressId;
+		boolean isRequestedPressValid = requestedPressId != null && pressList.stream().anyMatch((pressItem) -> requestedPressId.equals(pressItem.getId()));
+		if (!isRequestedPressValid) {
+			resolvedPressId = pressList.get(0).getId();
+			fallbackApplied = requestedPressId != null;
+		}
+		response.setSelectedPressId(resolvedPressId);
+
+		// 선택된 언론사의 활성 카테고리 목록을 조회한다.
+		Long resolvedPressNo = parsePressNo(resolvedPressId);
+		List<NewsCategorySummaryVO> categoryList = resolvedPressNo == null
+			? List.of()
+			: newsMapper.getActiveCategoryListByPressNo(resolvedPressNo);
+		response.setCategoryList(categoryList);
+
+		// 활성 카테고리가 없으면 기사 없이 반환한다.
+		if (categoryList.isEmpty()) {
+			response.setFallbackAppliedYn(fallbackApplied ? "Y" : "N");
+			return response;
+		}
+
+		// 요청 카테고리가 활성 목록에 존재하면 사용하고, 아니면 1순위 카테고리를 선택한다.
+		String resolvedCategoryId = requestedCategoryId;
+		boolean isRequestedCategoryValid = requestedCategoryId != null
+			&& categoryList.stream().anyMatch((categoryItem) -> requestedCategoryId.equals(categoryItem.getId()));
+		if (!isRequestedCategoryValid) {
+			resolvedCategoryId = categoryList.get(0).getId();
+			fallbackApplied = fallbackApplied || requestedCategoryId != null;
+		}
+		response.setSelectedCategoryId(resolvedCategoryId);
+
+		// 최종 선택된 카테고리 기준 기사 목록을 조회한다.
+		List<NewsTopArticleVO> articleList = newsMapper.getTopArticleListByPressNoAndCategoryCd(
+			resolvedPressNo,
+			resolvedCategoryId,
+			resolvedLimit
+		);
+		response.setArticleList(articleList);
+		response.setFallbackAppliedYn(fallbackApplied ? "Y" : "N");
+		return response;
 	}
 
 	// RSS 수집을 수행하고 결과를 반환합니다.
