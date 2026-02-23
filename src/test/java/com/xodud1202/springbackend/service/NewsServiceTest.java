@@ -7,6 +7,9 @@ import com.xodud1202.springbackend.domain.admin.news.AdminNewsListRowVO;
 import com.xodud1202.springbackend.domain.admin.news.AdminNewsPressRowVO;
 import com.xodud1202.springbackend.domain.news.NewsListJsonSnapshotPublishResultVO;
 import com.xodud1202.springbackend.domain.news.NewsListJsonSnapshotVO;
+import com.xodud1202.springbackend.domain.news.NewsListMetaJsonVO;
+import com.xodud1202.springbackend.domain.news.NewsListPressArticleShardJsonVO;
+import com.xodud1202.springbackend.domain.news.NewsListPressShardSnapshotPublishResultVO;
 import com.xodud1202.springbackend.domain.news.NewsCategorySummaryVO;
 import com.xodud1202.springbackend.domain.news.NewsPressSummaryVO;
 import com.xodud1202.springbackend.domain.news.NewsRssTargetVO;
@@ -20,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Collections;
@@ -32,6 +36,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.inOrder;
 
 @ExtendWith(MockitoExtension.class)
 // 뉴스 서비스 단위 테스트입니다.
@@ -212,6 +217,58 @@ public class NewsServiceTest {
 	}
 
 	@Test
+	@DisplayName("뉴스 메타 JSON은 언론사 메타와 shard 파일 경로 맵을 포함한다")
+	// 메타 파일 구조가 언론사/카테고리 메타와 기사 shard 경로를 담는지 확인합니다.
+	void buildNewsListMetaJson_containsArticleFileMap() {
+		AdminNewsPressRowVO pressRow = createAdminPressRow(1L, "JTBC", "Y", 1);
+		AdminNewsCategoryRowVO breakingCategory = createAdminCategoryRow(1L, "breaking", "속보", "Y", 1, "JTBC", "https://rss/breaking");
+
+		when(newsMapper.getAdminNewsPressManageList()).thenReturn(List.of(pressRow));
+		when(newsMapper.getAdminNewsCategoryManageListByPressNo(1L)).thenReturn(List.of(breakingCategory));
+		when(newsMapper.getActiveNewsRssTargetList()).thenReturn(List.of());
+
+		NewsListMetaJsonVO metaJson = newsService.buildNewsListMetaJson();
+
+		assertThat(metaJson.getPressList()).hasSize(1);
+		assertThat(metaJson.getCategoryListByPressId()).containsKey("1");
+		assertThat(metaJson.getArticleFileByPressId()).containsEntry("1", "articles/press-1.json");
+		assertThat(metaJson.getDefaultSelection().getDefaultPressId()).isEqualTo("1");
+	}
+
+	@Test
+	@DisplayName("뉴스 언론사 shard JSON은 같은 언론사 카테고리 기사만 포함한다")
+	// 언론사별 shard 파일이 카테고리별 기사 목록을 분리하여 구성하는지 확인합니다.
+	void buildNewsListPressArticleShardJsonMap_groupsByPressId() {
+		AdminNewsPressRowVO press1 = createAdminPressRow(1L, "JTBC", "Y", 1);
+		AdminNewsPressRowVO press2 = createAdminPressRow(2L, "MBC", "Y", 2);
+		AdminNewsCategoryRowVO p1c1 = createAdminCategoryRow(1L, "breaking", "속보", "Y", 1, "JTBC", "https://rss/1");
+		AdminNewsCategoryRowVO p2c1 = createAdminCategoryRow(2L, "society", "사회", "Y", 1, "MBC", "https://rss/2");
+		NewsRssTargetVO t1 = createRssTarget(1L, "JTBC", "breaking", "속보", "JTBC", "https://rss/1");
+		NewsRssTargetVO t2 = createRssTarget(2L, "MBC", "society", "사회", "MBC", "https://rss/2");
+
+		when(newsMapper.getAdminNewsPressManageList()).thenReturn(List.of(press1, press2));
+		when(newsMapper.getAdminNewsCategoryManageListByPressNo(1L)).thenReturn(List.of(p1c1));
+		when(newsMapper.getAdminNewsCategoryManageListByPressNo(2L)).thenReturn(List.of(p2c1));
+		when(newsMapper.getActiveNewsRssTargetList()).thenReturn(List.of(t1, t2));
+		when(rssFeedClient.fetchFeed("https://rss/1")).thenReturn(List.of(
+			new RssArticleItem("g1", "https://a/1", "기사1", null, null, null, LocalDateTime.of(2026, 2, 23, 10, 0))
+		));
+		when(rssFeedClient.fetchFeed("https://rss/2")).thenReturn(List.of(
+			new RssArticleItem("g2", "https://a/2", "기사2", null, null, null, LocalDateTime.of(2026, 2, 23, 9, 0))
+		));
+
+		Map<String, NewsListPressArticleShardJsonVO> shardMap = newsService.buildNewsListPressArticleShardJsonMap();
+
+		assertThat(shardMap).containsKeys("1", "2");
+		assertThat(shardMap.get("1").getArticleListByCategoryId()).containsKey("breaking");
+		assertThat(shardMap.get("1").getArticleListByCategoryId().get("breaking")).hasSize(1);
+		assertThat(shardMap.get("2").getArticleListByCategoryId()).containsKey("society");
+		assertThat(shardMap.get("2").getArticleListByCategoryId().get("society")).hasSize(1);
+		assertThat(shardMap.get("1").getCategoryOrder()).containsExactly("breaking");
+		assertThat(shardMap.get("2").getCategoryOrder()).containsExactly("society");
+	}
+
+	@Test
 	@DisplayName("뉴스 JSON 스냅샷 파일 생성 업로드는 원자적 FTP 업로드를 호출하고 결과를 반환한다")
 	// 스냅샷 파일 업로드 메서드가 경로/파일명/JSON 내용을 생성해 FTP 서비스에 전달하는지 확인합니다.
 	void publishNewsListJsonSnapshot_uploadsJsonFileAtomically() throws Exception {
@@ -240,6 +297,42 @@ public class NewsServiceTest {
 		assertThat(result.getJsonByteSize()).isPositive();
 		assertThat(jsonCaptor.getValue()).contains("\"meta\"");
 		assertThat(jsonCaptor.getValue()).contains("\"schemaVersion\"");
+	}
+
+	@Test
+	@DisplayName("뉴스 메타+언론사 shard 업로드는 기사 shard를 먼저 올리고 메타를 마지막에 교체한다")
+	// 기사 shard 업로드 성공 후에만 메타 업로드가 수행되고 호출 순서가 보장되는지 확인합니다.
+	void publishNewsListPressShardJsonSnapshot_uploadsShardsBeforeMeta() throws Exception {
+		AdminNewsPressRowVO press1 = createAdminPressRow(1L, "JTBC", "Y", 1);
+		AdminNewsCategoryRowVO p1c1 = createAdminCategoryRow(1L, "breaking", "속보", "Y", 1, "JTBC", "https://rss/1");
+		NewsRssTargetVO t1 = createRssTarget(1L, "JTBC", "breaking", "속보", "JTBC", "https://rss/1");
+
+		when(newsMapper.getAdminNewsPressManageList()).thenReturn(List.of(press1));
+		when(newsMapper.getAdminNewsCategoryManageListByPressNo(1L)).thenReturn(List.of(p1c1));
+		when(newsMapper.getActiveNewsRssTargetList()).thenReturn(List.of(t1));
+		when(rssFeedClient.fetchFeed("https://rss/1")).thenReturn(List.of(
+			new RssArticleItem("g1", "https://a/1", "기사1", null, null, null, LocalDateTime.of(2026, 2, 23, 10, 0))
+		));
+		when(ftpFileService.resolveNewsSnapshotTargetPath("/HDD1/Media/nas/news")).thenReturn("/HDD1/Media/nas/news");
+		when(ftpFileService.uploadUtf8TextFileAtomically(eq("/HDD1/Media/nas/news/articles"), eq("press-1.json"), any(String.class)))
+			.thenReturn("press-1.json.tmp.1");
+		when(ftpFileService.uploadUtf8TextFileAtomically(eq("/HDD1/Media/nas/news"), eq("meta.json"), any(String.class)))
+			.thenReturn("meta.json.tmp.1");
+
+		NewsListPressShardSnapshotPublishResultVO result = newsService.publishNewsListPressShardJsonSnapshot();
+
+		InOrder inOrder = inOrder(ftpFileService);
+		inOrder.verify(ftpFileService).resolveNewsSnapshotTargetPath("/HDD1/Media/nas/news");
+		inOrder.verify(ftpFileService).uploadUtf8TextFileAtomically(eq("/HDD1/Media/nas/news/articles"), eq("press-1.json"), any(String.class));
+		inOrder.verify(ftpFileService).uploadUtf8TextFileAtomically(eq("/HDD1/Media/nas/news"), eq("meta.json"), any(String.class));
+
+		assertThat(result.getBaseTargetPath()).isEqualTo("/HDD1/Media/nas/news");
+		assertThat(result.getMetaFileName()).isEqualTo("meta.json");
+		assertThat(result.getPressShardCount()).isEqualTo(1);
+		assertThat(result.getShardSuccessCount()).isEqualTo(1);
+		assertThat(result.getShardFailedCount()).isEqualTo(0);
+		assertThat(result.getMetaJsonByteSize()).isPositive();
+		assertThat(result.getTotalShardJsonByteSize()).isPositive();
 	}
 
 	// 테스트용 언론사 응답 객체를 생성합니다.

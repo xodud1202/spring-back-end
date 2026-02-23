@@ -9,8 +9,10 @@ import com.xodud1202.springbackend.domain.admin.news.AdminNewsPressDeletePO;
 import com.xodud1202.springbackend.domain.admin.news.AdminNewsPressOptionVO;
 import com.xodud1202.springbackend.domain.admin.news.AdminNewsPressRowVO;
 import com.xodud1202.springbackend.domain.admin.news.AdminNewsPressSavePO;
+import com.xodud1202.springbackend.domain.news.NewsListPressShardSnapshotPublishResultVO;
 import com.xodud1202.springbackend.service.NewsService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Validated
 @RestController
 @RequiredArgsConstructor
@@ -111,5 +114,27 @@ public class AdminNewsController {
 			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
 		}
 		return ResponseEntity.ok(newsService.deleteAdminNewsCategory(param));
+	}
+	
+	@GetMapping("/api/news/refresh/file")
+	public ResponseEntity<Object> refreshNewsListJsonSnapshot() {
+		try {
+			NewsListPressShardSnapshotPublishResultVO publishResult = newsService.publishNewsListPressShardJsonSnapshot();
+			log.info(
+					"뉴스 메타+언론사 shard JSON 업로드 완료 baseTargetPath={}, metaFileName={}, pressShardCount={}, shardSuccessCount={}, shardFailedCount={}, metaJsonByteSize={}, totalShardJsonByteSize={}",
+					publishResult.getBaseTargetPath(),
+					publishResult.getMetaFileName(),
+					publishResult.getPressShardCount(),
+					publishResult.getShardSuccessCount(),
+					publishResult.getShardFailedCount(),
+					publishResult.getMetaJsonByteSize(),
+					publishResult.getTotalShardJsonByteSize()
+			);
+
+			return ResponseEntity.ok(publishResult);
+		} catch (Exception exception) {
+			log.error("뉴스 메타+언론사 shard JSON 업로드 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("error", exception.getMessage()));
+		}
 	}
 }

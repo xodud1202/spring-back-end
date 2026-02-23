@@ -1,7 +1,7 @@
 package com.xodud1202.springbackend.scheduler;
 
 import com.xodud1202.springbackend.domain.news.NewsCollectResultVO;
-import com.xodud1202.springbackend.domain.news.NewsListJsonSnapshotPublishResultVO;
+import com.xodud1202.springbackend.domain.news.NewsListPressShardSnapshotPublishResultVO;
 import com.xodud1202.springbackend.service.NewsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,19 +32,19 @@ public class NewsArticleScheduler {
 
 		// 수집 완료 후 프론트 직접 조회용 JSON 스냅샷 파일을 생성/업로드합니다.
 		try {
-			NewsListJsonSnapshotPublishResultVO publishResult = newsService.publishNewsListJsonSnapshot();
+			NewsListPressShardSnapshotPublishResultVO publishResult = newsService.publishNewsListPressShardJsonSnapshot();
 			log.info(
-				"뉴스 JSON 스냅샷 업로드 완료 targetPath={}, fileName={}, tempFileName={}, targetCount={}, successTargetCount={}, failedTargetCount={}, jsonByteSize={}",
-				publishResult.getTargetPath(),
-				publishResult.getFileName(),
-				publishResult.getTempFileName(),
-				publishResult.getTargetCount(),
-				publishResult.getSuccessTargetCount(),
-				publishResult.getFailedTargetCount(),
-				publishResult.getJsonByteSize()
+				"뉴스 메타+언론사 shard JSON 업로드 완료 baseTargetPath={}, metaFileName={}, pressShardCount={}, shardSuccessCount={}, shardFailedCount={}, metaJsonByteSize={}, totalShardJsonByteSize={}",
+				publishResult.getBaseTargetPath(),
+				publishResult.getMetaFileName(),
+				publishResult.getPressShardCount(),
+				publishResult.getShardSuccessCount(),
+				publishResult.getShardFailedCount(),
+				publishResult.getMetaJsonByteSize(),
+				publishResult.getTotalShardJsonByteSize()
 			);
 		} catch (Exception exception) {
-			log.error("뉴스 JSON 스냅샷 업로드 실패 message={}", exception.getMessage(), exception);
+			log.error("뉴스 메타+언론사 shard JSON 업로드 실패 message={}", exception.getMessage(), exception);
 		}
 	}
 }

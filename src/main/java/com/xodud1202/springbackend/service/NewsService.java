@@ -19,6 +19,9 @@ import com.xodud1202.springbackend.domain.news.NewsCategorySummaryVO;
 import com.xodud1202.springbackend.domain.news.NewsCollectResultVO;
 import com.xodud1202.springbackend.domain.news.NewsListJsonSnapshotPublishResultVO;
 import com.xodud1202.springbackend.domain.news.NewsListJsonSnapshotVO;
+import com.xodud1202.springbackend.domain.news.NewsListMetaJsonVO;
+import com.xodud1202.springbackend.domain.news.NewsListPressArticleShardJsonVO;
+import com.xodud1202.springbackend.domain.news.NewsListPressShardSnapshotPublishResultVO;
 import com.xodud1202.springbackend.domain.news.NewsPressSummaryVO;
 import com.xodud1202.springbackend.domain.news.NewsRssTargetVO;
 import com.xodud1202.springbackend.domain.news.NewsSnapshotVO;
@@ -57,6 +60,8 @@ public class NewsService {
 	private static final String NEWS_LIST_JSON_SOURCE = "scheduler-rss";
 	private static final String NEWS_LIST_JSON_FILE_NAME = "newsList.json";
 	private static final String DEFAULT_NEWS_SNAPSHOT_TARGET_PATH = "/HDD1/Media/nas/news";
+	private static final String NEWS_LIST_META_FILE_NAME = "meta.json";
+	private static final String NEWS_LIST_ARTICLE_SHARD_DIR_NAME = "articles";
 
 	private final NewsMapper newsMapper;
 	private final RssFeedClient rssFeedClient;
@@ -675,6 +680,172 @@ public class NewsService {
 		} catch (Exception exception) {
 			throw new IllegalStateException("뉴스 JSON 스냅샷 FTP 업로드에 실패했습니다.", exception);
 		}
+	}
+
+	// 뉴스 목록 메타 JSON 파일 객체를 생성합니다.
+	public NewsListMetaJsonVO buildNewsListMetaJson() {
+		NewsListJsonSnapshotVO snapshot = buildNewsListJsonSnapshot();
+		return buildNewsListMetaJson(snapshot);
+	}
+
+	// 뉴스 목록 메타 JSON 파일 문자열을 생성합니다.
+	public String buildNewsListMetaJsonString() {
+		try {
+			return objectMapper.writeValueAsString(buildNewsListMetaJson());
+		} catch (JsonProcessingException exception) {
+			throw new IllegalStateException("뉴스 메타 JSON 직렬화에 실패했습니다.", exception);
+		}
+	}
+
+	// 뉴스 목록 언론사별 기사 shard JSON 파일 객체 맵을 생성합니다.
+	public Map<String, NewsListPressArticleShardJsonVO> buildNewsListPressArticleShardJsonMap() {
+		NewsListJsonSnapshotVO snapshot = buildNewsListJsonSnapshot();
+		return buildNewsListPressArticleShardJsonMap(snapshot);
+	}
+
+	// 뉴스 목록 메타+언론사 shard JSON 파일을 FTP에 원자적으로 업로드합니다.
+	public NewsListPressShardSnapshotPublishResultVO publishNewsListPressShardJsonSnapshot() {
+		NewsListJsonSnapshotVO snapshot = buildNewsListJsonSnapshot();
+		NewsListMetaJsonVO metaJson = buildNewsListMetaJson(snapshot);
+		Map<String, NewsListPressArticleShardJsonVO> shardJsonByPressId = buildNewsListPressArticleShardJsonMap(snapshot);
+
+		String baseTargetPath = resolveNewsSnapshotTargetPath();
+		String shardTargetPath = appendPath(baseTargetPath, NEWS_LIST_ARTICLE_SHARD_DIR_NAME);
+		int shardSuccessCount = 0;
+		int totalShardJsonByteSize = 0;
+
+		// 기사 shard 파일을 먼저 모두 업로드/교체하고, 하나라도 실패하면 메타 교체를 중단합니다.
+		try {
+			for (NewsListJsonSnapshotVO.PressItem pressItem : snapshot.getPressList()) {
+				if (pressItem == null || trimToNull(pressItem.getId()) == null) {
+					continue;
+				}
+				String pressId = trimToNull(pressItem.getId());
+				NewsListPressArticleShardJsonVO shardJson = shardJsonByPressId.get(pressId);
+				if (shardJson == null) {
+					continue;
+				}
+
+				String shardJsonText = objectMapper.writeValueAsString(shardJson);
+				ftpFileService.uploadUtf8TextFileAtomically(shardTargetPath, buildPressShardFileName(pressId), shardJsonText);
+				shardSuccessCount += 1;
+				totalShardJsonByteSize += shardJsonText.getBytes(StandardCharsets.UTF_8).length;
+			}
+		} catch (Exception exception) {
+			throw new IllegalStateException("뉴스 기사 shard JSON 업로드에 실패했습니다. 메타 파일 교체를 중단합니다.", exception);
+		}
+
+		// 메타 파일은 기사 shard가 모두 교체된 뒤 마지막에 교체합니다.
+		try {
+			String metaJsonText = objectMapper.writeValueAsString(metaJson);
+			ftpFileService.uploadUtf8TextFileAtomically(baseTargetPath, NEWS_LIST_META_FILE_NAME, metaJsonText);
+			return NewsListPressShardSnapshotPublishResultVO.builder()
+				.baseTargetPath(baseTargetPath)
+				.metaFileName(NEWS_LIST_META_FILE_NAME)
+				.pressShardCount(shardJsonByPressId.size())
+				.shardSuccessCount(shardSuccessCount)
+				.shardFailedCount(Math.max(0, shardJsonByPressId.size() - shardSuccessCount))
+				.metaJsonByteSize(metaJsonText.getBytes(StandardCharsets.UTF_8).length)
+				.totalShardJsonByteSize(totalShardJsonByteSize)
+				.build();
+		} catch (Exception exception) {
+			throw new IllegalStateException("뉴스 메타 JSON 업로드에 실패했습니다.", exception);
+		}
+	}
+
+	// 공통 스냅샷에서 메타 JSON 파일 구조를 구성합니다.
+	private NewsListMetaJsonVO buildNewsListMetaJson(NewsListJsonSnapshotVO snapshot) {
+		NewsListMetaJsonVO metaJson = new NewsListMetaJsonVO();
+		NewsListMetaJsonVO.Meta meta = new NewsListMetaJsonVO.Meta();
+		if (snapshot.getMeta() != null) {
+			meta.setGeneratedAt(snapshot.getMeta().getGeneratedAt());
+			meta.setSchemaVersion(snapshot.getMeta().getSchemaVersion());
+			meta.setSource(snapshot.getMeta().getSource());
+			meta.setTargetCount(snapshot.getMeta().getTargetCount());
+			meta.setSuccessTargetCount(snapshot.getMeta().getSuccessTargetCount());
+			meta.setFailedTargetCount(snapshot.getMeta().getFailedTargetCount());
+		}
+		metaJson.setMeta(meta);
+		metaJson.setPressList(snapshot.getPressList());
+		metaJson.setCategoryListByPressId(snapshot.getCategoryListByPressId());
+		metaJson.setDefaultSelection(snapshot.getDefaultSelection());
+
+		Map<String, String> articleFileByPressId = new LinkedHashMap<>();
+		for (NewsListJsonSnapshotVO.PressItem pressItem : snapshot.getPressList()) {
+			if (pressItem == null || trimToNull(pressItem.getId()) == null) {
+				continue;
+			}
+			String pressId = trimToNull(pressItem.getId());
+			articleFileByPressId.put(pressId, buildPressShardRelativePath(pressId));
+		}
+		metaJson.setArticleFileByPressId(articleFileByPressId);
+		return metaJson;
+	}
+
+	// 공통 스냅샷에서 언론사별 기사 shard JSON 파일 구조를 구성합니다.
+	private Map<String, NewsListPressArticleShardJsonVO> buildNewsListPressArticleShardJsonMap(NewsListJsonSnapshotVO snapshot) {
+		Map<String, NewsListPressArticleShardJsonVO> shardJsonByPressId = new LinkedHashMap<>();
+		Map<String, List<NewsListJsonSnapshotVO.CategoryItem>> categoryListByPressId = snapshot.getCategoryListByPressId();
+		Map<String, List<NewsListJsonSnapshotVO.ArticleItem>> articleListByPressCategoryKey = snapshot.getArticleListByPressCategoryKey();
+		String generatedAt = snapshot.getMeta() == null ? null : snapshot.getMeta().getGeneratedAt();
+		String schemaVersion = snapshot.getMeta() == null ? NEWS_LIST_JSON_SCHEMA_VERSION : snapshot.getMeta().getSchemaVersion();
+
+		for (NewsListJsonSnapshotVO.PressItem pressItem : snapshot.getPressList()) {
+			if (pressItem == null || trimToNull(pressItem.getId()) == null) {
+				continue;
+			}
+			String pressId = trimToNull(pressItem.getId());
+			List<NewsListJsonSnapshotVO.CategoryItem> categoryItemList = categoryListByPressId.getOrDefault(pressId, List.of());
+			Map<String, List<NewsListJsonSnapshotVO.ArticleItem>> articleListByCategoryId = new LinkedHashMap<>();
+			List<String> categoryOrder = new ArrayList<>();
+
+			for (NewsListJsonSnapshotVO.CategoryItem categoryItem : categoryItemList) {
+				String categoryId = categoryItem == null ? null : trimToNull(categoryItem.getId());
+				if (categoryId == null) {
+					continue;
+				}
+				categoryOrder.add(categoryId);
+				String categoryKey = buildPressCategoryKey(pressId, categoryId);
+				List<NewsListJsonSnapshotVO.ArticleItem> articleItemList = articleListByPressCategoryKey.getOrDefault(categoryKey, List.of());
+				articleListByCategoryId.put(categoryId, articleItemList);
+			}
+
+			NewsListPressArticleShardJsonVO.Meta shardMeta = new NewsListPressArticleShardJsonVO.Meta();
+			shardMeta.setGeneratedAt(generatedAt);
+			shardMeta.setSchemaVersion(schemaVersion);
+			shardMeta.setPressId(pressId);
+
+			NewsListPressArticleShardJsonVO shardJson = new NewsListPressArticleShardJsonVO();
+			shardJson.setMeta(shardMeta);
+			shardJson.setArticleListByCategoryId(articleListByCategoryId);
+			shardJson.setCategoryOrder(categoryOrder);
+			shardJsonByPressId.put(pressId, shardJson);
+		}
+
+		return shardJsonByPressId;
+	}
+
+	// 언론사 shard 상대 경로를 생성합니다.
+	private String buildPressShardRelativePath(String pressId) {
+		return NEWS_LIST_ARTICLE_SHARD_DIR_NAME + "/" + buildPressShardFileName(pressId);
+	}
+
+	// 언론사 shard 파일명을 생성합니다.
+	private String buildPressShardFileName(String pressId) {
+		return "press-" + pressId + ".json";
+	}
+
+	// 경로 문자열을 결합합니다.
+	private String appendPath(String basePath, String childPath) {
+		String normalizedBasePath = basePath == null ? "" : basePath.trim();
+		String normalizedChildPath = childPath == null ? "" : childPath.trim();
+		if (normalizedBasePath.endsWith("/")) {
+			normalizedBasePath = normalizedBasePath.substring(0, normalizedBasePath.length() - 1);
+		}
+		if (normalizedChildPath.startsWith("/")) {
+			normalizedChildPath = normalizedChildPath.substring(1);
+		}
+		return normalizedBasePath + "/" + normalizedChildPath;
 	}
 
 	// RSS 수집을 수행하고 결과를 반환합니다.
