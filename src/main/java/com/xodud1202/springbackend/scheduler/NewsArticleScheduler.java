@@ -1,6 +1,7 @@
 package com.xodud1202.springbackend.scheduler;
 
 import com.xodud1202.springbackend.domain.news.NewsCollectResultVO;
+import com.xodud1202.springbackend.domain.news.NewsListJsonSnapshotPublishResultVO;
 import com.xodud1202.springbackend.service.NewsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,5 +29,22 @@ public class NewsArticleScheduler {
 			collectResult.getInsertedArticleCount(),
 			collectResult.getSkippedArticleCount()
 		);
+
+		// 수집 완료 후 프론트 직접 조회용 JSON 스냅샷 파일을 생성/업로드합니다.
+		try {
+			NewsListJsonSnapshotPublishResultVO publishResult = newsService.publishNewsListJsonSnapshot();
+			log.info(
+				"뉴스 JSON 스냅샷 업로드 완료 targetPath={}, fileName={}, tempFileName={}, targetCount={}, successTargetCount={}, failedTargetCount={}, jsonByteSize={}",
+				publishResult.getTargetPath(),
+				publishResult.getFileName(),
+				publishResult.getTempFileName(),
+				publishResult.getTargetCount(),
+				publishResult.getSuccessTargetCount(),
+				publishResult.getFailedTargetCount(),
+				publishResult.getJsonByteSize()
+			);
+		} catch (Exception exception) {
+			log.error("뉴스 JSON 스냅샷 업로드 실패 message={}", exception.getMessage(), exception);
+		}
 	}
 }

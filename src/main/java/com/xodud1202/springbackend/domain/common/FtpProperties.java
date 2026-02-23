@@ -57,4 +57,7 @@ public class FtpProperties {
 	private String uploadBrandAllowExtension;
 	private String uploadBrandTargetPath;
 	private String uploadBrandViewBase;
+
+	// news snapshot 업로드 설정
+	private String newsSnapshotTargetPath;
 }

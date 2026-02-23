@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xodud1202.springbackend.domain.admin.news.AdminNewsCategoryDeletePO;
 import com.xodud1202.springbackend.domain.admin.news.AdminNewsCategoryOptionVO;
 import com.xodud1202.springbackend.domain.admin.news.AdminNewsCategoryRowVO;
@@ -15,6 +17,8 @@ import com.xodud1202.springbackend.domain.admin.news.AdminNewsPressSaveRowPO;
 import com.xodud1202.springbackend.domain.news.NewsArticleCreatePO;
 import com.xodud1202.springbackend.domain.news.NewsCategorySummaryVO;
 import com.xodud1202.springbackend.domain.news.NewsCollectResultVO;
+import com.xodud1202.springbackend.domain.news.NewsListJsonSnapshotPublishResultVO;
+import com.xodud1202.springbackend.domain.news.NewsListJsonSnapshotVO;
 import com.xodud1202.springbackend.domain.news.NewsPressSummaryVO;
 import com.xodud1202.springbackend.domain.news.NewsRssTargetVO;
 import com.xodud1202.springbackend.domain.news.NewsSnapshotVO;
@@ -32,7 +36,9 @@ import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -47,9 +53,15 @@ public class NewsService {
 	private static final String EMPTY_REPLACEMENT = "-";
 	private static final int MAX_TOP_ARTICLE_LIMIT = 20;
 	private static final int DEFAULT_TOP_ARTICLE_LIMIT = 5;
+	private static final String NEWS_LIST_JSON_SCHEMA_VERSION = "1.0.0";
+	private static final String NEWS_LIST_JSON_SOURCE = "scheduler-rss";
+	private static final String NEWS_LIST_JSON_FILE_NAME = "newsList.json";
+	private static final String DEFAULT_NEWS_SNAPSHOT_TARGET_PATH = "/HDD1/Media/nas/news";
 
 	private final NewsMapper newsMapper;
 	private final RssFeedClient rssFeedClient;
+	private final ObjectMapper objectMapper;
+	private final FtpFileService ftpFileService;
 
 	// 관리자 뉴스 목록 화면 언론사 옵션을 조회합니다.
 	public List<AdminNewsPressOptionVO> getAdminNewsPressOptionList() {
@@ -445,6 +457,224 @@ public class NewsService {
 		response.setArticleList(articleList);
 		response.setFallbackAppliedYn(fallbackApplied ? "Y" : "N");
 		return response;
+	}
+
+	// 뉴스 확장프로그램용 직접 조회 JSON 스냅샷 객체를 생성합니다.
+	public NewsListJsonSnapshotVO buildNewsListJsonSnapshot() {
+		// 스냅샷 생성 기준 시각과 메타 카운터를 초기화합니다.
+		LocalDateTime generatedAt = LocalDateTime.now();
+		String generatedAtText = generatedAt.format(DATE_TIME_FORMATTER);
+		List<AdminNewsPressRowVO> allPressRowList = newsMapper.getAdminNewsPressManageList();
+		List<NewsRssTargetVO> rssTargetList = newsMapper.getActiveNewsRssTargetList();
+		int successTargetCount = 0;
+		int failedTargetCount = 0;
+
+		// 프론트 직접 조회용 루트 구조와 보조 인덱스를 초기화합니다.
+		NewsListJsonSnapshotVO snapshot = new NewsListJsonSnapshotVO();
+		snapshot.setPressList(new ArrayList<>());
+		snapshot.setCategoryListByPressId(new LinkedHashMap<>());
+		snapshot.setArticleListByPressCategoryKey(new LinkedHashMap<>());
+
+		Map<String, String> defaultCategoryIdByPressId = new LinkedHashMap<>();
+		List<String> pressIdList = new ArrayList<>();
+		List<String> categoryKeyList = new ArrayList<>();
+		// 활성 언론사 목록과 언론사별 활성 카테고리 목록을 정렬 순서대로 구성합니다.
+		for (AdminNewsPressRowVO pressRow : allPressRowList) {
+			if (pressRow == null || !"Y".equals(trimToNull(pressRow.getUseYn()))) {
+				continue;
+			}
+
+			String pressId = String.valueOf(pressRow.getPressNo());
+			NewsListJsonSnapshotVO.PressItem pressItem = new NewsListJsonSnapshotVO.PressItem();
+			pressItem.setId(pressId);
+			pressItem.setName(trimToNull(pressRow.getPressNm()));
+			pressItem.setSortSeq(pressRow.getSortSeq());
+			pressItem.setUseYn("Y");
+			snapshot.getPressList().add(pressItem);
+			pressIdList.add(pressId);
+
+			List<AdminNewsCategoryRowVO> categoryRowList = newsMapper.getAdminNewsCategoryManageListByPressNo(pressRow.getPressNo());
+			List<NewsListJsonSnapshotVO.CategoryItem> categoryItemList = new ArrayList<>();
+			for (AdminNewsCategoryRowVO categoryRow : categoryRowList) {
+				if (categoryRow == null || !"Y".equals(trimToNull(categoryRow.getUseYn()))) {
+					continue;
+				}
+
+				NewsListJsonSnapshotVO.CategoryItem categoryItem = new NewsListJsonSnapshotVO.CategoryItem();
+				categoryItem.setId(trimToNull(categoryRow.getCategoryCd()));
+				categoryItem.setName(trimToNull(categoryRow.getCategoryNm()));
+				categoryItem.setSortSeq(categoryRow.getSortSeq());
+				categoryItem.setUseYn("Y");
+				categoryItem.setRssUrl(trimToNull(categoryRow.getRssUrl()));
+				categoryItem.setSourceNm(trimToNull(categoryRow.getSourceNm()));
+				categoryItemList.add(categoryItem);
+			}
+
+			snapshot.getCategoryListByPressId().put(pressId, categoryItemList);
+			// 언론사별 첫 활성 카테고리를 기본 선택값으로 저장합니다.
+			String defaultCategoryId = categoryItemList.isEmpty() ? "" : trimToNull(categoryItemList.get(0).getId());
+			defaultCategoryIdByPressId.put(pressId, defaultCategoryId == null ? "" : defaultCategoryId);
+
+			// 카테고리별 기사 배열 키를 미리 생성해 프론트가 빈 배열도 직접 접근 가능하게 합니다.
+			for (NewsListJsonSnapshotVO.CategoryItem categoryItem : categoryItemList) {
+				String categoryId = trimToNull(categoryItem.getId());
+				if (categoryId == null) {
+					continue;
+				}
+				String categoryKey = buildPressCategoryKey(pressId, categoryId);
+				snapshot.getArticleListByPressCategoryKey().put(categoryKey, new ArrayList<>());
+				categoryKeyList.add(categoryKey);
+			}
+		}
+
+		// 활성 RSS 대상별로 원본 전체 피드를 조회해 기사 목록을 구성합니다.
+		for (NewsRssTargetVO target : rssTargetList) {
+			try {
+				String pressId = String.valueOf(target.getPressNo());
+				String categoryId = trimToNull(target.getCategoryCd());
+				if (categoryId == null) {
+					failedTargetCount += 1;
+					continue;
+				}
+
+				String categoryKey = buildPressCategoryKey(pressId, categoryId);
+				boolean hasCategoryKey = snapshot.getArticleListByPressCategoryKey().containsKey(categoryKey);
+				List<NewsListJsonSnapshotVO.ArticleItem> articleItemList = new ArrayList<>();
+				List<RssArticleItem> feedItemList = rssFeedClient.fetchFeed(target.getRssUrl());
+				for (int feedIndex = 0; feedIndex < feedItemList.size(); feedIndex += 1) {
+					RssArticleItem feedItem = feedItemList.get(feedIndex);
+					articleItemList.add(buildSnapshotArticleItem(target, feedItem, feedIndex + 1, generatedAtText));
+				}
+
+				snapshot.getArticleListByPressCategoryKey().put(categoryKey, articleItemList);
+				if (!hasCategoryKey) {
+					categoryKeyList.add(categoryKey);
+				}
+				successTargetCount += 1;
+			} catch (Exception exception) {
+				failedTargetCount += 1;
+				log.warn(
+					"뉴스 JSON 스냅샷 RSS 조회 실패 pressNo={}, categoryCd={}, rssUrl={}, message={}",
+					target.getPressNo(),
+					target.getCategoryCd(),
+					target.getRssUrl(),
+					exception.getMessage()
+				);
+			}
+		}
+
+		// 메타/기본선택/보조 인덱스를 스냅샷에 반영합니다.
+		NewsListJsonSnapshotVO.Meta meta = new NewsListJsonSnapshotVO.Meta();
+		meta.setGeneratedAt(generatedAtText);
+		meta.setSchemaVersion(NEWS_LIST_JSON_SCHEMA_VERSION);
+		meta.setSource(NEWS_LIST_JSON_SOURCE);
+		meta.setTargetCount(rssTargetList.size());
+		meta.setSuccessTargetCount(successTargetCount);
+		meta.setFailedTargetCount(failedTargetCount);
+		snapshot.setMeta(meta);
+
+		NewsListJsonSnapshotVO.DefaultSelection defaultSelection = new NewsListJsonSnapshotVO.DefaultSelection();
+		defaultSelection.setDefaultPressId(pressIdList.isEmpty() ? "" : pressIdList.get(0));
+		defaultSelection.setDefaultCategoryIdByPressId(defaultCategoryIdByPressId);
+		snapshot.setDefaultSelection(defaultSelection);
+
+		NewsListJsonSnapshotVO.SnapshotIndex snapshotIndex = new NewsListJsonSnapshotVO.SnapshotIndex();
+		snapshotIndex.setPressIdList(pressIdList);
+		snapshotIndex.setCategoryKeyList(categoryKeyList);
+		snapshot.setIndex(snapshotIndex);
+		return snapshot;
+	}
+
+	// 뉴스 확장프로그램용 직접 조회 JSON 스냅샷 문자열을 생성합니다.
+	public String buildNewsListJsonSnapshotJson() {
+		try {
+			return objectMapper.writeValueAsString(buildNewsListJsonSnapshot());
+		} catch (JsonProcessingException exception) {
+			throw new IllegalStateException("뉴스 JSON 스냅샷 직렬화에 실패했습니다.", exception);
+		}
+	}
+
+	// 스냅샷 기사 항목을 생성합니다.
+	private NewsListJsonSnapshotVO.ArticleItem buildSnapshotArticleItem(
+		NewsRssTargetVO target,
+		RssArticleItem feedItem,
+		int rankScore,
+		String collectedDt
+	) {
+		String articleGuid = trimToNull(limitLength(feedItem.guid(), 150));
+		String articleUrl = trimToNull(limitLength(feedItem.link(), 150));
+		String articleTitle = trimToNull(limitLength(feedItem.title(), 500));
+		String articleSummary = trimToNull(feedItem.summary());
+		String thumbnailUrl = trimToNull(limitLength(feedItem.thumbnailUrl(), 150));
+		String authorNm = trimToNull(limitLength(feedItem.authorNm(), 100));
+		boolean hasRequiredMissing = articleUrl == null || articleTitle == null;
+
+		NewsListJsonSnapshotVO.ArticleItem articleItem = new NewsListJsonSnapshotVO.ArticleItem();
+		articleItem.setId(buildSnapshotArticleId(target, feedItem, rankScore));
+		articleItem.setTitle(valueOrDash(articleTitle));
+		articleItem.setUrl(valueOrDash(articleUrl));
+		articleItem.setPublishedDt(formatDateTime(feedItem.publishedDt()));
+		articleItem.setSummary(articleSummary);
+		articleItem.setThumbnailUrl(thumbnailUrl);
+		articleItem.setAuthorNm(authorNm);
+		articleItem.setRankScore(rankScore);
+		articleItem.setUseYn(hasRequiredMissing ? "N" : "Y");
+		articleItem.setCollectedDt(collectedDt);
+		return articleItem;
+	}
+
+	// 스냅샷 기사 식별자를 생성합니다.
+	private String buildSnapshotArticleId(NewsRssTargetVO target, RssArticleItem feedItem, int rankScore) {
+		StringBuilder builder = new StringBuilder();
+		builder.append(target.getPressNo()).append('|');
+		builder.append(trimToNull(target.getCategoryCd())).append('|');
+		builder.append(trimToNull(feedItem.guid())).append('|');
+		builder.append(trimToNull(feedItem.link())).append('|');
+		builder.append(trimToNull(feedItem.title())).append('|');
+		builder.append(rankScore);
+		return sha256(builder.toString());
+	}
+
+	// 스냅샷용 언론사-카테고리 키를 생성합니다.
+	private String buildPressCategoryKey(String pressId, String categoryId) {
+		return pressId + "|" + categoryId;
+	}
+
+	// 스냅샷 업로드 대상 FTP 경로를 반환합니다.
+	private String resolveNewsSnapshotTargetPath() {
+		return ftpFileService.resolveNewsSnapshotTargetPath(DEFAULT_NEWS_SNAPSHOT_TARGET_PATH);
+	}
+
+	// 날짜시간 값을 문자열로 포맷합니다.
+	private String formatDateTime(LocalDateTime value) {
+		return value == null ? null : value.format(DATE_TIME_FORMATTER);
+	}
+
+	// 뉴스 확장프로그램용 직접 조회 JSON 스냅샷 파일을 FTP에 원자적으로 업로드합니다.
+	public NewsListJsonSnapshotPublishResultVO publishNewsListJsonSnapshot() {
+		NewsListJsonSnapshotVO snapshot = buildNewsListJsonSnapshot();
+		String snapshotJson;
+		try {
+			snapshotJson = objectMapper.writeValueAsString(snapshot);
+		} catch (JsonProcessingException exception) {
+			throw new IllegalStateException("뉴스 JSON 스냅샷 직렬화에 실패했습니다.", exception);
+		}
+
+		String targetPath = resolveNewsSnapshotTargetPath();
+		try {
+			String tempFileName = ftpFileService.uploadUtf8TextFileAtomically(targetPath, NEWS_LIST_JSON_FILE_NAME, snapshotJson);
+			return NewsListJsonSnapshotPublishResultVO.builder()
+				.targetPath(targetPath)
+				.fileName(NEWS_LIST_JSON_FILE_NAME)
+				.tempFileName(tempFileName)
+				.targetCount(snapshot.getMeta() == null ? null : snapshot.getMeta().getTargetCount())
+				.successTargetCount(snapshot.getMeta() == null ? null : snapshot.getMeta().getSuccessTargetCount())
+				.failedTargetCount(snapshot.getMeta() == null ? null : snapshot.getMeta().getFailedTargetCount())
+				.jsonByteSize(snapshotJson.getBytes(StandardCharsets.UTF_8).length)
+				.build();
+		} catch (Exception exception) {
+			throw new IllegalStateException("뉴스 JSON 스냅샷 FTP 업로드에 실패했습니다.", exception);
+		}
 	}
 
 	// RSS 수집을 수행하고 결과를 반환합니다.

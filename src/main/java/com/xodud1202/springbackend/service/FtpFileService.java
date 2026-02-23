@@ -7,8 +7,10 @@ import org.apache.commons.net.ftp.FTPClient;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -16,6 +18,7 @@ import java.time.format.DateTimeFormatter;
 @Service
 @RequiredArgsConstructor
 public class FtpFileService {
+	private static final DateTimeFormatter FTP_TEMP_FILE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
 	
 	private final FtpProperties ftpProperties;
 
@@ -208,6 +211,65 @@ public class FtpFileService {
 	}
 
 	/**
+	 * UTF-8 텍스트 파일을 FTP에 임시파일 업로드 후 rename으로 원자적으로 교체합니다.
+	 * @param targetPath 업로드 대상 디렉토리 경로
+	 * @param finalFileName 최종 파일명
+	 * @param content 저장할 UTF-8 텍스트 내용
+	 * @return 업로드에 사용한 임시 파일명
+	 */
+	public String uploadUtf8TextFileAtomically(String targetPath, String finalFileName, String content) throws IOException {
+		FTPClient ftpClient = new FTPClient();
+		String tempFileName = buildAtomicTempFileName(finalFileName);
+		byte[] contentBytes = (content == null ? "" : content).getBytes(StandardCharsets.UTF_8);
+
+		try {
+			// FTP 서버 접속 및 로그인 후 이진 업로드 모드를 설정합니다.
+			connectAndLoginFtpClient(ftpClient);
+			ftpClient.enterLocalPassiveMode();
+			ftpClient.setFileType(FTP.BINARY_FILE_TYPE);
+
+			// 대상 경로가 없으면 생성하고, 최종 파일명과 임시 파일명을 같은 폴더에서 관리합니다.
+			changeOrCreateDirectories(ftpClient, targetPath);
+
+			// 임시 파일로 전체 내용을 먼저 업로드합니다.
+			try (InputStream inputStream = new ByteArrayInputStream(contentBytes)) {
+				boolean uploaded = ftpClient.storeFile(tempFileName, inputStream);
+				if (!uploaded) {
+					throw new IOException("FTP 임시 파일 업로드 실패: " + tempFileName);
+				}
+			}
+
+			// 서버가 overwrite rename을 지원하는 경우 최종 파일을 원자적으로 교체합니다.
+			boolean renamed = ftpClient.rename(tempFileName, finalFileName);
+			if (!renamed) {
+				// rename 실패 시 임시 파일을 정리하고 기존 최종 파일은 유지합니다.
+				ftpClient.deleteFile(tempFileName);
+				throw new IOException("FTP 파일 rename 실패(원자적 교체 미지원 가능): " + tempFileName + " -> " + finalFileName);
+			}
+
+			return tempFileName;
+		} finally {
+			if (ftpClient.isConnected()) {
+				ftpClient.logout();
+				ftpClient.disconnect();
+			}
+		}
+	}
+
+	/**
+	 * 뉴스 스냅샷 업로드 대상 경로를 반환합니다.
+	 * @param defaultPath 설정 미존재 시 사용할 기본 경로
+	 * @return 뉴스 스냅샷 업로드 경로
+	 */
+	public String resolveNewsSnapshotTargetPath(String defaultPath) {
+		String configuredPath = ftpProperties.getNewsSnapshotTargetPath();
+		if (configuredPath == null || configuredPath.trim().isEmpty()) {
+			return defaultPath;
+		}
+		return configuredPath.trim();
+	}
+
+	/**
 	 * 상품 이미지 접근 URL을 생성합니다.
 	 * @param goodsId 상품 코드
 	 * @param fileName 파일명
@@ -310,6 +372,57 @@ public class FtpFileService {
 				ftpClient.disconnect();
 			}
 		}
+	}
+
+	/**
+	 * FTP 서버에 접속하고 로그인합니다.
+	 * @param ftpClient FTP 클라이언트
+	 */
+	private void connectAndLoginFtpClient(FTPClient ftpClient) throws IOException {
+		ftpClient.connect(ftpProperties.getHost(), ftpProperties.getPort());
+		boolean login = ftpClient.login(ftpProperties.getUsername(), ftpProperties.getPwd());
+		if (!login) {
+			throw new IOException("FTP 로그인 실패");
+		}
+	}
+
+	/**
+	 * 절대/상대 경로 문자열을 기준으로 FTP 디렉토리를 생성 및 이동합니다.
+	 * @param ftpClient FTP 클라이언트
+	 * @param targetPath 대상 경로
+	 */
+	private void changeOrCreateDirectories(FTPClient ftpClient, String targetPath) throws IOException {
+		String normalizedTargetPath = targetPath == null ? "" : targetPath.trim();
+		if (normalizedTargetPath.isEmpty()) {
+			throw new IOException("FTP 대상 경로가 비어 있습니다.");
+		}
+
+		// 절대 경로는 루트부터 이동해 폴더를 순차 생성합니다.
+		if (normalizedTargetPath.startsWith("/")) {
+			if (!ftpClient.changeWorkingDirectory("/")) {
+				throw new IOException("FTP 루트 경로 이동 실패");
+			}
+		}
+
+		// 경로 세그먼트 단위로 디렉토리를 생성/이동합니다.
+		String[] pathSegments = normalizedTargetPath.split("/");
+		for (String pathSegment : pathSegments) {
+			String normalizedSegment = pathSegment == null ? "" : pathSegment.trim();
+			if (normalizedSegment.isEmpty()) {
+				continue;
+			}
+			ensureAndChangeDirectory(ftpClient, normalizedSegment);
+		}
+	}
+
+	/**
+	 * 원자적 교체용 임시 파일명을 생성합니다.
+	 * @param finalFileName 최종 파일명
+	 * @return 임시 파일명
+	 */
+	private String buildAtomicTempFileName(String finalFileName) {
+		String timeKey = LocalDateTime.now().format(FTP_TEMP_FILE_TIME_FORMATTER);
+		return finalFileName + ".tmp." + timeKey;
 	}
 
 	/**
