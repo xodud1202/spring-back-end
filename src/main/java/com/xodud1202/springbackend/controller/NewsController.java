@@ -18,7 +18,7 @@ import java.util.List;
 @Validated
 @RestController
 @RequiredArgsConstructor
-@CrossOrigin(originPatterns = {"http://localhost:*", "http://127.0.0.1:*", "chrome-extension://*"})
+@CrossOrigin(originPatterns = {"https://*.xodud1202.kro.kr", "http://localhost:*", "http://127.0.0.1:*", "chrome-extension://*"})
 // 뉴스 확장프로그램 조회 API를 제공합니다.
 public class NewsController {
 	private final NewsService newsService;
