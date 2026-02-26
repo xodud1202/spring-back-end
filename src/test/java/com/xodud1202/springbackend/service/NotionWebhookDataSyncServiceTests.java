@@ -87,7 +87,11 @@ class NotionWebhookDataSyncServiceTests {
 			  "in_trash":false,
 			  "properties":{
 			    "제목":{"type":"title","title":[{"plain_text":"샘플 타이틀"}]},
-			    "category_id":{"type":"rich_text","rich_text":[{"plain_text":"CAT-1"}]}
+			    "Notes":{"type":"rich_text","rich_text":[{"text":{"content":"테스트"}},{"text":{"content":"4"}}]},
+			    "Category":{"type":"multi_select","multi_select":[
+			      {"id":"80b73e6d-4b9c-440c-8d7e-5173009de988","name":"A"},
+			      {"id":"a780b085-fe26-4f9f-8a15-4ad6ce9594f3","name":"B"}
+			    ]}
 			  }
 			}
 			""");
@@ -120,9 +124,9 @@ class NotionWebhookDataSyncServiceTests {
 		assertEquals("24759db6-4d86-8062-920b-c9cabd964411", row.getDatabaseId());
 		assertEquals("24759db6-4d86-811f-acce-000b244c4fd6", row.getDataSourceId());
 		assertEquals("샘플 타이틀", row.getTitle());
-		assertEquals("첫 줄\n둘째 줄", row.getNotes());
+		assertEquals("테스트4", row.getNotes());
 		assertEquals("N", row.getDelYn());
-		assertEquals("CAT-1", row.getCategoryId());
+		assertEquals("80b73e6d-4b9c-440c-8d7e-5173009de988", row.getCategoryId());
 	}
 
 	@Test

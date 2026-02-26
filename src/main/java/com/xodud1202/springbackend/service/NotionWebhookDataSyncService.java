@@ -206,12 +206,41 @@ public class NotionWebhookDataSyncService {
 		row.setDelYn(resolveDeleteFlag(pageNode));
 		row.setCreateDt(parseOffsetDateTime(pageNode.path("created_time").asText(null)));
 
-		// 본문 블록에서 plain_text를 추출해 NOTES를 구성합니다.
-		row.setNotes(extractNotes(blocks));
+		// NOTES는 properties.Notes.rich_text[].text.content를 우선 사용하고 없으면 블록 본문으로 보완합니다.
+		String notesFromProperties = extractNotesFromProperties(pageNode.path("properties"));
+		String resolvedNotes = trimToNull(notesFromProperties) != null ? notesFromProperties : extractNotes(blocks);
+		row.setNotes(resolvedNotes);
 
-		// CATEGORY_ID는 properties의 category 성격 필드가 있을 때만 추출합니다.
+		// CATEGORY_ID는 properties.Category.multi_select[0].id를 우선 사용합니다.
 		row.setCategoryId(limitLength(extractCategoryId(pageNode.path("properties")), MAX_ID_LENGTH));
 		return row;
+	}
+
+	// properties.Notes.rich_text[].text.content를 순서대로 결합해 NOTES 문자열을 생성합니다.
+	private String extractNotesFromProperties(JsonNode propertiesNode) {
+		if (propertiesNode == null || !propertiesNode.isObject()) {
+			return "";
+		}
+
+		JsonNode notesProperty = propertiesNode.path("Notes");
+		if (!notesProperty.isObject()) {
+			return "";
+		}
+
+		JsonNode richTextNode = notesProperty.path("rich_text");
+		if (!richTextNode.isArray()) {
+			return "";
+		}
+
+		StringBuilder notesBuilder = new StringBuilder();
+		for (JsonNode itemNode : richTextNode) {
+			JsonNode textNode = itemNode.path("text");
+			String content = trimToNull(textNode.path("content").asText(null));
+			if (content != null) {
+				notesBuilder.append(content);
+			}
+		}
+		return notesBuilder.toString();
 	}
 
 	// 페이지 properties에서 title 타입 필드를 찾아 plain_text를 결합합니다.
@@ -303,6 +332,14 @@ public class NotionWebhookDataSyncService {
 	private String extractCategoryId(JsonNode propertiesNode) {
 		if (propertiesNode == null || !propertiesNode.isObject()) {
 			return null;
+		}
+
+		JsonNode categoryNode = propertiesNode.path("Category");
+		if (categoryNode.isObject()) {
+			JsonNode multiSelectNode = categoryNode.path("multi_select");
+			if (multiSelectNode.isArray() && multiSelectNode.size() > 0) {
+				return trimToNull(multiSelectNode.get(0).path("id").asText(null));
+			}
 		}
 
 		Iterator<Map.Entry<String, JsonNode>> iterator = propertiesNode.properties().iterator();
