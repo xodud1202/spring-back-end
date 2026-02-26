@@ -85,11 +85,11 @@ class NotionWebhookTempSaveServiceTests {
 	}
 
 	@Test
-	@DisplayName("저장 처리: 바디가 비JSON 문자열이면 BODY_RAW만 저장한다")
-	// 비JSON 바디 입력 시 파싱을 건너뛰고 원문만 저장합니다.
+	@DisplayName("저장 처리: 바디가 평문이면 BODY_RAW만 저장한다")
+	// key=value가 아닌 평문 바디 입력 시 원문만 저장합니다.
 	void saveWebhookRequest_savesOnlyRawBodyWhenBodyIsNotJson() {
-		// 비JSON 바디를 포함한 입력 데이터를 구성합니다.
-		String body = "token=plain-text";
+		// 평문 바디를 포함한 입력 데이터를 구성합니다.
+		String body = "plain-text-body";
 
 		// 매퍼 저장 결과를 목으로 고정합니다.
 		when(notionWebhookMapper.insertNotionWebhookTempBatch(anyList())).thenReturn(1);
@@ -104,6 +104,52 @@ class NotionWebhookTempSaveServiceTests {
 		List<NotionWebhookTempEntryPO> rows = captor.getValue();
 		assertEquals(1, rows.size());
 		assertEquals("BODY_RAW", rows.get(0).getTempKey());
-		assertEquals("token=plain-text", rows.get(0).getTempValue());
+		assertEquals("plain-text-body", rows.get(0).getTempValue());
+	}
+
+	@Test
+	@DisplayName("저장 처리: 긴 JSON 바디는 하위 키 저장 후 BODY_RAW 원문 저장을 생략한다")
+	// 긴 JSON 바디는 BODY 하위 키를 저장하고 BODY_RAW는 길이 초과로 생략합니다.
+	void saveWebhookRequest_skipsLongBodyRawWhenJsonParsed() {
+		// 255자를 초과하는 JSON 바디 문자열을 구성합니다.
+		String body = "{\"token\":\"" + "A".repeat(280) + "\"}";
+
+		// 매퍼 저장 결과를 목으로 고정합니다.
+		when(notionWebhookMapper.insertNotionWebhookTempBatch(anyList())).thenReturn(1);
+
+		// 저장 로직을 실행합니다.
+		int affected = notionWebhookTempSaveService.saveWebhookRequest("/api/notion/webhook", Map.of(), Map.of(), body);
+
+		// BODY.token만 저장되고 BODY_RAW는 저장되지 않는지 검증합니다.
+		assertEquals(1, affected);
+		ArgumentCaptor<List<NotionWebhookTempEntryPO>> captor = ArgumentCaptor.forClass(List.class);
+		verify(notionWebhookMapper).insertNotionWebhookTempBatch(captor.capture());
+		List<NotionWebhookTempEntryPO> rows = captor.getValue();
+		assertEquals(1, rows.size());
+		assertEquals("BODY.token", rows.get(0).getTempKey());
+		assertEquals(255, rows.get(0).getTempValue().length());
+	}
+
+	@Test
+	@DisplayName("저장 처리: 비JSON 바디가 key=value 포맷이면 BODY 하위 키로 분해한다")
+	// 비JSON key=value 바디는 BODY.{key} 형태로 파싱해 저장합니다.
+	void saveWebhookRequest_parsesNonJsonKeyValueBody() {
+		// key=value 포맷 바디를 구성합니다.
+		String body = "token=abc123&event=page.content_updated";
+
+		// 매퍼 저장 결과를 목으로 고정합니다.
+		when(notionWebhookMapper.insertNotionWebhookTempBatch(anyList())).thenReturn(3);
+
+		// 저장 로직을 실행합니다.
+		int affected = notionWebhookTempSaveService.saveWebhookRequest("/api/notion/webhook", Map.of(), Map.of(), body);
+
+		// BODY.key 및 BODY_RAW 저장을 검증합니다.
+		assertEquals(3, affected);
+		ArgumentCaptor<List<NotionWebhookTempEntryPO>> captor = ArgumentCaptor.forClass(List.class);
+		verify(notionWebhookMapper).insertNotionWebhookTempBatch(captor.capture());
+		List<NotionWebhookTempEntryPO> rows = captor.getValue();
+		assertTrue(rows.stream().anyMatch(row -> "BODY.token".equals(row.getTempKey()) && "abc123".equals(row.getTempValue())));
+		assertTrue(rows.stream().anyMatch(row -> "BODY.event".equals(row.getTempKey()) && "page.content_updated".equals(row.getTempValue())));
+		assertTrue(rows.stream().anyMatch(row -> "BODY_RAW".equals(row.getTempKey()) && body.equals(row.getTempValue())));
 	}
 }

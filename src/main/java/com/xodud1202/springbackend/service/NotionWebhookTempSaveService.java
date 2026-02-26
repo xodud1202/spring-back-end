@@ -8,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +22,8 @@ public class NotionWebhookTempSaveService {
 	private static final String QUERY_PREFIX = "QUERY.";
 	private static final String BODY_PREFIX = "BODY.";
 	private static final String BODY_RAW_KEY = "BODY_RAW";
+	private static final int MAX_TEMP_KEY_LENGTH = 255;
+	private static final int MAX_TEMP_VALUE_LENGTH = 255;
 
 	private final NotionWebhookMapper notionWebhookMapper;
 	private final ObjectMapper objectMapper;
@@ -58,7 +62,7 @@ public class NotionWebhookTempSaveService {
 			if (headerName == null) {
 				continue;
 			}
-			rows.add(buildRow(requestUrl, HEADER_PREFIX + headerName, safeValue(entry.getValue())));
+			appendRow(rows, requestUrl, HEADER_PREFIX + headerName, safeValue(entry.getValue()));
 		}
 	}
 
@@ -76,7 +80,7 @@ public class NotionWebhookTempSaveService {
 
 			String[] values = entry.getValue();
 			if (values == null || values.length == 0) {
-				rows.add(buildRow(requestUrl, QUERY_PREFIX + paramName, ""));
+				appendRow(rows, requestUrl, QUERY_PREFIX + paramName, "");
 				continue;
 			}
 
@@ -84,7 +88,7 @@ public class NotionWebhookTempSaveService {
 				String key = values.length == 1
 					? QUERY_PREFIX + paramName
 					: QUERY_PREFIX + paramName + "[" + index + "]";
-				rows.add(buildRow(requestUrl, key, safeValue(values[index])));
+				appendRow(rows, requestUrl, key, safeValue(values[index]));
 			}
 		}
 	}
@@ -96,13 +100,21 @@ public class NotionWebhookTempSaveService {
 			return;
 		}
 
-		rows.add(buildRow(requestUrl, BODY_RAW_KEY, body));
-
+		boolean parsedBody = false;
 		try {
 			JsonNode rootNode = objectMapper.readTree(body);
 			flattenJsonNode(rows, requestUrl, BODY_PREFIX, rootNode);
+			parsedBody = true;
 		} catch (Exception ignored) {
-			// JSON 파싱 실패 시 BODY_RAW만 저장하고 추가 처리하지 않습니다.
+			// JSON 파싱 실패 시 key=value 포맷 여부를 추가로 확인합니다.
+			parsedBody = appendKeyValueTextRows(rows, requestUrl, body);
+		}
+
+		// BODY_RAW는 컬럼 길이를 초과하지 않을 때만 저장합니다.
+		if (body.length() <= MAX_TEMP_VALUE_LENGTH) {
+			appendRow(rows, requestUrl, BODY_RAW_KEY, body);
+		} else if (!parsedBody) {
+			appendRow(rows, requestUrl, BODY_RAW_KEY, body.substring(0, MAX_TEMP_VALUE_LENGTH));
 		}
 	}
 
@@ -131,16 +143,68 @@ public class NotionWebhookTempSaveService {
 		}
 
 		String key = removeTrailingDot(prefix);
-		rows.add(buildRow(requestUrl, key, node.asText("")));
+		appendRow(rows, requestUrl, key, node.asText(""));
+	}
+
+	// 원문 텍스트가 key=value 포맷인지 확인해 BODY 하위 키로 저장합니다.
+	private boolean appendKeyValueTextRows(List<NotionWebhookTempEntryPO> rows, String requestUrl, String rawText) {
+		String normalizedText = trimToNull(rawText);
+		if (normalizedText == null) {
+			return false;
+		}
+
+		boolean appended = false;
+		String[] pairs = normalizedText.split("&");
+		for (String pair : pairs) {
+			String token = trimToNull(pair);
+			if (token == null) {
+				continue;
+			}
+
+			int separatorIndex = token.indexOf('=');
+			if (separatorIndex <= 0) {
+				continue;
+			}
+
+			String rawKey = URLDecoder.decode(token.substring(0, separatorIndex), StandardCharsets.UTF_8);
+			String decodedKey = trimToNull(rawKey);
+			if (decodedKey == null) {
+				continue;
+			}
+
+			String decodedValue = URLDecoder.decode(token.substring(separatorIndex + 1), StandardCharsets.UTF_8);
+			appendRow(rows, requestUrl, BODY_PREFIX + decodedKey, decodedValue);
+			appended = true;
+		}
+		return appended;
+	}
+
+	// 저장값 길이를 컬럼 제한에 맞춰 보정합니다.
+	private void appendRow(List<NotionWebhookTempEntryPO> rows, String requestUrl, String key, String value) {
+		String normalizedKey = normalizeKey(key);
+		String normalizedValue = safeValue(value);
+		String limitedValue = normalizedValue.length() > MAX_TEMP_VALUE_LENGTH
+			? normalizedValue.substring(0, MAX_TEMP_VALUE_LENGTH)
+			: normalizedValue;
+		rows.add(buildSingleRow(requestUrl, normalizedKey, limitedValue));
 	}
 
 	// 저장용 단일 엔트리를 생성합니다.
-	private NotionWebhookTempEntryPO buildRow(String requestUrl, String key, String value) {
+	private NotionWebhookTempEntryPO buildSingleRow(String requestUrl, String key, String value) {
 		NotionWebhookTempEntryPO row = new NotionWebhookTempEntryPO();
 		row.setRequestUrl(safeValue(requestUrl));
-		row.setTempKey(safeValue(key));
+		row.setTempKey(normalizeKey(key));
 		row.setTempValue(safeValue(value));
 		return row;
+	}
+
+	// TEMP_KEY 컬럼 길이에 맞춰 키 값을 정규화합니다.
+	private String normalizeKey(String key) {
+		String resolvedKey = safeValue(key);
+		if (resolvedKey.length() <= MAX_TEMP_KEY_LENGTH) {
+			return resolvedKey;
+		}
+		return resolvedKey.substring(0, MAX_TEMP_KEY_LENGTH);
 	}
 
 	// 문자열 끝의 구분 점(.)을 제거합니다.
