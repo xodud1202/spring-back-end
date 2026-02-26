@@ -18,4 +18,43 @@
 			)
 		</foreach>
 	</insert>
+
+	<insert id="upsertNotionDataList">
+		/* NotionWebhookMapper.upsertNotionDataList : Notion 페이지 상세를 NOTION_DATA_LIST에 저장/수정 */
+		INSERT INTO NOTION_DATA_LIST (
+		       ID
+		     , DATABASE_ID
+		     , DATA_SOURCE_ID
+		     , TITLE
+		     , NOTES
+		     , URL
+		     , DEL_YN
+		     , CATEGORY_ID
+		     , CREATE_DT
+		     , REG_DT
+		     , UPT_DT
+		) VALUES (
+		       #{row.id}
+		     , #{row.databaseId}
+		     , #{row.dataSourceId}
+		     , #{row.title}
+		     , #{row.notes}
+		     , #{row.url}
+		     , #{row.delYn}
+		     , #{row.categoryId}
+		     , COALESCE(#{row.createDt}, NOW())
+		     , NOW()
+		     , NOW()
+		)
+		ON DUPLICATE KEY UPDATE
+		       DATABASE_ID = VALUES(DATABASE_ID)
+		     , DATA_SOURCE_ID = VALUES(DATA_SOURCE_ID)
+		     , TITLE = VALUES(TITLE)
+		     , NOTES = VALUES(NOTES)
+		     , URL = VALUES(URL)
+		     , DEL_YN = VALUES(DEL_YN)
+		     , CATEGORY_ID = VALUES(CATEGORY_ID)
+		     , CREATE_DT = VALUES(CREATE_DT)
+		     , UPT_DT = NOW()
+	</insert>
 </mapper>

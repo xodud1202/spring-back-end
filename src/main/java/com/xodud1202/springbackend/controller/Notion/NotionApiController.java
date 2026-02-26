@@ -1,6 +1,7 @@
 package com.xodud1202.springbackend.controller.Notion;
 
 import com.xodud1202.springbackend.service.NotionWebhookTempSaveService;
+import com.xodud1202.springbackend.service.NotionWebhookDataSyncService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +23,7 @@ public class NotionApiController {
 	private static final String WEBHOOK_PATH = "/api/notion/webhook";
 
 	private final NotionWebhookTempSaveService notionWebhookTempSaveService;
+	private final NotionWebhookDataSyncService notionWebhookDataSyncService;
 
 	// Notion 웹훅 요청의 헤더/파라미터/바디를 KEY_VALUE_TEMP_TABLE에 저장합니다.
 	@RequestMapping(value = WEBHOOK_PATH, method = { RequestMethod.GET, RequestMethod.POST })
@@ -42,13 +44,18 @@ public class NotionApiController {
 				request.getParameterMap(),
 				requestBody
 			);
+			int syncedCount = notionWebhookDataSyncService.syncNotionDataFromWebhook(requestBody, headerMap);
 
-			// 저장 건수를 포함한 성공 응답을 반환합니다.
-			return ResponseEntity.ok(Map.of("message", "ok", "savedCount", savedCount));
+			// 임시 저장 건수와 본문 동기화 건수를 포함한 성공 응답을 반환합니다.
+			return ResponseEntity.ok(Map.of("message", "ok", "savedCount", savedCount, "syncedCount", syncedCount));
+		} catch (SecurityException securityException) {
+			// 서명 검증 실패 시 401 응답을 반환합니다.
+			log.warn("Notion 웹훅 서명 검증 실패 message={}", securityException.getMessage());
+			return ResponseEntity.status(401).body(Map.of("message", "웹훅 서명 검증 실패"));
 		} catch (Exception exception) {
-			// 저장 실패 시 에러 로그와 500 응답을 반환합니다.
-			log.error("Notion 웹훅 임시 저장 실패 message={}", exception.getMessage(), exception);
-			return ResponseEntity.internalServerError().body(Map.of("message", "웹훅 임시저장 실패"));
+			// 처리 실패 시 에러 로그와 500 응답을 반환합니다.
+			log.error("Notion 웹훅 처리 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "웹훅 처리 실패"));
 		}
 	}
 }
