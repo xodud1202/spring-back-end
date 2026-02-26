@@ -86,4 +86,30 @@
 		     , DEL_YN = 'Y'
 		     , UPT_DT = NOW()
 	</insert>
+
+	<insert id="upsertNotionCategoryBatch">
+		/* NotionWebhookMapper.upsertNotionCategoryBatch : Notion 카테고리 목록을 중복 제거 후 저장/수정 */
+		INSERT INTO NOTION_CATEGORY (
+		       CATEGORY_ID
+		     , CATEGORY_NM
+		     , COLOR
+		     , SORT_SEQ
+		     , REG_DT
+		     , UPT_DT
+		) VALUES
+		<foreach collection="rows" item="row" separator=",">
+			(
+			       #{row.categoryId}
+			     , #{row.categoryNm}
+			     , #{row.color}
+			     , 99
+			     , NOW()
+			     , NOW()
+			)
+		</foreach>
+		ON DUPLICATE KEY UPDATE
+		       CATEGORY_NM = VALUES(CATEGORY_NM)
+		     , COLOR = VALUES(COLOR)
+		     , UPT_DT = NOW()
+	</insert>
 </mapper>

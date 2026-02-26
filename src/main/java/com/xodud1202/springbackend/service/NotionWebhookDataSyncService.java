@@ -2,6 +2,7 @@ package com.xodud1202.springbackend.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xodud1202.springbackend.domain.notion.NotionCategoryUpsertPO;
 import com.xodud1202.springbackend.domain.notion.NotionDataListUpsertPO;
 import com.xodud1202.springbackend.mapper.NotionWebhookMapper;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,6 +18,7 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -27,6 +29,8 @@ public class NotionWebhookDataSyncService {
 	private static final int MAX_ID_LENGTH = 72;
 	private static final int MAX_TITLE_LENGTH = 200;
 	private static final int MAX_URL_LENGTH = 255;
+	private static final int MAX_CATEGORY_NM_LENGTH = 50;
+	private static final int MAX_CATEGORY_COLOR_LENGTH = 24;
 	private static final String SIGNATURE_HEADER = "x-notion-signature";
 	private static final String EVENT_TYPE_PAGE_DELETED = "page.deleted";
 
@@ -101,7 +105,14 @@ public class NotionWebhookDataSyncService {
 
 		// 조회 결과를 DB upsert 파라미터로 변환해 저장합니다.
 		NotionDataListUpsertPO upsertRow = buildUpsertRow(rootNode, pageNode, blocks);
-		return notionWebhookMapper.upsertNotionDataList(upsertRow);
+		int syncedCount = notionWebhookMapper.upsertNotionDataList(upsertRow);
+
+		// 게시글 저장이 끝난 뒤 Category 목록을 수집해 중복 제거 후 upsert 합니다.
+		List<NotionCategoryUpsertPO> categoryRows = deduplicateCategories(extractCategoryRows(pageNode.path("properties")));
+		if (!categoryRows.isEmpty()) {
+			notionWebhookMapper.upsertNotionCategoryBatch(categoryRows);
+		}
+		return syncedCount;
 	}
 
 	// page.deleted 이벤트를 NOTION_DATA_LIST 삭제 상태 upsert 파라미터로 변환합니다.
@@ -376,6 +387,72 @@ public class NotionWebhookDataSyncService {
 			}
 		}
 		return null;
+	}
+
+	// properties.Category.multi_select에서 카테고리 id/name/color 목록을 추출합니다.
+	private List<NotionCategoryUpsertPO> extractCategoryRows(JsonNode propertiesNode) {
+		List<NotionCategoryUpsertPO> rows = new ArrayList<>();
+		if (propertiesNode == null || !propertiesNode.isObject()) {
+			return rows;
+		}
+
+		JsonNode categoryNode = propertiesNode.path("Category");
+		if (categoryNode.isObject() && "multi_select".equals(categoryNode.path("type").asText())) {
+			appendCategoryRowsFromMultiSelect(categoryNode.path("multi_select"), rows);
+		}
+
+		if (!rows.isEmpty()) {
+			return rows;
+		}
+
+		Iterator<Map.Entry<String, JsonNode>> iterator = propertiesNode.properties().iterator();
+		while (iterator.hasNext()) {
+			Map.Entry<String, JsonNode> entry = iterator.next();
+			JsonNode propertyNode = entry.getValue();
+			if (!propertyNode.isObject()) {
+				continue;
+			}
+			if (!"multi_select".equals(propertyNode.path("type").asText())) {
+				continue;
+			}
+			appendCategoryRowsFromMultiSelect(propertyNode.path("multi_select"), rows);
+			if (!rows.isEmpty()) {
+				return rows;
+			}
+		}
+		return rows;
+	}
+
+	// multi_select 배열을 순회해 카테고리 upsert 목록을 생성합니다.
+	private void appendCategoryRowsFromMultiSelect(JsonNode multiSelectNode, List<NotionCategoryUpsertPO> collector) {
+		if (multiSelectNode == null || !multiSelectNode.isArray()) {
+			return;
+		}
+
+		for (JsonNode categoryItemNode : multiSelectNode) {
+			String categoryId = trimToNull(categoryItemNode.path("id").asText(null));
+			if (categoryId == null) {
+				continue;
+			}
+
+			NotionCategoryUpsertPO row = new NotionCategoryUpsertPO();
+			row.setCategoryId(limitLength(categoryId, MAX_ID_LENGTH));
+			row.setCategoryNm(limitLength(safeValue(trimToNull(categoryItemNode.path("name").asText(null))), MAX_CATEGORY_NM_LENGTH));
+			row.setColor(limitLength(safeValue(trimToNull(categoryItemNode.path("color").asText(null))), MAX_CATEGORY_COLOR_LENGTH));
+			collector.add(row);
+		}
+	}
+
+	// CATEGORY_ID 기준으로 중복을 제거하고 마지막 값을 유지합니다.
+	private List<NotionCategoryUpsertPO> deduplicateCategories(List<NotionCategoryUpsertPO> rows) {
+		Map<String, NotionCategoryUpsertPO> rowMap = new LinkedHashMap<>();
+		for (NotionCategoryUpsertPO row : rows) {
+			if (row == null || trimToNull(row.getCategoryId()) == null) {
+				continue;
+			}
+			rowMap.put(row.getCategoryId(), row);
+		}
+		return new ArrayList<>(rowMap.values());
 	}
 
 	// properties에서 URL 타입 속성값을 찾아 URL 컬럼 저장값으로 반환합니다.

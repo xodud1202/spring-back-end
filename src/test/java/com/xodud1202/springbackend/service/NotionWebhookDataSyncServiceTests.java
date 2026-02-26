@@ -2,6 +2,7 @@ package com.xodud1202.springbackend.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xodud1202.springbackend.domain.notion.NotionCategoryUpsertPO;
 import com.xodud1202.springbackend.domain.notion.NotionDataListUpsertPO;
 import com.xodud1202.springbackend.mapper.NotionWebhookMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -18,6 +20,8 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -114,6 +118,7 @@ class NotionWebhookDataSyncServiceTests {
 		when(notionApiClient.retrievePage("31359db6-4d86-8066-8302-f1f02561a8c1")).thenReturn(pageNode);
 		when(notionApiClient.retrieveAllChildBlocks("31359db6-4d86-8066-8302-f1f02561a8c1")).thenReturn(blocks);
 		when(notionWebhookMapper.upsertNotionDataList(any(NotionDataListUpsertPO.class))).thenReturn(1);
+		when(notionWebhookMapper.upsertNotionCategoryBatch(anyList())).thenReturn(2);
 
 		int affected = service.syncNotionDataFromWebhook(webhookBody, Map.of());
 
@@ -130,6 +135,16 @@ class NotionWebhookDataSyncServiceTests {
 		assertEquals("https://www.notion.so/sample", row.getNotionUrl());
 		assertEquals("N", row.getDelYn());
 		assertEquals("80b73e6d-4b9c-440c-8d7e-5173009de988", row.getCategoryId());
+
+		@SuppressWarnings("unchecked")
+		ArgumentCaptor<List<NotionCategoryUpsertPO>> categoryCaptor = ArgumentCaptor.forClass((Class) List.class);
+		verify(notionWebhookMapper).upsertNotionCategoryBatch(categoryCaptor.capture());
+		List<NotionCategoryUpsertPO> capturedRows = categoryCaptor.getValue();
+		assertEquals(2, capturedRows.size());
+		assertEquals("80b73e6d-4b9c-440c-8d7e-5173009de988", capturedRows.get(0).getCategoryId());
+		assertEquals("A", capturedRows.get(0).getCategoryNm());
+		assertEquals("a780b085-fe26-4f9f-8a15-4ad6ce9594f3", capturedRows.get(1).getCategoryId());
+		assertEquals("B", capturedRows.get(1).getCategoryNm());
 	}
 
 	@Test
@@ -174,6 +189,66 @@ class NotionWebhookDataSyncServiceTests {
 		NotionDataListUpsertPO row = captor.getValue();
 		assertEquals("", row.getUrl());
 		assertEquals("https://www.notion.so/sample-2", row.getNotionUrl());
+		verify(notionWebhookMapper, never()).upsertNotionCategoryBatch(anyList());
+	}
+
+	@Test
+	@DisplayName("동기화 처리: Category 중복 ID는 마지막 값 기준으로 중복 제거 후 저장한다")
+	// Category multi_select에 중복 id가 있으면 마지막 요소의 이름/색상을 유지합니다.
+	void syncNotionDataFromWebhook_deduplicatesCategoryRowsWithLastValue() throws Exception {
+		NotionWebhookDataSyncService service = new NotionWebhookDataSyncService(
+			notionWebhookMapper,
+			notionApiClient,
+			objectMapper,
+			""
+		);
+
+		String webhookBody = """
+			{
+			  "entity": {"type":"page","id":"31359db6-4d86-8066-8302-f1f02561a8c3"},
+			  "data": {"parent":{"id":"24759db6-4d86-8062-920b-c9cabd964411","data_source_id":"24759db6-4d86-811f-acce-000b244c4fd6"}}
+			}
+			""";
+		JsonNode pageNode = objectMapper.readTree("""
+			{
+			  "url":"https://www.notion.so/sample-3",
+			  "created_time":"2026-02-26T05:07:22.809Z",
+			  "archived":false,
+			  "in_trash":false,
+			  "properties":{
+			    "Title":{"type":"title","title":[{"plain_text":"샘플 타이틀3"}]},
+			    "Category":{"type":"multi_select","multi_select":[
+			      {"id":"dup-id","name":"초기명","color":"default"},
+			      {"id":"keep-id","name":"유지명","color":"blue"},
+			      {"id":"dup-id","name":"최신명","color":"green"}
+			    ]}
+			  }
+			}
+			""");
+
+		when(notionApiClient.retrievePage("31359db6-4d86-8066-8302-f1f02561a8c3")).thenReturn(pageNode);
+		when(notionApiClient.retrieveAllChildBlocks("31359db6-4d86-8066-8302-f1f02561a8c3")).thenReturn(List.of());
+		when(notionWebhookMapper.upsertNotionDataList(any(NotionDataListUpsertPO.class))).thenReturn(1);
+		when(notionWebhookMapper.upsertNotionCategoryBatch(anyList())).thenReturn(2);
+
+		int affected = service.syncNotionDataFromWebhook(webhookBody, Map.of());
+
+		assertEquals(1, affected);
+		@SuppressWarnings("unchecked")
+		ArgumentCaptor<List<NotionCategoryUpsertPO>> categoryCaptor = ArgumentCaptor.forClass((Class) List.class);
+		verify(notionWebhookMapper).upsertNotionCategoryBatch(categoryCaptor.capture());
+		List<NotionCategoryUpsertPO> capturedRows = categoryCaptor.getValue();
+		assertEquals(2, capturedRows.size());
+		assertEquals("dup-id", capturedRows.get(0).getCategoryId());
+		assertEquals("최신명", capturedRows.get(0).getCategoryNm());
+		assertEquals("green", capturedRows.get(0).getColor());
+		assertEquals("keep-id", capturedRows.get(1).getCategoryId());
+		assertEquals("유지명", capturedRows.get(1).getCategoryNm());
+		assertEquals("blue", capturedRows.get(1).getColor());
+
+		InOrder inOrder = inOrder(notionWebhookMapper);
+		inOrder.verify(notionWebhookMapper).upsertNotionDataList(any(NotionDataListUpsertPO.class));
+		inOrder.verify(notionWebhookMapper).upsertNotionCategoryBatch(anyList());
 	}
 
 	@Test
@@ -206,6 +281,7 @@ class NotionWebhookDataSyncServiceTests {
 		verify(notionWebhookMapper).upsertNotionDataDeleted(captor.capture());
 		assertEquals("31359db6-4d86-807b-a8d0-eacd48f3f3c6", captor.getValue().getId());
 		assertEquals("Y", captor.getValue().getDelYn());
+		verify(notionWebhookMapper, never()).upsertNotionCategoryBatch(anyList());
 	}
 
 	@Test
@@ -227,5 +303,6 @@ class NotionWebhookDataSyncServiceTests {
 		);
 		verify(notionApiClient, never()).retrievePage(any());
 		verify(notionWebhookMapper, never()).upsertNotionDataList(any());
+		verify(notionWebhookMapper, never()).upsertNotionCategoryBatch(anyList());
 	}
 }
