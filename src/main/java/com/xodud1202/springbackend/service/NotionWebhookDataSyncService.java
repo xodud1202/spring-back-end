@@ -200,9 +200,10 @@ public class NotionWebhookDataSyncService {
 		row.setDatabaseId(limitLength(safeValue(databaseId), MAX_ID_LENGTH));
 		row.setDataSourceId(limitLength(safeValue(dataSourceId), MAX_ID_LENGTH));
 
-		// 페이지 메타 정보를 title/url/delYn/createDt로 설정합니다.
+		// 페이지 메타 정보를 title/url/notionUrl/delYn/createDt로 설정합니다.
 		row.setTitle(limitLength(extractPageTitle(pageNode.path("properties")), MAX_TITLE_LENGTH));
-		row.setUrl(limitLength(trimToNull(pageNode.path("url").asText(null)), MAX_URL_LENGTH));
+		row.setUrl(limitLength(extractPageUrlProperty(pageNode.path("properties")), MAX_URL_LENGTH));
+		row.setNotionUrl(limitLength(trimToNull(pageNode.path("url").asText(null)), MAX_URL_LENGTH));
 		row.setDelYn(resolveDeleteFlag(pageNode));
 		row.setCreateDt(parseOffsetDateTime(pageNode.path("created_time").asText(null)));
 
@@ -375,6 +376,34 @@ public class NotionWebhookDataSyncService {
 			}
 		}
 		return null;
+	}
+
+	// properties에서 URL 타입 속성값을 찾아 URL 컬럼 저장값으로 반환합니다.
+	private String extractPageUrlProperty(JsonNode propertiesNode) {
+		if (propertiesNode == null || !propertiesNode.isObject()) {
+			return "";
+		}
+
+		JsonNode urlProperty = propertiesNode.path("URL");
+		if (urlProperty.isObject() && "url".equals(urlProperty.path("type").asText())) {
+			return safeValue(trimToNull(urlProperty.path("url").asText(null)));
+		}
+
+		Iterator<Map.Entry<String, JsonNode>> iterator = propertiesNode.properties().iterator();
+		while (iterator.hasNext()) {
+			Map.Entry<String, JsonNode> entry = iterator.next();
+			JsonNode propertyNode = entry.getValue();
+			if (!propertyNode.isObject()) {
+				continue;
+			}
+
+			if (!"url".equals(propertyNode.path("type").asText())) {
+				continue;
+			}
+
+			return safeValue(trimToNull(propertyNode.path("url").asText(null)));
+		}
+		return "";
 	}
 
 	// rich_text/title 배열에서 plain_text를 결합합니다.

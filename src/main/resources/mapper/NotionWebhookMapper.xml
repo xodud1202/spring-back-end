@@ -28,6 +28,7 @@
 		     , TITLE
 		     , NOTES
 		     , URL
+		     , NOTION_URL
 		     , DEL_YN
 		     , CATEGORY_ID
 		     , CREATE_DT
@@ -40,6 +41,7 @@
 		     , #{row.title}
 		     , #{row.notes}
 		     , #{row.url}
+		     , #{row.notionUrl}
 		     , #{row.delYn}
 		     , #{row.categoryId}
 		     , COALESCE(#{row.createDt}, NOW())
@@ -52,6 +54,7 @@
 		     , TITLE = VALUES(TITLE)
 		     , NOTES = VALUES(NOTES)
 		     , URL = VALUES(URL)
+		     , NOTION_URL = VALUES(NOTION_URL)
 		     , DEL_YN = VALUES(DEL_YN)
 		     , CATEGORY_ID = VALUES(CATEGORY_ID)
 		     , CREATE_DT = VALUES(CREATE_DT)

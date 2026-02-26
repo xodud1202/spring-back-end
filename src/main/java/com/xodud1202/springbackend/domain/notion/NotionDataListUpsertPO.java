@@ -15,6 +15,7 @@ public class NotionDataListUpsertPO {
 	private String title;
 	private String notes;
 	private String url;
+	private String notionUrl;
 	private String delYn;
 	private String categoryId;
 	private LocalDateTime createDt;

@@ -87,6 +87,7 @@ class NotionWebhookDataSyncServiceTests {
 			  "in_trash":false,
 			  "properties":{
 			    "제목":{"type":"title","title":[{"plain_text":"샘플 타이틀"}]},
+			    "URL":{"type":"url","url":"https://example.com/pages-url"},
 			    "Notes":{"type":"rich_text","rich_text":[{"text":{"content":"테스트"}},{"text":{"content":"4"}}]},
 			    "Category":{"type":"multi_select","multi_select":[
 			      {"id":"80b73e6d-4b9c-440c-8d7e-5173009de988","name":"A"},
@@ -125,8 +126,54 @@ class NotionWebhookDataSyncServiceTests {
 		assertEquals("24759db6-4d86-811f-acce-000b244c4fd6", row.getDataSourceId());
 		assertEquals("샘플 타이틀", row.getTitle());
 		assertEquals("테스트4", row.getNotes());
+		assertEquals("https://example.com/pages-url", row.getUrl());
+		assertEquals("https://www.notion.so/sample", row.getNotionUrl());
 		assertEquals("N", row.getDelYn());
 		assertEquals("80b73e6d-4b9c-440c-8d7e-5173009de988", row.getCategoryId());
+	}
+
+	@Test
+	@DisplayName("동기화 처리: URL 속성이 없으면 URL 컬럼은 빈값으로 저장하고 NOTION_URL은 저장한다")
+	// URL 타입 속성이 누락된 경우 URL 컬럼은 빈값으로 저장합니다.
+	void syncNotionDataFromWebhook_setsEmptyUrlWhenUrlPropertyMissing() throws Exception {
+		NotionWebhookDataSyncService service = new NotionWebhookDataSyncService(
+			notionWebhookMapper,
+			notionApiClient,
+			objectMapper,
+			""
+		);
+
+		String webhookBody = """
+			{
+			  "entity": {"type":"page","id":"31359db6-4d86-8066-8302-f1f02561a8c2"},
+			  "data": {"parent":{"id":"24759db6-4d86-8062-920b-c9cabd964411","data_source_id":"24759db6-4d86-811f-acce-000b244c4fd6"}}
+			}
+			""";
+		JsonNode pageNode = objectMapper.readTree("""
+			{
+			  "url":"https://www.notion.so/sample-2",
+			  "created_time":"2026-02-26T05:07:22.809Z",
+			  "archived":false,
+			  "in_trash":false,
+			  "properties":{
+			    "제목":{"type":"title","title":[{"plain_text":"샘플 타이틀2"}]},
+			    "Notes":{"type":"rich_text","rich_text":[{"text":{"content":"본문"}}]}
+			  }
+			}
+			""");
+
+		when(notionApiClient.retrievePage("31359db6-4d86-8066-8302-f1f02561a8c2")).thenReturn(pageNode);
+		when(notionApiClient.retrieveAllChildBlocks("31359db6-4d86-8066-8302-f1f02561a8c2")).thenReturn(List.of());
+		when(notionWebhookMapper.upsertNotionDataList(any(NotionDataListUpsertPO.class))).thenReturn(1);
+
+		int affected = service.syncNotionDataFromWebhook(webhookBody, Map.of());
+
+		assertEquals(1, affected);
+		ArgumentCaptor<NotionDataListUpsertPO> captor = ArgumentCaptor.forClass(NotionDataListUpsertPO.class);
+		verify(notionWebhookMapper).upsertNotionDataList(captor.capture());
+		NotionDataListUpsertPO row = captor.getValue();
+		assertEquals("", row.getUrl());
+		assertEquals("https://www.notion.so/sample-2", row.getNotionUrl());
 	}
 
 	@Test
