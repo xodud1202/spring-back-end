@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xodud1202.springbackend.domain.notion.NotionDataListUpsertPO;
 import com.xodud1202.springbackend.mapper.NotionWebhookMapper;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.NestedExceptionUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +28,7 @@ public class NotionWebhookDataSyncService {
 	private static final int MAX_TITLE_LENGTH = 200;
 	private static final int MAX_URL_LENGTH = 255;
 	private static final String SIGNATURE_HEADER = "x-notion-signature";
+	private static final String EVENT_TYPE_PAGE_DELETED = "page.deleted";
 
 	private final NotionWebhookMapper notionWebhookMapper;
 	private final NotionApiClient notionApiClient;
@@ -75,13 +77,45 @@ public class NotionWebhookDataSyncService {
 			return 0;
 		}
 
+		String eventType = trimToNull(rootNode.path("type").asText(null));
+		// page.deleted 이벤트는 Notion 조회 API를 호출하지 않고 삭제 상태만 반영합니다.
+		if (EVENT_TYPE_PAGE_DELETED.equals(eventType)) {
+			NotionDataListUpsertPO deletedRow = buildDeletedUpsertRow(rootNode);
+			return notionWebhookMapper.upsertNotionDataDeleted(deletedRow);
+		}
+
 		// Notion API에서 페이지 상세와 블록 목록을 조회합니다.
-		JsonNode pageNode = notionApiClient.retrievePage(pageId);
-		List<JsonNode> blocks = notionApiClient.retrieveAllChildBlocks(pageId);
+		JsonNode pageNode;
+		List<JsonNode> blocks;
+		try {
+			pageNode = notionApiClient.retrievePage(pageId);
+			blocks = notionApiClient.retrieveAllChildBlocks(pageId);
+		} catch (Exception exception) {
+			String rootMessage = trimToNull(NestedExceptionUtils.getMostSpecificCause(exception).getMessage());
+			String detailMessage = rootMessage == null ? safeValue(exception.getMessage()) : rootMessage;
+			throw new IllegalStateException(
+				"Notion 동기화 API 호출 실패 eventType=" + safeValue(eventType) + ", pageId=" + pageId + ", detail=" + detailMessage,
+				exception
+			);
+		}
 
 		// 조회 결과를 DB upsert 파라미터로 변환해 저장합니다.
 		NotionDataListUpsertPO upsertRow = buildUpsertRow(rootNode, pageNode, blocks);
 		return notionWebhookMapper.upsertNotionDataList(upsertRow);
+	}
+
+	// page.deleted 이벤트를 NOTION_DATA_LIST 삭제 상태 upsert 파라미터로 변환합니다.
+	private NotionDataListUpsertPO buildDeletedUpsertRow(JsonNode webhookNode) {
+		NotionDataListUpsertPO row = new NotionDataListUpsertPO();
+		String pageId = trimToNull(webhookNode.path("entity").path("id").asText(null));
+		String databaseId = trimToNull(webhookNode.path("data").path("parent").path("id").asText(null));
+		String dataSourceId = trimToNull(webhookNode.path("data").path("parent").path("data_source_id").asText(null));
+
+		row.setId(limitLength(pageId, MAX_ID_LENGTH));
+		row.setDatabaseId(limitLength(safeValue(databaseId), MAX_ID_LENGTH));
+		row.setDataSourceId(limitLength(safeValue(dataSourceId), MAX_ID_LENGTH));
+		row.setDelYn("Y");
+		return row;
 	}
 
 	// 검증 토큰이 설정된 경우 헤더 서명을 HMAC SHA-256으로 검증합니다.

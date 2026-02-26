@@ -126,6 +126,38 @@ class NotionWebhookDataSyncServiceTests {
 	}
 
 	@Test
+	@DisplayName("동기화 처리: page.deleted 이벤트는 Notion 조회 없이 삭제 상태만 upsert 한다")
+	// page.deleted 이벤트는 Notion API 조회를 생략하고 삭제 상태만 반영합니다.
+	void syncNotionDataFromWebhook_marksDeletedWithoutNotionApiCall() {
+		NotionWebhookDataSyncService service = new NotionWebhookDataSyncService(
+			notionWebhookMapper,
+			notionApiClient,
+			objectMapper,
+			""
+		);
+
+		String webhookBody = """
+			{
+			  "type":"page.deleted",
+			  "entity":{"type":"page","id":"31359db6-4d86-807b-a8d0-eacd48f3f3c6"},
+			  "data":{"parent":{"id":"24759db6-4d86-8062-920b-c9cabd964411","data_source_id":"24759db6-4d86-811f-acce-000b244c4fd6"}}
+			}
+			""";
+
+		when(notionWebhookMapper.upsertNotionDataDeleted(any(NotionDataListUpsertPO.class))).thenReturn(1);
+
+		int affected = service.syncNotionDataFromWebhook(webhookBody, Map.of());
+
+		assertEquals(1, affected);
+		verify(notionApiClient, never()).retrievePage(any());
+		verify(notionApiClient, never()).retrieveAllChildBlocks(any());
+		ArgumentCaptor<NotionDataListUpsertPO> captor = ArgumentCaptor.forClass(NotionDataListUpsertPO.class);
+		verify(notionWebhookMapper).upsertNotionDataDeleted(captor.capture());
+		assertEquals("31359db6-4d86-807b-a8d0-eacd48f3f3c6", captor.getValue().getId());
+		assertEquals("Y", captor.getValue().getDelYn());
+	}
+
+	@Test
 	@DisplayName("동기화 처리: 검증 토큰이 설정된 상태에서 서명이 불일치하면 예외를 발생시킨다")
 	// 서명 검증 실패 요청은 DB 처리 전에 차단합니다.
 	void syncNotionDataFromWebhook_throwsWhenSignatureMismatch() {

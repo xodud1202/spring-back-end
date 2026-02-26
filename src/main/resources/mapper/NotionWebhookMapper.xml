@@ -57,4 +57,30 @@
 		     , CREATE_DT = VALUES(CREATE_DT)
 		     , UPT_DT = NOW()
 	</insert>
+
+	<insert id="upsertNotionDataDeleted">
+		/* NotionWebhookMapper.upsertNotionDataDeleted : page.deleted 이벤트를 삭제 상태로 저장/수정 */
+		INSERT INTO NOTION_DATA_LIST (
+		       ID
+		     , DATABASE_ID
+		     , DATA_SOURCE_ID
+		     , DEL_YN
+		     , CREATE_DT
+		     , REG_DT
+		     , UPT_DT
+		) VALUES (
+		       #{row.id}
+		     , #{row.databaseId}
+		     , #{row.dataSourceId}
+		     , 'Y'
+		     , NOW()
+		     , NOW()
+		     , NOW()
+		)
+		ON DUPLICATE KEY UPDATE
+		       DATABASE_ID = COALESCE(NULLIF(VALUES(DATABASE_ID), ''), DATABASE_ID)
+		     , DATA_SOURCE_ID = COALESCE(NULLIF(VALUES(DATA_SOURCE_ID), ''), DATA_SOURCE_ID)
+		     , DEL_YN = 'Y'
+		     , UPT_DT = NOW()
+	</insert>
 </mapper>

@@ -15,4 +15,7 @@ public interface NotionWebhookMapper {
 
 	// Notion 페이지 상세 데이터를 NOTION_DATA_LIST에 저장/수정합니다.
 	int upsertNotionDataList(@Param("row") NotionDataListUpsertPO row);
+
+	// page.deleted 이벤트 기준으로 NOTION_DATA_LIST 삭제 상태를 저장/수정합니다.
+	int upsertNotionDataDeleted(@Param("row") NotionDataListUpsertPO row);
 }
