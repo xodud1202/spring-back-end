@@ -19,7 +19,7 @@ public class NewsArticleScheduler {
 	// 30분 주기 배치로 RSS 기사 수집을 실행하고 결과를 로그로 남깁니다.
 	public void collectNewsArticleEveryThirtyMinutes() {
 		// 수집 배치를 실행하고 집계 결과를 기록합니다.
-		NewsCollectResultVO collectResult = newsService.collectNewsArticles();
+		/*NewsCollectResultVO collectResult = newsService.collectNewsArticles();
 		log.info(
 			"뉴스 RSS 수집 완료 targetCount={}, successTargetCount={}, failedTargetCount={}, attemptedArticleCount={}, insertedArticleCount={}, skippedArticleCount={}",
 			collectResult.getTargetCount(),
@@ -28,7 +28,7 @@ public class NewsArticleScheduler {
 			collectResult.getAttemptedArticleCount(),
 			collectResult.getInsertedArticleCount(),
 			collectResult.getSkippedArticleCount()
-		);
+		);*/
 
 		// 수집 완료 후 프론트 직접 조회용 JSON 스냅샷 파일을 생성/업로드합니다.
 		try {
