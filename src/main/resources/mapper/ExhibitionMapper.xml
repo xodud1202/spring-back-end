@@ -72,6 +72,8 @@
 		SELECT EXHIBITION_TAB_NO
 		     , EXHIBITION_NO
 		     , TAB_NM
+		     , DATE_FORMAT(DISP_START_DT, '%Y-%m-%d %H:%i:%s') AS DISP_START_DT
+		     , DATE_FORMAT(DISP_END_DT, '%Y-%m-%d %H:%i:%s') AS DISP_END_DT
 		     , DISP_ORD
 		     , SHOW_YN
 		     , DEL_YN
@@ -206,6 +208,8 @@
 		INSERT INTO EXHIBITION_TAB (
 		       EXHIBITION_NO
 		     , TAB_NM
+		     , DISP_START_DT
+		     , DISP_END_DT
 		     , DISP_ORD
 		     , SHOW_YN
 		     , DEL_YN
@@ -214,6 +218,8 @@
 		) VALUES (
 		       #{exhibitionNo}
 		     , #{tabNm}
+		     , NULLIF(#{dispStartDt}, '')
+		     , NULLIF(#{dispEndDt}, '')
 		     , #{dispOrd}
 		     , #{showYn}
 		     , 'N'

@@ -17,6 +17,10 @@ public class ExhibitionTabPO {
 	private Integer dispOrd;
 	// 노출 여부입니다.
 	private String showYn;
+	// 노출 시작일시입니다.
+	private String dispStartDt;
+	// 노출 종료일시입니다.
+	private String dispEndDt;
 	// 삭제 여부입니다.
 	private String delYn;
 	// 등록자 번호입니다.
@@ -24,4 +28,3 @@ public class ExhibitionTabPO {
 	// 수정자 번호입니다.
 	private Long udtNo;
 }
-

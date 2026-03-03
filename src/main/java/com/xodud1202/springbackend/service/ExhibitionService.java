@@ -145,6 +145,10 @@ public class ExhibitionService {
 		if (dateValidation != null) {
 			return dateValidation;
 		}
+		String tabDateValidation = normalizeAndValidateTabDisplayPeriod(param);
+		if (tabDateValidation != null) {
+			return tabDateValidation;
+		}
 		return null;
 	}
 
@@ -548,6 +552,48 @@ public class ExhibitionService {
 		return null;
 	}
 
+	// 탭 노출 기간을 정규화하고 유효성을 검증합니다.
+	private String normalizeAndValidateTabDisplayPeriod(ExhibitionSavePO param) {
+		List<ExhibitionTabPO> tabList = safeList(param.getTabList());
+		for (int index = 0; index < tabList.size(); index += 1) {
+			ExhibitionTabPO tab = tabList.get(index);
+			if (tab == null || trimToNull(tab.getTabNm()) == null) {
+				continue;
+			}
+
+			String rawStart = trimToNull(tab.getDispStartDt());
+			String rawEnd = trimToNull(tab.getDispEndDt());
+			LocalDateTime startDateTime = null;
+			LocalDateTime endDateTime = null;
+
+			if (rawStart != null) {
+				startDateTime = parseDateTimeForSave(rawStart, false);
+				if (startDateTime == null) {
+					return "탭[" + (index + 1) + "] 노출 시작일시 형식을 확인해주세요.";
+				}
+				tab.setDispStartDt(DISPLAY_PERIOD_FORMATTER.format(startDateTime));
+			}
+			if (rawEnd != null) {
+				endDateTime = parseDateTimeForSave(rawEnd, true);
+				if (endDateTime == null) {
+					return "탭[" + (index + 1) + "] 노출 종료일시 형식을 확인해주세요.";
+				}
+				tab.setDispEndDt(DISPLAY_PERIOD_FORMATTER.format(endDateTime));
+			}
+
+			if (startDateTime != null && endDateTime != null && startDateTime.isAfter(endDateTime)) {
+				return "탭[" + (index + 1) + "] 노출 시작일시는 종료일시보다 늦을 수 없습니다.";
+			}
+			if (rawStart == null) {
+				tab.setDispStartDt(null);
+			}
+			if (rawEnd == null) {
+				tab.setDispEndDt(null);
+			}
+		}
+		return null;
+	}
+
 	// 검색용 날짜를 정규화하고 범위를 확보합니다.
 	private String normalizeSearchDate(String value, boolean isEnd) {
 		String normalized = trimToNull(value);
@@ -575,6 +621,7 @@ public class ExhibitionService {
 		if (normalized == null) {
 			return null;
 		}
+		normalized = normalized.replace("T", " ").trim();
 		if (normalized.length() == 10) {
 			LocalDate date = parseLocalDate(normalized);
 			if (date == null) {
@@ -582,7 +629,27 @@ public class ExhibitionService {
 			}
 			return isEnd ? date.atTime(23, 59, 59) : date.atStartOfDay();
 		}
+		if (normalized.length() == 13 && normalized.charAt(10) == ' ') {
+			LocalDate date = parseLocalDate(normalized.substring(0, 10));
+			if (date == null) {
+				return null;
+			}
+			Integer hour = parseHour(normalized.substring(11, 13));
+			if (hour == null || hour < 0 || hour > 24) {
+				return null;
+			}
+			return hour == 24 ? date.atTime(23, 59, 59) : date.atTime(hour, 0, 0);
+		}
 		return parseDateTime(normalized);
+	}
+
+	// 시간값을 정수로 추출합니다.
+	private Integer parseHour(String value) {
+		try {
+			return Integer.parseInt(value);
+		} catch (NumberFormatException ignore) {
+			return null;
+		}
 	}
 
 	// 입력값에서 로컬 날짜를 추출합니다.
