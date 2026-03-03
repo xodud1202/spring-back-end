@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+		"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.xodud1202.springbackend.mapper.ExhibitionMapper">
+	<select id="getAdminExhibitionList" resultType="com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionVO">
+		/* ExhibitionMapper.getAdminExhibitionList: 관리자 기획전 목록 조회 */
+		SELECT EB.EXHIBITION_NO
+		     , EB.EXHIBITION_NM
+		     , DATE_FORMAT(EB.DISP_START_DT, '%Y-%m-%d %H:%i:%s') AS DISP_START_DT
+		     , DATE_FORMAT(EB.DISP_END_DT, '%Y-%m-%d %H:%i:%s') AS DISP_END_DT
+		     , EB.LIST_VIEW_YN AS LIST_SHOW_YN
+		     , EB.VIEW_YN
+		     , DATE_FORMAT(EB.REG_DT, '%Y-%m-%d %H:%i:%s') AS REG_DT
+		     , DATE_FORMAT(EB.UDT_DT, '%Y-%m-%d %H:%i:%s') AS UDT_DT
+		  FROM EXHIBITION_BASE EB
+		 WHERE EB.DEL_YN = 'N'
+		<if test="searchGb == 'NO' and searchValue != null and searchValue != ''">
+		  AND EB.EXHIBITION_NO = #{searchValue}
+		</if>
+		<if test="searchGb == 'NM' and searchValue != null and searchValue != ''">
+		  AND EB.EXHIBITION_NM LIKE CONCAT('%', #{searchValue}, '%')
+		</if>
+		<if test="searchStartDt != null and searchStartDt != ''">
+		  AND (EB.DISP_END_DT IS NULL OR EB.DISP_END_DT &gt;= #{searchStartDt})
+		</if>
+		<if test="searchEndDt != null and searchEndDt != ''">
+		  AND (EB.DISP_START_DT IS NULL OR EB.DISP_START_DT &lt;= #{searchEndDt})
+		</if>
+		 ORDER BY EB.LIST_VIEW_YN DESC, EB.DISP_START_DT DESC, EB.EXHIBITION_NO DESC
+		 LIMIT #{pageSize} OFFSET #{offset}
+	</select>
+
+	<select id="getAdminExhibitionCount" resultType="int">
+		/* ExhibitionMapper.getAdminExhibitionCount: 관리자 기획전 목록 건수 조회 */
+		SELECT COUNT(1)
+		  FROM EXHIBITION_BASE EB
+		 WHERE EB.DEL_YN = 'N'
+		<if test="searchGb == 'NO' and searchValue != null and searchValue != ''">
+		  AND EB.EXHIBITION_NO = #{searchValue}
+		</if>
+		<if test="searchGb == 'NM' and searchValue != null and searchValue != ''">
+		  AND EB.EXHIBITION_NM LIKE CONCAT('%', #{searchValue}, '%')
+		</if>
+		<if test="searchStartDt != null and searchStartDt != ''">
+		  AND (EB.DISP_END_DT IS NULL OR EB.DISP_END_DT &gt;= #{searchStartDt})
+		</if>
+		<if test="searchEndDt != null and searchEndDt != ''">
+		  AND (EB.DISP_START_DT IS NULL OR EB.DISP_START_DT &lt;= #{searchEndDt})
+		</if>
+	</select>
+
+	<select id="getAdminExhibitionDetail" resultType="com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionDetailVO">
+		/* ExhibitionMapper.getAdminExhibitionDetail: 기획전 상세 조회 */
+		SELECT EB.EXHIBITION_NO
+		     , EB.EXHIBITION_NM
+		     , DATE_FORMAT(EB.DISP_START_DT, '%Y-%m-%d %H:%i:%s') AS DISP_START_DT
+		     , DATE_FORMAT(EB.DISP_END_DT, '%Y-%m-%d %H:%i:%s') AS DISP_END_DT
+		     , EB.LIST_VIEW_YN AS LIST_SHOW_YN
+		     , EB.VIEW_YN
+		     , EB.EXHIBITION_PC_DESC
+		     , EB.EXHIBITION_MO_DESC
+		  FROM EXHIBITION_BASE EB
+		 WHERE EB.EXHIBITION_NO = #{exhibitionNo}
+		   AND EB.DEL_YN = 'N'
+	</select>
+
+	<select id="getExhibitionTabList" resultType="com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionTabPO">
+		/* ExhibitionMapper.getExhibitionTabList: 기획전 탭 목록 조회 */
+		SELECT EXHIBITION_TAB_NO
+		     , EXHIBITION_NO
+		     , TAB_NM
+		     , DISP_ORD
+		     , SHOW_YN
+		     , DEL_YN
+		     , REG_NO
+		     , DATE_FORMAT(REG_DT, '%Y-%m-%d %H:%i:%s') AS REG_DT
+		     , UDT_NO
+		     , DATE_FORMAT(UDT_DT, '%Y-%m-%d %H:%i:%s') AS UDT_DT
+		  FROM EXHIBITION_TAB
+		 WHERE EXHIBITION_NO = #{exhibitionNo}
+		   AND DEL_YN = 'N'
+		 ORDER BY DISP_ORD ASC, EXHIBITION_TAB_NO ASC
+	</select>
+
+	<select id="getExhibitionGoodsList" resultType="com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionGoodsVO">
+		/* ExhibitionMapper.getExhibitionGoodsList: 기획전 탭 상품 목록 조회 */
+		SELECT ETG.EXHIBITION_NO
+		     , ETG.EXHIBITION_TAB_NO
+		     , ET.TAB_NM
+		     , ETG.GOODS_ID
+		     , GB.ERP_STYLE_CD
+		     , GB.GOODS_NM
+		     , ETG.DISP_ORD
+		     , ETG.SHOW_YN
+		     , ETG.DEL_YN
+		  FROM EXHIBITION_TAB_GOODS ETG
+		  LEFT JOIN EXHIBITION_TAB ET
+		    ON ET.EXHIBITION_TAB_NO = ETG.EXHIBITION_TAB_NO
+		   AND ET.DEL_YN = 'N'
+		  JOIN GOODS_BASE GB
+		    ON GB.GOODS_ID = ETG.GOODS_ID
+		 WHERE ETG.EXHIBITION_NO = #{exhibitionNo}
+		   AND ETG.DEL_YN = 'N'
+		<if test="exhibitionTabNo != null and exhibitionTabNo > 0">
+		  AND ETG.EXHIBITION_TAB_NO = #{exhibitionTabNo}
+		</if>
+		 ORDER BY ETG.EXHIBITION_TAB_NO ASC, ETG.DISP_ORD ASC, ETG.GOODS_ID ASC
+	</select>
+
+	<insert id="insertExhibitionBase" useGeneratedKeys="true" keyProperty="exhibitionNo" keyColumn="EXHIBITION_NO">
+		/* ExhibitionMapper.insertExhibitionBase: 기획전 기본 정보 등록 */
+		INSERT INTO EXHIBITION_BASE (
+		       EXHIBITION_NM
+		     , DISP_START_DT
+		     , DISP_END_DT
+		     , LIST_VIEW_YN
+		     , VIEW_YN
+		     , EXHIBITION_PC_DESC
+		     , EXHIBITION_MO_DESC
+		     , DEL_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{exhibitionNm}
+		     , NULLIF(#{dispStartDt}, '')
+		     , NULLIF(#{dispEndDt}, '')
+		     , #{listShowYn}
+		     , #{showYn}
+		     , #{exhibitionPcDesc}
+		     , #{exhibitionMoDesc}
+		     , 'N'
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+
+	<update id="updateExhibitionBase">
+		/* ExhibitionMapper.updateExhibitionBase: 기획전 기본 정보 수정 */
+		UPDATE EXHIBITION_BASE
+		   SET EXHIBITION_NM = #{exhibitionNm}
+		     , DISP_START_DT = NULLIF(#{dispStartDt}, '')
+		     , DISP_END_DT = NULLIF(#{dispEndDt}, '')
+		     , LIST_VIEW_YN = #{listShowYn}
+		     , VIEW_YN = #{showYn}
+		     , EXHIBITION_PC_DESC = #{exhibitionPcDesc}
+		     , EXHIBITION_MO_DESC = #{exhibitionMoDesc}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE EXHIBITION_NO = #{exhibitionNo}
+		   AND DEL_YN = 'N'
+	</update>
+
+	<select id="countExhibitionByNo" resultType="int">
+		/* ExhibitionMapper.countExhibitionByNo: 기획전 존재 여부 조회 */
+		SELECT COUNT(1)
+		  FROM EXHIBITION_BASE EB
+		 WHERE EB.EXHIBITION_NO = #{exhibitionNo}
+		   AND EB.DEL_YN = 'N'
+	</select>
+
+	<select id="countExhibitionTabByNo" resultType="int">
+		/* ExhibitionMapper.countExhibitionTabByNo: 기획전 탭 수 조회 */
+		SELECT COUNT(1)
+		  FROM EXHIBITION_TAB ET
+		 WHERE ET.EXHIBITION_NO = #{exhibitionNo}
+		   AND ET.DEL_YN = 'N'
+	</select>
+
+	<update id="updateExhibitionBaseDelete">
+		/* ExhibitionMapper.updateExhibitionBaseDelete: 기획전 삭제 상태 변경 */
+		UPDATE EXHIBITION_BASE
+		   SET DEL_YN = 'Y'
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE EXHIBITION_NO = #{exhibitionNo}
+		   AND DEL_YN = 'N'
+	</update>
+
+	<delete id="deleteExhibitionTabByExhibitionNo">
+		/* ExhibitionMapper.deleteExhibitionTabByExhibitionNo: 기획전 탭 일괄 삭제 */
+		DELETE
+		  FROM EXHIBITION_TAB
+		 WHERE EXHIBITION_NO = #{exhibitionNo}
+	</delete>
+
+	<delete id="deleteExhibitionGoodsByExhibitionNo">
+		/* ExhibitionMapper.deleteExhibitionGoodsByExhibitionNo: 기획전 탭 상품 일괄 삭제 */
+		DELETE
+		  FROM EXHIBITION_TAB_GOODS
+		 WHERE EXHIBITION_NO = #{exhibitionNo}
+	</delete>
+
+	<insert id="insertExhibitionTab" useGeneratedKeys="true" keyProperty="exhibitionTabNo" keyColumn="EXHIBITION_TAB_NO">
+		/* ExhibitionMapper.insertExhibitionTab: 기획전 탭 등록 */
+		INSERT INTO EXHIBITION_TAB (
+		       EXHIBITION_NO
+		     , TAB_NM
+		     , DISP_ORD
+		     , SHOW_YN
+		     , DEL_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{exhibitionNo}
+		     , #{tabNm}
+		     , #{dispOrd}
+		     , #{showYn}
+		     , 'N'
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+
+	<insert id="insertExhibitionGoods">
+		/* ExhibitionMapper.insertExhibitionGoods: 기획전 탭 상품 등록 */
+		INSERT INTO EXHIBITION_TAB_GOODS (
+		       EXHIBITION_NO
+		     , EXHIBITION_TAB_NO
+		     , GOODS_ID
+		     , DISP_ORD
+		     , SHOW_YN
+		     , DEL_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{exhibitionNo}
+		     , #{exhibitionTabNo}
+		     , #{goodsId}
+		     , #{dispOrd}
+		     , #{showYn}
+		     , 'N'
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+</mapper>

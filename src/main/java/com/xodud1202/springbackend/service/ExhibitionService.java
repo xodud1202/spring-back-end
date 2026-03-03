@@ -1,0 +1,625 @@
+package com.xodud1202.springbackend.service;
+
+import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionDeletePO;
+import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionDetailVO;
+import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionGoodsPO;
+import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionGoodsVO;
+import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionPO;
+import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionSavePO;
+import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionTabPO;
+import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionVO;
+import com.xodud1202.springbackend.mapper.ExhibitionMapper;
+import lombok.RequiredArgsConstructor;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+@Service
+@RequiredArgsConstructor
+// 기획전 관리 비즈니스 로직을 처리합니다.
+public class ExhibitionService {
+	private static final String YN_Y = "Y";
+	private static final String YN_N = "N";
+	private static final String SEARCH_GB_NO = "NO";
+	private static final String SEARCH_GB_NAME = "NM";
+	private static final int MIN_PAGE_SIZE = 1;
+	private static final int DEFAULT_PAGE_SIZE = 20;
+	private static final int MAX_PAGE_SIZE = 200;
+	private static final int DEFAULT_MAX_ORDER = 99999;
+	private static final DateTimeFormatter SEARCH_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+	private static final DateTimeFormatter BASIC_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd");
+	private static final DateTimeFormatter DISPLAY_PERIOD_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+	private static final String HEADER_GOODS_ID = "상품코드";
+	private static final String HEADER_DISPLAY_ORDER = "노출순서";
+
+	private final ExhibitionMapper exhibitionMapper;
+
+	// 기획전 목록을 조회합니다.
+	public Map<String, Object> getAdminExhibitionList(
+		Integer page,
+		String searchGb,
+		String searchValue,
+		String searchStartDt,
+		String searchEndDt,
+		Integer pageSize
+	) {
+		// 페이지/사이즈를 기본값으로 정리합니다.
+		int resolvedPage = page == null || page < MIN_PAGE_SIZE ? MIN_PAGE_SIZE : page;
+		int resolvedPageSize = pageSize == null || pageSize < MIN_PAGE_SIZE ? DEFAULT_PAGE_SIZE : Math.min(pageSize, MAX_PAGE_SIZE);
+		int offset = (resolvedPage - 1) * resolvedPageSize;
+
+		ExhibitionPO param = new ExhibitionPO();
+		param.setPage(resolvedPage);
+		param.setPageSize(resolvedPageSize);
+		param.setOffset(offset);
+		param.setSearchGb(normalizeSearchGb(trimToNull(searchGb), trimToNull(searchValue)));
+		param.setSearchValue(trimToNull(searchValue));
+
+		// 검색 기간을 정규화하고 유효성을 검사합니다.
+		String searchValidateMessage = normalizeSearchDateRange(param, searchStartDt, searchEndDt);
+		if (searchValidateMessage != null) {
+			throw new IllegalArgumentException(searchValidateMessage);
+		}
+
+		// 목록 및 건수를 조회합니다.
+		List<ExhibitionVO> list = exhibitionMapper.getAdminExhibitionList(param);
+		int totalCount = exhibitionMapper.getAdminExhibitionCount(param);
+
+		Map<String, Object> result = new HashMap<>();
+		result.put("list", list);
+		result.put("totalCount", totalCount);
+		result.put("page", resolvedPage);
+		result.put("pageSize", resolvedPageSize);
+		return result;
+	}
+
+	// 기획전 상세를 조회합니다.
+	public ExhibitionDetailVO getAdminExhibitionDetail(Integer exhibitionNo) {
+		// 유효하지 않은 식별자는 조회하지 않습니다.
+		if (exhibitionNo == null || exhibitionNo < 1) {
+			return null;
+		}
+		// 기본 마스터 정보를 조회합니다.
+		ExhibitionDetailVO detail = exhibitionMapper.getAdminExhibitionDetail(exhibitionNo);
+		if (detail == null) {
+			return null;
+		}
+		// 탭 및 상품 정보를 함께 조회합니다.
+		detail.setTabList(exhibitionMapper.getExhibitionTabList(exhibitionNo));
+		detail.setGoodsList(exhibitionMapper.getExhibitionGoodsList(exhibitionNo, null));
+		return detail;
+	}
+
+	// 기획전 저장 요청의 공통 유효성을 검증합니다.
+	public String validateExhibitionSave(ExhibitionSavePO param, boolean isCreate) {
+		// 필수 요청값을 확인합니다.
+		if (param == null) {
+			return "요청 데이터가 없습니다.";
+		}
+		// 수정 모드는 기획전 번호가 필수입니다.
+		if (!isCreate && (param.getExhibitionNo() == null || param.getExhibitionNo() < 1)) {
+			return "기획전 번호를 확인해주세요.";
+		}
+		if (trimToNull(param.getExhibitionNm()) == null) {
+			return "기획전명을 입력해주세요.";
+		}
+		if (param.getListShowYn() == null || !isYnValue(param.getListShowYn().trim())) {
+			return "리스트 노출 여부를 확인해주세요.";
+		}
+		if (param.getShowYn() == null || !isYnValue(param.getShowYn().trim())) {
+			return "노출 여부를 확인해주세요.";
+		}
+		if (isCreate && param.getRegNo() == null) {
+			return "등록자 정보를 확인해주세요.";
+		}
+		if (!isCreate && param.getUdtNo() == null) {
+			return "수정자 정보를 확인해주세요.";
+		}
+
+		// 등록/수정 일시를 정규화하고 유효성을 검증합니다.
+		String dateValidation = normalizeAndValidateDisplayPeriod(param);
+		if (dateValidation != null) {
+			return dateValidation;
+		}
+		return null;
+	}
+
+	// 기획전 등록 요청을 검증합니다.
+	public String validateExhibitionCreate(ExhibitionSavePO param) {
+		return validateExhibitionSave(param, true);
+	}
+
+	// 기획전 수정 요청을 검증합니다.
+	public String validateExhibitionUpdate(ExhibitionSavePO param) {
+		return validateExhibitionSave(param, false);
+	}
+
+	// 기획전 삭제 요청을 검증합니다.
+	public String validateExhibitionDelete(ExhibitionDeletePO param) {
+		// 필수 요청값을 확인합니다.
+		if (param == null) {
+			return "요청 데이터가 없습니다.";
+		}
+		if (param.getExhibitionNo() == null || param.getExhibitionNo() < 1) {
+			return "기획전 번호를 확인해주세요.";
+		}
+		if (param.getUdtNo() == null) {
+			return "수정자 정보를 확인해주세요.";
+		}
+		// 존재 여부를 확인합니다.
+		int exists = exhibitionMapper.countExhibitionByNo(param.getExhibitionNo());
+		if (exists == 0) {
+			return "기획전 정보를 확인해주세요.";
+		}
+		return null;
+	}
+
+	// 기획전을 등록합니다.
+	@Transactional
+	public int createExhibition(ExhibitionSavePO param) {
+		// 기본값을 정리한 뒤 등록합니다.
+		normalizeDefaultValues(param, true);
+		exhibitionMapper.insertExhibitionBase(param);
+		if (param.getExhibitionNo() == null || param.getExhibitionNo() < 1) {
+			throw new IllegalArgumentException("기획전 등록에 실패했습니다.");
+		}
+		saveExhibitionTabAndGoods(param.getExhibitionNo(), param);
+		return param.getExhibitionNo();
+	}
+
+	// 기획전을 수정합니다.
+	@Transactional
+	public int updateExhibition(ExhibitionSavePO param) {
+		// 수정 대상 존재 여부를 확인합니다.
+		int exists = exhibitionMapper.countExhibitionByNo(param.getExhibitionNo());
+		if (exists == 0) {
+			throw new IllegalArgumentException("기획전 정보를 확인해주세요.");
+		}
+
+		// 기본값 및 일시를 정리한 뒤 갱신합니다.
+		normalizeDefaultValues(param, false);
+		int updated = exhibitionMapper.updateExhibitionBase(param);
+		if (updated == 0) {
+			throw new IllegalArgumentException("기획전 수정에 실패했습니다.");
+		}
+		saveExhibitionTabAndGoods(param.getExhibitionNo(), param);
+		return updated;
+	}
+
+	// 기획전을 삭제 처리합니다.
+	@Transactional
+	public int deleteExhibition(ExhibitionDeletePO param) {
+		// 하위 탭/상품을 모두 정리한 뒤 기획전 상태를 삭제로 변경합니다.
+		exhibitionMapper.deleteExhibitionGoodsByExhibitionNo(param.getExhibitionNo());
+		exhibitionMapper.deleteExhibitionTabByExhibitionNo(param.getExhibitionNo());
+		return exhibitionMapper.updateExhibitionBaseDelete(param.getExhibitionNo(), param.getUdtNo());
+	}
+
+	// 기획전 탭/상품을 저장합니다.
+	private void saveExhibitionTabAndGoods(Integer exhibitionNo, ExhibitionSavePO param) {
+		if (exhibitionNo == null || exhibitionNo < 1) {
+			return;
+		}
+
+		// 기획전 단위로 기존 정보를 초기화합니다.
+		exhibitionMapper.deleteExhibitionGoodsByExhibitionNo(exhibitionNo);
+		exhibitionMapper.deleteExhibitionTabByExhibitionNo(exhibitionNo);
+
+		List<ExhibitionTabPO> tabList = safeList(param.getTabList());
+		if (tabList.isEmpty()) {
+			return;
+		}
+
+		// rowKey/기존 tabNo 매핑을 미리 준비합니다.
+		Map<String, Integer> tabRowKeyToNo = new HashMap<>();
+		Map<Integer, Integer> tabNoToNo = new HashMap<>();
+		for (int i = 0; i < tabList.size(); i += 1) {
+			ExhibitionTabPO source = tabList.get(i);
+			if (source == null) {
+				continue;
+			}
+			String tabNm = trimToNull(source.getTabNm());
+			if (tabNm == null) {
+				continue;
+			}
+
+			// 탭을 저장해 새 키를 받아옵니다.
+			ExhibitionTabPO saveTarget = new ExhibitionTabPO();
+			saveTarget.setExhibitionNo(exhibitionNo);
+			saveTarget.setTabNm(tabNm);
+			saveTarget.setShowYn(normalizeShowYn(source.getShowYn()));
+			saveTarget.setDelYn(YN_N);
+			saveTarget.setRegNo(resolveAuditNo(param.getRegNo(), param.getUdtNo()));
+			saveTarget.setUdtNo(resolveAuditNo(param.getRegNo(), param.getUdtNo()));
+			exhibitionMapper.insertExhibitionTab(saveTarget);
+			if (saveTarget.getExhibitionTabNo() == null || saveTarget.getExhibitionTabNo() < 1) {
+				throw new IllegalArgumentException("기획전 탭 등록에 실패했습니다.");
+			}
+			String sourceRowKey = trimToNull(source.getRowKey());
+			if (sourceRowKey != null) {
+				tabRowKeyToNo.put(sourceRowKey, saveTarget.getExhibitionTabNo());
+			}
+			Integer sourceTabNo = source.getExhibitionTabNo();
+			if (sourceTabNo != null && sourceTabNo > 0) {
+				tabNoToNo.put(sourceTabNo, saveTarget.getExhibitionTabNo());
+			}
+		}
+
+		// 탭별 상품을 정렬 상태로 저장합니다.
+		List<ExhibitionGoodsPO> goodsList = safeList(param.getGoodsList());
+		Map<Integer, Integer> tabDispOrd = new HashMap<>();
+		for (ExhibitionGoodsPO source : goodsList) {
+			if (source == null) {
+				continue;
+			}
+			String goodsId = trimToNull(source.getGoodsId());
+			if (goodsId == null) {
+				continue;
+			}
+
+			Integer targetTabNo = resolveGoodsTabNo(source, tabRowKeyToNo, tabNoToNo);
+			if (targetTabNo == null || targetTabNo < 1) {
+				throw new IllegalArgumentException("상품 탭을 선택해주세요.");
+			}
+			int nextOrder = tabDispOrd.getOrDefault(targetTabNo, 0) + 1;
+			tabDispOrd.put(targetTabNo, nextOrder);
+
+			ExhibitionGoodsPO saveTarget = new ExhibitionGoodsPO();
+			saveTarget.setExhibitionNo(exhibitionNo);
+			saveTarget.setExhibitionTabNo(targetTabNo);
+			saveTarget.setGoodsId(goodsId);
+			saveTarget.setDispOrd(resolvePositiveInteger(source.getDispOrd(), nextOrder));
+			saveTarget.setShowYn(normalizeShowYn(source.getShowYn()));
+			saveTarget.setDelYn(YN_N);
+			saveTarget.setRegNo(resolveAuditNo(param.getRegNo(), param.getUdtNo()));
+			saveTarget.setUdtNo(resolveAuditNo(param.getRegNo(), param.getUdtNo()));
+			exhibitionMapper.insertExhibitionGoods(saveTarget);
+		}
+	}
+
+	// 엑셀 업로드 요청을 검증합니다.
+	public String validateExhibitionGoodsExcelUpload(MultipartFile file) {
+		// 파일 존재을 확인합니다.
+		if (file == null || file.isEmpty()) {
+			return "엑셀 파일을 선택해주세요.";
+		}
+		String filename = file.getOriginalFilename();
+		if (filename == null || !filename.toLowerCase().endsWith(".xlsx")) {
+			return "xlsx 파일만 업로드할 수 있습니다.";
+		}
+		return null;
+	}
+
+	// 엑셀 업로드 데이터를 파싱해 상품 목록으로 반환합니다.
+	public List<Map<String, Object>> parseExhibitionGoodsExcel(MultipartFile file) throws IOException {
+		List<Map<String, Object>> rows = new ArrayList<>();
+		// 시트 정보를 읽어 헤더를 검증합니다.
+		try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
+			Sheet sheet = workbook.getSheetAt(0);
+			if (sheet == null) {
+				throw new IllegalArgumentException("엑셀 데이터를 확인해주세요.");
+			}
+			Row header = sheet.getRow(0);
+			if (header == null
+				|| !HEADER_GOODS_ID.equals(getCellString(header.getCell(0)))
+				|| !HEADER_DISPLAY_ORDER.equals(getCellString(header.getCell(1)))) {
+				throw new IllegalArgumentException("엑셀 헤더 형식을 확인해주세요.");
+			}
+
+			int lastRowNum = sheet.getLastRowNum();
+			for (int rowIndex = 1; rowIndex <= lastRowNum; rowIndex += 1) {
+				Row row = sheet.getRow(rowIndex);
+				if (row == null) {
+					continue;
+				}
+				String goodsId = trimToNull(getCellString(row.getCell(0)));
+				Integer dispOrd = getCellInteger(row.getCell(1));
+				if (goodsId == null) {
+					continue;
+				}
+				if (dispOrd == null || dispOrd < 1) {
+					throw new IllegalArgumentException("엑셀 업로드의 노출순서는 1 이상이어야 합니다.");
+				}
+				Map<String, Object> item = new HashMap<>();
+				item.put("goodsId", goodsId);
+				item.put("dispOrd", dispOrd);
+				item.put("showYn", YN_Y);
+				rows.add(item);
+			}
+		}
+		return rows;
+	}
+
+	// 엑셀 다운로드용 상품 템플릿을 생성합니다.
+	public byte[] buildExhibitionGoodsExcelTemplate(Integer exhibitionNo, Integer exhibitionTabNo) throws IOException {
+		List<ExhibitionGoodsVO> rows = new ArrayList<>();
+		if (exhibitionNo != null && exhibitionNo > 0) {
+			rows = exhibitionMapper.getExhibitionGoodsList(exhibitionNo, exhibitionTabNo);
+		}
+		// 파일 헤더 및 상품 데이터를 생성합니다.
+		try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+			Sheet sheet = workbook.createSheet("template");
+			Row header = sheet.createRow(0);
+			header.createCell(0).setCellValue(HEADER_GOODS_ID);
+			header.createCell(1).setCellValue(HEADER_DISPLAY_ORDER);
+			for (int index = 0; index < rows.size(); index += 1) {
+				ExhibitionGoodsVO item = rows.get(index);
+				if (item == null || trimToNull(item.getGoodsId()) == null) {
+					continue;
+				}
+				Row row = sheet.createRow(index + 1);
+				row.createCell(0).setCellValue(item.getGoodsId());
+				row.createCell(1).setCellValue(resolvePositiveInteger(item.getDispOrd(), index + 1));
+			}
+			workbook.write(outputStream);
+			return outputStream.toByteArray();
+		}
+	}
+
+	// 기획전 탭 수를 조회합니다.
+	public int countExhibitionTabByNo(Integer exhibitionNo) {
+		return exhibitionMapper.countExhibitionTabByNo(exhibitionNo);
+	}
+
+	// 기획전 조회 공백 문자열을 판별합니다.
+	private boolean isBlank(String value) {
+		return value == null || value.trim().isEmpty();
+	}
+
+	// 문자열을 trim하고 빈값은 null로 바꿉니다.
+	private String trimToNull(String value) {
+		if (value == null) {
+			return null;
+		}
+		String normalized = value.trim();
+		return normalized.isEmpty() ? null : normalized;
+	}
+
+	// 문자열 YN 값을 정규화합니다.
+	private String normalizeShowYn(String value) {
+		String normalized = trimToNull(value);
+		return YN_N.equals(normalized) ? YN_N : YN_Y;
+	}
+
+	// YN 값을 검증합니다.
+	private boolean isYnValue(String value) {
+		return YN_Y.equals(value) || YN_N.equals(value);
+	}
+
+	// 조회 파라미터 기본값을 정리합니다.
+	private String normalizeSearchGb(String searchGb, String searchValue) {
+		if (searchValue == null || searchValue.trim().isEmpty()) {
+			return null;
+		}
+		if (SEARCH_GB_NO.equals(searchGb) || SEARCH_GB_NAME.equals(searchGb)) {
+			return searchGb;
+		}
+		return SEARCH_GB_NAME;
+	}
+
+	// 입력값 기본값을 정리하고 YN 값을 보정합니다.
+	private void normalizeDefaultValues(ExhibitionSavePO param, boolean isCreate) {
+		param.setExhibitionNm(trimToNull(param.getExhibitionNm()));
+		param.setListShowYn(normalizeShowYn(param.getListShowYn()));
+		param.setShowYn(normalizeShowYn(param.getShowYn()));
+		param.setExhibitionPcDesc(trimToNull(param.getExhibitionPcDesc()));
+		param.setExhibitionMoDesc(trimToNull(param.getExhibitionMoDesc()));
+		if (!isCreate && param.getUdtNo() == null && param.getRegNo() != null) {
+			param.setUdtNo(param.getRegNo());
+		}
+	}
+
+	// 검색 기간을 정규화하고 유효성을 확인합니다.
+	private String normalizeSearchDateRange(ExhibitionPO param, String rawSearchStartDt, String rawSearchEndDt) {
+		String start = normalizeSearchDate(rawSearchStartDt, false);
+		String end = normalizeSearchDate(rawSearchEndDt, true);
+		param.setSearchStartDt(start);
+		param.setSearchEndDt(end);
+
+		if (start == null || end == null) {
+			return null;
+		}
+		LocalDateTime startDt = parseDateTime(start);
+		LocalDateTime endDt = parseDateTime(end);
+		if (startDt == null || endDt == null) {
+			return "검색 기간 형식을 확인해주세요.";
+		}
+		if (startDt.isAfter(endDt)) {
+			return "검색 시작일시는 종료일시보다 늦을 수 없습니다.";
+		}
+		return null;
+	}
+
+	// 저장용 노출 기간을 정규화하고 유효성을 검증합니다.
+	private String normalizeAndValidateDisplayPeriod(ExhibitionSavePO param) {
+		String rawStart = trimToNull(param.getDispStartDt());
+		String rawEnd = trimToNull(param.getDispEndDt());
+
+		LocalDateTime startDateTime = null;
+		LocalDateTime endDateTime = null;
+		if (rawStart != null) {
+			startDateTime = parseDateTimeForSave(rawStart, false);
+			if (startDateTime == null) {
+				return "노출 시작일시 형식을 확인해주세요.";
+			}
+			param.setDispStartDt(DISPLAY_PERIOD_FORMATTER.format(startDateTime));
+		}
+		if (rawEnd != null) {
+			endDateTime = parseDateTimeForSave(rawEnd, true);
+			if (endDateTime == null) {
+				return "노출 종료일시 형식을 확인해주세요.";
+			}
+			param.setDispEndDt(DISPLAY_PERIOD_FORMATTER.format(endDateTime));
+		}
+
+		if (startDateTime != null && endDateTime != null && startDateTime.isAfter(endDateTime)) {
+			return "노출 시작일시는 종료일시보다 늦을 수 없습니다.";
+		}
+
+		if (rawStart == null) {
+			param.setDispStartDt(null);
+		}
+		if (rawEnd == null) {
+			param.setDispEndDt(null);
+		}
+		return null;
+	}
+
+	// 검색용 날짜를 정규화하고 범위를 확보합니다.
+	private String normalizeSearchDate(String value, boolean isEnd) {
+		String normalized = trimToNull(value);
+		if (normalized == null) {
+			return null;
+		}
+		LocalDate localDate = parseLocalDate(normalized);
+		if (localDate != null) {
+			if (isEnd) {
+				return DISPLAY_PERIOD_FORMATTER.format(localDate.atTime(23, 59, 59));
+			}
+			return DISPLAY_PERIOD_FORMATTER.format(localDate.atStartOfDay());
+		}
+
+		if (normalized.length() == 16) {
+			normalized = normalized + ":00";
+		}
+		LocalDateTime dateTime = parseDateTime(normalized);
+		return dateTime == null ? null : DISPLAY_PERIOD_FORMATTER.format(dateTime);
+	}
+
+	// 저장용 날짜/시간을 정규화합니다.
+	private LocalDateTime parseDateTimeForSave(String value, boolean isEnd) {
+		String normalized = trimToNull(value);
+		if (normalized == null) {
+			return null;
+		}
+		if (normalized.length() == 10) {
+			LocalDate date = parseLocalDate(normalized);
+			if (date == null) {
+				return null;
+			}
+			return isEnd ? date.atTime(23, 59, 59) : date.atStartOfDay();
+		}
+		return parseDateTime(normalized);
+	}
+
+	// 입력값에서 로컬 날짜를 추출합니다.
+	private LocalDate parseLocalDate(String value) {
+		String normalized = value.trim();
+		try {
+			if (normalized.length() == 8) {
+				return LocalDate.parse(normalized, BASIC_DATE_FORMATTER);
+			}
+			if (normalized.length() >= 10) {
+				return LocalDate.parse(normalized.substring(0, 10), SEARCH_DATE_FORMATTER);
+			}
+		} catch (DateTimeParseException ignore) {
+			return null;
+		}
+		return null;
+	}
+
+	// 문자열 날짜/시간을 파싱합니다.
+	private LocalDateTime parseDateTime(String value) {
+		try {
+			String normalized = value.replace("T", " ").trim();
+			if (normalized.length() == 16) {
+				normalized = normalized + ":00";
+			}
+			if (normalized.length() == 19) {
+				return LocalDateTime.parse(normalized, DISPLAY_PERIOD_FORMATTER);
+			}
+		} catch (DateTimeParseException ignore) {
+			// 파싱 실패는 null 처리합니다.
+		}
+		return null;
+	}
+
+	// 음수/비어있는 정렬 값을 보정합니다.
+	private int resolvePositiveInteger(Integer value, int fallback) {
+		if (value == null || value < 1) {
+			return fallback;
+		}
+		return value;
+	}
+
+	// 신규/수정자 번호를 정리합니다.
+	private Long resolveAuditNo(Long regNo, Long udtNo) {
+		return regNo != null ? regNo : udtNo;
+	}
+
+	// 상품 탭 번호를 rowKey 기반으로 매핑합니다.
+	private Integer resolveGoodsTabNo(ExhibitionGoodsPO source, Map<String, Integer> tabRowKeyToNo, Map<Integer, Integer> tabNoToNo) {
+		if (source == null) {
+			return null;
+		}
+		if (source.getExhibitionTabNo() != null && source.getExhibitionTabNo() > 0) {
+			Integer mapped = tabNoToNo.get(source.getExhibitionTabNo());
+			if (mapped != null) {
+				return mapped;
+			}
+		}
+		String tabRowKey = trimToNull(source.getExhibitionTabRowKey());
+		if (tabRowKey != null) {
+			return tabRowKeyToNo.get(tabRowKey);
+		}
+		return null;
+	}
+
+	// 시트 셀 문자열을 반환합니다.
+	private String getCellString(Cell cell) {
+		if (cell == null) {
+			return "";
+		}
+		try {
+			return String.valueOf(cell.getStringCellValue()).trim();
+		} catch (Exception ignored) {
+			try {
+				return String.valueOf((long) cell.getNumericCellValue());
+			} catch (Exception ignored2) {
+				return "";
+			}
+		}
+	}
+
+	// 시트 셀 정수를 반환합니다.
+	private Integer getCellInteger(Cell cell) {
+		if (cell == null) {
+			return null;
+		}
+		try {
+			return (int) cell.getNumericCellValue();
+		} catch (Exception ignored) {
+			String raw = trimToNull(getCellString(cell));
+			if (raw == null) {
+				return null;
+			}
+			try {
+				return Integer.parseInt(raw);
+			} catch (NumberFormatException ignored2) {
+				return null;
+			}
+		}
+	}
+
+	// 리스트가 null인 경우 빈 리스트로 변환합니다.
+	private <T> List<T> safeList(List<T> source) {
+		return source == null ? List.of() : source;
+	}
+}
