@@ -664,11 +664,11 @@ public class BannerService {
 			}
 			int width = bufferedImage.getWidth();
 			int height = bufferedImage.getHeight();
-			if (DIV_01.equals(param.getBannerDivCd()) && (width != 1280 || height != 1280)) {
-				return "대배너 이미지는 1280x1280만 가능합니다.";
+			if (DIV_01.equals(param.getBannerDivCd()) && (width != 1024 || height != 1024)) {
+				return "대배너 이미지는 1024x1024만 가능합니다.";
 			}
-			if (DIV_03.equals(param.getBannerDivCd()) && (width != 1280 || height != 200)) {
-				return "띠배너 이미지는 1280x200만 가능합니다.";
+			if (DIV_03.equals(param.getBannerDivCd()) && (width != 1024 || height != 200)) {
+				return "띠배너 이미지는 1024x200만 가능합니다.";
 			}
 		} catch (IOException e) {
 			return "이미지 파일을 확인해주세요.";
