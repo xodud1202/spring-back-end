@@ -3,15 +3,19 @@ package com.xodud1202.springbackend.service;
 import com.xodud1202.springbackend.domain.admin.common.AdminMenuLnb;
 import com.xodud1202.springbackend.domain.admin.common.CommonCodeManagePO;
 import com.xodud1202.springbackend.domain.admin.common.MenuBase;
+import com.xodud1202.springbackend.domain.admin.common.MenuManageSavePO;
+import com.xodud1202.springbackend.domain.admin.common.MenuManageVO;
 import com.xodud1202.springbackend.domain.common.CommonCodeVO;
 import com.xodud1202.springbackend.mapper.CommonMapper;
 import com.xodud1202.springbackend.repository.MenuBaseRepository;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -90,7 +94,196 @@ public class AdminCommonService {
 		return buildLnbMenuTree(menuList);
 	}
 
+	// 메뉴 관리용 트리 목록을 반환합니다.
+	public List<MenuManageVO> getAdminMenuManageList() {
+		List<MenuBase> menuList = menuBaseRepository.findAll();
+		Map<Integer, Integer> childCountMap = menuList.stream()
+				.filter(item -> item != null && item.getUpMenuNo() != 0)
+				.collect(Collectors.groupingBy(MenuBase::getUpMenuNo, Collectors.collectingAndThen(Collectors.counting(), Long::intValue)));
+		return menuList.stream()
+				.filter(Objects::nonNull)
+				.sorted(Comparator.comparingInt(MenuBase::getMenuLevel).thenComparingInt(MenuBase::getUpMenuNo).thenComparingInt(MenuBase::getSortSeq))
+				.map(item -> toMenuManageVO(item, childCountMap.getOrDefault(item.getMenuNo(), 0)))
+				.collect(Collectors.toList());
+	}
+
+	// 메뉴 관리 상세 정보를 조회합니다.
+	public MenuManageVO getAdminMenuManageDetail(int menuNo) {
+		MenuBase menu = menuBaseRepository.findByMenuNo(menuNo).orElse(null);
+		if (menu == null) {
+			return null;
+		}
+		int childCount = menuBaseRepository.countByUpMenuNo(menuNo);
+		return toMenuManageVO(menu, childCount);
+	}
+
+	// 메뉴 URL 중복 여부와 규칙을 포함해 등록 요청을 검증합니다.
+	public String validateAdminMenuCreate(MenuManageSavePO param) {
+		normalizeMenuManageSaveParam(param);
+		if (param == null) {
+			return "요청 데이터가 없습니다.";
+		}
+		if (isBlank(param.getMenuNm())) {
+			return "메뉴명을 입력해주세요.";
+		}
+		if (param.getRegNo() == null) {
+			return "등록자 정보를 확인해주세요.";
+		}
+		if (!isBlank(param.getUseYn()) && !"Y".equals(param.getUseYn()) && !"N".equals(param.getUseYn())) {
+			return "사용여부를 확인해주세요.";
+		}
+		int upMenuNo = param.getUpMenuNo();
+		if (upMenuNo < 0) {
+			return "상위 메뉴를 확인해주세요.";
+		}
+		MenuBase parent = findMenu(upMenuNo);
+		if (upMenuNo != 0 && parent == null) {
+			return "상위 메뉴를 확인해주세요.";
+		}
+		// 상위 메뉴 규칙을 적용합니다.
+		if (upMenuNo != 0) {
+			if (parent != null && parent.getMenuLevel() >= MENU_LEVEL_MAX) {
+				return "3레벨 메뉴에는 하위 메뉴를 추가할 수 없습니다.";
+			}
+			if (StringUtils.isNotBlank(parent.getMenuUrl())) {
+				return "메뉴 URL이 등록된 항목에는 하위 메뉴를 추가할 수 없습니다.";
+			}
+		}
+		if (param.getMenuNm().length() > MENU_NAME_MAX_LENGTH) {
+			return "메뉴명은 50자 이내로 입력해주세요.";
+		}
+		String resolvedMenuUrl = trimToNull(param.getMenuUrl());
+		if (resolvedMenuUrl != null && resolvedMenuUrl.length() > MENU_URL_MAX_LENGTH) {
+			return "메뉴 URL은 255자 이내로 입력해주세요.";
+		}
+		if (resolvedMenuUrl != null && menuBaseRepository.countByMenuUrl(resolvedMenuUrl) > 0) {
+			return "이미 등록된 메뉴 URL입니다.";
+		}
+		return null;
+	}
+
+	// 메뉴 URL 중복 여부를 포함해 수정 요청을 검증합니다.
+	public String validateAdminMenuUpdate(MenuManageSavePO param) {
+		normalizeMenuManageSaveParam(param);
+		if (param == null) {
+			return "요청 데이터가 없습니다.";
+		}
+		if (param.getMenuNo() <= 0) {
+			return "메뉴 번호를 확인해주세요.";
+		}
+		if (isBlank(param.getMenuNm())) {
+			return "메뉴명을 입력해주세요.";
+		}
+		if (param.getUdtNo() == null) {
+			return "수정자 정보를 확인해주세요.";
+		}
+		MenuBase current = menuBaseRepository.findByMenuNo(param.getMenuNo()).orElse(null);
+		if (current == null) {
+			return "메뉴 정보를 확인해주세요.";
+		}
+		if (!isBlank(param.getUseYn()) && !"Y".equals(param.getUseYn()) && !"N".equals(param.getUseYn())) {
+			return "사용여부를 확인해주세요.";
+		}
+		if (param.getMenuNm().length() > MENU_NAME_MAX_LENGTH) {
+			return "메뉴명은 50자 이내로 입력해주세요.";
+		}
+		int childCount = menuBaseRepository.countByUpMenuNo(param.getMenuNo());
+		String resolvedMenuUrl = trimToNull(param.getMenuUrl());
+		if (resolvedMenuUrl != null && childCount > 0) {
+			return "하위 메뉴가 있는 메뉴는 메뉴 URL을 등록할 수 없습니다.";
+		}
+		if (resolvedMenuUrl != null && menuBaseRepository.countByMenuUrlAndMenuNoNot(resolvedMenuUrl, param.getMenuNo()) > 0) {
+			return "이미 등록된 메뉴 URL입니다.";
+		}
+		if (resolvedMenuUrl != null && resolvedMenuUrl.length() > MENU_URL_MAX_LENGTH) {
+			return "메뉴 URL은 255자 이내로 입력해주세요.";
+		}
+		return null;
+	}
+
+	// 메뉴 삭제 요청을 검증합니다.
+	public String validateAdminMenuDelete(MenuManageSavePO param) {
+		normalizeMenuManageSaveParam(param);
+		if (param == null) {
+			return "요청 데이터가 없습니다.";
+		}
+		if (param.getMenuNo() <= 0) {
+			return "메뉴 번호를 확인해주세요.";
+		}
+		if (param.getUdtNo() == null) {
+			return "수정자 정보를 확인해주세요.";
+		}
+		MenuBase menu = menuBaseRepository.findByMenuNo(param.getMenuNo()).orElse(null);
+		if (menu == null) {
+			return "메뉴 정보를 확인해주세요.";
+		}
+		if (menuBaseRepository.countByUpMenuNo(param.getMenuNo()) > 0) {
+			return "하위 메뉴가 존재하여 삭제할 수 없습니다.";
+		}
+		return null;
+	}
+
+	// 메뉴를 등록합니다.
+	@Transactional
+	@CacheEvict(value = "menuListCache", allEntries = true)
+	public int createAdminMenu(MenuManageSavePO param) {
+		normalizeMenuManageSaveParam(param);
+		int upMenuNo = param.getUpMenuNo();
+		MenuBase menu = new MenuBase();
+		menu.setUpMenuNo(upMenuNo);
+		menu.setSortSeq(resolveMenuSortSeq(upMenuNo, param.getSortSeq()));
+		menu.setMenuLevel(resolveMenuLevel(upMenuNo));
+		menu.setMenuNm(param.getMenuNm());
+		menu.setMenuUrl(trimToNull(param.getMenuUrl()));
+		menu.setUseYn(resolveYn(param.getUseYn()));
+		menu.setRegNo(param.getRegNo());
+		menu.setRegDt(LocalDateTime.now());
+		menu.setUdtNo(resolveEditorNo(param.getUdtNo(), param.getRegNo()));
+		menu.setUdtDt(LocalDateTime.now());
+		menuBaseRepository.save(menu);
+		return menu.getMenuNo();
+	}
+
+	// 메뉴를 수정합니다.
+	@Transactional
+	@CacheEvict(value = "menuListCache", allEntries = true)
+	public int updateAdminMenu(MenuManageSavePO param) {
+		normalizeMenuManageSaveParam(param);
+		MenuBase current = menuBaseRepository.findByMenuNo(param.getMenuNo()).orElse(null);
+		if (current == null) {
+			return 0;
+		}
+		current.setMenuNm(param.getMenuNm());
+		current.setMenuUrl(trimToNull(param.getMenuUrl()));
+		current.setUseYn(resolveYn(param.getUseYn()));
+		current.setSortSeq(param.getSortSeq() == null ? current.getSortSeq() : param.getSortSeq());
+		current.setUdtNo(param.getUdtNo());
+		current.setUdtDt(LocalDateTime.now());
+		menuBaseRepository.save(current);
+		return 1;
+	}
+
+	// 메뉴를 삭제합니다.
+	@Transactional
+	@CacheEvict(value = "menuListCache", allEntries = true)
+	public int deleteAdminMenu(MenuManageSavePO param) {
+		if (param == null || param.getMenuNo() <= 0) {
+			return 0;
+		}
+		MenuBase current = menuBaseRepository.findByMenuNo(param.getMenuNo()).orElse(null);
+		if (current == null) {
+			return 0;
+		}
+		menuBaseRepository.delete(current);
+		return 1;
+	}
+
 	// 공통 코드 그룹 목록 조회용 그룹코드 검색값 길이 제한입니다.
+	private static final int MENU_LEVEL_MAX = 3;
+	// 메뉴명 길이 제한입니다.
+	private static final int MENU_NAME_MAX_LENGTH = 50;
+	// 메뉴 URL 길이 제한입니다.
+	private static final int MENU_URL_MAX_LENGTH = 255;
 	private static final int CODE_MAX_LENGTH = 20;
 	// 공통 코드명 길이 제한입니다.
 	private static final int CODE_NAME_MAX_LENGTH = 50;
@@ -319,5 +512,75 @@ public class AdminCommonService {
 	// 문자열에 한글 포함 여부를 확인합니다.
 	private boolean containsKorean(String value) {
 		return value != null && value.matches(".*[ㄱ-ㅎㅏ-ㅣ가-힣]+.*");
+	}
+
+	// 메뉴 관리 DTO를 View 객체로 변환합니다.
+	private MenuManageVO toMenuManageVO(MenuBase item, int childCount) {
+		MenuManageVO vo = new MenuManageVO();
+		vo.setMenuNo(item.getMenuNo());
+		vo.setUpMenuNo(item.getUpMenuNo());
+		vo.setMenuLevel(item.getMenuLevel());
+		vo.setMenuNm(item.getMenuNm());
+		vo.setMenuUrl(item.getMenuUrl());
+		vo.setSortSeq(item.getSortSeq());
+		vo.setUseYn(item.getUseYn());
+		vo.setChildCount(childCount);
+		return vo;
+	}
+
+	// 메뉴 URL 중복/공백/유효성 검증을 위한 공통 정규화를 수행합니다.
+	private void normalizeMenuManageSaveParam(MenuManageSavePO param) {
+		if (param == null) {
+			return;
+		}
+		param.setMenuNm(trimToNull(param.getMenuNm()));
+		param.setMenuUrl(trimToNull(param.getMenuUrl()));
+		param.setUseYn(trimToNull(param.getUseYn()));
+		if (param.getUpMenuNo() == null) {
+			param.setUpMenuNo(0);
+		}
+		if (param.getSortSeq() != null && param.getSortSeq() < 0) {
+			param.setSortSeq(1);
+		}
+	}
+
+	// 정렬 순서 기본값을 계산합니다.
+	private int resolveMenuSortSeq(int upMenuNo, Integer sortSeq) {
+		if (sortSeq != null && sortSeq > 0) {
+			return sortSeq;
+		}
+		Integer maxSortSeq = menuBaseRepository.findMaxSortSeqByUpMenuNo(upMenuNo);
+		return maxSortSeq == null ? 1 : maxSortSeq + 1;
+	}
+
+	// 메뉴 사용여부를 정규화합니다.
+	private String resolveYn(String useYn) {
+		String resolvedUseYn = trimToNull(useYn);
+		return resolvedUseYn == null ? "Y" : resolvedUseYn;
+	}
+
+	// 메뉴 레벨을 계산합니다.
+	private int resolveMenuLevel(int upMenuNo) {
+		if (upMenuNo == 0) {
+			return 1;
+		}
+		MenuBase parent = menuBaseRepository.findByMenuNo(upMenuNo).orElse(null);
+		if (parent == null) {
+			return 1;
+		}
+		return parent.getMenuLevel() + 1;
+	}
+
+	// 메뉴 번호로 메뉴 정보를 조회합니다.
+	private MenuBase findMenu(int menuNo) {
+		return menuBaseRepository.findByMenuNo(menuNo).orElse(null);
+	}
+
+	// 수정자 값이 없을 경우 등록자 값을 사용합니다.
+	private Long resolveEditorNo(Long udtNo, Long regNo) {
+		if (udtNo != null) {
+			return udtNo;
+		}
+		return regNo;
 	}
 }

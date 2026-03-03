@@ -2,6 +2,8 @@ package com.xodud1202.springbackend.controller;
 
 import com.xodud1202.springbackend.domain.admin.common.AdminMenuLnb;
 import com.xodud1202.springbackend.domain.admin.common.CommonCodeManagePO;
+import com.xodud1202.springbackend.domain.admin.common.MenuManageSavePO;
+import com.xodud1202.springbackend.domain.admin.common.MenuManageVO;
 import com.xodud1202.springbackend.domain.common.CommonCodeVO;
 import com.xodud1202.springbackend.domain.common.FtpProperties;
 import com.xodud1202.springbackend.service.AdminCommonService;
@@ -35,6 +37,50 @@ public class AdminCommonController {
 	@GetMapping("/api/admin/menu/list")
 	public ResponseEntity<List<AdminMenuLnb>> getResumeInfo() {
 		return ResponseEntity.ok(adminCommonService.getAdminMenuLnbInfo());
+	}
+
+	@GetMapping("/api/admin/menu/manage/list")
+	public ResponseEntity<List<MenuManageVO>> getAdminMenuManageList() {
+		return ResponseEntity.ok(adminCommonService.getAdminMenuManageList());
+	}
+
+	@GetMapping("/api/admin/menu/manage/detail")
+	public ResponseEntity<Object> getAdminMenuManageDetail(@RequestParam(required = false) Integer menuNo) {
+		if (menuNo == null || menuNo <= 0) {
+			return ResponseEntity.badRequest().body(Map.of("message", "메뉴 번호를 확인해주세요."));
+		}
+		MenuManageVO detail = adminCommonService.getAdminMenuManageDetail(menuNo);
+		if (detail == null) {
+			return ResponseEntity.notFound().build();
+		}
+		return ResponseEntity.ok(detail);
+	}
+
+	@PostMapping("/api/admin/menu/manage/create")
+	public ResponseEntity<Object> createAdminMenu(@RequestBody MenuManageSavePO param) {
+		String validationMessage = adminCommonService.validateAdminMenuCreate(param);
+		if (validationMessage != null) {
+			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
+		}
+		return ResponseEntity.ok(adminCommonService.createAdminMenu(param));
+	}
+
+	@PostMapping("/api/admin/menu/manage/update")
+	public ResponseEntity<Object> updateAdminMenu(@RequestBody MenuManageSavePO param) {
+		String validationMessage = adminCommonService.validateAdminMenuUpdate(param);
+		if (validationMessage != null) {
+			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
+		}
+		return ResponseEntity.ok(adminCommonService.updateAdminMenu(param));
+	}
+
+	@PostMapping("/api/admin/menu/manage/delete")
+	public ResponseEntity<Object> deleteAdminMenu(@RequestBody MenuManageSavePO param) {
+		String validationMessage = adminCommonService.validateAdminMenuDelete(param);
+		if (validationMessage != null) {
+			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
+		}
+		return ResponseEntity.ok(adminCommonService.deleteAdminMenu(param));
 	}
 
 	@GetMapping("/api/admin/common/code")
