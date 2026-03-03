@@ -36,6 +36,9 @@ public interface ExhibitionMapper {
 	// 기획전 기본 정보를 수정합니다.
 	int updateExhibitionBase(ExhibitionSavePO param);
 
+	// 기획전 썸네일 URL을 수정합니다.
+	int updateExhibitionThumbnail(@Param("exhibitionNo") Integer exhibitionNo, @Param("thumbnailUrl") String thumbnailUrl);
+
 	// 기획전 존재 여부를 조회합니다.
 	int countExhibitionByNo(@Param("exhibitionNo") Integer exhibitionNo);
 
@@ -57,4 +60,3 @@ public interface ExhibitionMapper {
 	// 기획전 탭 상품을 등록합니다.
 	int insertExhibitionGoods(ExhibitionGoodsPO param);
 }
-

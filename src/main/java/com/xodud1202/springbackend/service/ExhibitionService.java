@@ -8,6 +8,7 @@ import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionPO;
 import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionSavePO;
 import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionTabPO;
 import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionVO;
+import com.xodud1202.springbackend.domain.common.FtpProperties;
 import com.xodud1202.springbackend.mapper.ExhibitionMapper;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.Cell;
@@ -20,6 +21,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.LocalDate;
@@ -48,8 +51,12 @@ public class ExhibitionService {
 	private static final DateTimeFormatter DISPLAY_PERIOD_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 	private static final String HEADER_GOODS_ID = "상품코드";
 	private static final String HEADER_DISPLAY_ORDER = "노출순서";
+	private static final int EXHIBITION_THUMBNAIL_WIDTH = 750;
+	private static final int EXHIBITION_THUMBNAIL_HEIGHT = 1024;
 
 	private final ExhibitionMapper exhibitionMapper;
+	private final FtpProperties ftpProperties;
+	private final FtpFileService ftpFileService;
 
 	// 기획전 목록을 조회합니다.
 	public Map<String, Object> getAdminExhibitionList(
@@ -169,6 +176,65 @@ public class ExhibitionService {
 			return "기획전 정보를 확인해주세요.";
 		}
 		return null;
+	}
+
+	// 기획전 썸네일 업로드 요청을 검증합니다.
+	public String validateExhibitionThumbnailUpload(Integer exhibitionNo, Long regNo, MultipartFile image) {
+		if (exhibitionNo == null || exhibitionNo < 1) {
+			return "기획전 번호를 확인해주세요.";
+		}
+		if (regNo == null) {
+			return "등록자 정보를 확인해주세요.";
+		}
+		if (image == null || image.isEmpty()) {
+			return "이미지를 선택해주세요.";
+		}
+		int exists = exhibitionMapper.countExhibitionByNo(exhibitionNo);
+		if (exists == 0) {
+			return "기획전 정보를 확인해주세요.";
+		}
+		long maxSizeInBytes = (long) ftpProperties.getUploadExhibitionMaxSize() * 1024 * 1024;
+		if (image.getSize() > maxSizeInBytes) {
+			return "파일 크기가 " + ftpProperties.getUploadExhibitionMaxSize() + "MB를 초과합니다.";
+		}
+
+		String originalFilename = image.getOriginalFilename();
+		if (originalFilename == null) {
+			return "파일명이 올바르지 않습니다.";
+		}
+		int lastDot = originalFilename.lastIndexOf(".");
+		if (lastDot < 0 || lastDot == originalFilename.length() - 1) {
+			return "이미지 확장자를 확인해주세요.";
+		}
+		String extension = originalFilename.substring(lastDot + 1).toLowerCase();
+		if (!isAllowedImageExtension(ftpProperties.getUploadExhibitionAllowExtension(), extension)) {
+			return "허용되지 않는 파일 형식입니다. 허용 형식: " + ftpProperties.getUploadExhibitionAllowExtension();
+		}
+
+		try {
+			BufferedImage bufferedImage = ImageIO.read(image.getInputStream());
+			if (bufferedImage == null) {
+				return "이미지 파일을 확인해주세요.";
+			}
+			int width = bufferedImage.getWidth();
+			int height = bufferedImage.getHeight();
+			if (width != EXHIBITION_THUMBNAIL_WIDTH || height != EXHIBITION_THUMBNAIL_HEIGHT) {
+				return "썸네일은 750x1024px만 가능합니다.";
+			}
+		} catch (IOException e) {
+			return "이미지 파일을 확인해주세요.";
+		}
+		return null;
+	}
+
+	// 기획전 썸네일을 업로드하고 DB에 URL을 반영합니다.
+	public String uploadExhibitionThumbnail(Integer exhibitionNo, Long regNo, MultipartFile image) throws IOException {
+		String thumbnailUrl = ftpFileService.uploadExhibitionImage(image, String.valueOf(exhibitionNo), String.valueOf(regNo));
+		int updated = exhibitionMapper.updateExhibitionThumbnail(exhibitionNo, thumbnailUrl);
+		if (updated == 0) {
+			throw new IllegalArgumentException("썸네일 저장에 실패했습니다.");
+		}
+		return thumbnailUrl;
 	}
 
 	// 기획전을 등록합니다.
@@ -616,6 +682,24 @@ public class ExhibitionService {
 				return null;
 			}
 		}
+	}
+
+	// 허용 확장자인지 확인합니다.
+	private boolean isAllowedImageExtension(String allowedExtensions, String extension) {
+		if (allowedExtensions == null || allowedExtensions.trim().isEmpty()) {
+			return false;
+		}
+		if (extension == null || extension.trim().isEmpty()) {
+			return false;
+		}
+		String normalizedExtension = extension.trim().toLowerCase();
+		String[] tokens = allowedExtensions.split(",");
+		for (String token : tokens) {
+			if (normalizedExtension.equals(token.trim().toLowerCase())) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	// 리스트가 null인 경우 빈 리스트로 변환합니다.

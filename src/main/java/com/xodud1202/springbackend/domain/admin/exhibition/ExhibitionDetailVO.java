@@ -19,6 +19,8 @@ public class ExhibitionDetailVO {
 	private String listShowYn;
 	// 노출 여부입니다.
 	private String showYn;
+	// 썸네일 URL입니다.
+	private String thumbnailUrl;
 	// PC 상세 HTML입니다.
 	private String exhibitionPcDesc;
 	// MO 상세 HTML입니다.
@@ -28,4 +30,3 @@ public class ExhibitionDetailVO {
 	// 탭별 상품 목록입니다.
 	private List<ExhibitionGoodsVO> goodsList;
 }
-

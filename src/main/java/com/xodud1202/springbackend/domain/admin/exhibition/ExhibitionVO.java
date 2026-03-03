@@ -17,9 +17,10 @@ public class ExhibitionVO {
 	private String listShowYn;
 	// 노출 여부입니다.
 	private String showYn;
+	// 썸네일 URL입니다.
+	private String thumbnailUrl;
 	// 등록일시입니다.
 	private String regDt;
 	// 수정일시입니다.
 	private String udtDt;
 }
-

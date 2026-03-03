@@ -138,6 +138,23 @@ public class FtpFileService {
 	}
 
 	/**
+	 * 기획전 썸네일 이미지를 FTP 서버에 업로드하고 접근 가능한 URL을 반환합니다.
+	 * @param file 업로드할 이미지 파일
+	 * @param exhibitionNo 기획전 번호
+	 * @param regNo 등록자 번호
+	 * @return 업로드된 파일의 접근 URL
+	 */
+	public String uploadExhibitionImage(MultipartFile file, String exhibitionNo, String regNo) throws IOException {
+		return uploadImageToFtp(
+				file,
+				ftpProperties.getUploadExhibitionTargetPath(),
+				ftpProperties.getUploadExhibitionView(),
+				new String[] { exhibitionNo },
+				regNo
+		);
+	}
+
+	/**
 	 * 브랜드 로고 이미지를 FTP 서버에 업로드하고 조회 가능한 URL을 반환합니다.
 	 * @param file 업로드할 이미지 파일
 	 * @param brandNo 브랜드 번호

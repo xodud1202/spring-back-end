@@ -122,6 +122,26 @@ public class AdminExhibitionController {
 		}
 	}
 
+	// 기획전 썸네일 이미지를 업로드합니다.
+	@PostMapping(value = "/api/admin/exhibition/thumbnail/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+	public ResponseEntity<Object> uploadExhibitionThumbnail(
+		@RequestParam("exhibitionNo") Integer exhibitionNo,
+		@RequestParam("regNo") Long regNo,
+		@RequestParam("image") MultipartFile image
+	) {
+		String validationMessage = exhibitionService.validateExhibitionThumbnailUpload(exhibitionNo, regNo, image);
+		if (validationMessage != null) {
+			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
+		}
+		try {
+			return ResponseEntity.ok(Map.of("thumbnailUrl", exhibitionService.uploadExhibitionThumbnail(exhibitionNo, regNo, image)));
+		} catch (IllegalArgumentException e) {
+			return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+		} catch (IOException e) {
+			return ResponseEntity.internalServerError().body(Map.of("message", "썸네일 업로드 중 오류가 발생했습니다."));
+		}
+	}
+
 	// 기획전을 삭제합니다.
 	@PostMapping("/api/admin/exhibition/delete")
 	public ResponseEntity<Object> deleteExhibition(@RequestBody ExhibitionDeletePO param) {

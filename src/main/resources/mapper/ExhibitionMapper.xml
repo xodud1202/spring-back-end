@@ -11,6 +11,7 @@
 		     , DATE_FORMAT(EB.DISP_END_DT, '%Y-%m-%d %H:%i:%s') AS DISP_END_DT
 		     , EB.LIST_VIEW_YN AS LIST_SHOW_YN
 		     , EB.VIEW_YN
+		     , EB.THUMBNAIL_URL
 		     , DATE_FORMAT(EB.REG_DT, '%Y-%m-%d %H:%i:%s') AS REG_DT
 		     , DATE_FORMAT(EB.UDT_DT, '%Y-%m-%d %H:%i:%s') AS UDT_DT
 		  FROM EXHIBITION_BASE EB
@@ -58,6 +59,7 @@
 		     , DATE_FORMAT(EB.DISP_END_DT, '%Y-%m-%d %H:%i:%s') AS DISP_END_DT
 		     , EB.LIST_VIEW_YN AS LIST_SHOW_YN
 		     , EB.VIEW_YN
+		     , EB.THUMBNAIL_URL
 		     , EB.EXHIBITION_PC_DESC
 		     , EB.EXHIBITION_MO_DESC
 		  FROM EXHIBITION_BASE EB
@@ -147,6 +149,14 @@
 		     , EXHIBITION_MO_DESC = #{exhibitionMoDesc}
 		     , UDT_NO = #{udtNo}
 		     , UDT_DT = NOW()
+		 WHERE EXHIBITION_NO = #{exhibitionNo}
+		   AND DEL_YN = 'N'
+	</update>
+
+	<update id="updateExhibitionThumbnail">
+		/* ExhibitionMapper.updateExhibitionThumbnail: 기획전 썸네일 경로 업데이트 */
+		UPDATE EXHIBITION_BASE
+		   SET THUMBNAIL_URL = #{thumbnailUrl}
 		 WHERE EXHIBITION_NO = #{exhibitionNo}
 		   AND DEL_YN = 'N'
 	</update>
