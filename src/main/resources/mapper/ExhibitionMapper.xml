@@ -95,6 +95,13 @@
 		     , ETG.GOODS_ID
 		     , GB.ERP_STYLE_CD
 		     , GB.GOODS_NM
+		     , (
+		         SELECT GI.IMG_PATH
+		           FROM GOODS_IMG GI
+		          WHERE GI.GOODS_ID = ETG.GOODS_ID
+		          ORDER BY GI.DISP_ORD ASC, GI.IMG_NO ASC
+		          LIMIT 1
+		       ) AS IMG_PATH
 		     , ETG.SORT_SEQ AS DISP_ORD
 		     , ETG.VIEW_YN AS SHOW_YN
 		     , 'N' AS DEL_YN

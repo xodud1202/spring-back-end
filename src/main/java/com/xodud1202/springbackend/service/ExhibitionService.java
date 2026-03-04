@@ -115,8 +115,31 @@ public class ExhibitionService {
 		}
 		// 탭 및 상품 정보를 함께 조회합니다.
 		detail.setTabList(exhibitionMapper.getExhibitionTabList(exhibitionNo));
-		detail.setGoodsList(exhibitionMapper.getExhibitionGoodsList(exhibitionNo, null));
+		List<ExhibitionGoodsVO> goodsList = exhibitionMapper.getExhibitionGoodsList(exhibitionNo, null);
+		applyGoodsImageUrls(goodsList);
+		detail.setGoodsList(goodsList);
 		return detail;
+	}
+
+	// 기획전 상품 이미지 URL을 적용합니다.
+	private void applyGoodsImageUrls(List<ExhibitionGoodsVO> goodsList) {
+		if (goodsList == null || goodsList.isEmpty()) {
+			return;
+		}
+		for (ExhibitionGoodsVO item : goodsList) {
+			if (item == null) {
+				continue;
+			}
+			String imgPath = item.getImgPath();
+			if (isBlank(imgPath)) {
+				continue;
+			}
+			if (imgPath.startsWith("http://") || imgPath.startsWith("https://")) {
+				item.setImgUrl(imgPath);
+				continue;
+			}
+			item.setImgUrl(ftpFileService.buildGoodsImageUrl(item.getGoodsId(), imgPath));
+		}
 	}
 
 	// 기획전 저장 요청의 공통 유효성을 검증합니다.

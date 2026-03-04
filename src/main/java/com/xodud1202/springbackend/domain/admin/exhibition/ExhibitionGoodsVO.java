@@ -17,6 +17,10 @@ public class ExhibitionGoodsVO {
 	private String erpStyleCd;
 	// 상품명입니다.
 	private String goodsNm;
+	// 이미지 경로입니다.
+	private String imgPath;
+	// 이미지 URL입니다.
+	private String imgUrl;
 	// 노출 순서입니다.
 	private Integer dispOrd;
 	// 노출 여부입니다.
@@ -24,4 +28,3 @@ public class ExhibitionGoodsVO {
 	// 삭제 여부입니다.
 	private String delYn;
 }
-
