@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+		"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.xodud1202.springbackend.mapper.CouponMapper">
+	<select id="getAdminCouponList" resultType="com.xodud1202.springbackend.domain.admin.coupon.CouponVO">
+		/* CouponMapper.getAdminCouponList: 관리자 쿠폰 목록 조회 */
+		SELECT CB.CPN_NO
+		     , CB.CPN_NM
+		     , CCS.CD_NM AS CPN_STAT_NM
+		     , CCG.CD_NM AS CPN_GB_NM
+		     , CCT.CD_NM AS CPN_TARGET_NM
+		     , CASE
+		         WHEN CB.CPN_DOWN_START_DT IS NULL OR CB.CPN_DOWN_START_DT = '0000-00-00 00:00:00' THEN ''
+		         ELSE DATE_FORMAT(CB.CPN_DOWN_START_DT, '%Y-%m-%d %H')
+		       END AS CPN_DOWN_START_DT
+		     , CASE
+		         WHEN CB.CPN_DOWN_END_DT IS NULL OR CB.CPN_DOWN_END_DT = '0000-00-00 00:00:00' THEN ''
+		         ELSE DATE_FORMAT(CB.CPN_DOWN_END_DT, '%Y-%m-%d %H')
+		       END AS CPN_DOWN_END_DT
+		     , CB.CPN_DOWN_ABLE_YN
+		     , CASE
+		         WHEN CB.STAT_STOP_DT IS NULL OR CB.STAT_STOP_DT = '0000-00-00 00:00:00' THEN ''
+		         ELSE DATE_FORMAT(CB.STAT_STOP_DT, '%Y-%m-%d %H')
+		       END AS STAT_STOP_DT
+		  FROM COUPON_BASE CB
+		  LEFT JOIN COMMON_CODE CCS
+		    ON CCS.GRP_CD = 'CPN_STAT'
+		   AND CCS.CD = CB.CPN_STAT_CD
+		  LEFT JOIN COMMON_CODE CCG
+		    ON CCG.GRP_CD = 'CPN_GB'
+		   AND CCG.CD = CB.CPN_GB_CD
+		  LEFT JOIN COMMON_CODE CCT
+		    ON CCT.GRP_CD = 'CPN_TARGET'
+		   AND CCT.CD = CB.CPN_TARGET_CD
+		 WHERE IFNULL(CB.DEL_YN, 'N') = 'N'
+		<if test="searchGb == 'CPN_NO' and searchValue != null and searchValue != ''">
+		  AND CB.CPN_NO = #{searchValue}
+		</if>
+		<if test="searchGb == 'CPN_NM' and searchValue != null and searchValue != ''">
+		  AND CB.CPN_NM LIKE CONCAT(#{searchValue}, '%')
+		</if>
+		<if test="dateGb == 'REG_DT' and searchStartDt != null and searchStartDt != ''">
+		  AND CB.REG_DT &gt;= #{searchStartDt}
+		</if>
+		<if test="dateGb == 'REG_DT' and searchEndDt != null and searchEndDt != ''">
+		  AND CB.REG_DT &lt;= #{searchEndDt}
+		</if>
+		<if test="dateGb == 'DOWN_DT' and searchStartDt != null and searchStartDt != ''">
+		  AND IFNULL(NULLIF(CB.CPN_DOWN_END_DT, '0000-00-00 00:00:00'), '9999-12-31 23:59:59') &gt;= #{searchStartDt}
+		</if>
+		<if test="dateGb == 'DOWN_DT' and searchEndDt != null and searchEndDt != ''">
+		  AND IFNULL(NULLIF(CB.CPN_DOWN_START_DT, '0000-00-00 00:00:00'), '1000-01-01 00:00:00') &lt;= #{searchEndDt}
+		</if>
+		<if test="cpnStatCd != null and cpnStatCd != ''">
+		  AND CB.CPN_STAT_CD = #{cpnStatCd}
+		</if>
+		<if test="cpnGbCd != null and cpnGbCd != ''">
+		  AND CB.CPN_GB_CD = #{cpnGbCd}
+		</if>
+		<if test="cpnTargetCd != null and cpnTargetCd != ''">
+		  AND CB.CPN_TARGET_CD = #{cpnTargetCd}
+		</if>
+		<if test="cpnDownAbleYn != null and cpnDownAbleYn != ''">
+		  AND CB.CPN_DOWN_ABLE_YN = #{cpnDownAbleYn}
+		</if>
+		 ORDER BY CB.CPN_NO DESC
+		 LIMIT #{pageSize} OFFSET #{offset}
+	</select>
+
+	<select id="getAdminCouponCount" resultType="int">
+		/* CouponMapper.getAdminCouponCount: 관리자 쿠폰 목록 건수 조회 */
+		SELECT COUNT(1)
+		  FROM COUPON_BASE CB
+		 WHERE IFNULL(CB.DEL_YN, 'N') = 'N'
+		<if test="searchGb == 'CPN_NO' and searchValue != null and searchValue != ''">
+		  AND CB.CPN_NO = #{searchValue}
+		</if>
+		<if test="searchGb == 'CPN_NM' and searchValue != null and searchValue != ''">
+		  AND CB.CPN_NM LIKE CONCAT(#{searchValue}, '%')
+		</if>
+		<if test="dateGb == 'REG_DT' and searchStartDt != null and searchStartDt != ''">
+		  AND CB.REG_DT &gt;= #{searchStartDt}
+		</if>
+		<if test="dateGb == 'REG_DT' and searchEndDt != null and searchEndDt != ''">
+		  AND CB.REG_DT &lt;= #{searchEndDt}
+		</if>
+		<if test="dateGb == 'DOWN_DT' and searchStartDt != null and searchStartDt != ''">
+		  AND IFNULL(NULLIF(CB.CPN_DOWN_END_DT, '0000-00-00 00:00:00'), '9999-12-31 23:59:59') &gt;= #{searchStartDt}
+		</if>
+		<if test="dateGb == 'DOWN_DT' and searchEndDt != null and searchEndDt != ''">
+		  AND IFNULL(NULLIF(CB.CPN_DOWN_START_DT, '0000-00-00 00:00:00'), '1000-01-01 00:00:00') &lt;= #{searchEndDt}
+		</if>
+		<if test="cpnStatCd != null and cpnStatCd != ''">
+		  AND CB.CPN_STAT_CD = #{cpnStatCd}
+		</if>
+		<if test="cpnGbCd != null and cpnGbCd != ''">
+		  AND CB.CPN_GB_CD = #{cpnGbCd}
+		</if>
+		<if test="cpnTargetCd != null and cpnTargetCd != ''">
+		  AND CB.CPN_TARGET_CD = #{cpnTargetCd}
+		</if>
+		<if test="cpnDownAbleYn != null and cpnDownAbleYn != ''">
+		  AND CB.CPN_DOWN_ABLE_YN = #{cpnDownAbleYn}
+		</if>
+	</select>
+</mapper>
