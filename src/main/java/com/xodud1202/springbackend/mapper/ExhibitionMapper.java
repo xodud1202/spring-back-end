@@ -51,11 +51,23 @@ public interface ExhibitionMapper {
 	// 기존 탭을 삭제합니다.
 	int deleteExhibitionTabByExhibitionNo(@Param("exhibitionNo") Integer exhibitionNo);
 
+	// 탭 번호로 탭을 삭제합니다.
+	int deleteExhibitionTabByTabNo(@Param("exhibitionTabNo") Integer exhibitionTabNo);
+
 	// 기존 탭 상품을 삭제합니다.
 	int deleteExhibitionGoodsByExhibitionNo(@Param("exhibitionNo") Integer exhibitionNo);
 
+	// 탭 번호 목록의 상품 개수를 조회합니다.
+	int countExhibitionGoodsByTabNoList(@Param("tabNoList") List<Integer> tabNoList);
+
+	// 탭 번호 목록의 상품을 삭제합니다.
+	int deleteExhibitionGoodsByTabNoList(@Param("tabNoList") List<Integer> tabNoList);
+
 	// 기획전 탭을 등록합니다.
 	int insertExhibitionTab(ExhibitionTabPO param);
+
+	// 기획전 탭을 수정합니다.
+	int updateExhibitionTab(ExhibitionTabPO param);
 
 	// 기획전 탭 상품을 등록합니다.
 	int insertExhibitionGoods(ExhibitionGoodsPO param);

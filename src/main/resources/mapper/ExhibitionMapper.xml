@@ -71,11 +71,11 @@
 		/* ExhibitionMapper.getExhibitionTabList: 기획전 탭 목록 조회 */
 		SELECT EXHIBITION_TAB_NO
 		     , EXHIBITION_NO
-		     , TAB_NM
+		     , EXHIBITION_TAB_NM AS TAB_NM
 		     , DATE_FORMAT(DISP_START_DT, '%Y-%m-%d %H:%i:%s') AS DISP_START_DT
 		     , DATE_FORMAT(DISP_END_DT, '%Y-%m-%d %H:%i:%s') AS DISP_END_DT
-		     , DISP_ORD
-		     , SHOW_YN
+		     , EXHIBITION_TAB_NO AS DISP_ORD
+		     , VIEW_YN AS SHOW_YN
 		     , DEL_YN
 		     , REG_NO
 		     , DATE_FORMAT(REG_DT, '%Y-%m-%d %H:%i:%s') AS REG_DT
@@ -89,27 +89,26 @@
 
 	<select id="getExhibitionGoodsList" resultType="com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionGoodsVO">
 		/* ExhibitionMapper.getExhibitionGoodsList: 기획전 탭 상품 목록 조회 */
-		SELECT ETG.EXHIBITION_NO
+		SELECT ET.EXHIBITION_NO
 		     , ETG.EXHIBITION_TAB_NO
-		     , ET.TAB_NM
+		     , ET.EXHIBITION_TAB_NM AS TAB_NM
 		     , ETG.GOODS_ID
 		     , GB.ERP_STYLE_CD
 		     , GB.GOODS_NM
-		     , ETG.DISP_ORD
-		     , ETG.SHOW_YN
-		     , ETG.DEL_YN
+		     , ETG.SORT_SEQ AS DISP_ORD
+		     , ETG.VIEW_YN AS SHOW_YN
+		     , 'N' AS DEL_YN
 		  FROM EXHIBITION_TAB_GOODS ETG
-		  LEFT JOIN EXHIBITION_TAB ET
+		  JOIN EXHIBITION_TAB ET
 		    ON ET.EXHIBITION_TAB_NO = ETG.EXHIBITION_TAB_NO
 		   AND ET.DEL_YN = 'N'
 		  JOIN GOODS_BASE GB
 		    ON GB.GOODS_ID = ETG.GOODS_ID
-		 WHERE ETG.EXHIBITION_NO = #{exhibitionNo}
-		   AND ETG.DEL_YN = 'N'
+		 WHERE ET.EXHIBITION_NO = #{exhibitionNo}
 		<if test="exhibitionTabNo != null and exhibitionTabNo > 0">
 		  AND ETG.EXHIBITION_TAB_NO = #{exhibitionTabNo}
 		</if>
-		 ORDER BY ETG.EXHIBITION_TAB_NO ASC, ETG.DISP_ORD ASC, ETG.GOODS_ID ASC
+		 ORDER BY ETG.EXHIBITION_TAB_NO ASC, ETG.SORT_SEQ ASC, ETG.GOODS_ID ASC
 	</select>
 
 	<insert id="insertExhibitionBase" useGeneratedKeys="true" keyProperty="exhibitionNo" keyColumn="EXHIBITION_NO">
@@ -196,31 +195,58 @@
 		 WHERE EXHIBITION_NO = #{exhibitionNo}
 	</delete>
 
+	<delete id="deleteExhibitionTabByTabNo">
+		/* ExhibitionMapper.deleteExhibitionTabByTabNo: 기획전 탭 단건 삭제 */
+		DELETE
+		  FROM EXHIBITION_TAB
+		 WHERE EXHIBITION_TAB_NO = #{exhibitionTabNo}
+	</delete>
+
 	<delete id="deleteExhibitionGoodsByExhibitionNo">
 		/* ExhibitionMapper.deleteExhibitionGoodsByExhibitionNo: 기획전 탭 상품 일괄 삭제 */
+		DELETE ETG
+		  FROM EXHIBITION_TAB_GOODS ETG
+		  JOIN EXHIBITION_TAB ET
+		    ON ET.EXHIBITION_TAB_NO = ETG.EXHIBITION_TAB_NO
+		 WHERE ET.EXHIBITION_NO = #{exhibitionNo}
+	</delete>
+
+	<select id="countExhibitionGoodsByTabNoList" resultType="int">
+		/* ExhibitionMapper.countExhibitionGoodsByTabNoList: 탭 번호 목록의 상품 건수 조회 */
+		SELECT COUNT(1)
+		  FROM EXHIBITION_TAB_GOODS
+		 WHERE EXHIBITION_TAB_NO IN
+		<foreach collection="tabNoList" item="tabNo" open="(" close=")" separator=",">
+			#{tabNo}
+		</foreach>
+	</select>
+
+	<delete id="deleteExhibitionGoodsByTabNoList">
+		/* ExhibitionMapper.deleteExhibitionGoodsByTabNoList: 탭 번호 목록의 상품 일괄 삭제 */
 		DELETE
 		  FROM EXHIBITION_TAB_GOODS
-		 WHERE EXHIBITION_NO = #{exhibitionNo}
+		 WHERE EXHIBITION_TAB_NO IN
+		<foreach collection="tabNoList" item="tabNo" open="(" close=")" separator=",">
+			#{tabNo}
+		</foreach>
 	</delete>
 
 	<insert id="insertExhibitionTab" useGeneratedKeys="true" keyProperty="exhibitionTabNo" keyColumn="EXHIBITION_TAB_NO">
 		/* ExhibitionMapper.insertExhibitionTab: 기획전 탭 등록 */
 		INSERT INTO EXHIBITION_TAB (
 		       EXHIBITION_NO
-		     , TAB_NM
+		     , EXHIBITION_TAB_NM
 		     , DISP_START_DT
 		     , DISP_END_DT
-		     , DISP_ORD
-		     , SHOW_YN
+		     , VIEW_YN
 		     , DEL_YN
 		     , REG_NO
 		     , UDT_NO
 		) VALUES (
 		       #{exhibitionNo}
 		     , #{tabNm}
-		     , NULLIF(#{dispStartDt}, '')
-		     , NULLIF(#{dispEndDt}, '')
-		     , #{dispOrd}
+		     , COALESCE(NULLIF(#{dispStartDt}, ''), NOW())
+		     , COALESCE(NULLIF(#{dispEndDt}, ''), NOW())
 		     , #{showYn}
 		     , 'N'
 		     , #{regNo}
@@ -228,24 +254,33 @@
 		)
 	</insert>
 
+	<update id="updateExhibitionTab">
+		/* ExhibitionMapper.updateExhibitionTab: 기획전 탭 수정 */
+		UPDATE EXHIBITION_TAB
+		   SET EXHIBITION_TAB_NM = #{tabNm}
+		     , DISP_START_DT = COALESCE(NULLIF(#{dispStartDt}, ''), NOW())
+		     , DISP_END_DT = COALESCE(NULLIF(#{dispEndDt}, ''), NOW())
+		     , VIEW_YN = #{showYn}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE EXHIBITION_TAB_NO = #{exhibitionTabNo}
+		   AND EXHIBITION_NO = #{exhibitionNo}
+	</update>
+
 	<insert id="insertExhibitionGoods">
 		/* ExhibitionMapper.insertExhibitionGoods: 기획전 탭 상품 등록 */
 		INSERT INTO EXHIBITION_TAB_GOODS (
-		       EXHIBITION_NO
-		     , EXHIBITION_TAB_NO
+		       EXHIBITION_TAB_NO
 		     , GOODS_ID
-		     , DISP_ORD
-		     , SHOW_YN
-		     , DEL_YN
+		     , SORT_SEQ
+		     , VIEW_YN
 		     , REG_NO
 		     , UDT_NO
 		) VALUES (
-		       #{exhibitionNo}
-		     , #{exhibitionTabNo}
+		       #{exhibitionTabNo}
 		     , #{goodsId}
 		     , #{dispOrd}
 		     , #{showYn}
-		     , 'N'
 		     , #{regNo}
 		     , #{udtNo}
 		)

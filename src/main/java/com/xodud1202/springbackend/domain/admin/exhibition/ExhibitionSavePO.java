@@ -31,5 +31,6 @@ public class ExhibitionSavePO {
 	private List<ExhibitionTabPO> tabList;
 	// 탭별 상품 목록입니다.
 	private List<ExhibitionGoodsPO> goodsList;
+	// 탭 삭제 시 연관 상품 강제 삭제 여부입니다.
+	private Boolean forceDeleteGoodsWithTabs;
 }
-

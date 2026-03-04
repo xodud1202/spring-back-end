@@ -92,6 +92,51 @@ public class AdminExhibitionController {
 		}
 	}
 
+	// 기획전 마스터 정보만 저장합니다.
+	@PostMapping("/api/admin/exhibition/master/save")
+	public ResponseEntity<Object> saveExhibitionMaster(@RequestBody ExhibitionSavePO param) {
+		// 마스터 저장 요청값을 확인합니다.
+		String validationMessage = exhibitionService.validateExhibitionMasterSave(param);
+		if (validationMessage != null) {
+			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
+		}
+		try {
+			return ResponseEntity.ok(Map.of("exhibitionNo", exhibitionService.saveExhibitionMaster(param)));
+		} catch (IllegalArgumentException e) {
+			return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+		}
+	}
+
+	// 기획전 탭 정보만 저장합니다.
+	@PostMapping("/api/admin/exhibition/tab/save")
+	public ResponseEntity<Object> saveExhibitionTabs(@RequestBody ExhibitionSavePO param) {
+		// 탭 저장 요청값을 확인합니다.
+		String validationMessage = exhibitionService.validateExhibitionTabSave(param);
+		if (validationMessage != null) {
+			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
+		}
+		try {
+			return ResponseEntity.ok(Map.of("savedCount", exhibitionService.saveExhibitionTabsOnly(param)));
+		} catch (IllegalArgumentException e) {
+			return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+		}
+	}
+
+	// 기획전 탭 상품 정보만 저장합니다.
+	@PostMapping("/api/admin/exhibition/goods/save")
+	public ResponseEntity<Object> saveExhibitionGoods(@RequestBody ExhibitionSavePO param) {
+		// 탭 상품 저장 요청값을 확인합니다.
+		String validationMessage = exhibitionService.validateExhibitionGoodsSave(param);
+		if (validationMessage != null) {
+			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
+		}
+		try {
+			return ResponseEntity.ok(Map.of("savedCount", exhibitionService.saveExhibitionGoodsOnly(param)));
+		} catch (IllegalArgumentException e) {
+			return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+		}
+	}
+
 	// 기획전을 등록합니다.
 	@PostMapping("/api/admin/exhibition/create")
 	public ResponseEntity<Object> createExhibition(@RequestBody ExhibitionSavePO param) {

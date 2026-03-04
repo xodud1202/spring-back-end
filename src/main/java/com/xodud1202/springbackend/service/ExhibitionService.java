@@ -30,9 +30,14 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -146,10 +151,7 @@ public class ExhibitionService {
 			return dateValidation;
 		}
 		String tabDateValidation = normalizeAndValidateTabDisplayPeriod(param);
-		if (tabDateValidation != null) {
-			return tabDateValidation;
-		}
-		return null;
+		return tabDateValidation;
 	}
 
 	// 기획전 등록 요청을 검증합니다.
@@ -160,6 +162,110 @@ public class ExhibitionService {
 	// 기획전 수정 요청을 검증합니다.
 	public String validateExhibitionUpdate(ExhibitionSavePO param) {
 		return validateExhibitionSave(param, false);
+	}
+
+	// 기획전 마스터 저장 요청을 검증합니다.
+	public String validateExhibitionMasterSave(ExhibitionSavePO param) {
+		boolean isCreateMode = param == null || param.getExhibitionNo() == null || param.getExhibitionNo() < 1;
+		return validateExhibitionSave(param, isCreateMode);
+	}
+
+	// 기획전 탭 저장 요청을 검증합니다.
+	public String validateExhibitionTabSave(ExhibitionSavePO param) {
+		// 필수 요청값을 확인합니다.
+		if (param == null) {
+			return "요청 데이터가 없습니다.";
+		}
+		if (param.getExhibitionNo() == null || param.getExhibitionNo() < 1) {
+			return "기획전 번호를 확인해주세요.";
+		}
+		if (param.getUdtNo() == null) {
+			return "수정자 정보를 확인해주세요.";
+		}
+		// 기획전 존재 여부를 확인합니다.
+		int exists = exhibitionMapper.countExhibitionByNo(param.getExhibitionNo());
+		if (exists == 0) {
+			return "기획전 정보를 확인해주세요.";
+		}
+
+		// 탭 노출 일시 형식을 정리하고 유효성을 검증합니다.
+		String tabDateValidation = normalizeAndValidateTabDisplayPeriod(param);
+		if (tabDateValidation != null) {
+			return tabDateValidation;
+		}
+
+		// 탭 입력값을 검증합니다.
+		List<ExhibitionTabPO> tabList = safeList(param.getTabList());
+		for (int index = 0; index < tabList.size(); index += 1) {
+			ExhibitionTabPO tab = tabList.get(index);
+			if (tab == null) {
+				continue;
+			}
+			String tabNm = trimToNull(tab.getTabNm());
+			if (tabNm == null) {
+				continue;
+			}
+			if (tabNm.length() > 50) {
+				return "탭[" + (index + 1) + "] 이름은 50자 이내로 입력해주세요.";
+			}
+			String showYn = trimToNull(tab.getShowYn());
+			if (showYn != null && !isYnValue(showYn)) {
+				return "탭[" + (index + 1) + "] 노출여부를 확인해주세요.";
+			}
+		}
+		return null;
+	}
+
+	// 기획전 탭 상품 저장 요청을 검증합니다.
+	public String validateExhibitionGoodsSave(ExhibitionSavePO param) {
+		// 필수 요청값을 확인합니다.
+		if (param == null) {
+			return "요청 데이터가 없습니다.";
+		}
+		if (param.getExhibitionNo() == null || param.getExhibitionNo() < 1) {
+			return "기획전 번호를 확인해주세요.";
+		}
+		if (param.getUdtNo() == null) {
+			return "수정자 정보를 확인해주세요.";
+		}
+		// 기획전 존재 여부를 확인합니다.
+		int exists = exhibitionMapper.countExhibitionByNo(param.getExhibitionNo());
+		if (exists == 0) {
+			return "기획전 정보를 확인해주세요.";
+		}
+
+		// 기획전에 등록된 탭 번호 목록을 조회합니다.
+		Set<Integer> validTabNoSet = exhibitionMapper.getExhibitionTabList(param.getExhibitionNo())
+			.stream()
+			.map(ExhibitionTabPO::getExhibitionTabNo)
+			.filter(Objects::nonNull)
+			.filter(tabNo -> tabNo > 0)
+			.collect(Collectors.toSet());
+
+		// 상품 입력값을 검증합니다.
+		List<ExhibitionGoodsPO> goodsList = safeList(param.getGoodsList());
+		for (int index = 0; index < goodsList.size(); index += 1) {
+			ExhibitionGoodsPO goods = goodsList.get(index);
+			if (goods == null) {
+				continue;
+			}
+			String goodsId = trimToNull(goods.getGoodsId());
+			if (goodsId == null) {
+				continue;
+			}
+			Integer exhibitionTabNo = goods.getExhibitionTabNo();
+			if (exhibitionTabNo == null || exhibitionTabNo < 1) {
+				return "상품 저장 전에 탭 저장을 먼저 진행해주세요.";
+			}
+			if (!validTabNoSet.contains(exhibitionTabNo)) {
+				return "상품[" + (index + 1) + "]의 탭 정보를 확인해주세요.";
+			}
+			String showYn = trimToNull(goods.getShowYn());
+			if (showYn != null && !isYnValue(showYn)) {
+				return "상품[" + (index + 1) + "] 노출여부를 확인해주세요.";
+			}
+		}
+		return null;
 	}
 
 	// 기획전 삭제 요청을 검증합니다.
@@ -180,6 +286,161 @@ public class ExhibitionService {
 			return "기획전 정보를 확인해주세요.";
 		}
 		return null;
+	}
+
+	// 기획전 마스터 정보를 저장합니다.
+	@Transactional
+	public int saveExhibitionMaster(ExhibitionSavePO param) {
+		// 신규/수정 모드를 식별합니다.
+		boolean isCreateMode = param.getExhibitionNo() == null || param.getExhibitionNo() < 1;
+		if (isCreateMode) {
+			normalizeDefaultValues(param, true);
+			exhibitionMapper.insertExhibitionBase(param);
+			if (param.getExhibitionNo() == null || param.getExhibitionNo() < 1) {
+				throw new IllegalArgumentException("기획전 등록에 실패했습니다.");
+			}
+			return param.getExhibitionNo();
+		}
+
+		// 수정 대상 존재 여부를 확인한 뒤 마스터 정보만 수정합니다.
+		int exists = exhibitionMapper.countExhibitionByNo(param.getExhibitionNo());
+		if (exists == 0) {
+			throw new IllegalArgumentException("기획전 정보를 확인해주세요.");
+		}
+		normalizeDefaultValues(param, false);
+		int updated = exhibitionMapper.updateExhibitionBase(param);
+		if (updated == 0) {
+			throw new IllegalArgumentException("기획전 수정에 실패했습니다.");
+		}
+		return param.getExhibitionNo();
+	}
+
+	// 기획전 탭 정보를 저장합니다.
+	@Transactional
+	public int saveExhibitionTabsOnly(ExhibitionSavePO param) {
+		Integer exhibitionNo = param.getExhibitionNo();
+		if (exhibitionNo == null || exhibitionNo < 1) {
+			throw new IllegalArgumentException("기획전 번호를 확인해주세요.");
+		}
+
+		// 기존 탭 목록을 조회합니다.
+		List<ExhibitionTabPO> existingTabs = exhibitionMapper.getExhibitionTabList(exhibitionNo);
+		Map<Integer, ExhibitionTabPO> existingTabMap = existingTabs.stream()
+			.filter(Objects::nonNull)
+			.filter(item -> item.getExhibitionTabNo() != null && item.getExhibitionTabNo() > 0)
+			.collect(Collectors.toMap(ExhibitionTabPO::getExhibitionTabNo, item -> item, (left, right) -> left));
+
+		// 저장 대상 탭 목록을 정규화합니다.
+		List<ExhibitionTabPO> sourceTabs = safeList(param.getTabList());
+		List<ExhibitionTabPO> saveTabs = new ArrayList<>();
+		Set<Integer> keepTabNoSet = new HashSet<>();
+		for (ExhibitionTabPO source : sourceTabs) {
+			if (source == null) {
+				continue;
+			}
+			String tabNm = trimToNull(source.getTabNm());
+			if (tabNm == null) {
+				continue;
+			}
+			ExhibitionTabPO saveTarget = new ExhibitionTabPO();
+			saveTarget.setExhibitionTabNo(source.getExhibitionTabNo());
+			saveTarget.setExhibitionNo(exhibitionNo);
+			saveTarget.setTabNm(tabNm);
+			saveTarget.setDispStartDt(source.getDispStartDt());
+			saveTarget.setDispEndDt(source.getDispEndDt());
+			saveTarget.setShowYn(normalizeShowYn(source.getShowYn()));
+			saveTarget.setRegNo(resolveAuditNo(param.getRegNo(), param.getUdtNo()));
+			saveTarget.setUdtNo(resolveAuditNo(param.getRegNo(), param.getUdtNo()));
+			saveTabs.add(saveTarget);
+			if (saveTarget.getExhibitionTabNo() != null && saveTarget.getExhibitionTabNo() > 0) {
+				keepTabNoSet.add(saveTarget.getExhibitionTabNo());
+			}
+		}
+
+		// 삭제 대상 탭 번호를 계산합니다.
+		List<Integer> deleteTabNoList = existingTabMap.keySet().stream()
+			.filter(tabNo -> !keepTabNoSet.contains(tabNo))
+			.collect(Collectors.toList());
+
+		// 삭제 대상 탭에 연관 상품이 있으면 확인 플래그를 검증합니다.
+		if (!deleteTabNoList.isEmpty()) {
+			int linkedGoodsCount = exhibitionMapper.countExhibitionGoodsByTabNoList(deleteTabNoList);
+			if (linkedGoodsCount > 0 && !Boolean.TRUE.equals(param.getForceDeleteGoodsWithTabs())) {
+				throw new IllegalArgumentException("삭제할 탭에 등록된 상품이 있습니다. 계속하려면 다시 시도해주세요.");
+			}
+			if (linkedGoodsCount > 0) {
+				exhibitionMapper.deleteExhibitionGoodsByTabNoList(deleteTabNoList);
+			}
+			for (Integer deleteTabNo : deleteTabNoList) {
+				exhibitionMapper.deleteExhibitionTabByTabNo(deleteTabNo);
+			}
+		}
+
+		// 탭을 등록/수정합니다.
+		int savedCount = 0;
+		for (ExhibitionTabPO saveTab : saveTabs) {
+			Integer exhibitionTabNo = saveTab.getExhibitionTabNo();
+			if (exhibitionTabNo != null && existingTabMap.containsKey(exhibitionTabNo)) {
+				savedCount += exhibitionMapper.updateExhibitionTab(saveTab);
+				continue;
+			}
+			exhibitionMapper.insertExhibitionTab(saveTab);
+			savedCount += 1;
+		}
+		return savedCount;
+	}
+
+	// 기획전 탭 상품 정보를 저장합니다.
+	@Transactional
+	public int saveExhibitionGoodsOnly(ExhibitionSavePO param) {
+		Integer exhibitionNo = param.getExhibitionNo();
+		if (exhibitionNo == null || exhibitionNo < 1) {
+			throw new IllegalArgumentException("기획전 번호를 확인해주세요.");
+		}
+
+		// 현재 기획전의 상품을 초기화한 뒤 전달된 목록을 다시 저장합니다.
+		exhibitionMapper.deleteExhibitionGoodsByExhibitionNo(exhibitionNo);
+
+		List<ExhibitionGoodsPO> sourceGoodsList = safeList(param.getGoodsList());
+		Map<String, ExhibitionGoodsPO> dedupedGoodsMap = new LinkedHashMap<>();
+		for (ExhibitionGoodsPO source : sourceGoodsList) {
+			if (source == null) {
+				continue;
+			}
+			String goodsId = trimToNull(source.getGoodsId());
+			Integer exhibitionTabNo = source.getExhibitionTabNo();
+			if (goodsId == null || exhibitionTabNo == null || exhibitionTabNo < 1) {
+				continue;
+			}
+			String dedupeKey = exhibitionTabNo + "::" + goodsId;
+			if (!dedupedGoodsMap.containsKey(dedupeKey)) {
+				dedupedGoodsMap.put(dedupeKey, source);
+			}
+		}
+
+		// 탭별 노출순서를 계산해 상품을 저장합니다.
+		Map<Integer, Integer> tabOrderMap = new HashMap<>();
+		int savedCount = 0;
+		for (ExhibitionGoodsPO source : dedupedGoodsMap.values()) {
+			Integer exhibitionTabNo = source.getExhibitionTabNo();
+			if (exhibitionTabNo == null || exhibitionTabNo < 1) {
+				continue;
+			}
+			int nextOrder = tabOrderMap.getOrDefault(exhibitionTabNo, 0) + 1;
+			tabOrderMap.put(exhibitionTabNo, nextOrder);
+
+			ExhibitionGoodsPO saveTarget = new ExhibitionGoodsPO();
+			saveTarget.setExhibitionNo(exhibitionNo);
+			saveTarget.setExhibitionTabNo(exhibitionTabNo);
+			saveTarget.setGoodsId(trimToNull(source.getGoodsId()));
+			saveTarget.setDispOrd(resolvePositiveInteger(source.getDispOrd(), nextOrder));
+			saveTarget.setShowYn(normalizeShowYn(source.getShowYn()));
+			saveTarget.setRegNo(resolveAuditNo(param.getRegNo(), param.getUdtNo()));
+			saveTarget.setUdtNo(resolveAuditNo(param.getRegNo(), param.getUdtNo()));
+			exhibitionMapper.insertExhibitionGoods(saveTarget);
+			savedCount += 1;
+		}
+		return savedCount;
 	}
 
 	// 기획전 썸네일 업로드 요청을 검증합니다.
@@ -300,8 +561,7 @@ public class ExhibitionService {
 		// rowKey/기존 tabNo 매핑을 미리 준비합니다.
 		Map<String, Integer> tabRowKeyToNo = new HashMap<>();
 		Map<Integer, Integer> tabNoToNo = new HashMap<>();
-		for (int i = 0; i < tabList.size(); i += 1) {
-			ExhibitionTabPO source = tabList.get(i);
+		for (ExhibitionTabPO source : tabList) {
 			if (source == null) {
 				continue;
 			}
@@ -314,6 +574,9 @@ public class ExhibitionService {
 			ExhibitionTabPO saveTarget = new ExhibitionTabPO();
 			saveTarget.setExhibitionNo(exhibitionNo);
 			saveTarget.setTabNm(tabNm);
+			// 탭 노출 기간을 그대로 저장 대상으로 전달합니다.
+			saveTarget.setDispStartDt(source.getDispStartDt());
+			saveTarget.setDispEndDt(source.getDispEndDt());
 			saveTarget.setShowYn(normalizeShowYn(source.getShowYn()));
 			saveTarget.setDelYn(YN_N);
 			saveTarget.setRegNo(resolveAuditNo(param.getRegNo(), param.getUdtNo()));
