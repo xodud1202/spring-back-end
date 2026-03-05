@@ -10,6 +10,10 @@ import com.xodud1202.springbackend.domain.admin.banner.BannerPO;
 import com.xodud1202.springbackend.domain.admin.banner.BannerSavePO;
 import com.xodud1202.springbackend.domain.admin.banner.BannerTabPO;
 import com.xodud1202.springbackend.domain.admin.banner.BannerVO;
+import com.xodud1202.springbackend.domain.shop.main.ShopMainGoodsItemVO;
+import com.xodud1202.springbackend.domain.shop.main.ShopMainGoodsTabVO;
+import com.xodud1202.springbackend.domain.shop.main.ShopMainImageBannerItemVO;
+import com.xodud1202.springbackend.domain.shop.main.ShopMainSectionVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -35,6 +39,18 @@ public interface BannerMapper {
 
 	// 배너 상품 목록을 조회합니다.
 	List<BannerGoodsVO> getBannerGoodsList(@Param("bannerNo") Integer bannerNo);
+
+	// 쇼핑몰 메인 노출 섹션 목록을 조회합니다.
+	List<ShopMainSectionVO> getShopMainSectionList();
+
+	// 쇼핑몰 메인 이미지 배너 아이템 목록을 조회합니다.
+	List<ShopMainImageBannerItemVO> getShopMainImageBannerItemList(@Param("bannerNo") Integer bannerNo);
+
+	// 쇼핑몰 메인 상품배너 탭 목록을 조회합니다.
+	List<ShopMainGoodsTabVO> getShopMainGoodsTabList(@Param("bannerNo") Integer bannerNo);
+
+	// 쇼핑몰 메인 상품 목록을 조회합니다.
+	List<ShopMainGoodsItemVO> getShopMainGoodsItemList(@Param("bannerNo") Integer bannerNo);
 
 	// 배너 기본 정보를 등록합니다.
 	int insertBannerBase(BannerSavePO param);

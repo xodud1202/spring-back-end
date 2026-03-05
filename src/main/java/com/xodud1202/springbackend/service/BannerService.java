@@ -12,6 +12,10 @@ import com.xodud1202.springbackend.domain.admin.banner.BannerPO;
 import com.xodud1202.springbackend.domain.admin.banner.BannerSavePO;
 import com.xodud1202.springbackend.domain.admin.banner.BannerTabPO;
 import com.xodud1202.springbackend.domain.admin.banner.BannerVO;
+import com.xodud1202.springbackend.domain.shop.main.ShopMainGoodsItemVO;
+import com.xodud1202.springbackend.domain.shop.main.ShopMainGoodsTabVO;
+import com.xodud1202.springbackend.domain.shop.main.ShopMainImageBannerItemVO;
+import com.xodud1202.springbackend.domain.shop.main.ShopMainSectionVO;
 import com.xodud1202.springbackend.mapper.BannerMapper;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.Row;
@@ -107,6 +111,144 @@ public class BannerService {
 		return detail;
 	}
 
+	// 쇼핑몰 메인 섹션 목록을 조회합니다.
+	public List<ShopMainSectionVO> getShopMainSectionList() {
+		// 메인 노출 대상 섹션 기본 목록을 조회합니다.
+		List<ShopMainSectionVO> sourceSectionList = bannerMapper.getShopMainSectionList();
+		if (sourceSectionList == null || sourceSectionList.isEmpty()) {
+			return List.of();
+		}
+
+		// 섹션별 배너 구분에 맞게 하위 데이터를 결합합니다.
+		List<ShopMainSectionVO> resultSectionList = new ArrayList<>();
+		for (ShopMainSectionVO section : sourceSectionList) {
+			if (section == null || section.getBannerNo() == null) {
+				continue;
+			}
+			attachShopSectionChildren(section);
+			resultSectionList.add(section);
+		}
+		return resultSectionList;
+	}
+
+	// 섹션 배너 구분에 따라 하위 데이터를 결합합니다.
+	private void attachShopSectionChildren(ShopMainSectionVO section) {
+		// 하위 목록 기본값을 빈 목록으로 초기화합니다.
+		section.setImageItems(List.of());
+		section.setTabItems(List.of());
+		section.setGoodsItems(List.of());
+
+		String bannerDivCd = section.getBannerDivCd() == null ? "" : section.getBannerDivCd().trim();
+		if (DIV_01.equals(bannerDivCd) || DIV_03.equals(bannerDivCd)) {
+			// 이미지형 배너(대배너/띠배너) 아이템을 결합합니다.
+			attachShopImageBannerItems(section);
+			return;
+		}
+		if (DIV_02.equals(bannerDivCd)) {
+			// 상품배너A 탭/상품 목록을 결합합니다.
+			attachShopGoodsTabBannerItems(section);
+			return;
+		}
+		if (DIV_04.equals(bannerDivCd)) {
+			// 상품리스트 배너 상품 목록을 결합합니다.
+			attachShopGoodsListBannerItems(section);
+		}
+	}
+
+	// 이미지형 배너 섹션 하위 아이템을 결합합니다.
+	private void attachShopImageBannerItems(ShopMainSectionVO section) {
+		// 이미지 배너 아이템 목록을 조회합니다.
+		List<ShopMainImageBannerItemVO> imageItemList = bannerMapper.getShopMainImageBannerItemList(section.getBannerNo());
+		if (imageItemList == null || imageItemList.isEmpty()) {
+			section.setImageItems(List.of());
+			return;
+		}
+
+		// null 항목을 제외한 이미지 아이템 목록을 설정합니다.
+		List<ShopMainImageBannerItemVO> normalizedImageItemList = imageItemList.stream()
+			.filter(item -> item != null)
+			.toList();
+		section.setImageItems(normalizedImageItemList);
+	}
+
+	// 상품배너A 섹션 하위 탭/상품 데이터를 결합합니다.
+	private void attachShopGoodsTabBannerItems(ShopMainSectionVO section) {
+		// 탭 목록과 상품 목록을 각각 조회합니다.
+		List<ShopMainGoodsTabVO> tabList = bannerMapper.getShopMainGoodsTabList(section.getBannerNo());
+		List<ShopMainGoodsItemVO> goodsList = bannerMapper.getShopMainGoodsItemList(section.getBannerNo());
+
+		// 상품 이미지 경로를 UI에서 바로 사용할 URL로 정규화합니다.
+		applyShopGoodsImageUrls(goodsList);
+
+		// 탭 번호 기준으로 상품 목록을 그룹핑합니다.
+		Map<Integer, List<ShopMainGoodsItemVO>> goodsByTabNoMap = new LinkedHashMap<>();
+		if (goodsList != null) {
+			for (ShopMainGoodsItemVO goods : goodsList) {
+				if (goods == null || goods.getBannerTabNo() == null) {
+					continue;
+				}
+				goodsByTabNoMap.computeIfAbsent(goods.getBannerTabNo(), key -> new ArrayList<>()).add(goods);
+			}
+		}
+
+		// 탭별 상품 목록을 결합합니다.
+		if (tabList == null || tabList.isEmpty()) {
+			section.setTabItems(List.of());
+			return;
+		}
+		List<ShopMainGoodsTabVO> normalizedTabList = new ArrayList<>();
+		for (ShopMainGoodsTabVO tab : tabList) {
+			if (tab == null || tab.getBannerTabNo() == null) {
+				continue;
+			}
+			List<ShopMainGoodsItemVO> tabGoodsList = goodsByTabNoMap.getOrDefault(tab.getBannerTabNo(), List.of());
+			tab.setGoodsItems(tabGoodsList);
+			normalizedTabList.add(tab);
+		}
+		section.setTabItems(normalizedTabList);
+	}
+
+	// 상품리스트 배너 섹션 하위 상품 목록을 결합합니다.
+	private void attachShopGoodsListBannerItems(ShopMainSectionVO section) {
+		// 상품리스트 배너 상품 목록을 조회합니다.
+		List<ShopMainGoodsItemVO> goodsList = bannerMapper.getShopMainGoodsItemList(section.getBannerNo());
+		if (goodsList == null || goodsList.isEmpty()) {
+			section.setGoodsItems(List.of());
+			return;
+		}
+
+		// 상품 이미지 URL을 보정한 뒤 null 항목을 제거해 설정합니다.
+		applyShopGoodsImageUrls(goodsList);
+		List<ShopMainGoodsItemVO> normalizedGoodsList = goodsList.stream()
+			.filter(item -> item != null)
+			.toList();
+		section.setGoodsItems(normalizedGoodsList);
+	}
+
+	// 상품 이미지 경로를 UI 조회용 URL로 보정합니다.
+	private void applyShopGoodsImageUrls(List<ShopMainGoodsItemVO> goodsList) {
+		if (goodsList == null || goodsList.isEmpty()) {
+			return;
+		}
+
+		// 절대 URL은 그대로 사용하고, 파일명만 있는 경우 FTP URL 규칙으로 보정합니다.
+		for (ShopMainGoodsItemVO item : goodsList) {
+			if (item == null) {
+				continue;
+			}
+			String imgPath = item.getImgPath();
+			if (isBlank(imgPath)) {
+				item.setImgUrl("");
+				continue;
+			}
+			if (imgPath.startsWith("http://") || imgPath.startsWith("https://")) {
+				item.setImgUrl(imgPath);
+				continue;
+			}
+			String imageUrl = ftpFileService.buildGoodsImageUrl(item.getGoodsId(), imgPath);
+			item.setImgUrl(imageUrl == null ? "" : imageUrl);
+		}
+	}
 	// 배너 등록 요청을 검증합니다.
 	public String validateBannerCreate(BannerSavePO param, List<MultipartFile> images, List<String> imageKeys) {
 		// 공통 검증을 수행합니다.

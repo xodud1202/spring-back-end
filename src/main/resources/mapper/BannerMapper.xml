@@ -147,6 +147,89 @@
 		 ORDER BY GBG.BANNER_TAB_NO ASC, GBG.DISP_ORD ASC, GBG.GOODS_ID ASC
 	</select>
 
+	
+	<select id="getShopMainSectionList" resultType="com.xodud1202.springbackend.domain.shop.main.ShopMainSectionVO">
+		/* BannerMapper.getShopMainSectionList: 쇼핑몰 메인 노출 섹션 목록 조회 */
+		SELECT BB.BANNER_NO
+		     , BB.BANNER_DIV_CD
+		     , BB.BANNER_NM
+		     , BB.DISP_ORD
+		  FROM BANNER_BASE BB
+		 WHERE BB.DEL_YN = 'N'
+		   AND BB.SHOW_YN = 'Y'
+		   AND IFNULL(BB.DISP_START_DT, '1000-01-01 00:00:00') &lt;= NOW()
+		   AND IFNULL(BB.DISP_END_DT, '9999-12-31 23:59:59') &gt;= NOW()
+		 ORDER BY BB.DISP_ORD ASC, BB.BANNER_NO ASC
+	</select>
+
+	<select id="getShopMainImageBannerItemList" resultType="com.xodud1202.springbackend.domain.shop.main.ShopMainImageBannerItemVO">
+		/* BannerMapper.getShopMainImageBannerItemList: 쇼핑몰 메인 이미지 배너 아이템 목록 조회 */
+		SELECT IBI.IMAGE_BANNER_NO
+		     , IBI.BANNER_NO
+		     , IBI.BANNER_NM
+		     , IBI.IMG_PATH
+		     , IBI.URL
+		     , IBI.BANNER_OPEN_CD
+		     , IBI.DISP_ORD
+		  FROM IMAGE_BANNER_INFO IBI
+		 WHERE IBI.BANNER_NO = #{bannerNo}
+		   AND IBI.DEL_YN = 'N'
+		   AND IBI.SHOW_YN = 'Y'
+		   AND IFNULL(IBI.DISP_START_DT, '1000-01-01 00:00:00') &lt;= NOW()
+		   AND IFNULL(IBI.DISP_END_DT, '9999-12-31 23:59:59') &gt;= NOW()
+		 ORDER BY IBI.DISP_ORD ASC, IBI.IMAGE_BANNER_NO ASC
+	</select>
+
+	<select id="getShopMainGoodsTabList" resultType="com.xodud1202.springbackend.domain.shop.main.ShopMainGoodsTabVO">
+		/* BannerMapper.getShopMainGoodsTabList: 쇼핑몰 메인 상품배너 탭 목록 조회 */
+		SELECT GBT.BANNER_TAB_NO
+		     , GBT.BANNER_NO
+		     , GBT.TAB_NM
+		     , GBT.DISP_ORD
+		  FROM GOODS_BANNER_TAB GBT
+		 WHERE GBT.BANNER_NO = #{bannerNo}
+		   AND GBT.DEL_YN = 'N'
+		   AND GBT.SHOW_YN = 'Y'
+		 ORDER BY GBT.DISP_ORD ASC, GBT.BANNER_TAB_NO ASC
+	</select>
+
+	<select id="getShopMainGoodsItemList" resultType="com.xodud1202.springbackend.domain.shop.main.ShopMainGoodsItemVO">
+		/* BannerMapper.getShopMainGoodsItemList: 쇼핑몰 메인 상품 목록 조회 */
+		SELECT GBG.BANNER_NO
+		     , GBG.BANNER_TAB_NO
+		     , GBG.GOODS_ID
+		     , GB.GOODS_NM
+		     , BB.BRAND_NM
+		     , GB.SALE_AMT
+		     , (
+		         SELECT GI.IMG_PATH
+		           FROM GOODS_IMG GI
+		          WHERE GI.GOODS_ID = GBG.GOODS_ID
+		          ORDER BY GI.DISP_ORD ASC, GI.IMG_NO ASC
+		          LIMIT 1
+		       ) AS IMG_PATH
+		     , GBG.DISP_ORD
+		  FROM GOODS_BANNER_GOODS GBG
+		  JOIN GOODS_BASE GB
+		    ON GB.GOODS_ID = GBG.GOODS_ID
+		   AND GB.SHOW_YN = 'Y'
+		  LEFT JOIN GOODS_BANNER_TAB GBT
+		    ON GBT.BANNER_NO = GBG.BANNER_NO
+		   AND GBT.BANNER_TAB_NO = GBG.BANNER_TAB_NO
+		  LEFT JOIN BRAND_BASE BB
+		    ON BB.BRAND_NO = GB.BRAND_NO
+		 WHERE GBG.BANNER_NO = #{bannerNo}
+		   AND GBG.SHOW_YN = 'Y'
+		   AND (
+		       GBG.BANNER_TAB_NO = 0
+		       OR (GBT.DEL_YN = 'N' AND GBT.SHOW_YN = 'Y')
+		   )
+		 ORDER BY COALESCE(GBT.DISP_ORD, 9999) ASC
+		        , GBG.BANNER_TAB_NO ASC
+		        , GBG.DISP_ORD ASC
+		        , GBG.GOODS_ID ASC
+	</select>
+
 	<insert id="insertBannerBase" useGeneratedKeys="true" keyProperty="bannerNo" keyColumn="BANNER_NO">
 		/* BannerMapper.insertBannerBase: 관리자 배너 등록 */
 		INSERT INTO BANNER_BASE (

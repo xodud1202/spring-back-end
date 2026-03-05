@@ -5,6 +5,10 @@ import com.xodud1202.springbackend.domain.admin.banner.BannerDeletePO;
 import com.xodud1202.springbackend.domain.admin.banner.BannerImageOrderSavePO;
 import com.xodud1202.springbackend.domain.admin.banner.BannerSavePO;
 import com.xodud1202.springbackend.domain.admin.banner.BannerVO;
+import com.xodud1202.springbackend.domain.shop.main.ShopMainGoodsItemVO;
+import com.xodud1202.springbackend.domain.shop.main.ShopMainGoodsTabVO;
+import com.xodud1202.springbackend.domain.shop.main.ShopMainImageBannerItemVO;
+import com.xodud1202.springbackend.domain.shop.main.ShopMainSectionVO;
 import com.xodud1202.springbackend.mapper.BannerMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -232,5 +236,104 @@ class BannerServiceTests {
 		// 삭제 예외를 검증합니다.
 		IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> bannerService.deleteBanner(param));
 		assertEquals("배너 정보를 확인해주세요.", exception.getMessage());
+	}
+	@Test
+	@DisplayName("쇼핑 메인 조회: 배너 구분별 하위 데이터가 결합된다")
+	// 쇼핑 메인 섹션 조회 시 배너 구분별 하위 데이터 결합을 검증합니다.
+	void getShopMainSectionList_mergesChildrenByBannerDiv() {
+		// 섹션 기본 데이터를 구성합니다.
+		ShopMainSectionVO heroSection = new ShopMainSectionVO();
+		heroSection.setBannerNo(1);
+		heroSection.setBannerDivCd("BANNER_DIV_01");
+		heroSection.setBannerNm("메인 대배너");
+
+		ShopMainSectionVO tabSection = new ShopMainSectionVO();
+		tabSection.setBannerNo(2);
+		tabSection.setBannerDivCd("BANNER_DIV_02");
+		tabSection.setBannerNm("상품배너A");
+
+		ShopMainSectionVO goodsListSection = new ShopMainSectionVO();
+		goodsListSection.setBannerNo(7);
+		goodsListSection.setBannerDivCd("BANNER_DIV_04");
+		goodsListSection.setBannerNm("상품리스트배너");
+
+		// 섹션별 하위 데이터 목 결과를 설정합니다.
+		ShopMainImageBannerItemVO heroImage = new ShopMainImageBannerItemVO();
+		heroImage.setImageBannerNo(100L);
+		heroImage.setImgPath("https://image.test/hero.png");
+
+		ShopMainGoodsTabVO firstTab = new ShopMainGoodsTabVO();
+		firstTab.setBannerTabNo(10);
+		firstTab.setTabNm("TOP10");
+		ShopMainGoodsTabVO secondTab = new ShopMainGoodsTabVO();
+		secondTab.setBannerTabNo(11);
+		secondTab.setTabNm("신상품");
+
+		ShopMainGoodsItemVO tabGoods = new ShopMainGoodsItemVO();
+		tabGoods.setBannerNo(2);
+		tabGoods.setBannerTabNo(10);
+		tabGoods.setGoodsId("GOODS001");
+		tabGoods.setImgPath("main_1.png");
+
+		ShopMainGoodsItemVO goodsListGoods = new ShopMainGoodsItemVO();
+		goodsListGoods.setBannerNo(7);
+		goodsListGoods.setBannerTabNo(0);
+		goodsListGoods.setGoodsId("GOODS002");
+		goodsListGoods.setImgPath("main_2.png");
+
+		when(bannerMapper.getShopMainSectionList()).thenReturn(List.of(heroSection, tabSection, goodsListSection));
+		when(bannerMapper.getShopMainImageBannerItemList(1)).thenReturn(List.of(heroImage));
+		when(bannerMapper.getShopMainGoodsTabList(2)).thenReturn(List.of(firstTab, secondTab));
+		when(bannerMapper.getShopMainGoodsItemList(2)).thenReturn(List.of(tabGoods));
+		when(bannerMapper.getShopMainGoodsItemList(7)).thenReturn(List.of(goodsListGoods));
+		when(ftpFileService.buildGoodsImageUrl("GOODS001", "main_1.png")).thenReturn("https://image.test/goods/GOODS001/main_1.png");
+		when(ftpFileService.buildGoodsImageUrl("GOODS002", "main_2.png")).thenReturn("https://image.test/goods/GOODS002/main_2.png");
+
+		// 서비스 조회 결과를 검증합니다.
+		List<ShopMainSectionVO> result = bannerService.getShopMainSectionList();
+		assertEquals(3, result.size());
+		assertEquals(1, result.get(0).getImageItems().size());
+		assertEquals(2, result.get(1).getTabItems().size());
+		assertEquals(1, result.get(1).getTabItems().get(0).getGoodsItems().size());
+		assertEquals(0, result.get(1).getTabItems().get(1).getGoodsItems().size());
+		assertEquals("https://image.test/goods/GOODS001/main_1.png", result.get(1).getTabItems().get(0).getGoodsItems().get(0).getImgUrl());
+		assertEquals(1, result.get(2).getGoodsItems().size());
+		assertEquals("https://image.test/goods/GOODS002/main_2.png", result.get(2).getGoodsItems().get(0).getImgUrl());
+	}
+
+	@Test
+	@DisplayName("쇼핑 메인 조회: 원본 데이터가 없으면 빈 목록을 반환한다")
+	// 쇼핑 메인 섹션 기본 목록이 없을 때 빈 목록 반환 동작을 검증합니다.
+	void getShopMainSectionList_returnsEmptyListWhenNoData() {
+		// 섹션 기본 목록 조회 결과를 빈 목록으로 설정합니다.
+		when(bannerMapper.getShopMainSectionList()).thenReturn(List.of());
+
+		// 빈 목록 반환 여부를 검증합니다.
+		assertEquals(0, bannerService.getShopMainSectionList().size());
+	}
+
+	@Test
+	@DisplayName("쇼핑 메인 조회: 상품 이미지 경로가 절대 URL이면 그대로 사용한다")
+	// 절대 URL 이미지 경로를 재조합하지 않고 그대로 사용하는 동작을 검증합니다.
+	void getShopMainSectionList_keepsAbsoluteImageUrl() {
+		// 상품리스트 배너 섹션과 상품 데이터를 구성합니다.
+		ShopMainSectionVO goodsListSection = new ShopMainSectionVO();
+		goodsListSection.setBannerNo(7);
+		goodsListSection.setBannerDivCd("BANNER_DIV_04");
+
+		ShopMainGoodsItemVO goodsItem = new ShopMainGoodsItemVO();
+		goodsItem.setBannerNo(7);
+		goodsItem.setBannerTabNo(0);
+		goodsItem.setGoodsId("GOODS999");
+		goodsItem.setImgPath("https://image.test/goods/GOODS999/main.png");
+
+		when(bannerMapper.getShopMainSectionList()).thenReturn(List.of(goodsListSection));
+		when(bannerMapper.getShopMainGoodsItemList(7)).thenReturn(List.of(goodsItem));
+
+		// 절대 URL이 imgUrl 필드로 유지되는지 검증합니다.
+		List<ShopMainSectionVO> result = bannerService.getShopMainSectionList();
+		assertEquals(1, result.size());
+		assertEquals(1, result.get(0).getGoodsItems().size());
+		assertEquals("https://image.test/goods/GOODS999/main.png", result.get(0).getGoodsItems().get(0).getImgUrl());
 	}
 }
