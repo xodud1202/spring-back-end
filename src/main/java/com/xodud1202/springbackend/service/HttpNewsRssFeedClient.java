@@ -25,7 +25,7 @@ import java.util.List;
 
 @Component
 // HTTP 기반 RSS/Atom 피드 파싱 기능을 제공합니다.
-public class HttpRssFeedClient implements RssFeedClient {
+public class HttpNewsRssFeedClient implements NewsRssFeedClient {
 	private static final int HTTP_TIMEOUT_SECONDS = 10;
 	private static final DateTimeFormatter RFC_1123_OFFSET_COLON_FORMATTER =
 		DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss XXX", Locale.ENGLISH);
@@ -36,7 +36,7 @@ public class HttpRssFeedClient implements RssFeedClient {
 
 	@Override
 	// RSS URL에서 기사 목록을 조회합니다.
-	public List<RssArticleItem> fetchFeed(String rssUrl) {
+	public List<RssArticleItem> fetchArticleItems(String rssUrl) {
 		// RSS URL 유효성을 확인합니다.
 		String normalizedUrl = trimToNull(rssUrl);
 		if (normalizedUrl == null) {

@@ -1,19 +1,23 @@
 package com.xodud1202.springbackend;
 
+import com.xodud1202.springbackend.controller.AdminAuthController;
 import com.xodud1202.springbackend.entity.UserBaseEntity;
 import com.xodud1202.springbackend.repository.UserRepository;
 import com.xodud1202.springbackend.security.JwtTokenProvider;
 import com.xodud1202.springbackend.service.UserBaseService;
 import com.xodud1202.springbackend.service.UserRefreshTokenService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.core.Authentication;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.Optional;
 
@@ -24,28 +28,37 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
-@AutoConfigureMockMvc(addFilters = false)
-// 관리자 로그인 API를 검증합니다.
+@ExtendWith(MockitoExtension.class)
+// 관리자 로그인 컨트롤러의 성공/실패 응답을 단위 테스트합니다.
 class LoginControllerTests {
 
-    @Autowired
-    private MockMvc mockMvc;
-
-    @MockBean
+    @Mock
     private AuthenticationManager authenticationManager;
 
-    @MockBean
+    @Mock
     private JwtTokenProvider tokenProvider;
 
-    @MockBean
+    @Mock
     private UserBaseService userBaseService;
 
-    @MockBean
+    @Mock
     private UserRefreshTokenService userRefreshTokenService;
 
-    @MockBean
+    @Mock
     private UserRepository userRepository;
+
+    @InjectMocks
+    private AdminAuthController adminAuthController;
+
+    private MockMvc mockMvc;
+
+    @BeforeEach
+    // MockMvc standalone 환경과 @Value 필드를 초기화합니다.
+    void setUp() {
+        ReflectionTestUtils.setField(adminAuthController, "jwtRefreshTokenExpirationInMs", 2592000000L);
+        ReflectionTestUtils.setField(adminAuthController, "jwtCookieSecure", false);
+        mockMvc = MockMvcBuilders.standaloneSetup(adminAuthController).build();
+    }
 
     @Test
     // 로그인 성공 시 accessToken이 반환되는지 확인합니다.

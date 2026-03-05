@@ -64,7 +64,7 @@ public class NewsService {
 	private static final String NEWS_LIST_ARTICLE_SHARD_DIR_NAME = "articles";
 
 	private final NewsMapper newsMapper;
-	private final RssFeedClient rssFeedClient;
+	private final NewsRssFeedClient newsRssFeedClient;
 	private final ObjectMapper objectMapper;
 	private final FtpFileService ftpFileService;
 
@@ -545,7 +545,7 @@ public class NewsService {
 				String categoryKey = buildPressCategoryKey(pressId, categoryId);
 				boolean hasCategoryKey = snapshot.getArticleListByPressCategoryKey().containsKey(categoryKey);
 				List<NewsListJsonSnapshotVO.ArticleItem> articleItemList = new ArrayList<>();
-				List<RssArticleItem> feedItemList = rssFeedClient.fetchFeed(target.getRssUrl());
+				List<RssArticleItem> feedItemList = newsRssFeedClient.fetchArticleItems(target.getRssUrl());
 				for (int feedIndex = 0; feedIndex < feedItemList.size(); feedIndex += 1) {
 					RssArticleItem feedItem = feedItemList.get(feedIndex);
 					articleItemList.add(buildSnapshotArticleItem(target, feedItem, feedIndex + 1, generatedAtText));
@@ -869,7 +869,7 @@ public class NewsService {
 				resetParam.setCategoryCd(target.getCategoryCd());
 				newsMapper.resetRankScoreByTarget(resetParam);
 
-				List<RssArticleItem> feedItems = rssFeedClient.fetchFeed(target.getRssUrl());
+				List<RssArticleItem> feedItems = newsRssFeedClient.fetchArticleItems(target.getRssUrl());
 				int rankScore = 0;
 				int activeUseYnCount = 0;
 				for (int feedIndex = 0; feedIndex < feedItems.size(); feedIndex += 1) {
@@ -880,7 +880,7 @@ public class NewsService {
 					rankScore += 1;
 					attemptedArticleCount += 1;
 
-					NewsArticleCreatePO saveParam = buildCreateParam(target, feedItem, rankScore);
+					NewsArticleCreatePO saveParam = buildNewsArticleCreateParam(target, feedItem, rankScore);
 					int affectedCount = newsMapper.insertNewsArticle(saveParam);
 					if (affectedCount > 0) {
 						insertedArticleCount += 1;
@@ -913,7 +913,7 @@ public class NewsService {
 	}
 
 	// RSS 기사 저장 파라미터를 생성합니다.
-	private NewsArticleCreatePO buildCreateParam(NewsRssTargetVO target, RssArticleItem item, int rankScore) {
+	private NewsArticleCreatePO buildNewsArticleCreateParam(NewsRssTargetVO target, RssArticleItem item, int rankScore) {
 		String articleGuidOriginal = trimToNull(limitLength(item.guid(), 150));
 		String articleUrlOriginal = trimToNull(limitLength(item.link(), 150));
 		String articleTitleOriginal = trimToNull(limitLength(item.title(), 500));

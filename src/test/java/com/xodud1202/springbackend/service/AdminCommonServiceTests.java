@@ -179,7 +179,6 @@ class AdminCommonServiceTests {
 		parent.setUdtNo(1L);
 		parent.setUdtDt(LocalDateTime.now());
 		when(menuBaseRepository.findByMenuNo(1)).thenReturn(Optional.of(parent));
-		when(menuBaseRepository.countByMenuUrl("/new")).thenReturn(0);
 		when(menuBaseRepository.findMaxSortSeqByUpMenuNo(1)).thenReturn(3);
 		when(menuBaseRepository.save(any(MenuBase.class))).thenAnswer(invocation -> {
 			MenuBase saved = invocation.getArgument(0);
@@ -210,17 +209,6 @@ class AdminCommonServiceTests {
 	@DisplayName("메뉴 삭제: 사용자가 누락되면 검증 실패 메시지 반환")
 	// 삭제 요청 시 수정자 정보 미입력은 실패 메시지를 반환합니다.
 	void validateAdminMenuDelete_returnsErrorWhenUdtNoMissing() {
-		// 삭제 대상을 설정합니다.
-		MenuBase target = new MenuBase();
-		target.setMenuNo(20);
-		target.setMenuNm("메뉴");
-		target.setMenuLevel(2);
-		target.setUpMenuNo(1);
-		target.setSortSeq(1);
-		target.setUseYn("Y");
-		when(menuBaseRepository.findByMenuNo(20)).thenReturn(Optional.of(target));
-		when(menuBaseRepository.countByUpMenuNo(20)).thenReturn(0);
-
 		MenuManageSavePO request = new MenuManageSavePO();
 		request.setMenuNo(20);
 

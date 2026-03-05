@@ -45,7 +45,7 @@ public class NewsServiceTest {
 	private NewsMapper newsMapper;
 
 	@Mock
-	private RssFeedClient rssFeedClient;
+	private NewsRssFeedClient newsRssFeedClient;
 
 	@Mock
 	private FtpFileService ftpFileService;
@@ -55,7 +55,7 @@ public class NewsServiceTest {
 	// 테스트 대상 서비스를 초기화합니다.
 	@BeforeEach
 	void setUp() {
-		newsService = new NewsService(newsMapper, rssFeedClient, new ObjectMapper(), ftpFileService);
+		newsService = new NewsService(newsMapper, newsRssFeedClient, new ObjectMapper(), ftpFileService);
 	}
 
 	@Test
@@ -180,7 +180,7 @@ public class NewsServiceTest {
 		when(newsMapper.getAdminNewsPressManageList()).thenReturn(List.of(pressRow));
 		when(newsMapper.getAdminNewsCategoryManageListByPressNo(1L)).thenReturn(List.of(breakingCategory, politicsCategory));
 		when(newsMapper.getActiveNewsRssTargetList()).thenReturn(List.of(rssTarget));
-		when(rssFeedClient.fetchFeed("https://rss/breaking")).thenReturn(feedItemList);
+		when(newsRssFeedClient.fetchArticleItems("https://rss/breaking")).thenReturn(feedItemList);
 
 		NewsListJsonSnapshotVO snapshot = newsService.buildNewsListJsonSnapshot();
 
@@ -250,10 +250,10 @@ public class NewsServiceTest {
 		when(newsMapper.getAdminNewsCategoryManageListByPressNo(1L)).thenReturn(List.of(p1c1));
 		when(newsMapper.getAdminNewsCategoryManageListByPressNo(2L)).thenReturn(List.of(p2c1));
 		when(newsMapper.getActiveNewsRssTargetList()).thenReturn(List.of(t1, t2));
-		when(rssFeedClient.fetchFeed("https://rss/1")).thenReturn(List.of(
+		when(newsRssFeedClient.fetchArticleItems("https://rss/1")).thenReturn(List.of(
 			new RssArticleItem("g1", "https://a/1", "기사1", null, null, null, LocalDateTime.of(2026, 2, 23, 10, 0))
 		));
-		when(rssFeedClient.fetchFeed("https://rss/2")).thenReturn(List.of(
+		when(newsRssFeedClient.fetchArticleItems("https://rss/2")).thenReturn(List.of(
 			new RssArticleItem("g2", "https://a/2", "기사2", null, null, null, LocalDateTime.of(2026, 2, 23, 9, 0))
 		));
 
@@ -310,7 +310,7 @@ public class NewsServiceTest {
 		when(newsMapper.getAdminNewsPressManageList()).thenReturn(List.of(press1));
 		when(newsMapper.getAdminNewsCategoryManageListByPressNo(1L)).thenReturn(List.of(p1c1));
 		when(newsMapper.getActiveNewsRssTargetList()).thenReturn(List.of(t1));
-		when(rssFeedClient.fetchFeed("https://rss/1")).thenReturn(List.of(
+		when(newsRssFeedClient.fetchArticleItems("https://rss/1")).thenReturn(List.of(
 			new RssArticleItem("g1", "https://a/1", "기사1", null, null, null, LocalDateTime.of(2026, 2, 23, 10, 0))
 		));
 		when(ftpFileService.resolveNewsSnapshotTargetPath("/HDD1/Media/nas/news")).thenReturn("/HDD1/Media/nas/news");

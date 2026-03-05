@@ -7,9 +7,9 @@
 		/* CouponMapper.getAdminCouponList: 관리자 쿠폰 목록 조회 */
 		SELECT CB.CPN_NO
 		     , CB.CPN_NM
-		     , CCS.CD_NM AS CPN_STAT_NM
-		     , CCG.CD_NM AS CPN_GB_NM
-		     , CCT.CD_NM AS CPN_TARGET_NM
+		     , FN_GET_CODE_NM('CPN_STAT', CB.CPN_STAT_CD) AS CPN_STAT_NM
+		     , FN_GET_CODE_NM('CPN_GB', CB.CPN_GB_CD) AS CPN_GB_NM
+		     , FN_GET_CODE_NM('CPN_TARGET', CB.CPN_TARGET_CD) AS CPN_TARGET_NM
 		     , CASE
 		         WHEN CB.CPN_DOWN_START_DT IS NULL OR CB.CPN_DOWN_START_DT = '0000-00-00 00:00:00' THEN ''
 		         ELSE DATE_FORMAT(CB.CPN_DOWN_START_DT, '%Y-%m-%d %H')
@@ -24,15 +24,6 @@
 		         ELSE DATE_FORMAT(CB.STAT_STOP_DT, '%Y-%m-%d %H')
 		       END AS STAT_STOP_DT
 		  FROM COUPON_BASE CB
-		  LEFT JOIN COMMON_CODE CCS
-		    ON CCS.GRP_CD = 'CPN_STAT'
-		   AND CCS.CD = CB.CPN_STAT_CD
-		  LEFT JOIN COMMON_CODE CCG
-		    ON CCG.GRP_CD = 'CPN_GB'
-		   AND CCG.CD = CB.CPN_GB_CD
-		  LEFT JOIN COMMON_CODE CCT
-		    ON CCT.GRP_CD = 'CPN_TARGET'
-		   AND CCT.CD = CB.CPN_TARGET_CD
 		 WHERE IFNULL(CB.DEL_YN, 'N') = 'N'
 		<if test="searchGb == 'CPN_NO' and searchValue != null and searchValue != ''">
 		  AND CB.CPN_NO = #{searchValue}

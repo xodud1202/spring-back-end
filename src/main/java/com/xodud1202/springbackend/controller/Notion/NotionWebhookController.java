@@ -1,4 +1,4 @@
-package com.xodud1202.springbackend.controller.Notion;
+package com.xodud1202.springbackend.controller.notion;
 
 import com.xodud1202.springbackend.service.NotionWebhookTempSaveService;
 import com.xodud1202.springbackend.service.NotionWebhookDataSyncService;
@@ -19,7 +19,7 @@ import java.util.Map;
 @RestController
 @RequiredArgsConstructor
 // Notion 웹훅 요청을 수신하고 요청 원문을 임시 테이블에 저장하는 컨트롤러입니다.
-public class NotionApiController {
+public class NotionWebhookController {
 	private static final String WEBHOOK_PATH = "/api/notion/webhook";
 
 	private final NotionWebhookTempSaveService notionWebhookTempSaveService;
@@ -27,7 +27,7 @@ public class NotionApiController {
 
 	// Notion 웹훅 요청의 헤더/파라미터/바디를 KEY_VALUE_TEMP_TABLE에 저장합니다.
 	@RequestMapping(value = WEBHOOK_PATH, method = { RequestMethod.GET, RequestMethod.POST })
-	public ResponseEntity<Object> notionWebhook(HttpServletRequest request, @RequestBody(required = false) String requestBody) {
+	public ResponseEntity<Object> handleNotionWebhookRequest(HttpServletRequest request, @RequestBody(required = false) String requestBody) {
 		try {
 			// 요청 헤더를 모두 순회해 저장용 맵으로 구성합니다.
 			Map<String, String> headerMap = new LinkedHashMap<>();

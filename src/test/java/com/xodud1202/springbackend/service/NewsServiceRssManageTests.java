@@ -27,7 +27,7 @@ class NewsServiceRssManageTests {
 	private NewsMapper newsMapper;
 
 	@Mock
-	private RssFeedClient rssFeedClient;
+	private NewsRssFeedClient newsRssFeedClient;
 
 	@InjectMocks
 	private NewsService newsService;
