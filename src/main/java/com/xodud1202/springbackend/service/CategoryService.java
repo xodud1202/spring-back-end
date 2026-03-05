@@ -6,6 +6,8 @@ import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsRegisterPO
 import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsVO;
 import com.xodud1202.springbackend.domain.admin.category.CategorySavePO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
+import com.xodud1202.springbackend.domain.shop.category.ShopCategoryGoodsItemVO;
+import com.xodud1202.springbackend.domain.shop.category.ShopCategoryPageVO;
 import com.xodud1202.springbackend.domain.shop.header.ShopHeaderCategoryTreeVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -14,6 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -177,6 +180,61 @@ public class CategoryService {
 		return resultList;
 	}
 
+	// 쇼핑몰 카테고리 페이지 데이터를 조회합니다.
+	public ShopCategoryPageVO getShopCategoryPage(String selectedCategoryId) {
+		// 쇼핑몰 카테고리 트리를 조회합니다.
+		List<ShopHeaderCategoryTreeVO> categoryTree = getShopHeaderCategoryTree();
+		// 카테고리 아이디/명 매핑을 생성합니다.
+		Map<String, String> categoryNameByIdMap = new LinkedHashMap<>();
+		collectCategoryNameById(categoryTree, categoryNameByIdMap);
+
+		// 요청 카테고리 아이디를 유효한 선택값으로 보정합니다.
+		String resolvedSelectedCategoryId = resolveSelectedCategoryId(selectedCategoryId, categoryNameByIdMap);
+		// 선택 카테고리의 상품 목록을 조회합니다.
+		List<ShopCategoryGoodsItemVO> goodsList = goodsService.getShopCategoryGoodsList(resolvedSelectedCategoryId);
+
+		// 카테고리 페이지 응답 객체를 구성합니다.
+		ShopCategoryPageVO result = new ShopCategoryPageVO();
+		result.setCategoryTree(categoryTree);
+		result.setSelectedCategoryId(resolvedSelectedCategoryId);
+		result.setSelectedCategoryNm(categoryNameByIdMap.getOrDefault(resolvedSelectedCategoryId, ""));
+		result.setGoodsList(goodsList);
+		result.setGoodsCount(goodsList.size());
+		return result;
+	}
+
+	// 선택 카테고리 아이디를 유효한 값으로 보정합니다.
+	private String resolveSelectedCategoryId(String selectedCategoryId, Map<String, String> categoryNameByIdMap) {
+		// 요청 카테고리가 존재하면 그대로 사용합니다.
+		if (!isBlank(selectedCategoryId) && categoryNameByIdMap.containsKey(selectedCategoryId)) {
+			return selectedCategoryId;
+		}
+		// 요청 카테고리가 없거나 유효하지 않으면 첫 번째 카테고리를 기본값으로 사용합니다.
+		for (String categoryId : categoryNameByIdMap.keySet()) {
+			return categoryId;
+		}
+		// 카테고리가 없으면 빈 문자열을 반환합니다.
+		return "";
+	}
+
+	// 카테고리 트리를 순회해 카테고리 아이디/명을 수집합니다.
+	private void collectCategoryNameById(List<ShopHeaderCategoryTreeVO> categoryTree, Map<String, String> categoryNameByIdMap) {
+		if (categoryTree == null || categoryTree.isEmpty()) {
+			return;
+		}
+		for (ShopHeaderCategoryTreeVO category : categoryTree) {
+			if (category == null || isBlank(category.getCategoryId())) {
+				continue;
+			}
+			categoryNameByIdMap.put(category.getCategoryId(), category.getCategoryNm() == null ? "" : category.getCategoryNm());
+			collectCategoryNameById(category.getChildren(), categoryNameByIdMap);
+		}
+	}
+
+	// 문자열 공백 여부를 확인합니다.
+	private boolean isBlank(String value) {
+		return value == null || value.trim().isEmpty();
+	}
 	// 레벨/부모 조건으로 노출 가능한 카테고리를 정렬 후 반환합니다.
 	private List<CategoryVO> resolveVisibleSortedCategoryList(Integer categoryLevel, String parentCategoryId) {
 		// 공통 카테고리 목록을 조회하고 빈 데이터일 경우 즉시 반환합니다.

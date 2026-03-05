@@ -1,6 +1,8 @@
 package com.xodud1202.springbackend.service;
 
 import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
+import com.xodud1202.springbackend.domain.shop.category.ShopCategoryGoodsItemVO;
+import com.xodud1202.springbackend.domain.shop.category.ShopCategoryPageVO;
 import com.xodud1202.springbackend.domain.shop.header.ShopHeaderCategoryTreeVO;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -12,10 +14,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-// 카테고리 서비스의 쇼핑몰 헤더 트리 조합 로직을 검증합니다.
+// 카테고리 서비스의 쇼핑몰 헤더 트리/카테고리 페이지 조합 로직을 검증합니다.
 class CategoryServiceTests {
 	@Mock
 	private GoodsService goodsService;
@@ -99,5 +102,79 @@ class CategoryServiceTests {
 		assertThat(result).hasSize(2);
 		assertThat(result.get(0).getCategoryId()).isEqualTo("10");
 		assertThat(result.get(1).getCategoryId()).isEqualTo("20");
+	}
+
+	@Test
+	@DisplayName("카테고리 페이지 조회 시 선택 카테고리 상품만 반환한다")
+	// 선택 카테고리 기준으로 상품 목록과 카테고리명이 조합되는지 확인합니다.
+	void getShopCategoryPage_returnsSelectedCategoryGoodsOnly() {
+		// 카테고리 트리 테스트 데이터를 구성합니다.
+		CategoryVO level1 = new CategoryVO();
+		level1.setCategoryId("10");
+		level1.setCategoryLevel(1);
+		level1.setCategoryNm("남성");
+		level1.setDispOrd(1);
+		level1.setShowYn("Y");
+
+		CategoryVO level2 = new CategoryVO();
+		level2.setCategoryId("100001");
+		level2.setParentCategoryId("10");
+		level2.setCategoryLevel(2);
+		level2.setCategoryNm("아우터");
+		level2.setDispOrd(1);
+		level2.setShowYn("Y");
+
+		when(goodsService.getCategoryList(1, null)).thenReturn(List.of(level1));
+		when(goodsService.getCategoryList(2, "10")).thenReturn(List.of(level2));
+		when(goodsService.getCategoryList(3, "100001")).thenReturn(List.of());
+
+		// 선택 카테고리 상품 목록 목 데이터를 설정합니다.
+		ShopCategoryGoodsItemVO goodsItem = new ShopCategoryGoodsItemVO();
+		goodsItem.setCategoryId("100001");
+		goodsItem.setGoodsId("CAMEUEP01BL");
+		goodsItem.setGoodsNm("테스트상품");
+		goodsItem.setBrandNm("테스트브랜드");
+		goodsItem.setSaleAmt(14900);
+		when(goodsService.getShopCategoryGoodsList("100001")).thenReturn(List.of(goodsItem));
+
+		// 카테고리 페이지 조회 결과를 검증합니다.
+		ShopCategoryPageVO result = categoryService.getShopCategoryPage("100001");
+		assertThat(result.getSelectedCategoryId()).isEqualTo("100001");
+		assertThat(result.getSelectedCategoryNm()).isEqualTo("아우터");
+		assertThat(result.getGoodsCount()).isEqualTo(1);
+		assertThat(result.getGoodsList()).hasSize(1);
+		assertThat(result.getGoodsList().get(0).getGoodsId()).isEqualTo("CAMEUEP01BL");
+	}
+
+	@Test
+	@DisplayName("카테고리 페이지 조회 시 선택 카테고리가 없으면 첫 카테고리로 보정한다")
+	// 잘못된 categoryId 요청 시 기본 카테고리로 보정되는지 확인합니다.
+	void getShopCategoryPage_fallsBackToFirstCategoryWhenInvalidCategoryId() {
+		// 정렬 검증용 1차 카테고리 데이터를 구성합니다.
+		CategoryVO first = new CategoryVO();
+		first.setCategoryId("10");
+		first.setCategoryLevel(1);
+		first.setCategoryNm("남성");
+		first.setDispOrd(1);
+		first.setShowYn("Y");
+
+		CategoryVO second = new CategoryVO();
+		second.setCategoryId("20");
+		second.setCategoryLevel(1);
+		second.setCategoryNm("여성");
+		second.setDispOrd(2);
+		second.setShowYn("Y");
+
+		when(goodsService.getCategoryList(1, null)).thenReturn(List.of(second, first));
+		when(goodsService.getCategoryList(2, "10")).thenReturn(List.of());
+		when(goodsService.getCategoryList(2, "20")).thenReturn(List.of());
+		when(goodsService.getShopCategoryGoodsList("10")).thenReturn(List.of());
+
+		// 잘못된 categoryId 전달 시 보정 결과를 검증합니다.
+		ShopCategoryPageVO result = categoryService.getShopCategoryPage("999999");
+		assertThat(result.getSelectedCategoryId()).isEqualTo("10");
+		assertThat(result.getSelectedCategoryNm()).isEqualTo("남성");
+		assertThat(result.getGoodsCount()).isEqualTo(0);
+		verify(goodsService).getShopCategoryGoodsList("10");
 	}
 }

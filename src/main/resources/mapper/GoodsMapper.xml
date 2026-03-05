@@ -361,6 +361,36 @@
 		 ORDER BY CG.DISP_ORD ASC, CG.GOODS_ID ASC
 	</select>
 
+	
+	<select id="getShopCategoryGoodsList" resultType="com.xodud1202.springbackend.domain.shop.category.ShopCategoryGoodsItemVO">
+		/* GoodsMapper.getShopCategoryGoodsList: 쇼핑몰 카테고리 화면 상품 목록 조회 */
+		SELECT CG.CATEGORY_ID
+		     , CG.GOODS_ID
+		     , GB.GOODS_NM
+		     , BB.BRAND_NM
+		     , GB.SUPPLY_AMT
+		     , GB.SALE_AMT
+		     , (
+		         SELECT GI.IMG_PATH
+		           FROM GOODS_IMG GI
+		          WHERE GI.GOODS_ID = CG.GOODS_ID
+		          ORDER BY GI.DISP_ORD ASC, GI.IMG_NO ASC
+		          LIMIT 1
+		       ) AS IMG_PATH
+		     , CG.DISP_ORD
+		  FROM CATEGORY_GOODS CG
+		  JOIN CATEGORY C
+		    ON C.CATEGORY_ID = CG.CATEGORY_ID
+		   AND C.SHOW_YN = 'Y'
+		  JOIN GOODS_BASE GB
+		    ON GB.GOODS_ID = CG.GOODS_ID
+		   AND GB.SHOW_YN = 'Y'
+		  LEFT JOIN BRAND_BASE BB
+		    ON BB.BRAND_NO = GB.BRAND_NO
+		 WHERE CG.CATEGORY_ID = #{categoryId}
+		 ORDER BY CG.DISP_ORD ASC, CG.GOODS_ID ASC
+	</select>
+
 	<insert id="insertCategoryGoods">
 		/* GoodsMapper.insertCategoryGoods: 카테고리 상품 등록 */
 		INSERT INTO CATEGORY_GOODS (

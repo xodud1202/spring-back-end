@@ -1,5 +1,6 @@
 package com.xodud1202.springbackend.controller.shop;
 
+import com.xodud1202.springbackend.domain.shop.category.ShopCategoryPageVO;
 import com.xodud1202.springbackend.domain.shop.header.ShopHeaderCategoryTreeVO;
 import com.xodud1202.springbackend.service.CategoryService;
 import org.junit.jupiter.api.BeforeEach;
@@ -68,5 +69,39 @@ class ShopCategoryControllerTests {
 		mockMvc.perform(get("/api/shop/header/categories").contentType(MediaType.APPLICATION_JSON))
 			.andExpect(status().isInternalServerError())
 			.andExpect(jsonPath("$.message").value("헤더 카테고리 조회에 실패했습니다."));
+	}
+
+	@Test
+	@DisplayName("카테고리 페이지 API는 정상 조회 시 200과 선택 카테고리 데이터를 반환한다")
+	// 카테고리 페이지 API 응답의 정상 상태를 확인합니다.
+	void getShopCategoryPage_returnsOk() throws Exception {
+		// 서비스 반환용 카테고리 페이지 응답 객체를 생성합니다.
+		ShopCategoryPageVO pageVO = new ShopCategoryPageVO();
+		pageVO.setCategoryTree(List.of());
+		pageVO.setSelectedCategoryId("100001");
+		pageVO.setSelectedCategoryNm("아우터");
+		pageVO.setGoodsList(List.of());
+		pageVO.setGoodsCount(0);
+		when(categoryService.getShopCategoryPage("100001")).thenReturn(pageVO);
+
+		// 카테고리 페이지 API 요청 후 200 응답과 데이터 필드를 검증합니다.
+		mockMvc.perform(get("/api/shop/category/page").param("categoryId", "100001").contentType(MediaType.APPLICATION_JSON))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.selectedCategoryId").value("100001"))
+			.andExpect(jsonPath("$.selectedCategoryNm").value("아우터"))
+			.andExpect(jsonPath("$.goodsCount").value(0));
+	}
+
+	@Test
+	@DisplayName("카테고리 페이지 API는 예외 발생 시 500과 에러 메시지를 반환한다")
+	// 카테고리 페이지 서비스 예외 발생 시 500 응답으로 변환되는지 확인합니다.
+	void getShopCategoryPage_returnsInternalServerErrorWhenExceptionOccurs() throws Exception {
+		// 서비스 예외를 발생하도록 목 동작을 설정합니다.
+		when(categoryService.getShopCategoryPage("999999")).thenThrow(new IllegalStateException("boom"));
+
+		// 카테고리 페이지 API 요청 후 500 응답과 메시지를 검증합니다.
+		mockMvc.perform(get("/api/shop/category/page").param("categoryId", "999999").contentType(MediaType.APPLICATION_JSON))
+			.andExpect(status().isInternalServerError())
+			.andExpect(jsonPath("$.message").value("카테고리 페이지 조회에 실패했습니다."));
 	}
 }

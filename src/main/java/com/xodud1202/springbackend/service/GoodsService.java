@@ -11,6 +11,7 @@ import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsRegisterPO
 import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsSavePO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsVO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
+import com.xodud1202.springbackend.domain.shop.category.ShopCategoryGoodsItemVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySaveItem;
@@ -530,6 +531,19 @@ public class GoodsService {
 		return list;
 	}
 
+	// 쇼핑몰 카테고리 화면의 선택 카테고리 상품 목록을 조회합니다.
+	public List<ShopCategoryGoodsItemVO> getShopCategoryGoodsList(String categoryId) {
+		// 카테고리 코드가 없으면 빈 목록을 반환합니다.
+		if (isBlank(categoryId)) {
+			return List.of();
+		}
+		// 선택 카테고리 상품 목록을 조회합니다.
+		List<ShopCategoryGoodsItemVO> list = goodsMapper.getShopCategoryGoodsList(categoryId);
+		// 상품 이미지 URL을 세팅합니다.
+		applyShopCategoryGoodsImageUrls(list);
+		return list;
+	}
+
 	// 카테고리 상품 정렬 순서 저장 요청을 검증합니다.
 	public String validateCategoryGoodsOrderSave(CategoryGoodsOrderSavePO param) {
 		// 요청 데이터 유효성을 확인합니다.
@@ -974,6 +988,28 @@ public class GoodsService {
 		}
 	}
 
+
+	// 쇼핑몰 카테고리 상품 목록에 이미지 URL을 세팅합니다.
+	private void applyShopCategoryGoodsImageUrls(List<ShopCategoryGoodsItemVO> list) {
+		if (list == null || list.isEmpty()) {
+			return;
+		}
+		for (ShopCategoryGoodsItemVO item : list) {
+			if (item == null) {
+				continue;
+			}
+			String imgPath = item.getImgPath();
+			if (isBlank(imgPath)) {
+                item.setImgUrl("");
+				continue;
+			}
+            if (imgPath.startsWith("http://") || imgPath.startsWith("https://")) {
+				item.setImgUrl(imgPath);
+				continue;
+			}
+			item.setImgUrl(ftpFileService.buildGoodsImageUrl(item.getGoodsId(), imgPath));
+		}
+	}
 	// 엑셀 업로드 행 정보를 전달합니다.
 	private static class CategoryGoodsExcelRow {
 		// 카테고리코드입니다.

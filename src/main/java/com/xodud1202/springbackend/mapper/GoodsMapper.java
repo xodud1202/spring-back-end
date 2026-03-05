@@ -21,6 +21,7 @@ import com.xodud1202.springbackend.domain.admin.category.CategorySavePO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsSavePO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsVO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
+import com.xodud1202.springbackend.domain.shop.category.ShopCategoryGoodsItemVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -109,6 +110,9 @@ public interface GoodsMapper {
 
 	// 카테고리별 상품 목록을 조회합니다.
 	List<CategoryGoodsVO> getAdminCategoryGoodsList(@Param("categoryId") String categoryId);
+
+	// 쇼핑몰 카테고리 화면 상품 목록을 조회합니다.
+	List<ShopCategoryGoodsItemVO> getShopCategoryGoodsList(@Param("categoryId") String categoryId);
 
 	// 카테고리 상품 단건을 등록합니다.
 	int insertCategoryGoods(CategoryGoodsSavePO param);
