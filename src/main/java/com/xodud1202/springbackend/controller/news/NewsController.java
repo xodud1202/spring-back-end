@@ -1,4 +1,4 @@
-package com.xodud1202.springbackend.controller;
+package com.xodud1202.springbackend.controller.news;
 
 import com.xodud1202.springbackend.domain.news.NewsCategorySummaryVO;
 import com.xodud1202.springbackend.domain.news.NewsPressSummaryVO;

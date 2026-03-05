@@ -1,4 +1,4 @@
-package com.xodud1202.springbackend.controller;
+package com.xodud1202.springbackend.controller.resume;
 
 import com.xodud1202.springbackend.entity.ResumeBaseEntity;
 import com.xodud1202.springbackend.service.ResumeService;

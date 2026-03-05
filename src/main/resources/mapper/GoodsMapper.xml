@@ -123,6 +123,7 @@
 		/* GoodsMapper.getBrandList: 브랜드 목록 조회 */
 		SELECT BRAND_NO
 		     , BRAND_NM
+		     , BRAND_LOGO_PATH
 		  FROM BRAND_BASE
 		 WHERE USE_YN = 'Y'
 		   AND DEL_YN = 'N'

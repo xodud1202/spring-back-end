@@ -1,8 +1,8 @@
-package com.xodud1202.springbackend.controller;
+package com.xodud1202.springbackend.controller.bo;
 
 import com.xodud1202.springbackend.domain.admin.category.CategorySavePO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
-import com.xodud1202.springbackend.service.GoodsService;
+import com.xodud1202.springbackend.service.CategoryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -20,13 +20,13 @@ import java.util.Map;
 @RequiredArgsConstructor
 // 관리자 카테고리 API를 제공합니다.
 public class AdminCategoryController {
-	private final GoodsService goodsService;
+	private final CategoryService categoryService;
 
 	// 관리자 카테고리 트리 목록을 조회합니다.
 	@GetMapping("/api/admin/category/manage/list")
 	public ResponseEntity<List<CategoryVO>> getCategoryManageList() {
 		// 카테고리 목록을 반환합니다.
-		return ResponseEntity.ok(goodsService.getAdminCategoryTreeList());
+		return ResponseEntity.ok(categoryService.getAdminCategoryTreeList());
 	}
 
 	// 관리자 카테고리 상세 정보를 조회합니다.
@@ -36,7 +36,7 @@ public class AdminCategoryController {
 		if (categoryId == null || categoryId.trim().isEmpty()) {
 			return ResponseEntity.badRequest().body(Map.of("message", "카테고리 코드를 입력해주세요."));
 		}
-		CategoryVO detail = goodsService.getAdminCategoryDetail(categoryId);
+		CategoryVO detail = categoryService.getAdminCategoryDetail(categoryId);
 		if (detail == null) {
 			return ResponseEntity.notFound().build();
 		}
@@ -47,7 +47,7 @@ public class AdminCategoryController {
 	@GetMapping("/api/admin/category/manage/next-id")
 	public ResponseEntity<Map<String, Object>> getCategoryManageNextId(@RequestParam(required = false) String parentCategoryId) {
 		// 다음 카테고리 코드를 생성합니다.
-		String nextId = goodsService.getNextAdminCategoryId(parentCategoryId);
+		String nextId = categoryService.getNextAdminCategoryId(parentCategoryId);
 		return ResponseEntity.ok(Map.of("categoryId", nextId));
 	}
 
@@ -55,32 +55,32 @@ public class AdminCategoryController {
 	@PostMapping("/api/admin/category/manage/create")
 	public ResponseEntity<Object> createCategory(@RequestBody CategorySavePO param) {
 		// 요청 검증을 수행합니다.
-		String validationMessage = goodsService.validateAdminCategoryCreate(param);
+		String validationMessage = categoryService.validateAdminCategoryCreate(param);
 		if (validationMessage != null) {
 			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
 		}
-		return ResponseEntity.ok(goodsService.createAdminCategory(param));
+		return ResponseEntity.ok(categoryService.createAdminCategory(param));
 	}
 
 	// 관리자 카테고리를 수정합니다.
 	@PostMapping("/api/admin/category/manage/update")
 	public ResponseEntity<Object> updateCategory(@RequestBody CategorySavePO param) {
 		// 요청 검증을 수행합니다.
-		String validationMessage = goodsService.validateAdminCategoryUpdate(param);
+		String validationMessage = categoryService.validateAdminCategoryUpdate(param);
 		if (validationMessage != null) {
 			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
 		}
-		return ResponseEntity.ok(goodsService.updateAdminCategory(param));
+		return ResponseEntity.ok(categoryService.updateAdminCategory(param));
 	}
 
 	// 관리자 카테고리를 삭제 처리합니다.
 	@PostMapping("/api/admin/category/manage/delete")
 	public ResponseEntity<Object> deleteCategory(@RequestBody CategorySavePO param) {
 		// 요청 검증을 수행합니다.
-		String validationMessage = goodsService.validateAdminCategoryDelete(param);
+		String validationMessage = categoryService.validateAdminCategoryDelete(param);
 		if (validationMessage != null) {
 			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
 		}
-		return ResponseEntity.ok(goodsService.deleteAdminCategory(param));
+		return ResponseEntity.ok(categoryService.deleteAdminCategory(param));
 	}
 }

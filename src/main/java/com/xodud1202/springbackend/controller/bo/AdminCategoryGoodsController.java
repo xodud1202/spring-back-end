@@ -1,10 +1,10 @@
-package com.xodud1202.springbackend.controller;
+package com.xodud1202.springbackend.controller.bo;
 
 import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsDeletePO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsOrderSavePO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsRegisterPO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsVO;
-import com.xodud1202.springbackend.service.GoodsService;
+import com.xodud1202.springbackend.service.CategoryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -28,7 +28,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 // 카테고리별 상품 관리 API를 제공합니다.
 public class AdminCategoryGoodsController {
-	private final GoodsService goodsService;
+	private final CategoryService categoryService;
 
 	// 카테고리별 상품 목록을 조회합니다.
 	@GetMapping("/api/admin/category/goods/list")
@@ -37,7 +37,7 @@ public class AdminCategoryGoodsController {
 		if (categoryId == null || categoryId.trim().isEmpty()) {
 			return ResponseEntity.badRequest().body(Map.of("message", "카테고리를 선택해주세요."));
 		}
-		List<CategoryGoodsVO> list = goodsService.getAdminCategoryGoodsList(categoryId);
+		List<CategoryGoodsVO> list = categoryService.getAdminCategoryGoodsList(categoryId);
 		return ResponseEntity.ok(list);
 	}
 
@@ -45,33 +45,33 @@ public class AdminCategoryGoodsController {
 	@PostMapping("/api/admin/category/goods/order/save")
 	public ResponseEntity<Object> saveCategoryGoodsOrder(@RequestBody CategoryGoodsOrderSavePO param) {
 		// 요청 검증을 수행합니다.
-		String validationMessage = goodsService.validateCategoryGoodsOrderSave(param);
+		String validationMessage = categoryService.validateCategoryGoodsOrderSave(param);
 		if (validationMessage != null) {
 			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
 		}
-		return ResponseEntity.ok(goodsService.saveCategoryGoodsOrder(param));
+		return ResponseEntity.ok(categoryService.saveCategoryGoodsOrder(param));
 	}
 
 	// 카테고리 상품을 등록합니다.
 	@PostMapping("/api/admin/category/goods/register")
 	public ResponseEntity<Object> registerCategoryGoods(@RequestBody CategoryGoodsRegisterPO param) {
 		// 요청 검증을 수행합니다.
-		String validationMessage = goodsService.validateCategoryGoodsRegister(param);
+		String validationMessage = categoryService.validateCategoryGoodsRegister(param);
 		if (validationMessage != null) {
 			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
 		}
-		return ResponseEntity.ok(goodsService.registerCategoryGoods(param));
+		return ResponseEntity.ok(categoryService.registerCategoryGoods(param));
 	}
 
 	// 카테고리 상품을 삭제합니다.
 	@PostMapping("/api/admin/category/goods/delete")
 	public ResponseEntity<Object> deleteCategoryGoods(@RequestBody CategoryGoodsDeletePO param) {
 		// 요청 검증을 수행합니다.
-		String validationMessage = goodsService.validateCategoryGoodsDelete(param);
+		String validationMessage = categoryService.validateCategoryGoodsDelete(param);
 		if (validationMessage != null) {
 			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
 		}
-		return ResponseEntity.ok(goodsService.deleteCategoryGoods(param));
+		return ResponseEntity.ok(categoryService.deleteCategoryGoods(param));
 	}
 
 	// 카테고리 상품 엑셀 파일을 다운로드합니다.
@@ -82,7 +82,7 @@ public class AdminCategoryGoodsController {
 			return ResponseEntity.badRequest().body(Map.of("message", "카테고리를 선택해주세요."));
 		}
 		try {
-			byte[] data = goodsService.buildCategoryGoodsExcel(categoryId);
+			byte[] data = categoryService.buildCategoryGoodsExcel(categoryId);
 			String fileDate = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
 			String filename = "category_goods_" + fileDate + ".xlsx";
 			return ResponseEntity.ok()
@@ -101,12 +101,12 @@ public class AdminCategoryGoodsController {
 		@RequestParam Long regNo,
 		@RequestParam Long udtNo) {
 		// 요청 검증을 수행합니다.
-		String validationMessage = goodsService.validateCategoryGoodsExcelUpload(file, regNo, udtNo);
+		String validationMessage = categoryService.validateCategoryGoodsExcelUpload(file, regNo, udtNo);
 		if (validationMessage != null) {
 			return ResponseEntity.badRequest().body(Map.of("message", validationMessage));
 		}
 		try {
-			Map<String, Object> result = goodsService.uploadCategoryGoodsExcel(file, regNo, udtNo);
+			Map<String, Object> result = categoryService.uploadCategoryGoodsExcel(file, regNo, udtNo);
 			return ResponseEntity.ok(result);
 		} catch (IllegalArgumentException e) {
 			return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));

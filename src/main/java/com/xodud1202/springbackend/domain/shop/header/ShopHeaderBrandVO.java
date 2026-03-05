@@ -1,10 +1,10 @@
-package com.xodud1202.springbackend.domain.admin.brand;
+package com.xodud1202.springbackend.domain.shop.header;
 
 import lombok.Data;
 
-// 관리자 브랜드 목록 응답 데이터를 정의합니다.
 @Data
-public class BrandVO {
+// 쇼핑몰 헤더 브랜드 정보를 전달합니다.
+public class ShopHeaderBrandVO {
 	// 브랜드 번호입니다.
 	private Integer brandNo;
 	// 브랜드명입니다.

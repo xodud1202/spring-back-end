@@ -1,4 +1,4 @@
-package com.xodud1202.springbackend.controller;
+package com.xodud1202.springbackend.controller.bo;
 
 import org.springframework.web.bind.annotation.*;
 

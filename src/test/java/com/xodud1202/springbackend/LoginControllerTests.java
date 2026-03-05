@@ -1,6 +1,6 @@
 package com.xodud1202.springbackend;
 
-import com.xodud1202.springbackend.controller.AdminAuthController;
+import com.xodud1202.springbackend.controller.bo.AdminAuthController;
 import com.xodud1202.springbackend.entity.UserBaseEntity;
 import com.xodud1202.springbackend.repository.UserRepository;
 import com.xodud1202.springbackend.security.JwtTokenProvider;

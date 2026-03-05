@@ -1,4 +1,4 @@
-package com.xodud1202.springbackend.controller;
+package com.xodud1202.springbackend.controller.bo;
 
 import com.xodud1202.springbackend.domain.admin.brand.BrandVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsPO;
@@ -16,6 +16,8 @@ import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeSavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryVO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
+import com.xodud1202.springbackend.service.BrandService;
+import com.xodud1202.springbackend.service.CategoryService;
 import com.xodud1202.springbackend.service.GoodsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +41,8 @@ import java.util.Map;
 // 관리자 상품 API를 제공합니다.
 public class AdminGoodsController {
 	private final GoodsService goodsService;
+	private final BrandService brandService;
+	private final CategoryService categoryService;
 
 	// 관리자 상품 목록을 조회합니다.
 	@GetMapping("/api/admin/goods/list")
@@ -55,7 +59,7 @@ public class AdminGoodsController {
 	// 브랜드 목록을 조회합니다.
 	@GetMapping("/api/admin/brand/list")
 	public ResponseEntity<List<BrandVO>> getBrandList() {
-		return ResponseEntity.ok(goodsService.getBrandList());
+		return ResponseEntity.ok(brandService.getBrandList());
 	}
 
 	// 관리자 상품 상세 정보를 조회합니다.
@@ -96,7 +100,7 @@ public class AdminGoodsController {
 	@GetMapping("/api/admin/category/list")
 	public ResponseEntity<List<CategoryVO>> getCategoryList(@RequestParam(required = false) Integer categoryLevel,
 			@RequestParam(required = false) String parentCategoryId) {
-		return ResponseEntity.ok(goodsService.getCategoryList(categoryLevel, parentCategoryId));
+		return ResponseEntity.ok(categoryService.getCategoryList(categoryLevel, parentCategoryId));
 	}
 
 	// 관리자 상품 카테고리 목록을 조회합니다.

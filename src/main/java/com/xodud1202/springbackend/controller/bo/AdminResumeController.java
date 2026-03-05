@@ -1,4 +1,4 @@
-package com.xodud1202.springbackend.controller;
+package com.xodud1202.springbackend.controller.bo;
 
 import com.xodud1202.springbackend.domain.admin.resume.ResumePO;
 import com.xodud1202.springbackend.domain.resume.ResumeEducation;
