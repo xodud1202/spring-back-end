@@ -9,7 +9,6 @@ import com.xodud1202.springbackend.domain.admin.news.AdminNewsPressDeletePO;
 import com.xodud1202.springbackend.domain.admin.news.AdminNewsPressOptionVO;
 import com.xodud1202.springbackend.domain.admin.news.AdminNewsPressRowVO;
 import com.xodud1202.springbackend.domain.admin.news.AdminNewsPressSavePO;
-import com.xodud1202.springbackend.domain.news.NewsCollectResultVO;
 import com.xodud1202.springbackend.domain.news.NewsListPressShardSnapshotPublishResultVO;
 import com.xodud1202.springbackend.service.NewsService;
 import lombok.RequiredArgsConstructor;
@@ -119,25 +118,8 @@ public class AdminNewsController {
 	
 	@GetMapping("/api/news/refresh/file")
 	public ResponseEntity<Object> refreshNewsListJsonSnapshot() {
-		// 파일 갱신 전 DB RSS 수집을 먼저 실행합니다.
+		// 메타+언론사 shard JSON 파일을 생성/업로드합니다.
 		try {
-			NewsCollectResultVO collectResult = newsService.collectNewsArticles();
-			log.info(
-				"뉴스 RSS 수집 완료 targetCount={}, successTargetCount={}, failedTargetCount={}, attemptedArticleCount={}, insertedArticleCount={}, skippedArticleCount={}",
-				collectResult.getTargetCount(),
-				collectResult.getSuccessTargetCount(),
-				collectResult.getFailedTargetCount(),
-				collectResult.getAttemptedArticleCount(),
-				collectResult.getInsertedArticleCount(),
-				collectResult.getSkippedArticleCount()
-			);
-		} catch (Exception exception) {
-			log.error("뉴스 RSS 수집 실패 message={}", exception.getMessage(), exception);
-		}
-
-		// 수집 성공/실패와 무관하게 메타+언론사 shard JSON 파일을 생성/업로드합니다.
-		try {
-			// 수집 결과를 반영해 메타+언론사 shard JSON 파일을 생성/업로드합니다.
 			NewsListPressShardSnapshotPublishResultVO publishResult = newsService.publishNewsListPressShardJsonSnapshot();
 			log.info(
 					"뉴스 메타+언론사 shard JSON 업로드 완료 baseTargetPath={}, metaFileName={}, pressShardCount={}, shardSuccessCount={}, shardFailedCount={}, metaJsonByteSize={}, totalShardJsonByteSize={}",

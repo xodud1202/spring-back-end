@@ -492,15 +492,18 @@ public class NewsService {
 
 		Map<String, String> defaultCategoryIdByPressId = new LinkedHashMap<>();
 		List<String> pressIdList = new ArrayList<>();
-		List<String> categoryKeyList = new ArrayList<>();
-		Map<Long, List<NewsRssTargetVO>> rssTargetListByPressNo = buildRssTargetListByPressNo(rssTargetList);
-		// 활성 언론사 목록과 언론사별 활성 카테고리 목록을 정렬 순서대로 구성합니다.
+		Map<Long, String> pressIdByPressNo = new LinkedHashMap<>();
+		Map<String, Map<String, NewsListJsonSnapshotVO.CategoryItem>> categoryItemByPressId = new LinkedHashMap<>();
+		Map<String, Integer> nextCategorySortSeqByPressId = new LinkedHashMap<>();
+
+		// 1차 패스: 활성 언론사 기본 구조를 초기화합니다.
 		for (AdminNewsPressRowVO pressRow : allPressRowList) {
-			if (pressRow == null || !"Y".equals(trimToNull(pressRow.getUseYn()))) {
+			if (!"Y".equals(trimToNull(pressRow.getUseYn()))) {
 				continue;
 			}
 
-			String pressId = String.valueOf(pressRow.getPressNo());
+			Long pressNo = pressRow.getPressNo();
+			String pressId = String.valueOf(pressNo);
 			NewsListJsonSnapshotVO.PressItem pressItem = new NewsListJsonSnapshotVO.PressItem();
 			pressItem.setId(pressId);
 			pressItem.setName(trimToNull(pressRow.getPressNm()));
@@ -508,41 +511,43 @@ public class NewsService {
 			pressItem.setUseYn("Y");
 			snapshot.getPressList().add(pressItem);
 			pressIdList.add(pressId);
-
-			// RSS 활성 대상 목록을 기준으로 언론사 카테고리 목록을 구성합니다.
-			List<NewsRssTargetVO> pressTargetList = rssTargetListByPressNo.getOrDefault(pressRow.getPressNo(), List.of());
-			List<NewsListJsonSnapshotVO.CategoryItem> categoryItemList = buildSnapshotCategoryItemListFromRssTargets(pressTargetList);
-
-			snapshot.getCategoryListByPressId().put(pressId, categoryItemList);
-			// 언론사별 첫 활성 카테고리를 기본 선택값으로 저장합니다.
-			String defaultCategoryId = categoryItemList.isEmpty() ? "" : trimToNull(categoryItemList.get(0).getId());
-			defaultCategoryIdByPressId.put(pressId, defaultCategoryId == null ? "" : defaultCategoryId);
-
-			// 카테고리별 기사 배열 키를 미리 생성해 프론트가 빈 배열도 직접 접근 가능하게 합니다.
-			for (NewsListJsonSnapshotVO.CategoryItem categoryItem : categoryItemList) {
-				String categoryId = trimToNull(categoryItem.getId());
-				if (categoryId == null) {
-					continue;
-				}
-				String categoryKey = buildPressCategoryKey(pressId, categoryId);
-				snapshot.getArticleListByPressCategoryKey().put(categoryKey, new ArrayList<>());
-				categoryKeyList.add(categoryKey);
-			}
+			pressIdByPressNo.put(pressNo, pressId);
+			snapshot.getCategoryListByPressId().put(pressId, new ArrayList<>());
+			defaultCategoryIdByPressId.put(pressId, "");
+			categoryItemByPressId.put(pressId, new LinkedHashMap<>());
+			nextCategorySortSeqByPressId.put(pressId, 1);
 		}
 
-		// 활성 RSS 대상별로 원본 전체 피드를 조회해 기사 목록을 구성합니다.
+		// 2차 패스: RSS 대상 순회로 카테고리/기사를 함께 채웁니다.
 		for (NewsRssTargetVO target : rssTargetList) {
 			try {
-				String pressId = String.valueOf(target.getPressNo());
-				String categoryId = trimToNull(target.getCategoryCd());
-				if (categoryId == null) {
-					failedTargetCount += 1;
-					continue;
+				Long pressNo = target == null ? null : target.getPressNo();
+				String categoryId = trimToNull(target == null ? null : target.getCategoryCd());
+				String pressId = pressIdByPressNo.getOrDefault(pressNo, String.valueOf(pressNo));
+				if (pressIdByPressNo.containsKey(pressNo)) {
+					Map<String, NewsListJsonSnapshotVO.CategoryItem> categoryItemById = categoryItemByPressId.get(pressId);
+					if (!categoryItemById.containsKey(categoryId)) {
+						NewsListJsonSnapshotVO.CategoryItem categoryItem = new NewsListJsonSnapshotVO.CategoryItem();
+						categoryItem.setId(categoryId);
+						categoryItem.setName(trimToNull(target.getCategoryNm()));
+						categoryItem.setSortSeq(nextCategorySortSeqByPressId.getOrDefault(pressId, 1));
+						categoryItem.setUseYn("Y");
+						categoryItem.setRssUrl(trimToNull(target.getRssUrl()));
+						categoryItem.setSourceNm(trimToNull(target.getSourceNm()));
+						categoryItemById.put(categoryId, categoryItem);
+						snapshot.getCategoryListByPressId().get(pressId).add(categoryItem);
+						nextCategorySortSeqByPressId.put(pressId, categoryItem.getSortSeq() + 1);
+						if ("".equals(defaultCategoryIdByPressId.get(pressId))) {
+							defaultCategoryIdByPressId.put(pressId, categoryId);
+						}
+					}
 				}
 
 				String categoryKey = buildPressCategoryKey(pressId, categoryId);
-				boolean hasCategoryKey = snapshot.getArticleListByPressCategoryKey().containsKey(categoryKey);
 				List<NewsListJsonSnapshotVO.ArticleItem> articleItemList;
+				if (!snapshot.getArticleListByPressCategoryKey().containsKey(categoryKey)) {
+					snapshot.getArticleListByPressCategoryKey().put(categoryKey, new ArrayList<>());
+				}
 				RssFetchResult rssFetchResult = fetchArticleItemsWithRetry(target);
 				if (RSS_FETCH_RESULT_OK.equals(rssFetchResult.resultCode())) {
 					// RSS 조회에 성공하면 원본 피드 기사 목록을 스냅샷에 반영합니다.
@@ -572,9 +577,6 @@ public class NewsService {
 				}
 
 				snapshot.getArticleListByPressCategoryKey().put(categoryKey, articleItemList);
-				if (!hasCategoryKey) {
-					categoryKeyList.add(categoryKey);
-				}
 				if (!articleItemList.isEmpty()) {
 					successTargetCount += 1;
 				} else {
@@ -584,13 +586,16 @@ public class NewsService {
 				failedTargetCount += 1;
 				log.warn(
 					"뉴스 JSON 스냅샷 RSS 조회 실패 pressNo={}, categoryCd={}, rssUrl={}, message={}",
-					target.getPressNo(),
-					target.getCategoryCd(),
-					target.getRssUrl(),
+					target == null ? null : target.getPressNo(),
+					target == null ? null : target.getCategoryCd(),
+					target == null ? null : target.getRssUrl(),
 					exception.getMessage()
 				);
 			}
 		}
+
+		// 최종 기사 키 목록을 맵 순서대로 추출합니다.
+		List<String> categoryKeyList = new ArrayList<>(snapshot.getArticleListByPressCategoryKey().keySet());
 
 		// 메타/기본선택/보조 인덱스를 스냅샷에 반영합니다.
 		NewsListJsonSnapshotVO.Meta meta = new NewsListJsonSnapshotVO.Meta();
@@ -612,43 +617,6 @@ public class NewsService {
 		snapshotIndex.setCategoryKeyList(categoryKeyList);
 		snapshot.setIndex(snapshotIndex);
 		return snapshot;
-	}
-
-	// RSS 활성 대상 목록을 언론사 번호 기준으로 그룹화합니다.
-	private Map<Long, List<NewsRssTargetVO>> buildRssTargetListByPressNo(List<NewsRssTargetVO> rssTargetList) {
-		Map<Long, List<NewsRssTargetVO>> rssTargetListByPressNo = new LinkedHashMap<>();
-		for (NewsRssTargetVO target : rssTargetList) {
-			// 언론사 번호/카테고리 코드가 유효한 대상만 그룹에 포함합니다.
-			if (target == null || target.getPressNo() == null || trimToNull(target.getCategoryCd()) == null) {
-				continue;
-			}
-			rssTargetListByPressNo.computeIfAbsent(target.getPressNo(), (pressNo) -> new ArrayList<>()).add(target);
-		}
-		return rssTargetListByPressNo;
-	}
-
-	// 언론사별 RSS 대상 목록을 스냅샷 카테고리 목록으로 변환합니다.
-	private List<NewsListJsonSnapshotVO.CategoryItem> buildSnapshotCategoryItemListFromRssTargets(List<NewsRssTargetVO> pressTargetList) {
-		Map<String, NewsListJsonSnapshotVO.CategoryItem> categoryItemById = new LinkedHashMap<>();
-		int fallbackSortSeq = 1;
-		for (NewsRssTargetVO target : pressTargetList) {
-			String categoryId = trimToNull(target.getCategoryCd());
-			if (categoryId == null || categoryItemById.containsKey(categoryId)) {
-				continue;
-			}
-
-			// RSS 대상의 카테고리 메타를 스냅샷 카테고리 항목으로 구성합니다.
-			NewsListJsonSnapshotVO.CategoryItem categoryItem = new NewsListJsonSnapshotVO.CategoryItem();
-			categoryItem.setId(categoryId);
-			categoryItem.setName(trimToNull(target.getCategoryNm()));
-			categoryItem.setSortSeq(fallbackSortSeq);
-			categoryItem.setUseYn("Y");
-			categoryItem.setRssUrl(trimToNull(target.getRssUrl()));
-			categoryItem.setSourceNm(trimToNull(target.getSourceNm()));
-			categoryItemById.put(categoryId, categoryItem);
-			fallbackSortSeq += 1;
-		}
-		return new ArrayList<>(categoryItemById.values());
 	}
 
 	// RSS 기사 목록을 스냅샷 기사 목록으로 변환합니다.

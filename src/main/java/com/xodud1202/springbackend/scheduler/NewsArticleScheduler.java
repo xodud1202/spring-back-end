@@ -1,6 +1,5 @@
 package com.xodud1202.springbackend.scheduler;
 
-import com.xodud1202.springbackend.domain.news.NewsCollectResultVO;
 import com.xodud1202.springbackend.domain.news.NewsListPressShardSnapshotPublishResultVO;
 import com.xodud1202.springbackend.service.NewsService;
 import lombok.RequiredArgsConstructor;
@@ -18,23 +17,7 @@ public class NewsArticleScheduler {
 	@Scheduled(cron = "10 0,30 * * * *", zone = "Asia/Seoul")
 	// 30분 주기 배치로 뉴스 메타+언론사 shard JSON 파일 생성/업로드를 실행합니다.
 	public void collectNewsArticleEveryThirtyMinutes() {
-		// 먼저 DB 뉴스 기사 수집을 실행합니다.
-		try {
-			NewsCollectResultVO collectResult = newsService.collectNewsArticles();
-			log.info(
-				"뉴스 RSS 수집 완료 targetCount={}, successTargetCount={}, failedTargetCount={}, attemptedArticleCount={}, insertedArticleCount={}, skippedArticleCount={}",
-				collectResult.getTargetCount(),
-				collectResult.getSuccessTargetCount(),
-				collectResult.getFailedTargetCount(),
-				collectResult.getAttemptedArticleCount(),
-				collectResult.getInsertedArticleCount(),
-				collectResult.getSkippedArticleCount()
-			);
-		} catch (Exception exception) {
-			log.error("뉴스 RSS 수집 실패 message={}", exception.getMessage(), exception);
-		}
-
-		// 수집 성공/실패와 무관하게 프론트 직접 조회용 JSON 스냅샷 파일을 생성/업로드합니다.
+		// 프론트 직접 조회용 JSON 스냅샷 파일을 생성/업로드합니다.
 		try {
 			NewsListPressShardSnapshotPublishResultVO publishResult = newsService.publishNewsListPressShardJsonSnapshot();
 			log.info(
