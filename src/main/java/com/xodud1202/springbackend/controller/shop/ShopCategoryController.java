@@ -32,13 +32,22 @@ public class ShopCategoryController {
 
 	// 쇼핑몰 카테고리 페이지 데이터를 조회합니다.
 	@GetMapping("/api/shop/category/page")
-	public ResponseEntity<Object> getShopCategoryPage(@RequestParam(value = "categoryId", required = false) String categoryId) {
+	public ResponseEntity<Object> getShopCategoryPage(
+		@RequestParam(value = "categoryId", required = false) String categoryId,
+		@RequestParam(value = "pageNo", required = false) Integer pageNo
+	) {
 		try {
 			// 선택 카테고리 기준 카테고리 페이지 데이터를 반환합니다.
-			return ResponseEntity.ok(categoryService.getShopCategoryPage(categoryId));
+			return ResponseEntity.ok(categoryService.getShopCategoryPage(categoryId, pageNo));
 		} catch (Exception exception) {
 			// 예외 발생 시 에러 로그와 실패 메시지를 반환합니다.
-			log.error("쇼핑몰 카테고리 페이지 조회 실패 message={} categoryId={}", exception.getMessage(), categoryId, exception);
+			log.error(
+				"쇼핑몰 카테고리 페이지 조회 실패 message={} categoryId={} pageNo={}",
+				exception.getMessage(),
+				categoryId,
+				pageNo,
+				exception
+			);
 			return ResponseEntity.internalServerError().body(Map.of("message", "카테고리 페이지 조회에 실패했습니다."));
 		}
 	}

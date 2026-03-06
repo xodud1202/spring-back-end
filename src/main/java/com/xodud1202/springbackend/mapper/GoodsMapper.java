@@ -111,8 +111,15 @@ public interface GoodsMapper {
 	// 카테고리별 상품 목록을 조회합니다.
 	List<CategoryGoodsVO> getAdminCategoryGoodsList(@Param("categoryId") String categoryId);
 
-	// 쇼핑몰 카테고리 화면 상품 목록을 조회합니다.
-	List<ShopCategoryGoodsItemVO> getShopCategoryGoodsList(@Param("categoryId") String categoryId);
+	// 쇼핑몰 카테고리 화면 상품 건수를 조회합니다.
+	int countShopCategoryGoods(@Param("categoryId") String categoryId);
+
+	// 쇼핑몰 카테고리 화면 상품 목록을 페이징 조회합니다.
+	List<ShopCategoryGoodsItemVO> getShopCategoryGoodsList(
+		@Param("categoryId") String categoryId,
+		@Param("offset") int offset,
+		@Param("pageSize") int pageSize
+	);
 
 	// 카테고리 상품 단건을 등록합니다.
 	int insertCategoryGoods(CategoryGoodsSavePO param);

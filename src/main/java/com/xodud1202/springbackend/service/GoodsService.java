@@ -531,14 +531,27 @@ public class GoodsService {
 		return list;
 	}
 
-	// 쇼핑몰 카테고리 화면의 선택 카테고리 상품 목록을 조회합니다.
-	public List<ShopCategoryGoodsItemVO> getShopCategoryGoodsList(String categoryId) {
+	// 쇼핑몰 카테고리 화면의 선택 카테고리 전체 상품 건수를 조회합니다.
+	public int countShopCategoryGoods(String categoryId) {
+		// 카테고리 코드가 없으면 0건을 반환합니다.
+		if (isBlank(categoryId)) {
+			return 0;
+		}
+		// 선택 카테고리 상품 건수를 조회합니다.
+		return goodsMapper.countShopCategoryGoods(categoryId);
+	}
+
+	// 쇼핑몰 카테고리 화면의 선택 카테고리 상품 목록을 페이징 조회합니다.
+	public List<ShopCategoryGoodsItemVO> getShopCategoryGoodsList(String categoryId, int offset, int pageSize) {
 		// 카테고리 코드가 없으면 빈 목록을 반환합니다.
 		if (isBlank(categoryId)) {
 			return List.of();
 		}
+		// 오프셋과 페이지 크기를 안전한 범위로 보정합니다.
+		int resolvedOffset = Math.max(offset, 0);
+		int resolvedPageSize = pageSize <= 0 ? 20 : pageSize;
 		// 선택 카테고리 상품 목록을 조회합니다.
-		List<ShopCategoryGoodsItemVO> list = goodsMapper.getShopCategoryGoodsList(categoryId);
+		List<ShopCategoryGoodsItemVO> list = goodsMapper.getShopCategoryGoodsList(categoryId, resolvedOffset, resolvedPageSize);
 		// 상품 이미지 URL을 세팅합니다.
 		applyShopCategoryGoodsImageUrls(list);
 		return list;

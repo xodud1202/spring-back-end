@@ -105,9 +105,9 @@ class CategoryServiceTests {
 	}
 
 	@Test
-	@DisplayName("카테고리 페이지 조회 시 선택 카테고리 상품만 반환한다")
-	// 선택 카테고리 기준으로 상품 목록과 카테고리명이 조합되는지 확인합니다.
-	void getShopCategoryPage_returnsSelectedCategoryGoodsOnly() {
+	@DisplayName("카테고리 페이지 조회 시 선택 카테고리 상품 페이징 데이터를 반환한다")
+	// 선택 카테고리 기준으로 상품 목록/총건수/페이지 메타가 조합되는지 확인합니다.
+	void getShopCategoryPage_returnsSelectedCategoryGoodsPageData() {
 		// 카테고리 트리 테스트 데이터를 구성합니다.
 		CategoryVO level1 = new CategoryVO();
 		level1.setCategoryId("10");
@@ -128,28 +128,33 @@ class CategoryServiceTests {
 		when(goodsService.getCategoryList(2, "10")).thenReturn(List.of(level2));
 		when(goodsService.getCategoryList(3, "100001")).thenReturn(List.of());
 
-		// 선택 카테고리 상품 목록 목 데이터를 설정합니다.
+		// 선택 카테고리 상품 페이징 목 데이터를 설정합니다.
 		ShopCategoryGoodsItemVO goodsItem = new ShopCategoryGoodsItemVO();
 		goodsItem.setCategoryId("100001");
 		goodsItem.setGoodsId("CAMEUEP01BL");
 		goodsItem.setGoodsNm("테스트상품");
 		goodsItem.setBrandNm("테스트브랜드");
 		goodsItem.setSaleAmt(14900);
-		when(goodsService.getShopCategoryGoodsList("100001")).thenReturn(List.of(goodsItem));
+		when(goodsService.countShopCategoryGoods("100001")).thenReturn(25);
+		when(goodsService.getShopCategoryGoodsList("100001", 0, 20)).thenReturn(List.of(goodsItem));
 
 		// 카테고리 페이지 조회 결과를 검증합니다.
-		ShopCategoryPageVO result = categoryService.getShopCategoryPage("100001");
+		ShopCategoryPageVO result = categoryService.getShopCategoryPage("100001", 1);
 		assertThat(result.getSelectedCategoryId()).isEqualTo("100001");
 		assertThat(result.getSelectedCategoryNm()).isEqualTo("아우터");
-		assertThat(result.getGoodsCount()).isEqualTo(1);
+		assertThat(result.getGoodsCount()).isEqualTo(25);
+		assertThat(result.getPageNo()).isEqualTo(1);
+		assertThat(result.getPageSize()).isEqualTo(20);
+		assertThat(result.getTotalPageCount()).isEqualTo(2);
 		assertThat(result.getGoodsList()).hasSize(1);
 		assertThat(result.getGoodsList().get(0).getGoodsId()).isEqualTo("CAMEUEP01BL");
+		verify(goodsService).getShopCategoryGoodsList("100001", 0, 20);
 	}
 
 	@Test
-	@DisplayName("카테고리 페이지 조회 시 선택 카테고리가 없으면 첫 카테고리로 보정한다")
-	// 잘못된 categoryId 요청 시 기본 카테고리로 보정되는지 확인합니다.
-	void getShopCategoryPage_fallsBackToFirstCategoryWhenInvalidCategoryId() {
+	@DisplayName("카테고리 페이지 조회 시 선택 카테고리가 없으면 첫 카테고리와 1페이지로 보정한다")
+	// 잘못된 categoryId/pageNo 요청 시 기본 카테고리/1페이지로 보정되는지 확인합니다.
+	void getShopCategoryPage_fallsBackToFirstCategoryAndFirstPageWhenInvalidRequest() {
 		// 정렬 검증용 1차 카테고리 데이터를 구성합니다.
 		CategoryVO first = new CategoryVO();
 		first.setCategoryId("10");
@@ -168,13 +173,50 @@ class CategoryServiceTests {
 		when(goodsService.getCategoryList(1, null)).thenReturn(List.of(second, first));
 		when(goodsService.getCategoryList(2, "10")).thenReturn(List.of());
 		when(goodsService.getCategoryList(2, "20")).thenReturn(List.of());
-		when(goodsService.getShopCategoryGoodsList("10")).thenReturn(List.of());
+		when(goodsService.countShopCategoryGoods("10")).thenReturn(0);
+		when(goodsService.getShopCategoryGoodsList("10", 0, 20)).thenReturn(List.of());
 
-		// 잘못된 categoryId 전달 시 보정 결과를 검증합니다.
-		ShopCategoryPageVO result = categoryService.getShopCategoryPage("999999");
+		// 잘못된 categoryId/null pageNo 전달 시 보정 결과를 검증합니다.
+		ShopCategoryPageVO result = categoryService.getShopCategoryPage("999999", null);
 		assertThat(result.getSelectedCategoryId()).isEqualTo("10");
 		assertThat(result.getSelectedCategoryNm()).isEqualTo("남성");
 		assertThat(result.getGoodsCount()).isEqualTo(0);
-		verify(goodsService).getShopCategoryGoodsList("10");
+		assertThat(result.getPageNo()).isEqualTo(1);
+		assertThat(result.getTotalPageCount()).isEqualTo(0);
+		verify(goodsService).getShopCategoryGoodsList("10", 0, 20);
+	}
+
+	@Test
+	@DisplayName("카테고리 페이지 조회 시 요청 페이지가 범위를 초과하면 마지막 페이지로 보정한다")
+	// 총 페이지 수를 넘어선 페이지 요청 시 마지막 페이지 오프셋이 적용되는지 확인합니다.
+	void getShopCategoryPage_clampsPageNoToLastPageWhenOutOfRange() {
+		// 카테고리 트리 테스트 데이터를 구성합니다.
+		CategoryVO level1 = new CategoryVO();
+		level1.setCategoryId("10");
+		level1.setCategoryLevel(1);
+		level1.setCategoryNm("남성");
+		level1.setDispOrd(1);
+		level1.setShowYn("Y");
+
+		CategoryVO level2 = new CategoryVO();
+		level2.setCategoryId("100001");
+		level2.setParentCategoryId("10");
+		level2.setCategoryLevel(2);
+		level2.setCategoryNm("아우터");
+		level2.setDispOrd(1);
+		level2.setShowYn("Y");
+
+		when(goodsService.getCategoryList(1, null)).thenReturn(List.of(level1));
+		when(goodsService.getCategoryList(2, "10")).thenReturn(List.of(level2));
+		when(goodsService.getCategoryList(3, "100001")).thenReturn(List.of());
+		when(goodsService.countShopCategoryGoods("100001")).thenReturn(45);
+		when(goodsService.getShopCategoryGoodsList("100001", 40, 20)).thenReturn(List.of());
+
+		// 총 3페이지에서 9페이지 요청 시 3페이지로 보정되는지 검증합니다.
+		ShopCategoryPageVO result = categoryService.getShopCategoryPage("100001", 9);
+		assertThat(result.getPageNo()).isEqualTo(3);
+		assertThat(result.getTotalPageCount()).isEqualTo(3);
+		assertThat(result.getPageSize()).isEqualTo(20);
+		verify(goodsService).getShopCategoryGoodsList("100001", 40, 20);
 	}
 }

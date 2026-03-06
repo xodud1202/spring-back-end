@@ -16,6 +16,12 @@ public class ShopCategoryPageVO {
 	private String selectedCategoryNm;
 	// 선택 카테고리 상품 목록입니다.
 	private List<ShopCategoryGoodsItemVO> goodsList;
-	// 선택 카테고리 상품 건수입니다.
+	// 선택 카테고리 전체 상품 건수입니다.
 	private Integer goodsCount;
+	// 현재 페이지 번호입니다.
+	private Integer pageNo;
+	// 페이지 크기입니다.
+	private Integer pageSize;
+	// 전체 페이지 수입니다.
+	private Integer totalPageCount;
 }

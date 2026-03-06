@@ -362,8 +362,21 @@
 	</select>
 
 	
+	<select id="countShopCategoryGoods" resultType="int">
+		/* GoodsMapper.countShopCategoryGoods: 쇼핑몰 카테고리 화면 상품 건수 조회 */
+		SELECT COUNT(1)
+		  FROM CATEGORY_GOODS CG
+		  JOIN CATEGORY C
+		    ON C.CATEGORY_ID = CG.CATEGORY_ID
+		   AND C.SHOW_YN = 'Y'
+		  JOIN GOODS_BASE GB
+		    ON GB.GOODS_ID = CG.GOODS_ID
+		   AND GB.SHOW_YN = 'Y'
+		 WHERE CG.CATEGORY_ID = #{categoryId}
+	</select>
+
 	<select id="getShopCategoryGoodsList" resultType="com.xodud1202.springbackend.domain.shop.category.ShopCategoryGoodsItemVO">
-		/* GoodsMapper.getShopCategoryGoodsList: 쇼핑몰 카테고리 화면 상품 목록 조회 */
+		/* GoodsMapper.getShopCategoryGoodsList: 쇼핑몰 카테고리 화면 상품 목록 페이징 조회 */
 		SELECT CG.CATEGORY_ID
 		     , CG.GOODS_ID
 		     , GB.GOODS_NM
@@ -389,6 +402,7 @@
 		    ON BB.BRAND_NO = GB.BRAND_NO
 		 WHERE CG.CATEGORY_ID = #{categoryId}
 		 ORDER BY CG.DISP_ORD ASC, CG.GOODS_ID ASC
+		 LIMIT #{pageSize} OFFSET #{offset}
 	</select>
 
 	<insert id="insertCategoryGoods">
