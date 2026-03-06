@@ -1,7 +1,6 @@
 package com.xodud1202.springbackend.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.xodud1202.springbackend.domain.admin.news.AdminNewsCategoryRowVO;
 import com.xodud1202.springbackend.domain.admin.news.AdminNewsListQueryPO;
 import com.xodud1202.springbackend.domain.admin.news.AdminNewsListRowVO;
 import com.xodud1202.springbackend.domain.admin.news.AdminNewsPressRowVO;
@@ -170,8 +169,6 @@ public class NewsServiceTest {
 	// 프론트 직접 조회용 맵 구조와 기본 선택값, RSS 전체 기사 저장이 정상 생성되는지 확인합니다.
 	void buildNewsListJsonSnapshot_buildsFrontDirectSnapshotWithAllRssArticles() {
 		AdminNewsPressRowVO pressRow = createAdminPressRow(1L, "JTBC", "Y", 1);
-		AdminNewsCategoryRowVO breakingCategory = createAdminCategoryRow(1L, "breaking", "속보", "Y", 1, "JTBC", "https://rss/breaking");
-		AdminNewsCategoryRowVO politicsCategory = createAdminCategoryRow(1L, "politics", "정치", "Y", 2, "JTBC", "https://rss/politics");
 		NewsRssTargetVO rssTarget = createRssTarget(1L, "JTBC", "breaking", "속보", "JTBC", "https://rss/breaking");
 		List<RssArticleItem> feedItemList = List.of(
 			new RssArticleItem("g1", "https://a/1", "기사1", "요약1", "https://img/1", "기자1", LocalDateTime.of(2026, 2, 23, 10, 0)),
@@ -179,7 +176,6 @@ public class NewsServiceTest {
 		);
 
 		when(newsMapper.getAdminNewsPressManageList()).thenReturn(List.of(pressRow));
-		when(newsMapper.getAdminNewsCategoryManageListByPressNo(1L)).thenReturn(List.of(breakingCategory, politicsCategory));
 		when(newsMapper.getActiveNewsRssTargetList()).thenReturn(List.of(rssTarget));
 		when(newsRssFeedClient.fetchArticleItems("https://rss/breaking")).thenReturn(feedItemList);
 
@@ -188,15 +184,13 @@ public class NewsServiceTest {
 		assertThat(snapshot.getPressList()).hasSize(1);
 		assertThat(snapshot.getPressList().get(0).getId()).isEqualTo("1");
 		assertThat(snapshot.getCategoryListByPressId()).containsKey("1");
-		assertThat(snapshot.getCategoryListByPressId().get("1")).hasSize(2);
+		assertThat(snapshot.getCategoryListByPressId().get("1")).hasSize(1);
 		assertThat(snapshot.getDefaultSelection().getDefaultPressId()).isEqualTo("1");
 		assertThat(snapshot.getDefaultSelection().getDefaultCategoryIdByPressId().get("1")).isEqualTo("breaking");
 		assertThat(snapshot.getArticleListByPressCategoryKey()).containsKey("1|breaking");
 		assertThat(snapshot.getArticleListByPressCategoryKey().get("1|breaking")).hasSize(2);
 		assertThat(snapshot.getArticleListByPressCategoryKey().get("1|breaking").get(0).getRankScore()).isEqualTo(1);
 		assertThat(snapshot.getArticleListByPressCategoryKey().get("1|breaking").get(1).getRankScore()).isEqualTo(2);
-		assertThat(snapshot.getArticleListByPressCategoryKey()).containsKey("1|politics");
-		assertThat(snapshot.getArticleListByPressCategoryKey().get("1|politics")).isEmpty();
 		assertThat(snapshot.getMeta().getTargetCount()).isEqualTo(1);
 		assertThat(snapshot.getMeta().getSuccessTargetCount()).isEqualTo(1);
 		assertThat(snapshot.getMeta().getFailedTargetCount()).isEqualTo(0);
@@ -207,12 +201,10 @@ public class NewsServiceTest {
 	// RSS 재시도 후에도 item이 없을 때 DB 상위 기사 목록으로 스냅샷을 채우는지 확인합니다.
 	void buildNewsListJsonSnapshot_fallbacksToDbArticlesWhenRssEmpty() {
 		AdminNewsPressRowVO pressRow = createAdminPressRow(1L, "JTBC", "Y", 1);
-		AdminNewsCategoryRowVO breakingCategory = createAdminCategoryRow(1L, "breaking", "속보", "Y", 1, "JTBC", "https://rss/breaking");
 		NewsRssTargetVO rssTarget = createRssTarget(1L, "JTBC", "breaking", "속보", "JTBC", "https://rss/breaking");
 		NewsTopArticleVO fallbackArticle = createArticleWithPublished("901", "DB기사1", "2026-02-23 10:00:00");
 
 		when(newsMapper.getAdminNewsPressManageList()).thenReturn(List.of(pressRow));
-		when(newsMapper.getAdminNewsCategoryManageListByPressNo(1L)).thenReturn(List.of(breakingCategory));
 		when(newsMapper.getActiveNewsRssTargetList()).thenReturn(List.of(rssTarget));
 		when(newsRssFeedClient.fetchArticleItems("https://rss/breaking")).thenReturn(List.of());
 		when(newsMapper.getTopArticleListByPressNoAndCategoryCd(1L, "breaking", 50)).thenReturn(List.of(fallbackArticle));
@@ -263,10 +255,8 @@ public class NewsServiceTest {
 	// 메타 파일 구조가 언론사/카테고리 메타와 기사 shard 경로를 담는지 확인합니다.
 	void buildNewsListMetaJson_containsArticleFileMap() {
 		AdminNewsPressRowVO pressRow = createAdminPressRow(1L, "JTBC", "Y", 1);
-		AdminNewsCategoryRowVO breakingCategory = createAdminCategoryRow(1L, "breaking", "속보", "Y", 1, "JTBC", "https://rss/breaking");
 
 		when(newsMapper.getAdminNewsPressManageList()).thenReturn(List.of(pressRow));
-		when(newsMapper.getAdminNewsCategoryManageListByPressNo(1L)).thenReturn(List.of(breakingCategory));
 		when(newsMapper.getActiveNewsRssTargetList()).thenReturn(List.of());
 
 		NewsListMetaJsonVO metaJson = newsService.buildNewsListMetaJson();
@@ -283,14 +273,10 @@ public class NewsServiceTest {
 	void buildNewsListPressArticleShardJsonMap_groupsByPressId() {
 		AdminNewsPressRowVO press1 = createAdminPressRow(1L, "JTBC", "Y", 1);
 		AdminNewsPressRowVO press2 = createAdminPressRow(2L, "MBC", "Y", 2);
-		AdminNewsCategoryRowVO p1c1 = createAdminCategoryRow(1L, "breaking", "속보", "Y", 1, "JTBC", "https://rss/1");
-		AdminNewsCategoryRowVO p2c1 = createAdminCategoryRow(2L, "society", "사회", "Y", 1, "MBC", "https://rss/2");
 		NewsRssTargetVO t1 = createRssTarget(1L, "JTBC", "breaking", "속보", "JTBC", "https://rss/1");
 		NewsRssTargetVO t2 = createRssTarget(2L, "MBC", "society", "사회", "MBC", "https://rss/2");
 
 		when(newsMapper.getAdminNewsPressManageList()).thenReturn(List.of(press1, press2));
-		when(newsMapper.getAdminNewsCategoryManageListByPressNo(1L)).thenReturn(List.of(p1c1));
-		when(newsMapper.getAdminNewsCategoryManageListByPressNo(2L)).thenReturn(List.of(p2c1));
 		when(newsMapper.getActiveNewsRssTargetList()).thenReturn(List.of(t1, t2));
 		when(newsRssFeedClient.fetchArticleItems("https://rss/1")).thenReturn(List.of(
 			new RssArticleItem("g1", "https://a/1", "기사1", null, null, null, LocalDateTime.of(2026, 2, 23, 10, 0))
@@ -346,11 +332,9 @@ public class NewsServiceTest {
 	// 기사 shard 업로드 성공 후에만 메타 업로드가 수행되고 호출 순서가 보장되는지 확인합니다.
 	void publishNewsListPressShardJsonSnapshot_uploadsShardsBeforeMeta() throws Exception {
 		AdminNewsPressRowVO press1 = createAdminPressRow(1L, "JTBC", "Y", 1);
-		AdminNewsCategoryRowVO p1c1 = createAdminCategoryRow(1L, "breaking", "속보", "Y", 1, "JTBC", "https://rss/1");
 		NewsRssTargetVO t1 = createRssTarget(1L, "JTBC", "breaking", "속보", "JTBC", "https://rss/1");
 
 		when(newsMapper.getAdminNewsPressManageList()).thenReturn(List.of(press1));
-		when(newsMapper.getAdminNewsCategoryManageListByPressNo(1L)).thenReturn(List.of(p1c1));
 		when(newsMapper.getActiveNewsRssTargetList()).thenReturn(List.of(t1));
 		when(newsRssFeedClient.fetchArticleItems("https://rss/1")).thenReturn(List.of(
 			new RssArticleItem("g1", "https://a/1", "기사1", null, null, null, LocalDateTime.of(2026, 2, 23, 10, 0))
@@ -416,27 +400,6 @@ public class NewsServiceTest {
 		row.setPressNm(pressNm);
 		row.setUseYn(useYn);
 		row.setSortSeq(sortSeq);
-		return row;
-	}
-
-	// 테스트용 관리자 카테고리 행 객체를 생성합니다.
-	private AdminNewsCategoryRowVO createAdminCategoryRow(
-		Long pressNo,
-		String categoryCd,
-		String categoryNm,
-		String useYn,
-		Integer sortSeq,
-		String sourceNm,
-		String rssUrl
-	) {
-		AdminNewsCategoryRowVO row = new AdminNewsCategoryRowVO();
-		row.setPressNo(pressNo);
-		row.setCategoryCd(categoryCd);
-		row.setCategoryNm(categoryNm);
-		row.setUseYn(useYn);
-		row.setSortSeq(sortSeq);
-		row.setSourceNm(sourceNm);
-		row.setRssUrl(rssUrl);
 		return row;
 	}
 

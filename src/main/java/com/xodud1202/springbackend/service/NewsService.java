@@ -493,6 +493,7 @@ public class NewsService {
 		Map<String, String> defaultCategoryIdByPressId = new LinkedHashMap<>();
 		List<String> pressIdList = new ArrayList<>();
 		List<String> categoryKeyList = new ArrayList<>();
+		Map<Long, List<NewsRssTargetVO>> rssTargetListByPressNo = buildRssTargetListByPressNo(rssTargetList);
 		// 활성 언론사 목록과 언론사별 활성 카테고리 목록을 정렬 순서대로 구성합니다.
 		for (AdminNewsPressRowVO pressRow : allPressRowList) {
 			if (pressRow == null || !"Y".equals(trimToNull(pressRow.getUseYn()))) {
@@ -508,22 +509,9 @@ public class NewsService {
 			snapshot.getPressList().add(pressItem);
 			pressIdList.add(pressId);
 
-			List<AdminNewsCategoryRowVO> categoryRowList = newsMapper.getAdminNewsCategoryManageListByPressNo(pressRow.getPressNo());
-			List<NewsListJsonSnapshotVO.CategoryItem> categoryItemList = new ArrayList<>();
-			for (AdminNewsCategoryRowVO categoryRow : categoryRowList) {
-				if (categoryRow == null || !"Y".equals(trimToNull(categoryRow.getUseYn()))) {
-					continue;
-				}
-
-				NewsListJsonSnapshotVO.CategoryItem categoryItem = new NewsListJsonSnapshotVO.CategoryItem();
-				categoryItem.setId(trimToNull(categoryRow.getCategoryCd()));
-				categoryItem.setName(trimToNull(categoryRow.getCategoryNm()));
-				categoryItem.setSortSeq(categoryRow.getSortSeq());
-				categoryItem.setUseYn("Y");
-				categoryItem.setRssUrl(trimToNull(categoryRow.getRssUrl()));
-				categoryItem.setSourceNm(trimToNull(categoryRow.getSourceNm()));
-				categoryItemList.add(categoryItem);
-			}
+			// RSS 활성 대상 목록을 기준으로 언론사 카테고리 목록을 구성합니다.
+			List<NewsRssTargetVO> pressTargetList = rssTargetListByPressNo.getOrDefault(pressRow.getPressNo(), List.of());
+			List<NewsListJsonSnapshotVO.CategoryItem> categoryItemList = buildSnapshotCategoryItemListFromRssTargets(pressTargetList);
 
 			snapshot.getCategoryListByPressId().put(pressId, categoryItemList);
 			// 언론사별 첫 활성 카테고리를 기본 선택값으로 저장합니다.
@@ -626,6 +614,43 @@ public class NewsService {
 		return snapshot;
 	}
 
+	// RSS 활성 대상 목록을 언론사 번호 기준으로 그룹화합니다.
+	private Map<Long, List<NewsRssTargetVO>> buildRssTargetListByPressNo(List<NewsRssTargetVO> rssTargetList) {
+		Map<Long, List<NewsRssTargetVO>> rssTargetListByPressNo = new LinkedHashMap<>();
+		for (NewsRssTargetVO target : rssTargetList) {
+			// 언론사 번호/카테고리 코드가 유효한 대상만 그룹에 포함합니다.
+			if (target == null || target.getPressNo() == null || trimToNull(target.getCategoryCd()) == null) {
+				continue;
+			}
+			rssTargetListByPressNo.computeIfAbsent(target.getPressNo(), (pressNo) -> new ArrayList<>()).add(target);
+		}
+		return rssTargetListByPressNo;
+	}
+
+	// 언론사별 RSS 대상 목록을 스냅샷 카테고리 목록으로 변환합니다.
+	private List<NewsListJsonSnapshotVO.CategoryItem> buildSnapshotCategoryItemListFromRssTargets(List<NewsRssTargetVO> pressTargetList) {
+		Map<String, NewsListJsonSnapshotVO.CategoryItem> categoryItemById = new LinkedHashMap<>();
+		int fallbackSortSeq = 1;
+		for (NewsRssTargetVO target : pressTargetList) {
+			String categoryId = trimToNull(target.getCategoryCd());
+			if (categoryId == null || categoryItemById.containsKey(categoryId)) {
+				continue;
+			}
+
+			// RSS 대상의 카테고리 메타를 스냅샷 카테고리 항목으로 구성합니다.
+			NewsListJsonSnapshotVO.CategoryItem categoryItem = new NewsListJsonSnapshotVO.CategoryItem();
+			categoryItem.setId(categoryId);
+			categoryItem.setName(trimToNull(target.getCategoryNm()));
+			categoryItem.setSortSeq(fallbackSortSeq);
+			categoryItem.setUseYn("Y");
+			categoryItem.setRssUrl(trimToNull(target.getRssUrl()));
+			categoryItem.setSourceNm(trimToNull(target.getSourceNm()));
+			categoryItemById.put(categoryId, categoryItem);
+			fallbackSortSeq += 1;
+		}
+		return new ArrayList<>(categoryItemById.values());
+	}
+
 	// RSS 기사 목록을 스냅샷 기사 목록으로 변환합니다.
 	private List<NewsListJsonSnapshotVO.ArticleItem> buildSnapshotArticleItemListFromRss(
 		NewsRssTargetVO target,
@@ -651,6 +676,9 @@ public class NewsService {
 			target.getCategoryCd(),
 			SNAPSHOT_DB_FALLBACK_ARTICLE_LIMIT
 		);
+		if (fallbackArticleList == null) {
+			return List.of();
+		}
 
 		List<NewsListJsonSnapshotVO.ArticleItem> articleItemList = new ArrayList<>();
 		for (int index = 0; index < fallbackArticleList.size(); index += 1) {
