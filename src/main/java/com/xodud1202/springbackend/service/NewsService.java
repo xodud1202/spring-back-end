@@ -565,6 +565,7 @@ public class NewsService {
 					target.getRssUrl(),
 					exception.getMessage()
 				);
+				exception.printStackTrace();
 			}
 		}
 
