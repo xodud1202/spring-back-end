@@ -6,11 +6,10 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
-import org.xml.sax.InputSource;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
-import java.io.StringReader;
+import java.io.ByteArrayInputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -44,14 +43,14 @@ public class HttpNewsRssFeedClient implements NewsRssFeedClient {
 		}
 
 		try {
-			// HTTP 요청으로 피드 XML 문자열을 조회합니다.
+			// HTTP 요청으로 피드 XML 바이트 배열을 조회합니다.
 			HttpRequest request = HttpRequest.newBuilder()
 				.uri(URI.create(normalizedUrl))
 				.timeout(java.time.Duration.ofSeconds(HTTP_TIMEOUT_SECONDS))
 				.header("Accept", "application/rss+xml, application/atom+xml, application/xml, text/xml, */*")
 				.GET()
 				.build();
-			HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+			HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
 			if (response.statusCode() < 200 || response.statusCode() >= 300) {
 				throw new IllegalStateException("RSS HTTP 응답 코드가 비정상입니다. status=" + response.statusCode());
 			}
@@ -64,15 +63,15 @@ public class HttpNewsRssFeedClient implements NewsRssFeedClient {
 		}
 	}
 
-	// XML 문자열을 DOM 문서로 파싱합니다.
-	private Document parseXml(String xmlText) throws Exception {
+	// XML 바이트 배열을 DOM 문서로 파싱합니다.
+	private Document parseXml(byte[] xmlBytes) throws Exception {
 		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
 		factory.setNamespaceAware(true);
 		factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
 		factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
 		factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
 		DocumentBuilder builder = factory.newDocumentBuilder();
-		return builder.parse(new InputSource(new StringReader(xmlText)));
+		return builder.parse(new ByteArrayInputStream(xmlBytes));
 	}
 
 	// DOM 문서에서 item/entry 노드를 추출해 기사 목록으로 변환합니다.

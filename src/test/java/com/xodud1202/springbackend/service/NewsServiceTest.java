@@ -11,6 +11,7 @@ import com.xodud1202.springbackend.domain.news.NewsListMetaJsonVO;
 import com.xodud1202.springbackend.domain.news.NewsListPressArticleShardJsonVO;
 import com.xodud1202.springbackend.domain.news.NewsListPressShardSnapshotPublishResultVO;
 import com.xodud1202.springbackend.domain.news.NewsCategorySummaryVO;
+import com.xodud1202.springbackend.domain.news.NewsCollectResultVO;
 import com.xodud1202.springbackend.domain.news.NewsPressSummaryVO;
 import com.xodud1202.springbackend.domain.news.NewsRssTargetVO;
 import com.xodud1202.springbackend.domain.news.NewsSnapshotVO;
@@ -202,6 +203,47 @@ public class NewsServiceTest {
 	}
 
 	@Test
+	@DisplayName("뉴스 JSON 스냅샷은 RSS가 비어 있으면 DB 기사로 fallback 한다")
+	// RSS 재시도 후에도 item이 없을 때 DB 상위 기사 목록으로 스냅샷을 채우는지 확인합니다.
+	void buildNewsListJsonSnapshot_fallbacksToDbArticlesWhenRssEmpty() {
+		AdminNewsPressRowVO pressRow = createAdminPressRow(1L, "JTBC", "Y", 1);
+		AdminNewsCategoryRowVO breakingCategory = createAdminCategoryRow(1L, "breaking", "속보", "Y", 1, "JTBC", "https://rss/breaking");
+		NewsRssTargetVO rssTarget = createRssTarget(1L, "JTBC", "breaking", "속보", "JTBC", "https://rss/breaking");
+		NewsTopArticleVO fallbackArticle = createArticleWithPublished("901", "DB기사1", "2026-02-23 10:00:00");
+
+		when(newsMapper.getAdminNewsPressManageList()).thenReturn(List.of(pressRow));
+		when(newsMapper.getAdminNewsCategoryManageListByPressNo(1L)).thenReturn(List.of(breakingCategory));
+		when(newsMapper.getActiveNewsRssTargetList()).thenReturn(List.of(rssTarget));
+		when(newsRssFeedClient.fetchArticleItems("https://rss/breaking")).thenReturn(List.of());
+		when(newsMapper.getTopArticleListByPressNoAndCategoryCd(1L, "breaking", 50)).thenReturn(List.of(fallbackArticle));
+
+		NewsListJsonSnapshotVO snapshot = newsService.buildNewsListJsonSnapshot();
+
+		assertThat(snapshot.getArticleListByPressCategoryKey()).containsKey("1|breaking");
+		assertThat(snapshot.getArticleListByPressCategoryKey().get("1|breaking")).hasSize(1);
+		assertThat(snapshot.getArticleListByPressCategoryKey().get("1|breaking").get(0).getTitle()).isEqualTo("DB기사1");
+		assertThat(snapshot.getMeta().getSuccessTargetCount()).isEqualTo(1);
+		assertThat(snapshot.getMeta().getFailedTargetCount()).isEqualTo(0);
+	}
+
+	@Test
+	@DisplayName("뉴스 RSS 수집은 재시도 후에도 비정상이면 대상 실패로 집계한다")
+	// RSS 재시도 후에도 item이 없으면 해당 대상을 실패로 처리하는지 확인합니다.
+	void collectNewsArticles_marksTargetFailedWhenRssStillEmptyAfterRetry() {
+		NewsRssTargetVO rssTarget = createRssTarget(1L, "JTBC", "breaking", "속보", "JTBC", "https://rss/breaking");
+
+		when(newsMapper.deleteNewsArticleOlderThan7Days()).thenReturn(0);
+		when(newsMapper.getActiveNewsRssTargetList()).thenReturn(List.of(rssTarget));
+		when(newsRssFeedClient.fetchArticleItems("https://rss/breaking")).thenReturn(List.of());
+		NewsCollectResultVO result = newsService.collectNewsArticles();
+
+		assertThat(result.getTargetCount()).isEqualTo(1);
+		assertThat(result.getSuccessTargetCount()).isEqualTo(0);
+		assertThat(result.getFailedTargetCount()).isEqualTo(1);
+		assertThat(result.getInsertedArticleCount()).isEqualTo(0);
+	}
+
+	@Test
 	@DisplayName("뉴스 JSON 스냅샷 JSON 문자열은 파싱 가능한 구조를 반환한다")
 	// 스냅샷 직렬화 결과가 JSON 문자열로 생성되고 핵심 키가 포함되는지 확인합니다.
 	void buildNewsListJsonSnapshotJson_returnsParsableJsonString() {
@@ -357,6 +399,13 @@ public class NewsServiceTest {
 		article.setId(id);
 		article.setTitle(title);
 		article.setUrl("https://example.com/" + id);
+		return article;
+	}
+
+	// 테스트용 기사 응답 객체(발행일 포함)를 생성합니다.
+	private NewsTopArticleVO createArticleWithPublished(String id, String title, String publishedDt) {
+		NewsTopArticleVO article = createArticle(id, title);
+		article.setPublishedDt(publishedDt);
 		return article;
 	}
 

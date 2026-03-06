@@ -62,11 +62,21 @@ public class NewsService {
 	private static final String DEFAULT_NEWS_SNAPSHOT_TARGET_PATH = "/HDD1/Media/nas/news";
 	private static final String NEWS_LIST_META_FILE_NAME = "meta.json";
 	private static final String NEWS_LIST_ARTICLE_SHARD_DIR_NAME = "articles";
+	private static final int RSS_FETCH_MAX_ATTEMPT_COUNT = 3;
+	private static final long[] RSS_FETCH_RETRY_WAIT_MILLIS = {500L, 1000L, 2000L};
+	private static final int SNAPSHOT_DB_FALLBACK_ARTICLE_LIMIT = 50;
+	private static final String RSS_FETCH_RESULT_OK = "RSS_OK";
+	private static final String RSS_FETCH_RESULT_EMPTY = "RSS_EMPTY";
+	private static final String RSS_FETCH_RESULT_ERROR = "RSS_ERROR";
 
 	private final NewsMapper newsMapper;
 	private final NewsRssFeedClient newsRssFeedClient;
 	private final ObjectMapper objectMapper;
 	private final FtpFileService ftpFileService;
+
+	// RSS 재시도 결과 정보를 보관합니다.
+	private record RssFetchResult(List<RssArticleItem> articleItemList, int attemptCount, String resultCode, String resultMessage) {
+	}
 
 	// 관리자 뉴스 목록 화면 언론사 옵션을 조회합니다.
 	public List<AdminNewsPressOptionVO> getAdminNewsPressOptionList() {
@@ -544,18 +554,44 @@ public class NewsService {
 
 				String categoryKey = buildPressCategoryKey(pressId, categoryId);
 				boolean hasCategoryKey = snapshot.getArticleListByPressCategoryKey().containsKey(categoryKey);
-				List<NewsListJsonSnapshotVO.ArticleItem> articleItemList = new ArrayList<>();
-				List<RssArticleItem> feedItemList = newsRssFeedClient.fetchArticleItems(target.getRssUrl());
-				for (int feedIndex = 0; feedIndex < feedItemList.size(); feedIndex += 1) {
-					RssArticleItem feedItem = feedItemList.get(feedIndex);
-					articleItemList.add(buildSnapshotArticleItem(target, feedItem, feedIndex + 1, generatedAtText));
+				List<NewsListJsonSnapshotVO.ArticleItem> articleItemList;
+				RssFetchResult rssFetchResult = fetchArticleItemsWithRetry(target);
+				if (RSS_FETCH_RESULT_OK.equals(rssFetchResult.resultCode())) {
+					// RSS 조회에 성공하면 원본 피드 기사 목록을 스냅샷에 반영합니다.
+					articleItemList = buildSnapshotArticleItemListFromRss(target, rssFetchResult.articleItemList(), generatedAtText);
+					log.info(
+						"뉴스 JSON 스냅샷 RSS 조회 성공 pressNo={}, categoryCd={}, rssUrl={}, attemptCount={}, articleCount={}, resultCode={}",
+						target.getPressNo(),
+						target.getCategoryCd(),
+						target.getRssUrl(),
+						rssFetchResult.attemptCount(),
+						articleItemList.size(),
+						rssFetchResult.resultCode()
+					);
+				} else {
+					// 재시도 후에도 RSS가 비정상이면 DB 최신 기사로 fallback 처리합니다.
+					articleItemList = buildSnapshotArticleItemListFromDbFallback(target, generatedAtText);
+					log.warn(
+						"뉴스 JSON 스냅샷 RSS fallback 사용 pressNo={}, categoryCd={}, rssUrl={}, attemptCount={}, fallbackArticleCount={}, resultCode={}, resultMessage={}",
+						target.getPressNo(),
+						target.getCategoryCd(),
+						target.getRssUrl(),
+						rssFetchResult.attemptCount(),
+						articleItemList.size(),
+						rssFetchResult.resultCode(),
+						rssFetchResult.resultMessage()
+					);
 				}
 
 				snapshot.getArticleListByPressCategoryKey().put(categoryKey, articleItemList);
 				if (!hasCategoryKey) {
 					categoryKeyList.add(categoryKey);
 				}
-				successTargetCount += 1;
+				if (!articleItemList.isEmpty()) {
+					successTargetCount += 1;
+				} else {
+					failedTargetCount += 1;
+				}
 			} catch (Exception exception) {
 				failedTargetCount += 1;
 				log.warn(
@@ -565,7 +601,6 @@ public class NewsService {
 					target.getRssUrl(),
 					exception.getMessage()
 				);
-				exception.printStackTrace();
 			}
 		}
 
@@ -589,6 +624,123 @@ public class NewsService {
 		snapshotIndex.setCategoryKeyList(categoryKeyList);
 		snapshot.setIndex(snapshotIndex);
 		return snapshot;
+	}
+
+	// RSS 기사 목록을 스냅샷 기사 목록으로 변환합니다.
+	private List<NewsListJsonSnapshotVO.ArticleItem> buildSnapshotArticleItemListFromRss(
+		NewsRssTargetVO target,
+		List<RssArticleItem> feedItemList,
+		String collectedDt
+	) {
+		List<NewsListJsonSnapshotVO.ArticleItem> articleItemList = new ArrayList<>();
+		for (int feedIndex = 0; feedIndex < feedItemList.size(); feedIndex += 1) {
+			// RSS 항목 순서를 점수로 사용해 스냅샷 기사 항목을 구성합니다.
+			RssArticleItem feedItem = feedItemList.get(feedIndex);
+			articleItemList.add(buildSnapshotArticleItem(target, feedItem, feedIndex + 1, collectedDt));
+		}
+		return articleItemList;
+	}
+
+	// RSS 재시도 후에도 비정상이면 DB 기사로 스냅샷 fallback 목록을 생성합니다.
+	private List<NewsListJsonSnapshotVO.ArticleItem> buildSnapshotArticleItemListFromDbFallback(
+		NewsRssTargetVO target,
+		String collectedDt
+	) {
+		List<NewsTopArticleVO> fallbackArticleList = newsMapper.getTopArticleListByPressNoAndCategoryCd(
+			target.getPressNo(),
+			target.getCategoryCd(),
+			SNAPSHOT_DB_FALLBACK_ARTICLE_LIMIT
+		);
+
+		List<NewsListJsonSnapshotVO.ArticleItem> articleItemList = new ArrayList<>();
+		for (int index = 0; index < fallbackArticleList.size(); index += 1) {
+			// DB 상위 기사 정보를 스냅샷 기사 구조로 변환합니다.
+			NewsTopArticleVO fallbackArticle = fallbackArticleList.get(index);
+			articleItemList.add(buildSnapshotArticleItemFromDbFallback(target, fallbackArticle, index + 1, collectedDt));
+		}
+		return articleItemList;
+	}
+
+	// DB fallback 기사 1건을 스냅샷 기사 항목으로 변환합니다.
+	private NewsListJsonSnapshotVO.ArticleItem buildSnapshotArticleItemFromDbFallback(
+		NewsRssTargetVO target,
+		NewsTopArticleVO fallbackArticle,
+		int rankScore,
+		String collectedDt
+	) {
+		String articleTitle = trimToNull(fallbackArticle == null ? null : limitLength(fallbackArticle.getTitle(), 500));
+		String articleUrl = trimToNull(fallbackArticle == null ? null : limitLength(fallbackArticle.getUrl(), 150));
+		boolean hasRequiredMissing = articleTitle == null || articleUrl == null;
+
+		NewsListJsonSnapshotVO.ArticleItem articleItem = new NewsListJsonSnapshotVO.ArticleItem();
+		articleItem.setId(sha256(
+			"SNAPSHOT_FALLBACK|"
+				+ target.getPressNo() + "|"
+				+ trimToNull(target.getCategoryCd()) + "|"
+				+ rankScore + "|"
+				+ valueOrDash(articleTitle) + "|"
+				+ valueOrDash(articleUrl)
+		));
+		articleItem.setTitle(valueOrDash(articleTitle));
+		articleItem.setUrl(valueOrDash(articleUrl));
+		articleItem.setPublishedDt(trimToNull(fallbackArticle == null ? null : fallbackArticle.getPublishedDt()));
+		articleItem.setSummary(null);
+		articleItem.setThumbnailUrl(null);
+		articleItem.setAuthorNm(null);
+		articleItem.setRankScore(rankScore);
+		articleItem.setUseYn(hasRequiredMissing ? "N" : "Y");
+		articleItem.setCollectedDt(collectedDt);
+		return articleItem;
+	}
+
+	// RSS 조회를 재시도 정책(3회, 0.5/1/2초)으로 수행합니다.
+	private RssFetchResult fetchArticleItemsWithRetry(NewsRssTargetVO target) {
+		String lastMessage = null;
+		for (int attempt = 1; attempt <= RSS_FETCH_MAX_ATTEMPT_COUNT; attempt += 1) {
+			try {
+				// RSS 조회가 성공하면 item 비어있음 여부를 검증합니다.
+				List<RssArticleItem> feedItemList = newsRssFeedClient.fetchArticleItems(target.getRssUrl());
+				if (!feedItemList.isEmpty()) {
+					return new RssFetchResult(feedItemList, attempt, RSS_FETCH_RESULT_OK, null);
+				}
+
+				lastMessage = "RSS item이 비어 있습니다.";
+				if (attempt < RSS_FETCH_MAX_ATTEMPT_COUNT) {
+					sleepBeforeRetry(attempt, target, lastMessage);
+					continue;
+				}
+				return new RssFetchResult(List.of(), attempt, RSS_FETCH_RESULT_EMPTY, lastMessage);
+			} catch (Exception exception) {
+				lastMessage = exception.getMessage();
+				if (attempt < RSS_FETCH_MAX_ATTEMPT_COUNT) {
+					sleepBeforeRetry(attempt, target, lastMessage);
+					continue;
+				}
+				return new RssFetchResult(List.of(), attempt, RSS_FETCH_RESULT_ERROR, lastMessage);
+			}
+		}
+		return new RssFetchResult(List.of(), RSS_FETCH_MAX_ATTEMPT_COUNT, RSS_FETCH_RESULT_ERROR, lastMessage);
+	}
+
+	// RSS 재시도 전 대기시간을 적용합니다.
+	private void sleepBeforeRetry(int attempt, NewsRssTargetVO target, String reason) {
+		int waitIndex = Math.min(attempt - 1, RSS_FETCH_RETRY_WAIT_MILLIS.length - 1);
+		long waitMillis = RSS_FETCH_RETRY_WAIT_MILLIS[waitIndex];
+		log.warn(
+			"뉴스 RSS 재시도 대기 pressNo={}, categoryCd={}, rssUrl={}, attempt={}, waitMillis={}, reason={}",
+			target.getPressNo(),
+			target.getCategoryCd(),
+			target.getRssUrl(),
+			attempt,
+			waitMillis,
+			reason
+		);
+		try {
+			Thread.sleep(waitMillis);
+		} catch (InterruptedException exception) {
+			Thread.currentThread().interrupt();
+			throw new IllegalStateException("RSS 재시도 대기 중 인터럽트가 발생했습니다.", exception);
+		}
 	}
 
 	// 뉴스 확장프로그램용 직접 조회 JSON 스냅샷 문자열을 생성합니다.
@@ -870,7 +1022,21 @@ public class NewsService {
 				resetParam.setCategoryCd(target.getCategoryCd());
 				newsMapper.resetRankScoreByTarget(resetParam);
 
-				List<RssArticleItem> feedItems = newsRssFeedClient.fetchArticleItems(target.getRssUrl());
+				RssFetchResult rssFetchResult = fetchArticleItemsWithRetry(target);
+				List<RssArticleItem> feedItems = rssFetchResult.articleItemList();
+				if (!RSS_FETCH_RESULT_OK.equals(rssFetchResult.resultCode())) {
+					log.warn(
+						"뉴스 RSS 수집에서 빈 피드/오류가 발생해 대상 저장을 건너뜁니다. pressNo={}, categoryCd={}, rssUrl={}, attemptCount={}, resultCode={}, resultMessage={}",
+						target.getPressNo(),
+						target.getCategoryCd(),
+						target.getRssUrl(),
+						rssFetchResult.attemptCount(),
+						rssFetchResult.resultCode(),
+						rssFetchResult.resultMessage()
+					);
+					failedTargetCount += 1;
+					continue;
+				}
 				int rankScore = 0;
 				int activeUseYnCount = 0;
 				for (int feedIndex = 0; feedIndex < feedItems.size(); feedIndex += 1) {
