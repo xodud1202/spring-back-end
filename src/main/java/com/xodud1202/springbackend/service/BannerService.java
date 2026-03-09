@@ -236,18 +236,24 @@ public class BannerService {
 			if (item == null) {
 				continue;
 			}
-			String imgPath = item.getImgPath();
-			if (isBlank(imgPath)) {
-				item.setImgUrl("");
-				continue;
-			}
-			if (imgPath.startsWith("http://") || imgPath.startsWith("https://")) {
-				item.setImgUrl(imgPath);
-				continue;
-			}
-			String imageUrl = ftpFileService.buildGoodsImageUrl(item.getGoodsId(), imgPath);
-			item.setImgUrl(imageUrl == null ? "" : imageUrl);
+			item.setImgUrl(resolveShopGoodsImageUrl(item.getGoodsId(), item.getImgPath()));
+			item.setSecondaryImgUrl(resolveShopGoodsImageUrl(item.getGoodsId(), item.getSecondaryImgPath()));
 		}
+	}
+
+	// 쇼핑몰 상품 이미지 경로를 UI 조회용 URL로 보정합니다.
+	private String resolveShopGoodsImageUrl(String goodsId, String imgPath) {
+		// 이미지 경로가 없으면 빈 문자열을 반환합니다.
+		if (isBlank(imgPath)) {
+			return "";
+		}
+		// 절대 URL은 그대로 반환합니다.
+		if (imgPath.startsWith("http://") || imgPath.startsWith("https://")) {
+			return imgPath;
+		}
+		// 파일명만 전달되면 FTP 규칙으로 접근 URL을 생성합니다.
+		String imageUrl = ftpFileService.buildGoodsImageUrl(goodsId, imgPath);
+		return imageUrl == null ? "" : imageUrl;
 	}
 	// 배너 등록 요청을 검증합니다.
 	public String validateBannerCreate(BannerSavePO param, List<MultipartFile> images, List<String> imageKeys) {

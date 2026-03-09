@@ -208,6 +208,13 @@
 		          ORDER BY GI.DISP_ORD ASC, GI.IMG_NO ASC
 		          LIMIT 1
 		       ) AS IMG_PATH
+		     , (
+		         SELECT GI.IMG_PATH
+		           FROM GOODS_IMG GI
+		          WHERE GI.GOODS_ID = GBG.GOODS_ID
+		          ORDER BY GI.DISP_ORD ASC, GI.IMG_NO ASC
+		          LIMIT 1 OFFSET 1
+		       ) AS SECONDARY_IMG_PATH
 		     , GBG.DISP_ORD
 		  FROM GOODS_BANNER_GOODS GBG
 		  JOIN GOODS_BASE GB

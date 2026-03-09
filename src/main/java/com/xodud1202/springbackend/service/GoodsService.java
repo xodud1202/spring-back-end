@@ -14,7 +14,6 @@ import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
 import com.xodud1202.springbackend.domain.shop.category.ShopCategoryGoodsItemVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySavePO;
-import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySaveItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsDescSaveItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsDescSavePO;
@@ -1011,17 +1010,23 @@ public class GoodsService {
 			if (item == null) {
 				continue;
 			}
-			String imgPath = item.getImgPath();
-			if (isBlank(imgPath)) {
-                item.setImgUrl("");
-				continue;
-			}
-            if (imgPath.startsWith("http://") || imgPath.startsWith("https://")) {
-				item.setImgUrl(imgPath);
-				continue;
-			}
-			item.setImgUrl(ftpFileService.buildGoodsImageUrl(item.getGoodsId(), imgPath));
+			item.setImgUrl(resolveShopGoodsImageUrl(item.getGoodsId(), item.getImgPath()));
+			item.setSecondaryImgUrl(resolveShopGoodsImageUrl(item.getGoodsId(), item.getSecondaryImgPath()));
 		}
+	}
+
+	// 쇼핑몰 상품 이미지 경로를 UI 조회용 URL로 변환합니다.
+	private String resolveShopGoodsImageUrl(String goodsId, String imgPath) {
+		// 이미지 경로가 없으면 빈 문자열을 반환합니다.
+		if (isBlank(imgPath)) {
+			return "";
+		}
+		// 절대 URL은 그대로 반환합니다.
+		if (imgPath.startsWith("http://") || imgPath.startsWith("https://")) {
+			return imgPath;
+		}
+		// 파일명만 있는 경우 FTP 규칙으로 URL을 생성합니다.
+		return ftpFileService.buildGoodsImageUrl(goodsId, imgPath);
 	}
 	// 엑셀 업로드 행 정보를 전달합니다.
 	private static class CategoryGoodsExcelRow {
@@ -1159,6 +1164,7 @@ public class GoodsService {
 	}
 
 	// 관리자 상품 카테고리를 단건 저장합니다.
+	@Transactional
 	public int saveAdminGoodsCategory(GoodsCategorySavePO param) {
 		if (param.getDispOrd() == null) {
 			param.setDispOrd(0);
@@ -1168,16 +1174,9 @@ public class GoodsService {
 		}
 		String originCategoryId = param.getOriginCategoryId();
 		if (!isBlank(originCategoryId) && !originCategoryId.equals(param.getCategoryId())) {
-			GoodsCategorySavePO deleteParam = new GoodsCategorySavePO();
-			deleteParam.setGoodsId(param.getGoodsId());
-			deleteParam.setCategoryId(originCategoryId);
-			goodsMapper.deleteAdminGoodsCategory(deleteParam);
+			deleteAdminGoodsCategoryHierarchy(originCategoryId, param.getGoodsId(), param.getUdtNo());
 		}
-		int exists = goodsMapper.countAdminGoodsCategory(param.getGoodsId(), param.getCategoryId());
-		if (exists > 0) {
-			return goodsMapper.updateAdminGoodsCategory(param);
-		}
-		return goodsMapper.insertAdminGoodsCategory(param);
+		return saveCategoryGoodsHierarchy(param.getCategoryId(), param.getGoodsId(), param.getDispOrd(), param.getRegNo(), param.getUdtNo());
 	}
 
 	// 관리자 상품 카테고리 단건 삭제 요청을 검증합니다.
@@ -1198,11 +1197,13 @@ public class GoodsService {
 	}
 
 	// 관리자 상품 카테고리를 단건 삭제합니다.
+	@Transactional
 	public int deleteAdminGoodsCategory(GoodsCategorySavePO param) {
-		return goodsMapper.deleteAdminGoodsCategory(param);
+		return deleteAdminGoodsCategoryHierarchy(param.getCategoryId(), param.getGoodsId(), param.getUdtNo());
 	}
 
 	// 관리자 상품 카테고리를 저장합니다.
+	@Transactional
 	public void saveAdminGoodsCategories(GoodsSavePO param) {
 		if (param == null || param.getCategoryList() == null) {
 			return;
@@ -1216,27 +1217,72 @@ public class GoodsService {
 			return;
 		}
 		List<GoodsCategoryItem> categoryList = param.getCategoryList();
-		goodsMapper.deleteAdminGoodsCategoryByGoodsId(goodsId);
+		goodsMapper.deleteCategoryGoodsByGoodsId(goodsId);
 		if (categoryList.isEmpty()) {
 			return;
 		}
-		List<GoodsCategorySaveItem> saveItems = new java.util.ArrayList<>();
 		for (int index = 0; index < categoryList.size(); index += 1) {
 			GoodsCategoryItem item = categoryList.get(index);
 			if (item == null || isBlank(item.getCategoryId())) {
 				continue;
 			}
-			GoodsCategorySaveItem saveItem = new GoodsCategorySaveItem();
-			saveItem.setGoodsId(goodsId);
-			saveItem.setCategoryId(item.getCategoryId());
-			saveItem.setDispOrd(item.getDispOrd() != null ? item.getDispOrd() : index + 1);
-			saveItem.setRegNo(writerNo);
-			saveItem.setUdtNo(writerNo);
-			saveItems.add(saveItem);
+			Integer dispOrd = item.getDispOrd() != null ? item.getDispOrd() : index + 1;
+			saveCategoryGoodsHierarchy(item.getCategoryId(), goodsId, dispOrd, writerNo, writerNo);
 		}
-		if (!saveItems.isEmpty()) {
-			goodsMapper.insertAdminGoodsCategoryList(saveItems);
+	}
+
+	// 관리자 상품 카테고리와 상위 카테고리 매핑을 함께 저장합니다.
+	private int saveCategoryGoodsHierarchy(String categoryId, String goodsId, Integer dispOrd, Long regNo, Long udtNo) {
+		// 대상 카테고리 정보를 확인합니다.
+		CategoryVO category = goodsMapper.getAdminCategoryDetail(categoryId);
+		if (category == null || isBlank(goodsId)) {
+			return 0;
 		}
+
+		int affected = upsertCategoryGoodsDispOrd(category.getCategoryId(), goodsId, dispOrd, regNo, udtNo);
+		// 상위 카테고리 매핑을 누락 없이 보정합니다.
+		List<CategoryVO> parents = getCategoryParents(category.getCategoryId());
+		for (CategoryVO parent : parents) {
+			if (parent == null || isBlank(parent.getCategoryId())) {
+				continue;
+			}
+			if (goodsMapper.countCategoryGoods(parent.getCategoryId(), goodsId) > 0) {
+				continue;
+			}
+			CategoryGoodsSavePO savePO = new CategoryGoodsSavePO();
+			savePO.setCategoryId(parent.getCategoryId());
+			savePO.setGoodsId(goodsId);
+			savePO.setDispOrd(dispOrd != null ? dispOrd : 0);
+			savePO.setRegNo(regNo);
+			savePO.setUdtNo(udtNo);
+			affected += goodsMapper.insertCategoryGoods(savePO);
+		}
+		return affected;
+	}
+
+	// 관리자 상품 카테고리 매핑을 단건 저장하거나 정렬 순서를 갱신합니다.
+	private int upsertCategoryGoodsDispOrd(String categoryId, String goodsId, Integer dispOrd, Long regNo, Long udtNo) {
+		// 기존 매핑 존재 여부를 확인합니다.
+		CategoryGoodsSavePO savePO = new CategoryGoodsSavePO();
+		savePO.setCategoryId(categoryId);
+		savePO.setGoodsId(goodsId);
+		savePO.setDispOrd(dispOrd != null ? dispOrd : 0);
+		savePO.setRegNo(regNo);
+		savePO.setUdtNo(udtNo);
+		if (goodsMapper.countCategoryGoods(categoryId, goodsId) > 0) {
+			return goodsMapper.updateCategoryGoodsDispOrd(savePO);
+		}
+		return goodsMapper.insertCategoryGoods(savePO);
+	}
+
+	// 관리자 상품 카테고리와 계층 매핑을 함께 삭제합니다.
+	private int deleteAdminGoodsCategoryHierarchy(String categoryId, String goodsId, Long udtNo) {
+		// 삭제 대상 카테고리 정보를 확인합니다.
+		CategoryVO category = goodsMapper.getAdminCategoryDetail(categoryId);
+		if (category == null || isBlank(goodsId)) {
+			return 0;
+		}
+		return deleteCategoryGoodsWithHierarchy(category, goodsId, udtNo);
 	}
 
 	// 관리자 상품 사이즈 삭제 요청을 검증합니다.

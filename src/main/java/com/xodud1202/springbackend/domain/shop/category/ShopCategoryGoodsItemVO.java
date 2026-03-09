@@ -21,6 +21,10 @@ public class ShopCategoryGoodsItemVO {
 	private String imgPath;
 	// 이미지 URL입니다.
 	private String imgUrl;
+	// 두 번째 이미지 경로입니다.
+	private String secondaryImgPath;
+	// 두 번째 이미지 URL입니다.
+	private String secondaryImgUrl;
 	// 노출 순서입니다.
 	private Integer dispOrd;
 }

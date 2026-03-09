@@ -274,12 +274,14 @@ class BannerServiceTests {
 		tabGoods.setBannerTabNo(10);
 		tabGoods.setGoodsId("GOODS001");
 		tabGoods.setImgPath("main_1.png");
+		tabGoods.setSecondaryImgPath("sub_1.png");
 
 		ShopMainGoodsItemVO goodsListGoods = new ShopMainGoodsItemVO();
 		goodsListGoods.setBannerNo(7);
 		goodsListGoods.setBannerTabNo(0);
 		goodsListGoods.setGoodsId("GOODS002");
 		goodsListGoods.setImgPath("main_2.png");
+		goodsListGoods.setSecondaryImgPath("sub_2.png");
 
 		when(bannerMapper.getShopMainSectionList()).thenReturn(List.of(heroSection, tabSection, goodsListSection));
 		when(bannerMapper.getShopMainImageBannerItemList(1)).thenReturn(List.of(heroImage));
@@ -287,7 +289,9 @@ class BannerServiceTests {
 		when(bannerMapper.getShopMainGoodsItemList(2)).thenReturn(List.of(tabGoods));
 		when(bannerMapper.getShopMainGoodsItemList(7)).thenReturn(List.of(goodsListGoods));
 		when(ftpFileService.buildGoodsImageUrl("GOODS001", "main_1.png")).thenReturn("https://image.test/goods/GOODS001/main_1.png");
+		when(ftpFileService.buildGoodsImageUrl("GOODS001", "sub_1.png")).thenReturn("https://image.test/goods/GOODS001/sub_1.png");
 		when(ftpFileService.buildGoodsImageUrl("GOODS002", "main_2.png")).thenReturn("https://image.test/goods/GOODS002/main_2.png");
+		when(ftpFileService.buildGoodsImageUrl("GOODS002", "sub_2.png")).thenReturn("https://image.test/goods/GOODS002/sub_2.png");
 
 		// 서비스 조회 결과를 검증합니다.
 		List<ShopMainSectionVO> result = bannerService.getShopMainSectionList();
@@ -297,8 +301,10 @@ class BannerServiceTests {
 		assertEquals(1, result.get(1).getTabItems().get(0).getGoodsItems().size());
 		assertEquals(0, result.get(1).getTabItems().get(1).getGoodsItems().size());
 		assertEquals("https://image.test/goods/GOODS001/main_1.png", result.get(1).getTabItems().get(0).getGoodsItems().get(0).getImgUrl());
+		assertEquals("https://image.test/goods/GOODS001/sub_1.png", result.get(1).getTabItems().get(0).getGoodsItems().get(0).getSecondaryImgUrl());
 		assertEquals(1, result.get(2).getGoodsItems().size());
 		assertEquals("https://image.test/goods/GOODS002/main_2.png", result.get(2).getGoodsItems().get(0).getImgUrl());
+		assertEquals("https://image.test/goods/GOODS002/sub_2.png", result.get(2).getGoodsItems().get(0).getSecondaryImgUrl());
 	}
 
 	@Test
@@ -326,6 +332,7 @@ class BannerServiceTests {
 		goodsItem.setBannerTabNo(0);
 		goodsItem.setGoodsId("GOODS999");
 		goodsItem.setImgPath("https://image.test/goods/GOODS999/main.png");
+		goodsItem.setSecondaryImgPath("https://image.test/goods/GOODS999/sub.png");
 
 		when(bannerMapper.getShopMainSectionList()).thenReturn(List.of(goodsListSection));
 		when(bannerMapper.getShopMainGoodsItemList(7)).thenReturn(List.of(goodsItem));
@@ -335,5 +342,6 @@ class BannerServiceTests {
 		assertEquals(1, result.size());
 		assertEquals(1, result.get(0).getGoodsItems().size());
 		assertEquals("https://image.test/goods/GOODS999/main.png", result.get(0).getGoodsItems().get(0).getImgUrl());
+		assertEquals("https://image.test/goods/GOODS999/sub.png", result.get(0).getGoodsItems().get(0).getSecondaryImgUrl());
 	}
 }
