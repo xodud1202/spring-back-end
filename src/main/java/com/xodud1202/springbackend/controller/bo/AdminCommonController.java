@@ -288,6 +288,13 @@ public class AdminCommonController {
 		try {
 			String validationError = validateBrandLogoImage(image, brandNo);
 			if (validationError != null) {
+				log.warn(
+						"브랜드 로고 업로드 검증 실패. brandNo={}, originalFilename={}, size={}, error={}",
+						sanitizeLogValue(brandNo),
+						getMultipartOriginalFilename(image),
+						getMultipartSize(image),
+						validationError
+				);
 				return ResponseEntity.badRequest().body(Map.of("error", validationError));
 			}
 
@@ -298,9 +305,11 @@ public class AdminCommonController {
 			response.put("message", "이미지 업로드가 완료되었습니다.");
 			return ResponseEntity.ok(response);
 		} catch (IOException e) {
+			log.error("브랜드 로고 업로드 중 FTP 오류가 발생했습니다. brandNo={}", sanitizeLogValue(brandNo), e);
 			return ResponseEntity.internalServerError()
 					.body(Map.of("error", "FTP 업로드 실패: " + e.getMessage()));
 		} catch (Exception e) {
+			log.error("브랜드 로고 업로드 중 서버 오류가 발생했습니다. brandNo={}", sanitizeLogValue(brandNo), e);
 			return ResponseEntity.internalServerError()
 					.body(Map.of("error", "이미지 업로드 실패: " + e.getMessage()));
 		}
@@ -379,6 +388,10 @@ public class AdminCommonController {
 			return "이미지 파일이 없습니다.";
 		}
 
+		if (ftpProperties.getUploadBrandMaxSize() <= 0) {
+			return "브랜드 로고 업로드 설정이 올바르지 않습니다.";
+		}
+
 		long maxSizeInBytes = (long) ftpProperties.getUploadBrandMaxSize() * 1024 * 1024;
 		if (image.getSize() > maxSizeInBytes) {
 			return "파일 크기가 " + ftpProperties.getUploadBrandMaxSize() + "MB를 초과합니다.";
@@ -391,10 +404,49 @@ public class AdminCommonController {
 
 		String extension = originalFilename.substring(originalFilename.lastIndexOf(".") + 1).toLowerCase();
 		String allowedExtensions = ftpProperties.getUploadBrandAllowExtension();
+		if (allowedExtensions == null || allowedExtensions.trim().isEmpty()) {
+			return "브랜드 로고 업로드 설정이 올바르지 않습니다.";
+		}
 		if (!allowedExtensions.contains(extension)) {
 			return "허용되지 않는 파일 형식입니다. 허용 형식: " + allowedExtensions;
 		}
 
 		return null;
+	}
+
+	/**
+	 * 멀티파트 파일의 원본 파일명을 로그용 문자열로 변환합니다.
+	 * @param image 업로드 파일
+	 * @return 로그에 남길 파일명
+	 */
+	private String getMultipartOriginalFilename(MultipartFile image) {
+		if (image == null || image.getOriginalFilename() == null) {
+			return "";
+		}
+		return image.getOriginalFilename();
+	}
+
+	/**
+	 * 멀티파트 파일 크기를 로그용 값으로 변환합니다.
+	 * @param image 업로드 파일
+	 * @return 로그에 남길 파일 크기
+	 */
+	private long getMultipartSize(MultipartFile image) {
+		if (image == null) {
+			return -1L;
+		}
+		return image.getSize();
+	}
+
+	/**
+	 * 로그에 남길 문자열 값을 정리합니다.
+	 * @param value 로그 대상 값
+	 * @return 공백 제거된 문자열
+	 */
+	private String sanitizeLogValue(String value) {
+		if (value == null) {
+			return "";
+		}
+		return value.trim();
 	}
 }
