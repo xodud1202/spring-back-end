@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+		"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.xodud1202.springbackend.mapper.ShopAuthMapper">
+	<select id="getShopCustomerByCi" resultType="com.xodud1202.springbackend.domain.shop.auth.ShopCustomerSessionVO">
+		/* ShopAuthMapper.getShopCustomerByCi: CI 값으로 쇼핑몰 고객 로그인 정보를 조회 */
+		SELECT CUST_NO
+		     , LOGIN_ID
+		     , CUST_NM
+		     , CUST_GRADE_CD
+		     , CI
+		     , EMAIL
+		  FROM CUSTOMER_BASE
+		 WHERE CI = #{ci}
+		   AND CUST_STAT_CD = 'CUST_STAT_01'
+		 LIMIT 1
+	</select>
+</mapper>
