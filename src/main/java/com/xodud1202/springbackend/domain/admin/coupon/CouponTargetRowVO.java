@@ -11,6 +11,10 @@ public class CouponTargetRowVO {
 	private String targetValue;
 	// 대상 표시명입니다.
 	private String targetNm;
+	// 브랜드 번호입니다.
+	private Integer brandNo;
+	// 브랜드명입니다.
+	private String brandNm;
 	// 상품코드입니다.
 	private String goodsId;
 	// 상품명입니다.

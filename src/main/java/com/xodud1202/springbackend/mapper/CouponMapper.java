@@ -26,6 +26,9 @@ public interface CouponMapper {
 	// 관리자 쿠폰 상품 적용 대상을 조회합니다.
 	List<CouponTargetRowVO> getAdminCouponApplyGoodsTargetList(@Param("cpnNo") Long cpnNo);
 
+	// 관리자 쿠폰 브랜드 적용 대상을 조회합니다.
+	List<CouponTargetRowVO> getAdminCouponApplyBrandTargetList(@Param("cpnNo") Long cpnNo);
+
 	// 관리자 쿠폰 기획전 적용 대상을 조회합니다.
 	List<CouponTargetRowVO> getAdminCouponApplyExhibitionTargetList(@Param("cpnNo") Long cpnNo);
 
@@ -57,6 +60,9 @@ public interface CouponMapper {
 
 	// 유효한 상품 대상 목록을 조회합니다.
 	List<CouponTargetRowVO> getExistingGoodsTargetRows(@Param("targetValueList") List<String> targetValueList);
+
+	// 유효한 브랜드 대상 목록을 조회합니다.
+	List<CouponTargetRowVO> getExistingBrandTargetRows(@Param("targetValueList") List<Integer> targetValueList);
 
 	// 유효한 기획전 대상 목록을 조회합니다.
 	List<CouponTargetRowVO> getExistingExhibitionTargetRows(@Param("targetValueList") List<Integer> targetValueList);

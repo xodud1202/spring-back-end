@@ -42,6 +42,7 @@ public class CouponService {
 	private static final String CPN_STAT_WAIT = "CPN_STAT_01";
 	private static final String CPN_TARGET_ALL = "CPN_TARGET_99";
 	private static final String CPN_TARGET_GOODS = "CPN_TARGET_01";
+	private static final String CPN_TARGET_BRAND = "CPN_TARGET_04";
 	private static final String CPN_TARGET_EXHIBITION = "CPN_TARGET_02";
 	private static final String CPN_TARGET_CATEGORY = "CPN_TARGET_03";
 	private static final String CPN_USE_DT_PERIOD = "CPN_USE_DT_01";
@@ -142,6 +143,7 @@ public class CouponService {
 		// 쿠폰 타겟별 적용 대상을 조회합니다.
 		List<CouponTargetRowVO> applyList = switch (detail.getCpnTargetCd()) {
 			case CPN_TARGET_GOODS -> couponMapper.getAdminCouponApplyGoodsTargetList(cpnNo);
+			case CPN_TARGET_BRAND -> couponMapper.getAdminCouponApplyBrandTargetList(cpnNo);
 			case CPN_TARGET_EXHIBITION -> couponMapper.getAdminCouponApplyExhibitionTargetList(cpnNo);
 			case CPN_TARGET_CATEGORY -> couponMapper.getAdminCouponApplyCategoryTargetList(cpnNo);
 			default -> List.of();
@@ -248,6 +250,7 @@ public class CouponService {
 		// 쿠폰 타겟 코드 유효성을 확인합니다.
 		if (!CPN_TARGET_ALL.equals(param.getCpnTargetCd())
 			&& !CPN_TARGET_GOODS.equals(param.getCpnTargetCd())
+			&& !CPN_TARGET_BRAND.equals(param.getCpnTargetCd())
 			&& !CPN_TARGET_EXHIBITION.equals(param.getCpnTargetCd())
 			&& !CPN_TARGET_CATEGORY.equals(param.getCpnTargetCd())) {
 			return "쿠폰 타겟을 확인해주세요.";
@@ -362,6 +365,7 @@ public class CouponService {
 		// 적용/제외 대상의 유효 값을 계산합니다.
 		List<CouponTargetRowVO> validApplyRows = switch (param.getCpnTargetCd()) {
 			case CPN_TARGET_GOODS -> resolveValidGoodsTargets(extractTargetValues(param.getApplyTargets()));
+			case CPN_TARGET_BRAND -> resolveValidBrandTargets(extractTargetValues(param.getApplyTargets()));
 			case CPN_TARGET_EXHIBITION -> resolveValidExhibitionTargets(extractTargetValues(param.getApplyTargets()));
 			case CPN_TARGET_CATEGORY -> resolveValidCategoryTargets(extractTargetValues(param.getApplyTargets()));
 			default -> List.of();
@@ -398,6 +402,47 @@ public class CouponService {
 			return List.of();
 		}
 		List<CouponTargetRowVO> existingRows = couponMapper.getExistingGoodsTargetRows(targetValues);
+		Map<String, CouponTargetRowVO> existingRowMap = new LinkedHashMap<>();
+		for (CouponTargetRowVO row : existingRows) {
+			if (row == null || isBlank(row.getTargetValue())) {
+				continue;
+			}
+			existingRowMap.put(row.getTargetValue(), row);
+		}
+
+		// 입력 순서를 유지하며 유효 대상만 반영합니다.
+		List<CouponTargetRowVO> result = new ArrayList<>();
+		for (String targetValue : targetValues) {
+			CouponTargetRowVO existingRow = existingRowMap.get(targetValue);
+			if (existingRow != null) {
+				result.add(existingRow);
+			}
+		}
+		return result;
+	}
+
+	// 브랜드 대상 목록에서 유효한 브랜드만 반환합니다.
+	private List<CouponTargetRowVO> resolveValidBrandTargets(List<String> targetValues) {
+		// 대상값이 없으면 빈 목록을 반환합니다.
+		if (targetValues.isEmpty()) {
+			return List.of();
+		}
+
+		// 숫자형 브랜드 번호만 추출합니다.
+		List<Integer> brandNoList = new ArrayList<>();
+		for (String targetValue : targetValues) {
+			try {
+				brandNoList.add(Integer.parseInt(targetValue));
+			} catch (NumberFormatException ignored) {
+				// 숫자 변환이 불가능한 값은 무시합니다.
+			}
+		}
+		if (brandNoList.isEmpty()) {
+			return List.of();
+		}
+
+		// 유효한 브랜드 목록을 조회합니다.
+		List<CouponTargetRowVO> existingRows = couponMapper.getExistingBrandTargetRows(brandNoList);
 		Map<String, CouponTargetRowVO> existingRowMap = new LinkedHashMap<>();
 		for (CouponTargetRowVO row : existingRows) {
 			if (row == null || isBlank(row.getTargetValue())) {

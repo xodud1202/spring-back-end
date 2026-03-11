@@ -147,6 +147,23 @@
 		 ORDER BY CT.TARGET_VALUE ASC
 	</select>
 
+	<select id="getAdminCouponApplyBrandTargetList" resultType="com.xodud1202.springbackend.domain.admin.coupon.CouponTargetRowVO">
+		/* CouponMapper.getAdminCouponApplyBrandTargetList: 관리자 쿠폰 브랜드 적용 대상 조회 */
+		SELECT CT.TARGET_GB_CD
+		     , CT.TARGET_VALUE
+		     , BB.BRAND_NO
+		     , BB.BRAND_NM
+		     , CONCAT('[', CT.TARGET_VALUE, '] ', IFNULL(BB.BRAND_NM, '')) AS TARGET_NM
+		  FROM COUPON_TARGET CT
+		  LEFT JOIN BRAND_BASE BB
+		    ON BB.BRAND_NO = CAST(CT.TARGET_VALUE AS UNSIGNED)
+		   AND BB.USE_YN = 'Y'
+		   AND IFNULL(BB.DEL_YN, 'N') = 'N'
+		 WHERE CT.CPN_NO = #{cpnNo}
+		   AND CT.TARGET_GB_CD = 'TARGET_GB_01'
+		 ORDER BY CT.TARGET_VALUE ASC
+	</select>
+
 	<select id="getAdminCouponApplyExhibitionTargetList" resultType="com.xodud1202.springbackend.domain.admin.coupon.CouponTargetRowVO">
 		/* CouponMapper.getAdminCouponApplyExhibitionTargetList: 관리자 쿠폰 기획전 적용 대상 조회 */
 		SELECT CT.TARGET_GB_CD
@@ -301,6 +318,22 @@
 			#{item}
 		</foreach>
 		 ORDER BY GB.GOODS_ID ASC
+	</select>
+
+	<select id="getExistingBrandTargetRows" resultType="com.xodud1202.springbackend.domain.admin.coupon.CouponTargetRowVO">
+		/* CouponMapper.getExistingBrandTargetRows: 유효한 브랜드 대상 목록 조회 */
+		SELECT CAST(BB.BRAND_NO AS CHAR) AS TARGET_VALUE
+		     , BB.BRAND_NO
+		     , BB.BRAND_NM
+		     , CONCAT('[', BB.BRAND_NO, '] ', IFNULL(BB.BRAND_NM, '')) AS TARGET_NM
+		  FROM BRAND_BASE BB
+		 WHERE BB.BRAND_NO IN
+		<foreach collection="targetValueList" item="item" open="(" separator="," close=")">
+			#{item}
+		</foreach>
+		   AND BB.USE_YN = 'Y'
+		   AND IFNULL(BB.DEL_YN, 'N') = 'N'
+		 ORDER BY BB.BRAND_NO ASC
 	</select>
 
 	<select id="getExistingExhibitionTargetRows" resultType="com.xodud1202.springbackend.domain.admin.coupon.CouponTargetRowVO">
