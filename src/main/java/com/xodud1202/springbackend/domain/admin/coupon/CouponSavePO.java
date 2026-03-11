@@ -17,6 +17,10 @@ public class CouponSavePO {
 	private String cpnGbCd;
 	// 쿠폰 타겟 코드입니다.
 	private String cpnTargetCd;
+	// 쿠폰 할인 구분 코드입니다.
+	private String cpnDcGbCd;
+	// 쿠폰 할인 값입니다.
+	private Integer cpnDcVal;
 	// 다운로드 시작일시입니다.
 	private String cpnDownStartDt;
 	// 다운로드 종료일시입니다.

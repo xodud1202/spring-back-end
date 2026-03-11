@@ -45,6 +45,8 @@ public class CouponService {
 	private static final String CPN_TARGET_BRAND = "CPN_TARGET_04";
 	private static final String CPN_TARGET_EXHIBITION = "CPN_TARGET_02";
 	private static final String CPN_TARGET_CATEGORY = "CPN_TARGET_03";
+	private static final String CPN_DC_GB_AMOUNT = "CPN_DC_GB_01";
+	private static final String CPN_DC_GB_RATE = "CPN_DC_GB_02";
 	private static final String CPN_USE_DT_PERIOD = "CPN_USE_DT_01";
 	private static final String CPN_USE_DT_DATETIME = "CPN_USE_DT_02";
 	private static final String TARGET_GB_APPLY = "TARGET_GB_01";
@@ -189,6 +191,12 @@ public class CouponService {
 		if (isBlank(param.getCpnTargetCd())) {
 			return "쿠폰 타겟을 선택해주세요.";
 		}
+		if (isBlank(param.getCpnDcGbCd())) {
+			return "쿠폰 할인 구분을 선택해주세요.";
+		}
+		if (param.getCpnDcVal() == null) {
+			return "쿠폰 할인 값을 입력해주세요.";
+		}
 		if (isBlank(param.getCpnUseDtGb())) {
 			return "사용 가능 기간 구분을 선택해주세요.";
 		}
@@ -198,12 +206,28 @@ public class CouponService {
 		param.setCpnStatCd(trimToNull(param.getCpnStatCd()));
 		param.setCpnGbCd(trimToNull(param.getCpnGbCd()));
 		param.setCpnTargetCd(trimToNull(param.getCpnTargetCd()));
+		param.setCpnDcGbCd(trimToNull(param.getCpnDcGbCd()));
 		param.setCpnUseDtGb(trimToNull(param.getCpnUseDtGb()));
 		param.setCpnDownAbleYn(normalizeYnDefaultY(param.getCpnDownAbleYn()));
 
 		// 쿠폰 상태 코드 기본값을 설정합니다.
 		if (isBlank(param.getCpnStatCd())) {
 			param.setCpnStatCd(CPN_STAT_WAIT);
+		}
+		if (isBlank(param.getCpnDcGbCd())) {
+			param.setCpnDcGbCd(CPN_DC_GB_AMOUNT);
+		}
+
+		// 할인 구분/할인 값을 검증합니다.
+		if (!CPN_DC_GB_AMOUNT.equals(param.getCpnDcGbCd())
+			&& !CPN_DC_GB_RATE.equals(param.getCpnDcGbCd())) {
+			return "쿠폰 할인 구분을 확인해주세요.";
+		}
+		if (param.getCpnDcVal() < 0) {
+			return "쿠폰 할인 값은 0 이상만 입력할 수 있습니다.";
+		}
+		if (CPN_DC_GB_RATE.equals(param.getCpnDcGbCd()) && param.getCpnDcVal() >= 100) {
+			return "할인율은 99 이하만 입력할 수 있습니다.";
 		}
 
 		// 다운로드 가능기간을 정규화합니다.

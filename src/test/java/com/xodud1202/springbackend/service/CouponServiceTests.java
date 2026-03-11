@@ -240,6 +240,37 @@ class CouponServiceTests {
 	}
 
 	@Test
+	@DisplayName("저장 검증: 할인 값이 음수이면 검증 오류를 반환한다")
+	// 할인 값이 음수이면 저장 검증 오류를 반환합니다.
+	void validateCouponSave_returnsErrorWhenDiscountValueNegative() {
+		// 할인 값이 음수인 저장 요청 데이터를 준비합니다.
+		CouponSavePO param = buildValidCouponSavePO();
+		param.setCpnDcVal(-1);
+
+		// 저장 검증 결과를 확인합니다.
+		String validationMessage = couponService.validateCouponSave(param);
+
+		// 할인 값 검증 오류 메시지를 확인합니다.
+		assertEquals("쿠폰 할인 값은 0 이상만 입력할 수 있습니다.", validationMessage);
+	}
+
+	@Test
+	@DisplayName("저장 검증: 할인율 쿠폰은 100 이상 입력 시 검증 오류를 반환한다")
+	// 할인율 쿠폰은 100 이상 입력 시 저장 검증 오류를 반환합니다.
+	void validateCouponSave_returnsErrorWhenDiscountRateOverLimit() {
+		// 할인율 100 저장 요청 데이터를 준비합니다.
+		CouponSavePO param = buildValidCouponSavePO();
+		param.setCpnDcGbCd("CPN_DC_GB_02");
+		param.setCpnDcVal(100);
+
+		// 저장 검증 결과를 확인합니다.
+		String validationMessage = couponService.validateCouponSave(param);
+
+		// 할인율 상한 검증 오류 메시지를 확인합니다.
+		assertEquals("할인율은 99 이하만 입력할 수 있습니다.", validationMessage);
+	}
+
+	@Test
 	@DisplayName("대상 조회: 브랜드 타겟 쿠폰이면 브랜드 적용 대상을 반환한다")
 	// 브랜드 타겟 쿠폰 대상 조회 시 브랜드 목록을 반환합니다.
 	void getAdminCouponTargetList_returnsBrandApplyList() {
@@ -322,6 +353,8 @@ class CouponServiceTests {
 		param.setCpnStatCd("CPN_STAT_01");
 		param.setCpnGbCd("CPN_GB_01");
 		param.setCpnTargetCd("CPN_TARGET_01");
+		param.setCpnDcGbCd("CPN_DC_GB_01");
+		param.setCpnDcVal(1000);
 		param.setCpnDownStartDt("2026-03-11 00:00:00");
 		param.setCpnDownEndDt("2026-03-31 23:59:59");
 		param.setCpnUseDtGb("CPN_USE_DT_01");

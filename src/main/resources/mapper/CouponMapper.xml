@@ -103,6 +103,8 @@
 		     , CB.CPN_STAT_CD
 		     , CB.CPN_GB_CD
 		     , CB.CPN_TARGET_CD
+		     , CB.CPN_DC_GB_CD
+		     , CB.CPN_DC_VAL
 		     , CASE
 		         WHEN CB.CPN_DOWN_START_DT IS NULL OR CB.CPN_DOWN_START_DT = '0000-00-00 00:00:00' THEN NULL
 		         ELSE DATE_FORMAT(CB.CPN_DOWN_START_DT, '%Y-%m-%d %H:%i:%s')
@@ -219,6 +221,8 @@
 		     , CPN_STAT_CD
 		     , CPN_GB_CD
 		     , CPN_TARGET_CD
+		     , CPN_DC_GB_CD
+		     , CPN_DC_VAL
 		     , CPN_DOWN_START_DT
 		     , CPN_DOWN_END_DT
 		     , CPN_USE_DT_GB
@@ -235,6 +239,8 @@
 		     , #{cpnStatCd}
 		     , #{cpnGbCd}
 		     , #{cpnTargetCd}
+		     , COALESCE(NULLIF(#{cpnDcGbCd}, ''), 'CPN_DC_GB_01')
+		     , COALESCE(#{cpnDcVal}, 0)
 		     , COALESCE(NULLIF(#{cpnDownStartDt}, ''), NOW())
 		     , COALESCE(NULLIF(#{cpnDownEndDt}, ''), '0000-00-00 00:00:00')
 		     , #{cpnUseDtGb}
@@ -256,6 +262,8 @@
 		     , CPN_STAT_CD = #{cpnStatCd}
 		     , CPN_GB_CD = #{cpnGbCd}
 		     , CPN_TARGET_CD = #{cpnTargetCd}
+		     , CPN_DC_GB_CD = COALESCE(NULLIF(#{cpnDcGbCd}, ''), 'CPN_DC_GB_01')
+		     , CPN_DC_VAL = COALESCE(#{cpnDcVal}, 0)
 		     , CPN_DOWN_START_DT = COALESCE(NULLIF(#{cpnDownStartDt}, ''), NOW())
 		     , CPN_DOWN_END_DT = COALESCE(NULLIF(#{cpnDownEndDt}, ''), '0000-00-00 00:00:00')
 		     , CPN_USE_DT_GB = #{cpnUseDtGb}
