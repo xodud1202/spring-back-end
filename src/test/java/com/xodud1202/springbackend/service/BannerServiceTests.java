@@ -286,8 +286,8 @@ class BannerServiceTests {
 		when(bannerMapper.getShopMainSectionList()).thenReturn(List.of(heroSection, tabSection, goodsListSection));
 		when(bannerMapper.getShopMainImageBannerItemList(1)).thenReturn(List.of(heroImage));
 		when(bannerMapper.getShopMainGoodsTabList(2)).thenReturn(List.of(firstTab, secondTab));
-		when(bannerMapper.getShopMainGoodsItemList(2)).thenReturn(List.of(tabGoods));
-		when(bannerMapper.getShopMainGoodsItemList(7)).thenReturn(List.of(goodsListGoods));
+		when(bannerMapper.getShopMainGoodsItemList(2, "GOODS_STAT_02")).thenReturn(List.of(tabGoods));
+		when(bannerMapper.getShopMainGoodsItemList(7, "GOODS_STAT_02")).thenReturn(List.of(goodsListGoods));
 		when(ftpFileService.buildGoodsImageUrl("GOODS001", "main_1.png")).thenReturn("https://image.test/goods/GOODS001/main_1.png");
 		when(ftpFileService.buildGoodsImageUrl("GOODS001", "sub_1.png")).thenReturn("https://image.test/goods/GOODS001/sub_1.png");
 		when(ftpFileService.buildGoodsImageUrl("GOODS002", "main_2.png")).thenReturn("https://image.test/goods/GOODS002/main_2.png");
@@ -305,6 +305,8 @@ class BannerServiceTests {
 		assertEquals(1, result.get(2).getGoodsItems().size());
 		assertEquals("https://image.test/goods/GOODS002/main_2.png", result.get(2).getGoodsItems().get(0).getImgUrl());
 		assertEquals("https://image.test/goods/GOODS002/sub_2.png", result.get(2).getGoodsItems().get(0).getSecondaryImgUrl());
+		verify(bannerMapper, times(1)).getShopMainGoodsItemList(2, "GOODS_STAT_02");
+		verify(bannerMapper, times(1)).getShopMainGoodsItemList(7, "GOODS_STAT_02");
 	}
 
 	@Test
@@ -335,7 +337,7 @@ class BannerServiceTests {
 		goodsItem.setSecondaryImgPath("https://image.test/goods/GOODS999/sub.png");
 
 		when(bannerMapper.getShopMainSectionList()).thenReturn(List.of(goodsListSection));
-		when(bannerMapper.getShopMainGoodsItemList(7)).thenReturn(List.of(goodsItem));
+		when(bannerMapper.getShopMainGoodsItemList(7, "GOODS_STAT_02")).thenReturn(List.of(goodsItem));
 
 		// 절대 URL이 imgUrl 필드로 유지되는지 검증합니다.
 		List<ShopMainSectionVO> result = bannerService.getShopMainSectionList();
@@ -343,5 +345,6 @@ class BannerServiceTests {
 		assertEquals(1, result.get(0).getGoodsItems().size());
 		assertEquals("https://image.test/goods/GOODS999/main.png", result.get(0).getGoodsItems().get(0).getImgUrl());
 		assertEquals("https://image.test/goods/GOODS999/sub.png", result.get(0).getGoodsItems().get(0).getSecondaryImgUrl());
+		verify(bannerMapper, times(1)).getShopMainGoodsItemList(7, "GOODS_STAT_02");
 	}
 }

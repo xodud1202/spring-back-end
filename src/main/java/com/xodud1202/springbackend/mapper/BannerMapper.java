@@ -50,7 +50,7 @@ public interface BannerMapper {
 	List<ShopMainGoodsTabVO> getShopMainGoodsTabList(@Param("bannerNo") Integer bannerNo);
 
 	// 쇼핑몰 메인 상품 목록을 조회합니다.
-	List<ShopMainGoodsItemVO> getShopMainGoodsItemList(@Param("bannerNo") Integer bannerNo);
+	List<ShopMainGoodsItemVO> getShopMainGoodsItemList(@Param("bannerNo") Integer bannerNo, @Param("goodsStatCd") String goodsStatCd);
 
 	// 배너 기본 정보를 등록합니다.
 	int insertBannerBase(BannerSavePO param);

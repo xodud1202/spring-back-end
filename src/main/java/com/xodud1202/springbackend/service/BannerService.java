@@ -47,6 +47,7 @@ public class BannerService {
 	private static final String DIV_02 = "BANNER_DIV_02";
 	private static final String DIV_03 = "BANNER_DIV_03";
 	private static final String DIV_04 = "BANNER_DIV_04";
+	private static final String GOODS_STAT_SALE_CD = "GOODS_STAT_02";
 	private static final DateTimeFormatter DISPLAY_PERIOD_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
 	private final BannerMapper bannerMapper;
@@ -175,7 +176,7 @@ public class BannerService {
 	private void attachShopGoodsTabBannerItems(ShopMainSectionVO section) {
 		// 탭 목록과 상품 목록을 각각 조회합니다.
 		List<ShopMainGoodsTabVO> tabList = bannerMapper.getShopMainGoodsTabList(section.getBannerNo());
-		List<ShopMainGoodsItemVO> goodsList = bannerMapper.getShopMainGoodsItemList(section.getBannerNo());
+		List<ShopMainGoodsItemVO> goodsList = bannerMapper.getShopMainGoodsItemList(section.getBannerNo(), GOODS_STAT_SALE_CD);
 
 		// 상품 이미지 경로를 UI에서 바로 사용할 URL로 정규화합니다.
 		applyShopGoodsImageUrls(goodsList);
@@ -211,7 +212,7 @@ public class BannerService {
 	// 상품리스트 배너 섹션 하위 상품 목록을 결합합니다.
 	private void attachShopGoodsListBannerItems(ShopMainSectionVO section) {
 		// 상품리스트 배너 상품 목록을 조회합니다.
-		List<ShopMainGoodsItemVO> goodsList = bannerMapper.getShopMainGoodsItemList(section.getBannerNo());
+		List<ShopMainGoodsItemVO> goodsList = bannerMapper.getShopMainGoodsItemList(section.getBannerNo(), GOODS_STAT_SALE_CD);
 		if (goodsList == null || goodsList.isEmpty()) {
 			section.setGoodsItems(List.of());
 			return;
