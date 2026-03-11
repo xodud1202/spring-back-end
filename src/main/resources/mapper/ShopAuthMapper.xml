@@ -140,12 +140,19 @@
 		     , CPN_STAT_CD
 		     , CPN_USE_DT_GB
 		     , CPN_USABLE_DT
-		     , CPN_USE_START_DT
-		     , CPN_USE_END_DT
+		     , CASE
+		           WHEN CPN_USE_DT_GB = 'CPN_USE_DT_02'
+		           THEN NULLIF(CPN_USE_START_DT, '0000-00-00 00:00:00')
+		           ELSE NULL
+		       END AS CPN_USE_START_DT
+		     , CASE
+		           WHEN CPN_USE_DT_GB = 'CPN_USE_DT_02'
+		           THEN NULLIF(CPN_USE_END_DT, '0000-00-00 00:00:00')
+		           ELSE NULL
+		       END AS CPN_USE_END_DT
 		  FROM COUPON_BASE
 		 WHERE CPN_NO = #{cpnNo}
 		   AND CPN_STAT_CD = 'CPN_STAT_02'
-		 LIMIT 1
 	</select>
 
 	<insert id="insertCustomerCoupon">

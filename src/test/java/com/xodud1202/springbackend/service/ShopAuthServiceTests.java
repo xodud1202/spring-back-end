@@ -25,6 +25,7 @@ import java.time.format.DateTimeFormatter;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -427,6 +428,64 @@ class ShopAuthServiceTests {
 			assertEquals(LocalDateTime.of(2026, 3, 31, 23, 59, 59), couponSavePO.getCpnUsableEndDt());
 			assertEquals(51L, couponSavePO.getRegNo());
 			assertEquals(51L, couponSavePO.getUdtNo());
+		}
+	}
+
+	@Test
+	@DisplayName("구글 회원가입: 기간형 쿠폰(CPN_USE_DT_01)은 현재 시점 기준으로 사용기간을 계산해 CNT만큼 지급한다")
+	// 기간형 쿠폰 지급 시 사용 시작/종료 일시 계산 로직을 검증합니다.
+	void joinWithGoogle_issuesPeriodCouponWithNowBasedUsableWindow() {
+		// 신규 등록 시나리오용 조회/등록 목 동작을 구성합니다.
+		ShopCustomerSessionVO joinedCustomer = new ShopCustomerSessionVO();
+		joinedCustomer.setCustNo(61L);
+		joinedCustomer.setCustNm("기간쿠폰회원");
+		joinedCustomer.setCustGradeCd("CUST_GRADE_01");
+		when(shopAuthMapper.getShopCustomerByCi("google-sub")).thenReturn(null, joinedCustomer);
+		doAnswer(invocation -> {
+			// 고객 등록 생성키를 부여합니다.
+			ShopGoogleJoinSavePO savePO = invocation.getArgument(0);
+			savePO.setCustNo(61L);
+			return 1;
+		}).when(shopAuthMapper).insertShopGoogleCustomer(any(ShopGoogleJoinSavePO.class));
+		when(shopAuthMapper.getShopJoinPoint("xodud1202")).thenReturn(0);
+
+		// 기간형 쿠폰 2장 지급 혜택을 구성합니다.
+		ShopCustomerGradeBenefitVO benefitVO = new ShopCustomerGradeBenefitVO();
+		benefitVO.setCustGradeCd("CUST_GRADE_01");
+		benefitVO.setCartCpnNo(2L);
+		benefitVO.setCartCpnCnt(2);
+		when(shopAuthMapper.getCustomerGradeBenefitByCustGradeCd("CUST_GRADE_01")).thenReturn(benefitVO);
+
+		// 기간형 쿠폰 규칙(CPN_USE_DT_01, 30일)을 구성합니다.
+		ShopCouponIssueRuleVO periodCouponRule = new ShopCouponIssueRuleVO();
+		periodCouponRule.setCpnNo(2L);
+		periodCouponRule.setCpnStatCd("CPN_STAT_02");
+		periodCouponRule.setCpnUseDtGb("CPN_USE_DT_01");
+		periodCouponRule.setCpnUsableDt(30);
+		when(shopAuthMapper.getIssuableCouponIssueRule(2L)).thenReturn(periodCouponRule);
+
+		// 회원가입 직전/직후 시간을 저장해 사용 시작 시점 범위를 검증합니다.
+		LocalDateTime beforeJoin = LocalDateTime.now();
+		ShopGoogleJoinRequest request = createDefaultJoinRequest();
+		request.setCustNm("기간쿠폰회원");
+		shopAuthService.joinWithGoogle(request);
+		LocalDateTime afterJoin = LocalDateTime.now();
+
+		// 기간형 쿠폰이 요청 수량(2건)만큼 지급되는지 검증합니다.
+		ArgumentCaptor<ShopCustomerCouponSavePO> couponSaveCaptor = ArgumentCaptor.forClass(ShopCustomerCouponSavePO.class);
+		verify(shopAuthMapper, times(2)).insertCustomerCoupon(couponSaveCaptor.capture());
+		for (ShopCustomerCouponSavePO couponSavePO : couponSaveCaptor.getAllValues()) {
+			// 쿠폰 기본 식별/감사 정보가 올바른지 검증합니다.
+			assertEquals(61L, couponSavePO.getCustNo());
+			assertEquals(2L, couponSavePO.getCpnNo());
+			assertEquals(61L, couponSavePO.getRegNo());
+			assertEquals(61L, couponSavePO.getUdtNo());
+
+			// 기간형 쿠폰의 사용 시작/종료 일시 계산값을 검증합니다.
+			assertNotNull(couponSavePO.getCpnUsableStartDt());
+			assertNotNull(couponSavePO.getCpnUsableEndDt());
+			assertTrue(!couponSavePO.getCpnUsableStartDt().isBefore(beforeJoin) && !couponSavePO.getCpnUsableStartDt().isAfter(afterJoin));
+			assertEquals(couponSavePO.getCpnUsableStartDt().plusDays(30), couponSavePO.getCpnUsableEndDt());
 		}
 	}
 

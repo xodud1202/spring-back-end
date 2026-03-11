@@ -34,7 +34,6 @@ public class ShopAuthService {
 	private static final String CPN_USE_DT_DATETIME = "CPN_USE_DT_02";
 	private static final String JOIN_POINT_GIVE_GB_CD = "JOIN_POINT";
 	private static final String JOIN_POINT_GIVE_MEMO = "회원가입 포인트 지급";
-	private static final String JOIN_POINT_DETAIL_BIGO = "회원가입 포인트 적립";
 	private static final String SEX_UNSELECTED = "X";
 	private static final String SEX_MALE = "M";
 	private static final String SEX_FEMALE = "F";
@@ -180,7 +179,7 @@ public class ShopAuthService {
 		ShopCustomerPointDetailSavePO pointDetailSavePO = new ShopCustomerPointDetailSavePO();
 		pointDetailSavePO.setPntNo(pointSavePO.getPntNo());
 		pointDetailSavePO.setPntAmt(joinPoint);
-		pointDetailSavePO.setBigo(JOIN_POINT_DETAIL_BIGO);
+		pointDetailSavePO.setBigo(JOIN_POINT_GIVE_MEMO);
 		pointDetailSavePO.setRegNo(custNo);
 		shopAuthMapper.insertCustomerPointDetail(pointDetailSavePO);
 	}
