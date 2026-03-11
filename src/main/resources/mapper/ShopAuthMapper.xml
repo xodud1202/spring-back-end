@@ -16,4 +16,61 @@
 		   AND CUST_STAT_CD = 'CUST_STAT_01'
 		 LIMIT 1
 	</select>
+
+	<insert id="insertShopGoogleCustomer" useGeneratedKeys="true" keyProperty="custNo" keyColumn="CUST_NO">
+		/* ShopAuthMapper.insertShopGoogleCustomer: 구글 신규 회원 정보를 등록 */
+		INSERT INTO CUSTOMER_BASE (
+		       LOGIN_ID
+		     , PASSWORD
+		     , CUST_NM
+		     , CUST_GRADE_CD
+		     , CUST_STAT_CD
+		     , JOIN_GB
+		     , SEX
+		     , BIRTH
+		     , PHONE_NUMBER
+		     , EMAIL
+		     , SMS_RSV_YN
+		     , SMS_RSV_DT
+		     , EMAIL_RSV_YN
+		     , EMAIL_RSV_DT
+		     , APP_PUSH_RSV_YN
+		     , APP_PUSH_RSV_DT
+		     , DEVICE_GB_CD
+		     , CI
+		     , DI
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{loginId}
+		     , #{password}
+		     , #{custNm}
+		     , #{custGradeCd}
+		     , #{custStatCd}
+		     , #{joinGb}
+		     , #{sex}
+		     , #{birth}
+		     , #{phoneNumber}
+		     , #{email}
+		     , #{smsRsvYn}
+		     , CASE WHEN #{smsRsvYn} = 'Y' THEN NOW() ELSE NULL END
+		     , #{emailRsvYn}
+		     , CASE WHEN #{emailRsvYn} = 'Y' THEN NOW() ELSE NULL END
+		     , #{appPushRsvYn}
+		     , CASE WHEN #{appPushRsvYn} = 'Y' THEN NOW() ELSE NULL END
+		     , #{deviceGbCd}
+		     , #{ci}
+		     , #{di}
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+
+	<update id="updateShopGoogleCustomerAuditNo">
+		/* ShopAuthMapper.updateShopGoogleCustomerAuditNo: 구글 신규 회원 등록 후 REG_NO/UDT_NO를 고객번호로 갱신 */
+		UPDATE CUSTOMER_BASE
+		   SET REG_NO = #{auditNo}
+		     , UDT_NO = #{auditNo}
+		 WHERE CUST_NO = #{custNo}
+	</update>
 </mapper>

@@ -1,5 +1,6 @@
 package com.xodud1202.springbackend.controller.shop;
 
+import com.xodud1202.springbackend.domain.shop.auth.ShopGoogleJoinRequest;
 import com.xodud1202.springbackend.domain.shop.auth.ShopGoogleLoginRequest;
 import com.xodud1202.springbackend.domain.shop.auth.ShopGoogleLoginResponse;
 import com.xodud1202.springbackend.service.ShopAuthService;
@@ -51,15 +52,7 @@ public class ShopAuthController {
 
 			// 기존 고객이면 세션과 로그인 쿠키를 함께 갱신합니다.
 			if (response.isLoginSuccess() && response.getCustNo() != null) {
-				HttpSession session = httpRequest.getSession(true);
-				session.setAttribute(SESSION_ATTR_CUST_NO, response.getCustNo());
-				session.setMaxInactiveInterval(SESSION_TIMEOUT_SECONDS);
-
-				return ResponseEntity.ok()
-					.header(HttpHeaders.SET_COOKIE, buildCookie(COOKIE_CUST_NO, String.valueOf(response.getCustNo())).toString())
-					.header(HttpHeaders.SET_COOKIE, buildCookie(COOKIE_CUST_NM, encodeCookieValue(response.getCustNm())).toString())
-					.header(HttpHeaders.SET_COOKIE, buildCookie(COOKIE_CUST_GRADE_CD, encodeCookieValue(response.getCustGradeCd())).toString())
-					.body(response);
+				return createLoginSuccessResponse(response, httpRequest);
 			}
 
 			// 신규 가입 대상이면 추가 정보 입력 응답을 그대로 반환합니다.
@@ -71,6 +64,33 @@ public class ShopAuthController {
 			// 기타 예외는 500 응답으로 반환합니다.
 			log.error("쇼핑몰 구글 로그인 판정 실패 message={}", exception.getMessage(), exception);
 			return ResponseEntity.internalServerError().body(Map.of("message", "구글 로그인 처리에 실패했습니다."));
+		}
+	}
+
+	// 구글 신규 회원가입을 저장하고 로그인 처리합니다.
+	@PostMapping("/api/shop/auth/google/join")
+	public ResponseEntity<Object> joinWithGoogle(
+		@RequestBody ShopGoogleJoinRequest request,
+		HttpServletRequest httpRequest
+	) {
+		try {
+			// 구글 신규 회원가입을 처리합니다.
+			ShopGoogleLoginResponse response = shopAuthService.joinWithGoogle(request);
+
+			// 가입 후 로그인 성공이면 세션과 로그인 쿠키를 함께 갱신합니다.
+			if (response.isLoginSuccess() && response.getCustNo() != null) {
+				return createLoginSuccessResponse(response, httpRequest);
+			}
+
+			// 비정상 응답은 그대로 반환합니다.
+			return ResponseEntity.ok(response);
+		} catch (IllegalArgumentException exception) {
+			// 유효성 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 기타 예외는 500 응답으로 반환합니다.
+			log.error("쇼핑몰 구글 회원가입 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "구글 회원가입 처리에 실패했습니다."));
 		}
 	}
 
@@ -119,6 +139,24 @@ public class ShopAuthController {
 			.maxAge(Duration.ofSeconds(SESSION_TIMEOUT_SECONDS))
 			.sameSite("Lax")
 			.build();
+	}
+
+	// 로그인 성공 응답을 세션/쿠키와 함께 반환합니다.
+	private ResponseEntity<Object> createLoginSuccessResponse(
+		ShopGoogleLoginResponse response,
+		HttpServletRequest httpRequest
+	) {
+		// 세션에 고객번호를 저장하고 1시간 만료로 갱신합니다.
+		HttpSession session = httpRequest.getSession(true);
+		session.setAttribute(SESSION_ATTR_CUST_NO, response.getCustNo());
+		session.setMaxInactiveInterval(SESSION_TIMEOUT_SECONDS);
+
+		// 로그인 쿠키 3종을 발급해 브라우저 로그인 상태를 유지합니다.
+		return ResponseEntity.ok()
+			.header(HttpHeaders.SET_COOKIE, buildCookie(COOKIE_CUST_NO, String.valueOf(response.getCustNo())).toString())
+			.header(HttpHeaders.SET_COOKIE, buildCookie(COOKIE_CUST_NM, encodeCookieValue(response.getCustNm())).toString())
+			.header(HttpHeaders.SET_COOKIE, buildCookie(COOKIE_CUST_GRADE_CD, encodeCookieValue(response.getCustGradeCd())).toString())
+			.body(response);
 	}
 
 	// 요청 쿠키에서 지정한 이름의 값을 찾습니다.

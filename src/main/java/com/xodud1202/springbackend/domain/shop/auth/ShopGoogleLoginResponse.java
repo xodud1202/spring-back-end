@@ -17,4 +17,6 @@ public class ShopGoogleLoginResponse {
 	private String custGradeCd;
 	// 추천 로그인 아이디입니다.
 	private String loginId;
+	// 처리 결과 메시지입니다.
+	private String message;
 }
