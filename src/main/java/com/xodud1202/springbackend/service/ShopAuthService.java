@@ -1,5 +1,10 @@
 package com.xodud1202.springbackend.service;
 
+import com.xodud1202.springbackend.domain.shop.auth.ShopCouponIssueRuleVO;
+import com.xodud1202.springbackend.domain.shop.auth.ShopCustomerCouponSavePO;
+import com.xodud1202.springbackend.domain.shop.auth.ShopCustomerGradeBenefitVO;
+import com.xodud1202.springbackend.domain.shop.auth.ShopCustomerPointDetailSavePO;
+import com.xodud1202.springbackend.domain.shop.auth.ShopCustomerPointSavePO;
 import com.xodud1202.springbackend.domain.shop.auth.ShopCustomerSessionVO;
 import com.xodud1202.springbackend.domain.shop.auth.ShopGoogleJoinRequest;
 import com.xodud1202.springbackend.domain.shop.auth.ShopGoogleJoinSavePO;
@@ -12,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DateTimeException;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -20,9 +26,15 @@ import java.util.regex.Pattern;
 @Service
 @RequiredArgsConstructor
 public class ShopAuthService {
+	private static final String SHOP_SITE_ID = "xodud1202";
 	private static final String DEFAULT_CUST_GRADE_CD = "CUST_GRADE_01";
 	private static final String DEFAULT_CUST_STAT_CD = "CUST_STAT_01";
 	private static final String GOOGLE_JOIN_GB = "GOOGLE";
+	private static final String CPN_USE_DT_PERIOD = "CPN_USE_DT_01";
+	private static final String CPN_USE_DT_DATETIME = "CPN_USE_DT_02";
+	private static final String JOIN_POINT_GIVE_GB_CD = "JOIN_POINT";
+	private static final String JOIN_POINT_GIVE_MEMO = "회원가입 포인트 지급";
+	private static final String JOIN_POINT_DETAIL_BIGO = "회원가입 포인트 적립";
 	private static final String SEX_UNSELECTED = "X";
 	private static final String SEX_MALE = "M";
 	private static final String SEX_FEMALE = "F";
@@ -118,6 +130,9 @@ public class ShopAuthService {
 		// REG_NO/UDT_NO를 가입자 고객번호로 갱신합니다.
 		shopAuthMapper.updateShopGoogleCustomerAuditNo(savePO.getCustNo(), savePO.getCustNo());
 
+		// 회원가입 기본 포인트/등급 쿠폰 혜택을 지급합니다.
+		grantJoinBenefits(savePO.getCustNo(), savePO.getCustGradeCd());
+
 		// 등록된 회원 정보를 다시 조회해 로그인 응답을 구성합니다.
 		ShopCustomerSessionVO joinedCustomer = shopAuthMapper.getShopCustomerByCi(normalizedSub);
 		if (joinedCustomer == null || joinedCustomer.getCustNo() == null) {
@@ -127,6 +142,126 @@ public class ShopAuthService {
 			joinedCustomer.setCustGradeCd(savePO.getCustGradeCd());
 		}
 		return buildLoginSuccessResponse(joinedCustomer, savePO.getLoginId());
+	}
+
+	// 회원가입 완료 후 포인트/쿠폰 혜택을 지급합니다.
+	private void grantJoinBenefits(Long custNo, String custGradeCd) {
+		// 가입 포인트가 설정되어 있으면 고객 포인트를 지급합니다.
+		grantJoinPointIfNeeded(custNo);
+
+		// 고객등급별 혜택 쿠폰이 설정되어 있으면 고객 쿠폰을 지급합니다.
+		grantJoinCouponsByGrade(custNo, custGradeCd);
+	}
+
+	// 사이트 기본 가입 포인트를 고객에게 지급합니다.
+	private void grantJoinPointIfNeeded(Long custNo) {
+		// 사이트 기본 회원가입 포인트를 조회합니다.
+		Integer joinPoint = shopAuthMapper.getShopJoinPoint(SHOP_SITE_ID);
+		if (joinPoint == null || joinPoint <= 0) {
+			return;
+		}
+
+		// 포인트 마스터 지급 이력을 등록합니다.
+		ShopCustomerPointSavePO pointSavePO = new ShopCustomerPointSavePO();
+		pointSavePO.setCustNo(custNo);
+		pointSavePO.setPntGiveGbCd(JOIN_POINT_GIVE_GB_CD);
+		pointSavePO.setPntGiveMemo(JOIN_POINT_GIVE_MEMO);
+		pointSavePO.setSaveAmt(joinPoint);
+		pointSavePO.setRegNo(custNo);
+		pointSavePO.setUdtNo(custNo);
+		shopAuthMapper.insertCustomerPointBase(pointSavePO);
+
+		// 생성된 포인트 번호가 없으면 처리 실패로 간주합니다.
+		if (pointSavePO.getPntNo() == null) {
+			throw new IllegalArgumentException("회원가입 포인트 지급 처리에 실패했습니다.");
+		}
+
+		// 포인트 상세 이력을 등록합니다.
+		ShopCustomerPointDetailSavePO pointDetailSavePO = new ShopCustomerPointDetailSavePO();
+		pointDetailSavePO.setPntNo(pointSavePO.getPntNo());
+		pointDetailSavePO.setPntAmt(joinPoint);
+		pointDetailSavePO.setBigo(JOIN_POINT_DETAIL_BIGO);
+		pointDetailSavePO.setRegNo(custNo);
+		shopAuthMapper.insertCustomerPointDetail(pointDetailSavePO);
+	}
+
+	// 고객등급별 혜택 쿠폰을 고객에게 지급합니다.
+	private void grantJoinCouponsByGrade(Long custNo, String custGradeCd) {
+		// 고객등급별 혜택 정보를 조회합니다.
+		ShopCustomerGradeBenefitVO benefitVO = shopAuthMapper.getCustomerGradeBenefitByCustGradeCd(custGradeCd);
+		if (benefitVO == null) {
+			return;
+		}
+
+		// 혜택 쿠폰 번호/수량이 설정된 항목을 고객에게 발급합니다.
+		issueCouponByCount(custNo, benefitVO.getGoodsCpnNo(), benefitVO.getGoodsCpnCnt());
+		issueCouponByCount(custNo, benefitVO.getCartCpnNo(), benefitVO.getCartCpnCnt());
+		issueCouponByCount(custNo, benefitVO.getDeliveryCpnNo(), benefitVO.getDeliveryCpnCnt());
+	}
+
+	// 단일 쿠폰을 지정 수량만큼 고객에게 지급합니다.
+	private void issueCouponByCount(Long custNo, Long cpnNo, Integer issueCount) {
+		// 쿠폰번호/수량이 유효하지 않으면 지급을 생략합니다.
+		if (cpnNo == null || issueCount == null || issueCount < 1) {
+			return;
+		}
+
+		// 정상 상태(CPN_STAT_02) 쿠폰만 발급 규칙을 조회합니다.
+		ShopCouponIssueRuleVO couponRule = shopAuthMapper.getIssuableCouponIssueRule(cpnNo);
+		if (couponRule == null) {
+			return;
+		}
+
+		// 쿠폰 사용 가능 시작/종료 일시를 계산합니다.
+		LocalDateTime now = LocalDateTime.now();
+		LocalDateTime usableStartDt = resolveCouponUsableStartDateTime(couponRule, now);
+		LocalDateTime usableEndDt = resolveCouponUsableEndDateTime(couponRule, now);
+		if (usableStartDt == null || usableEndDt == null || usableStartDt.isAfter(usableEndDt)) {
+			return;
+		}
+
+		// 요청 수량만큼 고객 쿠폰을 반복 지급합니다.
+		for (int issueIndex = 0; issueIndex < issueCount; issueIndex += 1) {
+			ShopCustomerCouponSavePO couponSavePO = new ShopCustomerCouponSavePO();
+			couponSavePO.setCustNo(custNo);
+			couponSavePO.setCpnNo(cpnNo);
+			couponSavePO.setCpnUsableStartDt(usableStartDt);
+			couponSavePO.setCpnUsableEndDt(usableEndDt);
+			couponSavePO.setRegNo(custNo);
+			couponSavePO.setUdtNo(custNo);
+			shopAuthMapper.insertCustomerCoupon(couponSavePO);
+		}
+	}
+
+	// 쿠폰 사용 가능 시작 일시를 계산합니다.
+	private LocalDateTime resolveCouponUsableStartDateTime(ShopCouponIssueRuleVO couponRule, LocalDateTime now) {
+		// 기간형 쿠폰은 발급 시점을 시작일시로 사용합니다.
+		if (CPN_USE_DT_PERIOD.equals(couponRule.getCpnUseDtGb())) {
+			return now;
+		}
+
+		// 고정일시형 쿠폰은 쿠폰 기본 시작일시를 사용합니다.
+		if (CPN_USE_DT_DATETIME.equals(couponRule.getCpnUseDtGb())) {
+			return couponRule.getCpnUseStartDt();
+		}
+		return null;
+	}
+
+	// 쿠폰 사용 가능 종료 일시를 계산합니다.
+	private LocalDateTime resolveCouponUsableEndDateTime(ShopCouponIssueRuleVO couponRule, LocalDateTime now) {
+		// 기간형 쿠폰은 사용 가능 일수 기준으로 종료일시를 계산합니다.
+		if (CPN_USE_DT_PERIOD.equals(couponRule.getCpnUseDtGb())) {
+			if (couponRule.getCpnUsableDt() == null || couponRule.getCpnUsableDt() < 1) {
+				return null;
+			}
+			return now.plusDays(couponRule.getCpnUsableDt());
+		}
+
+		// 고정일시형 쿠폰은 쿠폰 기본 종료일시를 사용합니다.
+		if (CPN_USE_DT_DATETIME.equals(couponRule.getCpnUseDtGb())) {
+			return couponRule.getCpnUseEndDt();
+		}
+		return null;
 	}
 
 	// 회원가입 요청의 필수값/약관 동의 여부를 확인합니다.

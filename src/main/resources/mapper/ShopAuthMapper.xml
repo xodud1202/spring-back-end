@@ -73,4 +73,99 @@
 		     , UDT_NO = #{auditNo}
 		 WHERE CUST_NO = #{custNo}
 	</update>
+
+	<select id="getShopJoinPoint" resultType="int">
+		/* ShopAuthMapper.getShopJoinPoint: 사이트 회원가입 기본 포인트 조회 */
+		SELECT JOIN_POINT
+		  FROM SITE_INFO
+		 WHERE SITE_ID = #{siteId}
+		 LIMIT 1
+	</select>
+
+	<select id="getCustomerGradeBenefitByCustGradeCd" resultType="com.xodud1202.springbackend.domain.shop.auth.ShopCustomerGradeBenefitVO">
+		/* ShopAuthMapper.getCustomerGradeBenefitByCustGradeCd: 고객등급별 쿠폰 혜택 정보를 조회 */
+		SELECT CUST_GRADE_CD
+		     , GOODS_CPN_NO
+		     , GOODS_CPN_CNT
+		     , CART_CPN_NO
+		     , CART_CPN_CNT
+		     , DELIVERY_CPN_NO
+		     , DELIVERY_CPN_CNT
+		  FROM CUSTOMER_GRADE_BENEFIT
+		 WHERE CUST_GRADE_CD = #{custGradeCd}
+		 LIMIT 1
+	</select>
+
+	<insert id="insertCustomerPointBase" useGeneratedKeys="true" keyProperty="pntNo" keyColumn="PNT_NO">
+		/* ShopAuthMapper.insertCustomerPointBase: 회원가입 포인트 마스터 이력을 등록 */
+		INSERT INTO CUSTOMER_POINT_BASE (
+		       CUST_NO
+		     , PNT_GIVE_GB_CD
+		     , PNT_GIVE_MEMO
+		     , SAVE_AMT
+		     , USE_AMT
+		     , RMN_AMT
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{custNo}
+		     , #{pntGiveGbCd}
+		     , #{pntGiveMemo}
+		     , #{saveAmt}
+		     , 0
+		     , #{saveAmt}
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+
+	<insert id="insertCustomerPointDetail">
+		/* ShopAuthMapper.insertCustomerPointDetail: 회원가입 포인트 상세 이력을 등록 */
+		INSERT INTO CUSTOMER_POINT_DETAIL (
+		       PNT_NO
+		     , PNT_AMT
+		     , BIGO
+		     , REG_NO
+		) VALUES (
+		       #{pntNo}
+		     , #{pntAmt}
+		     , #{bigo}
+		     , #{regNo}
+		)
+	</insert>
+
+	<select id="getIssuableCouponIssueRule" resultType="com.xodud1202.springbackend.domain.shop.auth.ShopCouponIssueRuleVO">
+		/* ShopAuthMapper.getIssuableCouponIssueRule: 발급 가능한 정상 상태 쿠폰 사용기간 규칙 조회 */
+		SELECT CPN_NO
+		     , CPN_STAT_CD
+		     , CPN_USE_DT_GB
+		     , CPN_USABLE_DT
+		     , CPN_USE_START_DT
+		     , CPN_USE_END_DT
+		  FROM COUPON_BASE
+		 WHERE CPN_NO = #{cpnNo}
+		   AND CPN_STAT_CD = 'CPN_STAT_02'
+		 LIMIT 1
+	</select>
+
+	<insert id="insertCustomerCoupon">
+		/* ShopAuthMapper.insertCustomerCoupon: 고객에게 쿠폰 1건을 지급 등록 */
+		INSERT INTO CUSTOMER_COUPON (
+		       CUST_NO
+		     , CPN_NO
+		     , CPN_USABLE_START_DT
+		     , CPN_USABLE_END_DT
+		     , CPN_USE_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{custNo}
+		     , #{cpnNo}
+		     , #{cpnUsableStartDt}
+		     , #{cpnUsableEndDt}
+		     , 'N'
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
 </mapper>

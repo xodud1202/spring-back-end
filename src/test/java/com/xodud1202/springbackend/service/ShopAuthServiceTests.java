@@ -1,6 +1,11 @@
 package com.xodud1202.springbackend.service;
 
 import com.xodud1202.springbackend.domain.shop.auth.ShopCustomerSessionVO;
+import com.xodud1202.springbackend.domain.shop.auth.ShopCouponIssueRuleVO;
+import com.xodud1202.springbackend.domain.shop.auth.ShopCustomerCouponSavePO;
+import com.xodud1202.springbackend.domain.shop.auth.ShopCustomerGradeBenefitVO;
+import com.xodud1202.springbackend.domain.shop.auth.ShopCustomerPointDetailSavePO;
+import com.xodud1202.springbackend.domain.shop.auth.ShopCustomerPointSavePO;
 import com.xodud1202.springbackend.domain.shop.auth.ShopGoogleJoinRequest;
 import com.xodud1202.springbackend.domain.shop.auth.ShopGoogleJoinSavePO;
 import com.xodud1202.springbackend.domain.shop.auth.ShopGoogleLoginRequest;
@@ -15,6 +20,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -30,7 +36,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-// ShopAuthService의 구글 로그인 판정 로직을 검증합니다.
+// ShopAuthService의 구글 로그인/회원가입 로직을 검증합니다.
 class ShopAuthServiceTests {
 
 	// 쇼핑몰 로그인 매퍼 목 객체입니다.
@@ -310,6 +316,118 @@ class ShopAuthServiceTests {
 		// insert/update 호출이 없는지 검증합니다.
 		verify(shopAuthMapper, never()).insertShopGoogleCustomer(any(ShopGoogleJoinSavePO.class));
 		verify(shopAuthMapper, never()).updateShopGoogleCustomerAuditNo(any(Long.class), any(Long.class));
+	}
+
+	@Test
+	@DisplayName("구글 회원가입: 사이트 가입 포인트가 0보다 크면 고객 포인트를 지급한다")
+	// 가입 포인트 지급 로직을 검증합니다.
+	void joinWithGoogle_grantsJoinPointWhenSiteJoinPointIsPositive() {
+		// 신규 등록 시나리오용 조회/등록 목 동작을 구성합니다.
+		ShopCustomerSessionVO joinedCustomer = new ShopCustomerSessionVO();
+		joinedCustomer.setCustNo(31L);
+		joinedCustomer.setCustNm("포인트회원");
+		joinedCustomer.setCustGradeCd("CUST_GRADE_01");
+		when(shopAuthMapper.getShopCustomerByCi("google-sub")).thenReturn(null, joinedCustomer);
+		doAnswer(invocation -> {
+			// 고객 등록 생성키를 부여합니다.
+			ShopGoogleJoinSavePO savePO = invocation.getArgument(0);
+			savePO.setCustNo(31L);
+			return 1;
+		}).when(shopAuthMapper).insertShopGoogleCustomer(any(ShopGoogleJoinSavePO.class));
+		when(shopAuthMapper.getShopJoinPoint("xodud1202")).thenReturn(2000);
+		doAnswer(invocation -> {
+			// 포인트 마스터 생성키를 부여합니다.
+			ShopCustomerPointSavePO pointSavePO = invocation.getArgument(0);
+			pointSavePO.setPntNo(41L);
+			return 1;
+		}).when(shopAuthMapper).insertCustomerPointBase(any(ShopCustomerPointSavePO.class));
+		when(shopAuthMapper.getCustomerGradeBenefitByCustGradeCd("CUST_GRADE_01")).thenReturn(null);
+
+		// 회원가입을 수행합니다.
+		ShopGoogleJoinRequest request = createDefaultJoinRequest();
+		request.setCustNm("포인트회원");
+		shopAuthService.joinWithGoogle(request);
+
+		// 포인트 마스터 저장값을 검증합니다.
+		ArgumentCaptor<ShopCustomerPointSavePO> pointSaveCaptor = ArgumentCaptor.forClass(ShopCustomerPointSavePO.class);
+		verify(shopAuthMapper, times(1)).insertCustomerPointBase(pointSaveCaptor.capture());
+		ShopCustomerPointSavePO capturedPointSavePO = pointSaveCaptor.getValue();
+		assertEquals(31L, capturedPointSavePO.getCustNo());
+		assertEquals("JOIN_POINT", capturedPointSavePO.getPntGiveGbCd());
+		assertEquals(2000, capturedPointSavePO.getSaveAmt());
+		assertEquals(31L, capturedPointSavePO.getRegNo());
+		assertEquals(31L, capturedPointSavePO.getUdtNo());
+
+		// 포인트 상세 저장값을 검증합니다.
+		ArgumentCaptor<ShopCustomerPointDetailSavePO> pointDetailCaptor = ArgumentCaptor.forClass(ShopCustomerPointDetailSavePO.class);
+		verify(shopAuthMapper, times(1)).insertCustomerPointDetail(pointDetailCaptor.capture());
+		ShopCustomerPointDetailSavePO capturedPointDetailPO = pointDetailCaptor.getValue();
+		assertEquals(41L, capturedPointDetailPO.getPntNo());
+		assertEquals(2000, capturedPointDetailPO.getPntAmt());
+		assertEquals("회원가입 포인트 적립", capturedPointDetailPO.getBigo());
+		assertEquals(31L, capturedPointDetailPO.getRegNo());
+
+		// 등급혜택이 없는 경우 쿠폰 지급은 호출되지 않는지 검증합니다.
+		verify(shopAuthMapper, never()).insertCustomerCoupon(any(ShopCustomerCouponSavePO.class));
+	}
+
+	@Test
+	@DisplayName("구글 회원가입: 사이트 가입 포인트가 0이면 포인트 미지급, 정상 상태 쿠폰만 CNT만큼 지급한다")
+	// 포인트 미지급과 쿠폰 지급 수량/상태 조건을 함께 검증합니다.
+	void joinWithGoogle_skipsJoinPointWhenZeroAndIssuesCouponsByCountForActiveCouponOnly() {
+		// 신규 등록 시나리오용 조회/등록 목 동작을 구성합니다.
+		ShopCustomerSessionVO joinedCustomer = new ShopCustomerSessionVO();
+		joinedCustomer.setCustNo(51L);
+		joinedCustomer.setCustNm("쿠폰회원");
+		joinedCustomer.setCustGradeCd("CUST_GRADE_01");
+		when(shopAuthMapper.getShopCustomerByCi("google-sub")).thenReturn(null, joinedCustomer);
+		doAnswer(invocation -> {
+			// 고객 등록 생성키를 부여합니다.
+			ShopGoogleJoinSavePO savePO = invocation.getArgument(0);
+			savePO.setCustNo(51L);
+			return 1;
+		}).when(shopAuthMapper).insertShopGoogleCustomer(any(ShopGoogleJoinSavePO.class));
+		when(shopAuthMapper.getShopJoinPoint("xodud1202")).thenReturn(0);
+
+		// 고객등급 혜택(상품 쿠폰 2장, 장바구니 쿠폰 1장)을 구성합니다.
+		ShopCustomerGradeBenefitVO benefitVO = new ShopCustomerGradeBenefitVO();
+		benefitVO.setCustGradeCd("CUST_GRADE_01");
+		benefitVO.setGoodsCpnNo(1L);
+		benefitVO.setGoodsCpnCnt(2);
+		benefitVO.setCartCpnNo(2L);
+		benefitVO.setCartCpnCnt(1);
+		when(shopAuthMapper.getCustomerGradeBenefitByCustGradeCd("CUST_GRADE_01")).thenReturn(benefitVO);
+
+		// 정상 상태 쿠폰 1번만 발급 가능하도록 규칙을 구성합니다.
+		ShopCouponIssueRuleVO goodsCouponRule = new ShopCouponIssueRuleVO();
+		goodsCouponRule.setCpnNo(1L);
+		goodsCouponRule.setCpnStatCd("CPN_STAT_02");
+		goodsCouponRule.setCpnUseDtGb("CPN_USE_DT_02");
+		goodsCouponRule.setCpnUseStartDt(LocalDateTime.of(2026, 3, 1, 0, 0, 0));
+		goodsCouponRule.setCpnUseEndDt(LocalDateTime.of(2026, 3, 31, 23, 59, 59));
+		when(shopAuthMapper.getIssuableCouponIssueRule(1L)).thenReturn(goodsCouponRule);
+		when(shopAuthMapper.getIssuableCouponIssueRule(2L)).thenReturn(null);
+
+		// 회원가입을 수행합니다.
+		ShopGoogleJoinRequest request = createDefaultJoinRequest();
+		request.setCustNm("쿠폰회원");
+		shopAuthService.joinWithGoogle(request);
+
+		// 가입 포인트가 0이면 포인트 지급 호출이 없어야 합니다.
+		verify(shopAuthMapper, never()).insertCustomerPointBase(any(ShopCustomerPointSavePO.class));
+		verify(shopAuthMapper, never()).insertCustomerPointDetail(any(ShopCustomerPointDetailSavePO.class));
+
+		// 정상 상태 쿠폰(1번)만 수량 2건 지급되는지 검증합니다.
+		ArgumentCaptor<ShopCustomerCouponSavePO> couponSaveCaptor = ArgumentCaptor.forClass(ShopCustomerCouponSavePO.class);
+		verify(shopAuthMapper, times(2)).insertCustomerCoupon(couponSaveCaptor.capture());
+		for (ShopCustomerCouponSavePO couponSavePO : couponSaveCaptor.getAllValues()) {
+			assertEquals(51L, couponSavePO.getCustNo());
+			assertEquals(1L, couponSavePO.getCpnNo());
+			assertEquals(LocalDateTime.of(2026, 3, 1, 0, 0, 0), couponSavePO.getCpnUsableStartDt());
+			assertEquals(LocalDateTime.of(2026, 3, 31, 23, 59, 59), couponSavePO.getCpnUsableEndDt());
+			assertEquals(51L, couponSavePO.getRegNo());
+			assertEquals(51L, couponSavePO.getUdtNo());
+		}
 	}
 
 	// 기본 구글 회원가입 요청 객체를 생성합니다.
