@@ -507,6 +507,40 @@
 		   AND GOODS_ID = #{goodsId}
 	</select>
 
+	<select id="countShopMypageWishGoods" resultType="int">
+		/* GoodsMapper.countShopMypageWishGoods: 쇼핑몰 마이페이지 위시리스트 전체 건수 조회 */
+		SELECT COUNT(1)
+		  FROM WISH_LIST WL
+		  JOIN GOODS_BASE GB
+		    ON GB.GOODS_ID = WL.GOODS_ID
+		   AND GB.SHOW_YN = 'Y'
+		   AND GB.GOODS_STAT_CD = 'GOODS_STAT_02'
+		 WHERE WL.CUST_NO = #{custNo}
+	</select>
+
+	<select id="getShopMypageWishGoodsList" resultType="com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishGoodsItemVO">
+		/* GoodsMapper.getShopMypageWishGoodsList: 쇼핑몰 마이페이지 위시리스트 목록 페이징 조회 */
+		SELECT WL.CUST_NO
+		     , WL.GOODS_ID
+		     , GB.GOODS_NM
+		     , GB.SALE_AMT
+		     , (
+		         SELECT GI.IMG_PATH
+		           FROM GOODS_IMG GI
+		          WHERE GI.GOODS_ID = WL.GOODS_ID
+		          ORDER BY GI.DISP_ORD ASC, GI.IMG_NO ASC
+		          LIMIT 1
+		       ) AS IMG_PATH
+		  FROM WISH_LIST WL
+		  JOIN GOODS_BASE GB
+		    ON GB.GOODS_ID = WL.GOODS_ID
+		   AND GB.SHOW_YN = 'Y'
+		   AND GB.GOODS_STAT_CD = 'GOODS_STAT_02'
+		 WHERE WL.CUST_NO = #{custNo}
+		 ORDER BY WL.REG_DT DESC, WL.GOODS_ID DESC
+		 LIMIT #{pageSize} OFFSET #{offset}
+	</select>
+
 	<insert id="insertShopWishList">
 		/* GoodsMapper.insertShopWishList: 쇼핑몰 상품 위시리스트 등록 */
 		INSERT INTO WISH_LIST (

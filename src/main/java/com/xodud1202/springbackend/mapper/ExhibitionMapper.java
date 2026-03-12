@@ -7,6 +7,7 @@ import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionPO;
 import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionSavePO;
 import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionTabPO;
 import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionVO;
+import com.xodud1202.springbackend.domain.shop.exhibition.ShopExhibitionItemVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -71,4 +72,10 @@ public interface ExhibitionMapper {
 
 	// 기획전 탭 상품을 등록합니다.
 	int insertExhibitionGoods(ExhibitionGoodsPO param);
+
+	// 쇼핑몰 기획전 목록 건수를 조회합니다.
+	int countShopVisibleExhibitionList();
+
+	// 쇼핑몰 기획전 목록을 페이징 조회합니다.
+	List<ShopExhibitionItemVO> getShopVisibleExhibitionList(@Param("offset") int offset, @Param("pageSize") int pageSize);
 }

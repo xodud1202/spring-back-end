@@ -1,6 +1,7 @@
 package com.xodud1202.springbackend.controller.shop;
 
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsDetailVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishPageVO;
 import com.xodud1202.springbackend.service.GoodsService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -94,6 +95,65 @@ public class ShopGoodsController {
 			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
 			log.error("쇼핑몰 위시리스트 토글 실패 message={}", exception.getMessage(), exception);
 			return ResponseEntity.internalServerError().body(Map.of("message", "위시리스트 처리에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 마이페이지 위시리스트 페이지 데이터를 조회합니다.
+	@GetMapping("/api/shop/mypage/wish/page")
+	public ResponseEntity<Object> getShopMypageWishPage(
+		@RequestParam(value = "pageNo", required = false) Integer pageNo,
+		HttpServletRequest request
+	) {
+		try {
+			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			// 위시리스트 페이지 데이터를 조회해 반환합니다.
+			ShopMypageWishPageVO result = goodsService.getShopMypageWishPage(custNo, pageNo);
+			return ResponseEntity.ok(result);
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
+			log.error("쇼핑몰 마이페이지 위시리스트 조회 실패 message={} pageNo={}", exception.getMessage(), pageNo, exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "위시리스트 조회에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 마이페이지 위시리스트 상품을 삭제합니다.
+	@PostMapping("/api/shop/mypage/wish/delete")
+	public ResponseEntity<Object> deleteShopMypageWish(
+		@RequestBody(required = false) Map<String, Object> requestBody,
+		HttpServletRequest request
+	) {
+		try {
+			// 필수 파라미터(goodsId) 유효성을 확인합니다.
+			Object goodsIdValue = requestBody == null ? null : requestBody.get("goodsId");
+			String goodsId = goodsIdValue instanceof String ? ((String) goodsIdValue).trim() : "";
+			if (goodsId.isEmpty()) {
+				return ResponseEntity.badRequest().body(Map.of("message", "상품코드를 확인해주세요."));
+			}
+
+			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			// 위시리스트 상품을 삭제합니다.
+			goodsService.deleteShopMypageWishGoods(goodsId, custNo);
+			return ResponseEntity.ok(Map.of("message", "위시리스트에서 삭제했습니다."));
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
+			log.error("쇼핑몰 마이페이지 위시리스트 삭제 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "위시리스트 삭제에 실패했습니다."));
 		}
 	}
 

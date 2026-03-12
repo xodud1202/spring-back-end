@@ -9,6 +9,8 @@ import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionSavePO;
 import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionTabPO;
 import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionVO;
 import com.xodud1202.springbackend.domain.common.FtpProperties;
+import com.xodud1202.springbackend.domain.shop.exhibition.ShopExhibitionItemVO;
+import com.xodud1202.springbackend.domain.shop.exhibition.ShopExhibitionPageVO;
 import com.xodud1202.springbackend.mapper.ExhibitionMapper;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.Cell;
@@ -50,6 +52,7 @@ public class ExhibitionService {
 	private static final int MIN_PAGE_SIZE = 1;
 	private static final int DEFAULT_PAGE_SIZE = 20;
 	private static final int MAX_PAGE_SIZE = 200;
+	private static final int SHOP_EXHIBITION_PAGE_SIZE = 20;
 	private static final int DEFAULT_MAX_ORDER = 99999;
 	private static final DateTimeFormatter SEARCH_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 	private static final DateTimeFormatter BASIC_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd");
@@ -99,6 +102,32 @@ public class ExhibitionService {
 		result.put("totalCount", totalCount);
 		result.put("page", resolvedPage);
 		result.put("pageSize", resolvedPageSize);
+		return result;
+	}
+
+	// 쇼핑몰 기획전 목록 페이지 데이터를 조회합니다.
+	public ShopExhibitionPageVO getShopExhibitionPage(Integer requestedPageNo) {
+		// 요청 페이지 번호를 1 이상 값으로 보정합니다.
+		int resolvedRequestedPageNo = resolveRequestedPageNo(requestedPageNo);
+		// 노출 조건에 맞는 전체 기획전 건수를 조회합니다.
+		int totalCount = exhibitionMapper.countShopVisibleExhibitionList();
+		// 전체 페이지 수를 계산합니다.
+		int totalPageCount = calculateTotalPageCount(totalCount, SHOP_EXHIBITION_PAGE_SIZE);
+		// 범위를 초과한 페이지 번호를 마지막 페이지로 보정합니다.
+		int resolvedPageNo = totalPageCount == 0 ? MIN_PAGE_SIZE : Math.min(resolvedRequestedPageNo, totalPageCount);
+		// 페이징 오프셋을 계산합니다.
+		int offset = calculateOffset(resolvedPageNo, SHOP_EXHIBITION_PAGE_SIZE);
+		// 노출 조건에 맞는 기획전 목록을 조회합니다.
+		List<ShopExhibitionItemVO> exhibitionList = exhibitionMapper.getShopVisibleExhibitionList(offset, SHOP_EXHIBITION_PAGE_SIZE);
+		List<ShopExhibitionItemVO> safeExhibitionList = exhibitionList == null ? List.of() : exhibitionList;
+
+		// 쇼핑몰 기획전 목록 화면 응답 객체를 구성합니다.
+		ShopExhibitionPageVO result = new ShopExhibitionPageVO();
+		result.setExhibitionList(safeExhibitionList);
+		result.setTotalCount(totalCount);
+		result.setPageNo(resolvedPageNo);
+		result.setPageSize(SHOP_EXHIBITION_PAGE_SIZE);
+		result.setTotalPageCount(totalPageCount);
 		return result;
 	}
 
@@ -732,6 +761,30 @@ public class ExhibitionService {
 	// 기획전 탭 수를 조회합니다.
 	public int countExhibitionTabByNo(Integer exhibitionNo) {
 		return exhibitionMapper.countExhibitionTabByNo(exhibitionNo);
+	}
+
+	// 요청 페이지 번호를 1 이상 값으로 보정합니다.
+	private int resolveRequestedPageNo(Integer requestedPageNo) {
+		if (requestedPageNo == null || requestedPageNo < MIN_PAGE_SIZE) {
+			return MIN_PAGE_SIZE;
+		}
+		return requestedPageNo;
+	}
+
+	// 전체 건수와 페이지 크기를 기준으로 전체 페이지 수를 계산합니다.
+	private int calculateTotalPageCount(int totalCount, int pageSize) {
+		if (totalCount <= 0 || pageSize <= 0) {
+			return 0;
+		}
+		return (totalCount + pageSize - 1) / pageSize;
+	}
+
+	// 현재 페이지와 페이지 크기를 기준으로 조회 오프셋을 계산합니다.
+	private int calculateOffset(int pageNo, int pageSize) {
+		if (pageNo < MIN_PAGE_SIZE || pageSize <= 0) {
+			return 0;
+		}
+		return (pageNo - 1) * pageSize;
 	}
 
 	// 기획전 조회 공백 문자열을 판별합니다.

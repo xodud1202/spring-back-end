@@ -49,6 +49,34 @@ class ShopAuthServiceTests {
 	private ShopAuthService shopAuthService;
 
 	@Test
+	@DisplayName("고객 등급명 조회: 공통코드에 등급명이 있으면 코드명을 반환한다")
+	// 고객등급 코드가 공통코드에 존재하면 코드명을 반환합니다.
+	void getCustomerGradeName_returnsCodeNameWhenCodeExists() {
+		// 공통코드 조회 목 데이터를 구성합니다.
+		when(shopAuthMapper.getCommonCodeName("CUST_GRADE", "CUST_GRADE_03")).thenReturn("GOLD");
+
+		// 고객 등급명을 조회합니다.
+		String custGradeNm = shopAuthService.getCustomerGradeName("CUST_GRADE_03");
+
+		// 공통코드 코드명이 반환되는지 검증합니다.
+		assertEquals("GOLD", custGradeNm);
+	}
+
+	@Test
+	@DisplayName("고객 등급명 조회: 공통코드 미조회면 등급코드 값을 대체 반환한다")
+	// 고객등급 코드에 매핑된 코드명이 없으면 코드값 자체를 반환합니다.
+	void getCustomerGradeName_returnsCodeWhenCodeNameMissing() {
+		// 공통코드 미조회 응답을 목으로 구성합니다.
+		when(shopAuthMapper.getCommonCodeName("CUST_GRADE", "CUST_GRADE_03")).thenReturn(null);
+
+		// 앞뒤 공백이 포함된 고객 등급명을 조회합니다.
+		String custGradeNm = shopAuthService.getCustomerGradeName(" CUST_GRADE_03 ");
+
+		// 공통코드 미조회 시 코드값 대체 반환을 검증합니다.
+		assertEquals("CUST_GRADE_03", custGradeNm);
+	}
+
+	@Test
 	@DisplayName("구글 로그인 판정: 기존 고객이 있으면 로그인 성공 응답을 반환한다")
 	// 기존 고객이 CI로 조회되면 로그인 성공 응답을 반환합니다.
 	void loginWithGoogle_returnsLoginSuccessWhenCustomerExists() {
@@ -365,7 +393,7 @@ class ShopAuthServiceTests {
 		ShopCustomerPointDetailSavePO capturedPointDetailPO = pointDetailCaptor.getValue();
 		assertEquals(41L, capturedPointDetailPO.getPntNo());
 		assertEquals(2000, capturedPointDetailPO.getPntAmt());
-		assertEquals("회원가입 포인트 적립", capturedPointDetailPO.getBigo());
+		assertEquals("회원가입 포인트 지급", capturedPointDetailPO.getBigo());
 		assertEquals(31L, capturedPointDetailPO.getRegNo());
 
 		// 등급혜택이 없는 경우 쿠폰 지급은 호출되지 않는지 검증합니다.

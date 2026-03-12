@@ -17,6 +17,15 @@
 		 LIMIT 1
 	</select>
 
+	<select id="getCommonCodeName" resultType="string">
+		/* ShopAuthMapper.getCommonCodeName: 공통코드 코드명 조회 */
+		SELECT CD_NM
+		  FROM COMMON_CODE
+		 WHERE GRP_CD = #{grpCd}
+		   AND CD = #{cd}
+		 LIMIT 1
+	</select>
+
 	<insert id="insertShopGoogleCustomer" useGeneratedKeys="true" keyProperty="custNo" keyColumn="CUST_NO">
 		/* ShopAuthMapper.insertShopGoogleCustomer: 구글 신규 회원 정보를 등록 */
 		INSERT INTO CUSTOMER_BASE (

@@ -112,6 +112,11 @@ public class ShopAuthController {
 			session.setAttribute(SESSION_ATTR_CUST_NO, custNo);
 			session.setMaxInactiveInterval(SESSION_TIMEOUT_SECONDS);
 
+			// 고객명/등급코드를 디코드하고 등급명을 조회합니다.
+			String decodedCustNm = decodeCookieValue(custNmValue);
+			String decodedCustGradeCd = decodeCookieValue(custGradeCdValue);
+			String decodedCustGradeNm = shopAuthService.getCustomerGradeName(decodedCustGradeCd);
+
 			// 로그인 쿠키도 다시 발급해 만료 시간을 1시간으로 초기화합니다.
 			return ResponseEntity.ok()
 				.header(HttpHeaders.SET_COOKIE, buildCookie(COOKIE_CUST_NO, custNoValue).toString())
@@ -120,8 +125,9 @@ public class ShopAuthController {
 				.body(Map.of(
 					"authenticated", true,
 					"custNo", custNo,
-					"custNm", decodeCookieValue(custNmValue),
-					"custGradeCd", decodeCookieValue(custGradeCdValue)
+					"custNm", decodedCustNm,
+					"custGradeCd", decodedCustGradeCd,
+					"custGradeNm", decodedCustGradeNm
 				));
 		} catch (Exception exception) {
 			// 세션 갱신 실패 시 에러 로그와 실패 메시지를 반환합니다.

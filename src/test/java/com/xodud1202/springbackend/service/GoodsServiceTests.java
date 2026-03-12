@@ -15,6 +15,8 @@ import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsGroupItemVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsImageVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSiteInfoVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSizeItemVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishGoodsItemVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishPageVO;
 import com.xodud1202.springbackend.mapper.GoodsMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -164,6 +166,61 @@ class GoodsServiceTests {
 		assertThat(result).hasSize(1);
 		assertThat(result.get(0).getImgUrl()).isEqualTo("https://image.test/goods/GOODS001/main.png");
 		assertThat(result.get(0).getSecondaryImgUrl()).isEqualTo("https://image.test/goods/GOODS001/sub.png");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 마이페이지 위시리스트 조회 시 10개 페이지 기준으로 최근 등록순 목록을 반환한다")
+	// 위시리스트 페이지 조회 시 건수/페이지/이미지 URL 보정 결과를 검증합니다.
+	void getShopMypageWishPage_returnsPagedWishGoods() {
+		// 위시리스트 상품 테스트 데이터를 구성합니다.
+		ShopMypageWishGoodsItemVO firstItem = new ShopMypageWishGoodsItemVO();
+		firstItem.setCustNo(7L);
+		firstItem.setGoodsId("GOODS200");
+		firstItem.setGoodsNm("최근등록상품");
+		firstItem.setSaleAmt(19900);
+		firstItem.setImgPath("wish-main.png");
+
+		ShopMypageWishGoodsItemVO secondItem = new ShopMypageWishGoodsItemVO();
+		secondItem.setCustNo(7L);
+		secondItem.setGoodsId("GOODS100");
+		secondItem.setGoodsNm("이전등록상품");
+		secondItem.setSaleAmt(9900);
+		secondItem.setImgPath("");
+
+		// 매퍼/FTP 목 응답을 설정합니다.
+		when(goodsMapper.countShopMypageWishGoods(7L)).thenReturn(11);
+		when(goodsMapper.getShopMypageWishGoodsList(7L, 0, 10)).thenReturn(List.of(firstItem, secondItem));
+		when(ftpFileService.buildGoodsImageUrl("GOODS200", "wish-main.png")).thenReturn("https://image.test/goods/GOODS200/wish-main.png");
+
+		// 위시리스트 페이지를 조회합니다.
+		ShopMypageWishPageVO result = goodsService.getShopMypageWishPage(7L, 1);
+
+		// 건수/페이지 정보와 이미지 URL 보정 결과를 검증합니다.
+		assertThat(result).isNotNull();
+		assertThat(result.getGoodsCount()).isEqualTo(11);
+		assertThat(result.getPageNo()).isEqualTo(1);
+		assertThat(result.getPageSize()).isEqualTo(10);
+		assertThat(result.getTotalPageCount()).isEqualTo(2);
+		assertThat(result.getGoodsList()).hasSize(2);
+		assertThat(result.getGoodsList().get(0).getGoodsId()).isEqualTo("GOODS200");
+		assertThat(result.getGoodsList().get(0).getImgUrl()).isEqualTo("https://image.test/goods/GOODS200/wish-main.png");
+		assertThat(result.getGoodsList().get(1).getGoodsId()).isEqualTo("GOODS100");
+		assertThat(result.getGoodsList().get(1).getImgUrl()).isEqualTo("");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 마이페이지 위시리스트 삭제 시 고객번호와 상품코드로 삭제를 수행한다")
+	// 위시리스트 삭제 요청 시 delete 매퍼가 호출되는지 검증합니다.
+	void deleteShopMypageWishGoods_deletesWishItem() {
+		// 삭제 대상 고객번호/상품코드를 준비합니다.
+		String goodsId = " GOODS001 ";
+		Long custNo = 7L;
+
+		// 삭제 처리를 수행합니다.
+		goodsService.deleteShopMypageWishGoods(goodsId, custNo);
+
+		// trim 처리된 상품코드로 삭제 호출되는지 검증합니다.
+		verify(goodsMapper, times(1)).deleteShopWishList(7L, "GOODS001");
 	}
 
 	@Test

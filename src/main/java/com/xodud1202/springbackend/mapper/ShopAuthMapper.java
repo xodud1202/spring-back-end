@@ -14,6 +14,9 @@ public interface ShopAuthMapper {
 	// CI 값으로 기존 고객 로그인 정보를 조회합니다.
 	ShopCustomerSessionVO getShopCustomerByCi(@Param("ci") String ci);
 
+	// 공통코드 코드값으로 코드명을 조회합니다.
+	String getCommonCodeName(@Param("grpCd") String grpCd, @Param("cd") String cd);
+
 	// 구글 신규 회원 정보를 CUSTOMER_BASE에 등록합니다.
 	int insertShopGoogleCustomer(ShopGoogleJoinSavePO param);
 

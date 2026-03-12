@@ -29,6 +29,7 @@ import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsGroupItemVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsImageVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSiteInfoVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSizeItemVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishGoodsItemVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -127,6 +128,16 @@ public interface GoodsMapper {
 
 	// 쇼핑몰 상품 위시리스트 등록 여부 건수를 조회합니다.
 	int countShopWishList(@Param("custNo") Long custNo, @Param("goodsId") String goodsId);
+
+	// 쇼핑몰 마이페이지 위시리스트 전체 건수를 조회합니다.
+	int countShopMypageWishGoods(@Param("custNo") Long custNo);
+
+	// 쇼핑몰 마이페이지 위시리스트 목록을 페이징 조회합니다.
+	List<ShopMypageWishGoodsItemVO> getShopMypageWishGoodsList(
+		@Param("custNo") Long custNo,
+		@Param("offset") int offset,
+		@Param("pageSize") int pageSize
+	);
 
 	// 쇼핑몰 상품 위시리스트를 등록합니다.
 	int insertShopWishList(@Param("custNo") Long custNo, @Param("goodsId") String goodsId, @Param("regNo") Long regNo);

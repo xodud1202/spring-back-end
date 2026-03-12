@@ -27,6 +27,7 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class ShopAuthService {
 	private static final String SHOP_SITE_ID = "xodud1202";
+	private static final String CUST_GRADE_GRP_CD = "CUST_GRADE";
 	private static final String DEFAULT_CUST_GRADE_CD = "CUST_GRADE_01";
 	private static final String DEFAULT_CUST_STAT_CD = "CUST_STAT_01";
 	private static final String GOOGLE_JOIN_GB = "GOOGLE";
@@ -50,6 +51,22 @@ public class ShopAuthService {
 	private static final Pattern PHONE_NUMBER_PATTERN = Pattern.compile("^\\d{3}-\\d{4}-\\d{4}$");
 
 	private final ShopAuthMapper shopAuthMapper;
+
+	// 고객 등급코드에 해당하는 등급명을 조회합니다.
+	public String getCustomerGradeName(String custGradeCd) {
+		// 등급코드가 비어 있으면 빈 문자열을 반환합니다.
+		if (isBlank(custGradeCd)) {
+			return "";
+		}
+
+		// 공통코드에서 고객 등급명을 조회하고 미조회 시 코드값을 대체 반환합니다.
+		String normalizedCustGradeCd = custGradeCd.trim();
+		String custGradeNm = shopAuthMapper.getCommonCodeName(CUST_GRADE_GRP_CD, normalizedCustGradeCd);
+		if (isBlank(custGradeNm)) {
+			return normalizedCustGradeCd;
+		}
+		return custGradeNm.trim();
+	}
 
 	// 구글 로그인 식별값으로 기존 회원 여부를 판정합니다.
 	public ShopGoogleLoginResponse loginWithGoogle(ShopGoogleLoginRequest request) {

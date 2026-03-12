@@ -26,6 +26,8 @@ import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsShippingSummaryVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSiteInfoVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSizeItemVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsWishlistVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishGoodsItemVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishPageVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryVO;
@@ -85,6 +87,7 @@ public class GoodsService {
 	private static final String CPN_TARGET_BRAND = "CPN_TARGET_04";
 	private static final String CPN_TARGET_CATEGORY = "CPN_TARGET_03";
 	private static final String CPN_TARGET_EXHIBITION = "CPN_TARGET_02";
+	private static final int SHOP_MYPAGE_WISH_PAGE_SIZE = 10;
 
 	// 관리자 상품 목록을 페이징 조건으로 조회합니다.
 	public Map<String, Object> getAdminGoodsList(GoodsPO param) {
@@ -579,6 +582,76 @@ public class GoodsService {
 		// 상품 이미지 URL을 세팅합니다.
 		applyShopCategoryGoodsImageUrls(list);
 		return list;
+	}
+
+	// 쇼핑몰 마이페이지 위시리스트 페이지 데이터를 조회합니다.
+	public ShopMypageWishPageVO getShopMypageWishPage(Long custNo, Integer requestedPageNo) {
+		// 고객번호가 없으면 로그인 예외를 반환합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+
+		// 요청 페이지 번호를 1 이상으로 보정합니다.
+		int resolvedRequestedPageNo = resolveRequestedPageNo(requestedPageNo);
+		// 위시리스트 전체 건수를 조회합니다.
+		int goodsCount = goodsMapper.countShopMypageWishGoods(custNo);
+		// 전체 페이지 수를 계산합니다.
+		int totalPageCount = calculateTotalPageCount(goodsCount, SHOP_MYPAGE_WISH_PAGE_SIZE);
+		// 범위를 초과한 페이지 번호를 마지막 페이지로 보정합니다.
+		int resolvedPageNo = totalPageCount == 0 ? 1 : Math.min(resolvedRequestedPageNo, totalPageCount);
+		// 페이지 조회 오프셋을 계산합니다.
+		int offset = calculateOffset(resolvedPageNo, SHOP_MYPAGE_WISH_PAGE_SIZE);
+		// 위시리스트 상품 목록을 조회합니다.
+		List<ShopMypageWishGoodsItemVO> goodsList = goodsMapper.getShopMypageWishGoodsList(custNo, offset, SHOP_MYPAGE_WISH_PAGE_SIZE);
+		// 상품 이미지 URL을 세팅합니다.
+		applyShopMypageWishGoodsImageUrls(goodsList);
+
+		// 위시리스트 페이지 응답 객체를 구성합니다.
+		ShopMypageWishPageVO result = new ShopMypageWishPageVO();
+		result.setGoodsList(goodsList == null ? List.of() : goodsList);
+		result.setGoodsCount(goodsCount);
+		result.setPageNo(resolvedPageNo);
+		result.setPageSize(SHOP_MYPAGE_WISH_PAGE_SIZE);
+		result.setTotalPageCount(totalPageCount);
+		return result;
+	}
+
+	// 쇼핑몰 마이페이지 위시리스트 상품을 삭제합니다.
+	public void deleteShopMypageWishGoods(String goodsId, Long custNo) {
+		// 필수 입력값(goodsId/custNo) 유효성을 확인합니다.
+		if (isBlank(goodsId)) {
+			throw new IllegalArgumentException("상품코드를 확인해주세요.");
+		}
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+
+		// 위시리스트에서 고객/상품 기준으로 삭제합니다.
+		goodsMapper.deleteShopWishList(custNo, goodsId.trim());
+	}
+
+	// 요청 페이지 번호를 1 이상 값으로 보정합니다.
+	private int resolveRequestedPageNo(Integer requestedPageNo) {
+		if (requestedPageNo == null || requestedPageNo < 1) {
+			return 1;
+		}
+		return requestedPageNo;
+	}
+
+	// 전체 건수와 페이지 크기를 기준으로 전체 페이지 수를 계산합니다.
+	private int calculateTotalPageCount(int goodsCount, int pageSize) {
+		if (goodsCount <= 0 || pageSize <= 0) {
+			return 0;
+		}
+		return (goodsCount + pageSize - 1) / pageSize;
+	}
+
+	// 현재 페이지와 페이지 크기를 기준으로 조회 오프셋을 계산합니다.
+	private int calculateOffset(int pageNo, int pageSize) {
+		if (pageNo < 1 || pageSize <= 0) {
+			return 0;
+		}
+		return (pageNo - 1) * pageSize;
 	}
 
 	// 쇼핑몰 상품상세 상단 렌더링에 필요한 데이터를 조회합니다.
@@ -1478,6 +1551,19 @@ public class GoodsService {
 			}
 			item.setImgUrl(resolveShopGoodsImageUrl(item.getGoodsId(), item.getImgPath()));
 			item.setSecondaryImgUrl(resolveShopGoodsImageUrl(item.getGoodsId(), item.getSecondaryImgPath()));
+		}
+	}
+
+	// 쇼핑몰 마이페이지 위시리스트 상품 목록에 이미지 URL을 세팅합니다.
+	private void applyShopMypageWishGoodsImageUrls(List<ShopMypageWishGoodsItemVO> list) {
+		if (list == null || list.isEmpty()) {
+			return;
+		}
+		for (ShopMypageWishGoodsItemVO item : list) {
+			if (item == null) {
+				continue;
+			}
+			item.setImgUrl(resolveShopGoodsImageUrl(item.getGoodsId(), item.getImgPath()));
 		}
 	}
 

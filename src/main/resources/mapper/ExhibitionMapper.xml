@@ -51,6 +51,35 @@
 		</if>
 	</select>
 
+	<select id="countShopVisibleExhibitionList" resultType="int">
+		/* ExhibitionMapper.countShopVisibleExhibitionList: 쇼핑몰 기획전 목록 건수 조회 */
+		SELECT COUNT(1)
+		  FROM EXHIBITION_BASE EB
+		 WHERE EB.DEL_YN = 'N'
+		   AND EB.VIEW_YN = 'Y'
+		   AND EB.LIST_VIEW_YN = 'Y'
+		   AND EB.EXHIBITION_STAT_CD = 'EXHIBITION_STAT_02'
+		   AND NOW() &gt;= EB.DISP_START_DT
+		   AND NOW() &lt;= EB.DISP_END_DT
+	</select>
+
+	<select id="getShopVisibleExhibitionList" resultType="com.xodud1202.springbackend.domain.shop.exhibition.ShopExhibitionItemVO">
+		/* ExhibitionMapper.getShopVisibleExhibitionList: 쇼핑몰 기획전 목록 페이징 조회 */
+		SELECT EB.EXHIBITION_NO
+		     , EB.EXHIBITION_NM
+		     , EB.THUMBNAIL_URL
+		     , DATE_FORMAT(EB.DISP_START_DT, '%Y-%m-%d %H:%i:%s') AS DISP_START_DT
+		  FROM EXHIBITION_BASE EB
+		 WHERE EB.DEL_YN = 'N'
+		   AND EB.VIEW_YN = 'Y'
+		   AND EB.LIST_VIEW_YN = 'Y'
+		   AND EB.EXHIBITION_STAT_CD = 'EXHIBITION_STAT_02'
+		   AND NOW() &gt;= EB.DISP_START_DT
+		   AND NOW() &lt;= EB.DISP_END_DT
+		 ORDER BY EB.DISP_START_DT DESC, EB.EXHIBITION_NO DESC
+		 LIMIT #{pageSize} OFFSET #{offset}
+	</select>
+
 	<select id="getAdminExhibitionDetail" resultType="com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionDetailVO">
 		/* ExhibitionMapper.getAdminExhibitionDetail: 기획전 상세 조회 */
 		SELECT EB.EXHIBITION_NO

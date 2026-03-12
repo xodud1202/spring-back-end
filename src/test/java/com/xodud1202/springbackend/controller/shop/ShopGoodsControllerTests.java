@@ -2,6 +2,8 @@ package com.xodud1202.springbackend.controller.shop;
 
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsBasicVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsDetailVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishGoodsItemVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishPageVO;
 import com.xodud1202.springbackend.service.GoodsService;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,11 +19,14 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.util.List;
 
 @ExtendWith(MockitoExtension.class)
 // 쇼핑몰 상품상세 컨트롤러 API 응답을 검증합니다.
@@ -179,6 +184,71 @@ class ShopGoodsControllerTests {
 			)
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.message").value("상품 정보를 찾을 수 없습니다."));
+	}
+
+	@Test
+	@DisplayName("마이페이지 위시리스트 조회 API는 로그인 사용자가 요청하면 페이지 데이터를 반환한다")
+	// 마이페이지 위시리스트 조회 성공 시 200 응답과 페이지 필드를 반환하는지 검증합니다.
+	void getShopMypageWishPage_returnsOk() throws Exception {
+		// 위시리스트 페이지 응답 객체를 구성합니다.
+		ShopMypageWishGoodsItemVO wishItem = new ShopMypageWishGoodsItemVO();
+		wishItem.setGoodsId("GOODS001");
+		wishItem.setGoodsNm("테스트 위시상품");
+		wishItem.setSaleAmt(19900);
+
+		ShopMypageWishPageVO page = new ShopMypageWishPageVO();
+		page.setGoodsList(List.of(wishItem));
+		page.setGoodsCount(1);
+		page.setPageNo(1);
+		page.setPageSize(10);
+		page.setTotalPageCount(1);
+		when(goodsService.getShopMypageWishPage(1L, 1)).thenReturn(page);
+
+		// 로그인 쿠키와 함께 요청하면 200 응답과 페이지 필드를 검증합니다.
+		mockMvc.perform(
+				get("/api/shop/mypage/wish/page")
+					.cookie(new Cookie("cust_no", "1"))
+					.param("pageNo", "1")
+					.contentType(MediaType.APPLICATION_JSON)
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.goodsCount").value(1))
+			.andExpect(jsonPath("$.pageSize").value(10))
+			.andExpect(jsonPath("$.goodsList[0].goodsId").value("GOODS001"));
+	}
+
+	@Test
+	@DisplayName("마이페이지 위시리스트 조회 API는 비로그인 요청이면 401을 반환한다")
+	// 비로그인 상태에서 마이페이지 위시리스트 조회 요청 시 401 응답을 검증합니다.
+	void getShopMypageWishPage_returnsUnauthorizedWhenNotLoggedIn() throws Exception {
+		// 로그인 쿠키 없이 요청하면 401 응답과 메시지를 검증합니다.
+		mockMvc.perform(
+				get("/api/shop/mypage/wish/page")
+					.param("pageNo", "1")
+					.contentType(MediaType.APPLICATION_JSON)
+			)
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
+	}
+
+	@Test
+	@DisplayName("마이페이지 위시리스트 삭제 API는 로그인 사용자가 요청하면 삭제 메시지를 반환한다")
+	// 마이페이지 위시리스트 삭제 성공 시 200 응답과 메시지를 반환하는지 검증합니다.
+	void deleteShopMypageWish_returnsOk() throws Exception {
+		// 삭제 서비스 호출을 no-op으로 설정합니다.
+		doNothing().when(goodsService).deleteShopMypageWishGoods("GOODS001", 1L);
+
+		// 로그인 쿠키와 함께 요청하면 200 응답과 메시지를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/mypage/wish/delete")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"goodsId":"GOODS001"}
+						""")
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.message").value("위시리스트에서 삭제했습니다."));
 	}
 
 	@Test
