@@ -9,6 +9,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -34,6 +36,7 @@ public class ShopGoodsController {
 		HttpServletRequest request
 	) {
 		try {
+			log.info("check goodsId: {}", goodsId);
 			// 필수 파라미터(goodsId) 유효성을 확인합니다.
 			if (goodsId == null || goodsId.trim().isEmpty()) {
 				return ResponseEntity.badRequest().body(Map.of("message", "상품코드를 확인해주세요."));
@@ -54,6 +57,91 @@ public class ShopGoodsController {
 			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
 			log.error("쇼핑몰 상품상세 조회 실패 message={} goodsId={}", exception.getMessage(), goodsId, exception);
 			return ResponseEntity.internalServerError().body(Map.of("message", "상품상세 조회에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 상품 위시리스트를 토글(등록/삭제)합니다.
+	@PostMapping("/api/shop/goods/wishlist/toggle")
+	public ResponseEntity<Object> toggleShopGoodsWishlist(
+		@RequestBody(required = false) Map<String, Object> requestBody,
+		HttpServletRequest request
+	) {
+		try {
+			// 필수 파라미터(goodsId) 유효성을 확인합니다.
+			Object goodsIdValue = requestBody == null ? null : requestBody.get("goodsId");
+			String goodsId = goodsIdValue instanceof String ? ((String) goodsIdValue).trim() : "";
+			if (goodsId.isEmpty()) {
+				return ResponseEntity.badRequest().body(Map.of("message", "상품코드를 확인해주세요."));
+			}
+
+			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			// 위시리스트 토글 처리 후 최종 상태를 반환합니다.
+			boolean wished = goodsService.toggleShopGoodsWishlist(goodsId, custNo);
+			return ResponseEntity.ok(Map.of("wished", wished));
+		} catch (IllegalArgumentException exception) {
+			// 조회 가능한 상품이 없으면 404 응답을 반환합니다.
+			if ("상품 정보를 찾을 수 없습니다.".equals(exception.getMessage())) {
+				return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", exception.getMessage()));
+			}
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
+			log.error("쇼핑몰 위시리스트 토글 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "위시리스트 처리에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 상품 장바구니를 등록(기존 건은 수량 가산)합니다.
+	@PostMapping("/api/shop/goods/cart/add")
+	public ResponseEntity<Object> addShopGoodsCart(
+		@RequestBody(required = false) Map<String, Object> requestBody,
+		HttpServletRequest request
+	) {
+		try {
+			// 필수 파라미터(goodsId/sizeId/qty) 유효성을 확인합니다.
+			Object goodsIdValue = requestBody == null ? null : requestBody.get("goodsId");
+			String goodsId = goodsIdValue instanceof String ? ((String) goodsIdValue).trim() : "";
+			if (goodsId.isEmpty()) {
+				return ResponseEntity.badRequest().body(Map.of("message", "상품코드를 확인해주세요."));
+			}
+
+			Object sizeIdValue = requestBody == null ? null : requestBody.get("sizeId");
+			String sizeId = sizeIdValue instanceof String ? ((String) sizeIdValue).trim() : "";
+			if (sizeId.isEmpty()) {
+				return ResponseEntity.badRequest().body(Map.of("message", "사이즈를 선택해주세요."));
+			}
+
+			Integer qty = parseIntegerValue(requestBody == null ? null : requestBody.get("qty"));
+			if (qty == null || qty < 1) {
+				return ResponseEntity.badRequest().body(Map.of("message", "수량을 확인해주세요."));
+			}
+
+			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			// 장바구니 등록 처리 후 최종 수량을 반환합니다.
+			int cartQty = goodsService.addShopGoodsCart(goodsId, sizeId, qty, custNo);
+			return ResponseEntity.ok(Map.of("qty", cartQty, "message", "장바구니에 담았습니다."));
+		} catch (IllegalArgumentException exception) {
+			// 조회 가능한 상품이 없으면 404 응답을 반환합니다.
+			if ("상품 정보를 찾을 수 없습니다.".equals(exception.getMessage())) {
+				return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", exception.getMessage()));
+			}
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
+			log.error("쇼핑몰 장바구니 등록 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "장바구니 처리에 실패했습니다."));
 		}
 	}
 
@@ -83,6 +171,32 @@ public class ShopGoodsController {
 			.findFirst()
 			.map(Cookie::getValue)
 			.orElse(null);
+	}
+
+	// 숫자 또는 문자열 값을 정수로 변환합니다.
+	private Integer parseIntegerValue(Object rawValue) {
+		// 값이 없으면 null을 반환합니다.
+		if (rawValue == null) {
+			return null;
+		}
+		// 숫자 타입은 int 값으로 변환합니다.
+		if (rawValue instanceof Number numberValue) {
+			return numberValue.intValue();
+		}
+		// 문자열 타입은 공백 제거 후 정수 변환을 시도합니다.
+		if (rawValue instanceof String stringValue) {
+			String normalizedValue = stringValue.trim();
+			if (normalizedValue.isEmpty()) {
+				return null;
+			}
+			try {
+				return Integer.valueOf(normalizedValue);
+			} catch (NumberFormatException exception) {
+				return null;
+			}
+		}
+		// 변환 불가능한 타입이면 null을 반환합니다.
+		return null;
 	}
 
 	// URL 인코딩된 쿠키 값을 원문 문자열로 디코딩합니다.

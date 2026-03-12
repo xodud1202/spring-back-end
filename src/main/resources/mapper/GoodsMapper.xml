@@ -507,6 +507,78 @@
 		   AND GOODS_ID = #{goodsId}
 	</select>
 
+	<insert id="insertShopWishList">
+		/* GoodsMapper.insertShopWishList: 쇼핑몰 상품 위시리스트 등록 */
+		INSERT INTO WISH_LIST (
+		       CUST_NO
+		     , GOODS_ID
+		     , REG_NO
+		) VALUES (
+		       #{custNo}
+		     , #{goodsId}
+		     , #{regNo}
+		)
+	</insert>
+
+	<delete id="deleteShopWishList">
+		/* GoodsMapper.deleteShopWishList: 쇼핑몰 상품 위시리스트 삭제 */
+		DELETE
+		  FROM WISH_LIST
+		 WHERE CUST_NO = #{custNo}
+		   AND GOODS_ID = #{goodsId}
+	</delete>
+
+	<select id="countShopCart" resultType="int">
+		/* GoodsMapper.countShopCart: 쇼핑몰 장바구니 등록 여부 건수 조회 */
+		SELECT COUNT(1)
+		  FROM CART
+		 WHERE CUST_NO = #{custNo}
+		   AND GOODS_ID = #{goodsId}
+		   AND SIZE_ID = #{sizeId}
+	</select>
+
+	<insert id="insertShopCart">
+		/* GoodsMapper.insertShopCart: 쇼핑몰 장바구니 등록 */
+		INSERT INTO CART (
+		       CUST_NO
+		     , GOODS_ID
+		     , SIZE_ID
+		     , QTY
+		     , EXHIBITION_NO
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{custNo}
+		     , #{goodsId}
+		     , #{sizeId}
+		     , #{qty}
+		     , NULL
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+
+	<update id="addShopCartQty">
+		/* GoodsMapper.addShopCartQty: 쇼핑몰 장바구니 수량 추가 */
+		UPDATE CART
+		   SET QTY = QTY + #{qty}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE CUST_NO = #{custNo}
+		   AND GOODS_ID = #{goodsId}
+		   AND SIZE_ID = #{sizeId}
+	</update>
+
+	<select id="getShopCartQty" resultType="int">
+		/* GoodsMapper.getShopCartQty: 쇼핑몰 장바구니 현재 수량 조회 */
+		SELECT QTY
+		  FROM CART
+		 WHERE CUST_NO = #{custNo}
+		   AND GOODS_ID = #{goodsId}
+		   AND SIZE_ID = #{sizeId}
+		 LIMIT 1
+	</select>
+
 	<select id="getShopGoodsSiteInfo" resultType="com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSiteInfoVO">
 		/* GoodsMapper.getShopGoodsSiteInfo: 쇼핑몰 상품상세 사이트 배송 기준 정보 조회 */
 		SELECT SITE_ID

@@ -631,6 +631,95 @@ public class GoodsService {
 		return result;
 	}
 
+	// 쇼핑몰 상품 위시리스트를 토글(등록/삭제)하고 최종 상태를 반환합니다.
+	public boolean toggleShopGoodsWishlist(String goodsId, Long custNo) {
+		// 필수 입력값(goodsId/custNo) 유효성을 확인합니다.
+		if (isBlank(goodsId)) {
+			throw new IllegalArgumentException("상품코드를 확인해주세요.");
+		}
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+
+		// 현재 조회 가능한 상품인지 확인합니다.
+		String normalizedGoodsId = goodsId.trim();
+		ShopGoodsBasicVO goods = goodsMapper.getShopGoodsBasic(normalizedGoodsId);
+		if (goods == null) {
+			throw new IllegalArgumentException("상품 정보를 찾을 수 없습니다.");
+		}
+
+		// 기존 등록 여부에 따라 삭제 또는 등록 처리합니다.
+		int existedCount = goodsMapper.countShopWishList(custNo, normalizedGoodsId);
+		if (existedCount > 0) {
+			goodsMapper.deleteShopWishList(custNo, normalizedGoodsId);
+			return false;
+		}
+
+		// 위시리스트 신규 등록 시 등록자는 고객번호로 기록합니다.
+		goodsMapper.insertShopWishList(custNo, normalizedGoodsId, custNo);
+		return true;
+	}
+
+	// 쇼핑몰 상품 장바구니를 등록(기존 건은 수량 가산)하고 최종 수량을 반환합니다.
+	@Transactional
+	public int addShopGoodsCart(String goodsId, String sizeId, Integer qty, Long custNo) {
+		// 필수 입력값(goodsId/sizeId/qty/custNo) 유효성을 확인합니다.
+		if (isBlank(goodsId)) {
+			throw new IllegalArgumentException("상품코드를 확인해주세요.");
+		}
+		if (isBlank(sizeId)) {
+			throw new IllegalArgumentException("사이즈를 선택해주세요.");
+		}
+		if (qty == null || qty < 1) {
+			throw new IllegalArgumentException("수량을 확인해주세요.");
+		}
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+
+		// 현재 조회 가능한 상품인지 확인합니다.
+		String normalizedGoodsId = goodsId.trim();
+		String normalizedSizeId = sizeId.trim();
+		int resolvedQty = qty;
+		ShopGoodsBasicVO goods = goodsMapper.getShopGoodsBasic(normalizedGoodsId);
+		if (goods == null) {
+			throw new IllegalArgumentException("상품 정보를 찾을 수 없습니다.");
+		}
+
+		// 상품 사이즈 목록에서 요청 사이즈의 유효성과 품절 상태를 확인합니다.
+		List<ShopGoodsSizeItemVO> sizeList = goodsMapper.getShopGoodsSizeList(normalizedGoodsId);
+		ShopGoodsSizeItemVO targetSize = null;
+		for (ShopGoodsSizeItemVO sizeItem : sizeList) {
+			if (sizeItem == null) {
+				continue;
+			}
+			if (!normalizedSizeId.equals(sizeItem.getSizeId())) {
+				continue;
+			}
+			targetSize = sizeItem;
+			break;
+		}
+		if (targetSize == null) {
+			throw new IllegalArgumentException("사이즈를 확인해주세요.");
+		}
+		int stockQty = targetSize.getStockQty() == null ? 0 : targetSize.getStockQty();
+		if (stockQty < 1) {
+			throw new IllegalArgumentException("품절된 사이즈입니다.");
+		}
+
+		// 기존 장바구니 존재 여부에 따라 수량 가산 또는 신규 등록을 수행합니다.
+		int existedCount = goodsMapper.countShopCart(custNo, normalizedGoodsId, normalizedSizeId);
+		if (existedCount > 0) {
+			goodsMapper.addShopCartQty(custNo, normalizedGoodsId, normalizedSizeId, resolvedQty, custNo);
+		} else {
+			goodsMapper.insertShopCart(custNo, normalizedGoodsId, normalizedSizeId, resolvedQty, custNo, custNo);
+		}
+
+		// 저장 이후 장바구니 최종 수량을 조회해 반환합니다.
+		Integer latestQty = goodsMapper.getShopCartQty(custNo, normalizedGoodsId, normalizedSizeId);
+		return latestQty == null ? resolvedQty : latestQty;
+	}
+
 	// 쇼핑몰 상품 위시리스트 상태를 계산합니다.
 	private ShopGoodsWishlistVO buildShopGoodsWishlist(Long custNo, String goodsId) {
 		// 기본값은 비등록 상태로 반환합니다.

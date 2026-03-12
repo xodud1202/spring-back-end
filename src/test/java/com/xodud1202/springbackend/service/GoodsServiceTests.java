@@ -27,6 +27,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
@@ -316,6 +317,125 @@ class GoodsServiceTests {
 
 		// 상품상세 조회 결과가 null인지 확인합니다.
 		assertThat(goodsService.getShopGoodsDetail("NOT_FOUND", null, null)).isNull();
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 위시리스트 토글 시 미등록 상품은 등록 후 wished=true를 반환한다")
+	// 위시 미등록 상태에서 토글하면 insert 후 true를 반환하는지 검증합니다.
+	void toggleShopGoodsWishlist_insertsWhenNotWished() {
+		// 위시 토글 대상 상품 기본 정보를 구성합니다.
+		ShopGoodsBasicVO goods = new ShopGoodsBasicVO();
+		goods.setGoodsId("GOODS001");
+
+		// 미등록 상태 목 응답을 설정합니다.
+		when(goodsMapper.getShopGoodsBasic("GOODS001")).thenReturn(goods);
+		when(goodsMapper.countShopWishList(7L, "GOODS001")).thenReturn(0);
+		when(goodsMapper.insertShopWishList(7L, "GOODS001", 7L)).thenReturn(1);
+
+		// 위시 토글 후 등록 상태(true) 여부를 검증합니다.
+		boolean result = goodsService.toggleShopGoodsWishlist("GOODS001", 7L);
+		assertThat(result).isTrue();
+		verify(goodsMapper).insertShopWishList(7L, "GOODS001", 7L);
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 위시리스트 토글 시 등록된 상품은 삭제 후 wished=false를 반환한다")
+	// 위시 등록 상태에서 토글하면 delete 후 false를 반환하는지 검증합니다.
+	void toggleShopGoodsWishlist_deletesWhenAlreadyWished() {
+		// 위시 토글 대상 상품 기본 정보를 구성합니다.
+		ShopGoodsBasicVO goods = new ShopGoodsBasicVO();
+		goods.setGoodsId("GOODS002");
+
+		// 등록 상태 목 응답을 설정합니다.
+		when(goodsMapper.getShopGoodsBasic("GOODS002")).thenReturn(goods);
+		when(goodsMapper.countShopWishList(8L, "GOODS002")).thenReturn(1);
+		when(goodsMapper.deleteShopWishList(8L, "GOODS002")).thenReturn(1);
+
+		// 위시 토글 후 해제 상태(false) 여부를 검증합니다.
+		boolean result = goodsService.toggleShopGoodsWishlist("GOODS002", 8L);
+		assertThat(result).isFalse();
+		verify(goodsMapper).deleteShopWishList(8L, "GOODS002");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 위시리스트 토글 시 조회 불가 상품이면 예외를 반환한다")
+	// 조회 가능한 상품이 없을 때 상품 미존재 예외를 반환하는지 검증합니다.
+	void toggleShopGoodsWishlist_throwsWhenGoodsMissing() {
+		// 상품 기본 정보가 없는 상황을 목으로 설정합니다.
+		when(goodsMapper.getShopGoodsBasic("UNKNOWN")).thenReturn(null);
+
+		// 상품 미존재 예외 메시지를 검증합니다.
+		assertThatThrownBy(() -> goodsService.toggleShopGoodsWishlist("UNKNOWN", 9L))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessage("상품 정보를 찾을 수 없습니다.");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 장바구니 등록 시 미등록 상품은 신규 등록 후 최종 수량을 반환한다")
+	// 장바구니 미등록 상태에서 등록하면 insert 후 최종 수량을 반환하는지 검증합니다.
+	void addShopGoodsCart_insertsWhenNotExists() {
+		// 장바구니 등록 대상 상품과 사이즈 목록을 구성합니다.
+		ShopGoodsBasicVO goods = new ShopGoodsBasicVO();
+		goods.setGoodsId("GOODS001");
+		ShopGoodsSizeItemVO sizeItem = new ShopGoodsSizeItemVO();
+		sizeItem.setGoodsId("GOODS001");
+		sizeItem.setSizeId("095");
+		sizeItem.setStockQty(10);
+
+		// 미등록 상태 목 응답을 설정합니다.
+		when(goodsMapper.getShopGoodsBasic("GOODS001")).thenReturn(goods);
+		when(goodsMapper.getShopGoodsSizeList("GOODS001")).thenReturn(List.of(sizeItem));
+		when(goodsMapper.countShopCart(7L, "GOODS001", "095")).thenReturn(0);
+		when(goodsMapper.insertShopCart(7L, "GOODS001", "095", 2, 7L, 7L)).thenReturn(1);
+		when(goodsMapper.getShopCartQty(7L, "GOODS001", "095")).thenReturn(2);
+
+		// 장바구니 등록 후 최종 수량과 insert 호출 여부를 검증합니다.
+		int result = goodsService.addShopGoodsCart("GOODS001", "095", 2, 7L);
+		assertThat(result).isEqualTo(2);
+		verify(goodsMapper).insertShopCart(7L, "GOODS001", "095", 2, 7L, 7L);
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 장바구니 등록 시 기존 상품은 수량을 가산하고 최종 수량을 반환한다")
+	// 장바구니 등록 상태에서 동일 상품/사이즈를 등록하면 수량 가산 여부를 검증합니다.
+	void addShopGoodsCart_updatesWhenExists() {
+		// 장바구니 등록 대상 상품과 사이즈 목록을 구성합니다.
+		ShopGoodsBasicVO goods = new ShopGoodsBasicVO();
+		goods.setGoodsId("GOODS002");
+		ShopGoodsSizeItemVO sizeItem = new ShopGoodsSizeItemVO();
+		sizeItem.setGoodsId("GOODS002");
+		sizeItem.setSizeId("100");
+		sizeItem.setStockQty(20);
+
+		// 기등록 상태 목 응답을 설정합니다.
+		when(goodsMapper.getShopGoodsBasic("GOODS002")).thenReturn(goods);
+		when(goodsMapper.getShopGoodsSizeList("GOODS002")).thenReturn(List.of(sizeItem));
+		when(goodsMapper.countShopCart(8L, "GOODS002", "100")).thenReturn(1);
+		when(goodsMapper.addShopCartQty(8L, "GOODS002", "100", 3, 8L)).thenReturn(1);
+		when(goodsMapper.getShopCartQty(8L, "GOODS002", "100")).thenReturn(5);
+
+		// 장바구니 등록 후 최종 수량과 update 호출 여부를 검증합니다.
+		int result = goodsService.addShopGoodsCart("GOODS002", "100", 3, 8L);
+		assertThat(result).isEqualTo(5);
+		verify(goodsMapper).addShopCartQty(8L, "GOODS002", "100", 3, 8L);
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 장바구니 등록 시 존재하지 않는 사이즈면 예외를 반환한다")
+	// 상품에 없는 사이즈 요청 시 사이즈 검증 예외를 반환하는지 확인합니다.
+	void addShopGoodsCart_throwsWhenSizeMissing() {
+		// 장바구니 등록 대상 상품을 구성합니다.
+		ShopGoodsBasicVO goods = new ShopGoodsBasicVO();
+		goods.setGoodsId("GOODS003");
+
+		// 상품은 존재하지만 요청 사이즈가 없는 상태를 목으로 설정합니다.
+		when(goodsMapper.getShopGoodsBasic("GOODS003")).thenReturn(goods);
+		when(goodsMapper.getShopGoodsSizeList("GOODS003")).thenReturn(List.of());
+
+		// 사이즈 검증 예외 메시지를 확인합니다.
+		assertThatThrownBy(() -> goodsService.addShopGoodsCart("GOODS003", "110", 1, 9L))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessage("사이즈를 확인해주세요.");
 	}
 
 	// 테스트용 카테고리 계층 목 데이터를 구성합니다.

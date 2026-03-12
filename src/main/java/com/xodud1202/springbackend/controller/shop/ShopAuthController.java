@@ -130,6 +130,26 @@ public class ShopAuthController {
 		}
 	}
 
+	// 쇼핑몰 로그아웃 시 세션과 로그인 쿠키를 모두 만료 처리합니다.
+	@PostMapping("/api/shop/auth/logout")
+	public ResponseEntity<Object> logoutShop(HttpServletRequest request) {
+		try {
+			// 쇼핑몰 세션이 존재하면 고객번호 속성을 제거하고 세션을 무효화합니다.
+			invalidateShopSession(request);
+
+			// 로그인 쿠키 3종을 모두 만료 처리한 뒤 성공 응답을 반환합니다.
+			return ResponseEntity.ok()
+				.header(HttpHeaders.SET_COOKIE, buildExpiredCookie(COOKIE_CUST_NO).toString())
+				.header(HttpHeaders.SET_COOKIE, buildExpiredCookie(COOKIE_CUST_NM).toString())
+				.header(HttpHeaders.SET_COOKIE, buildExpiredCookie(COOKIE_CUST_GRADE_CD).toString())
+				.body(Map.of("message", "로그아웃 처리되었습니다."));
+		} catch (Exception exception) {
+			// 기타 예외는 500 응답으로 반환합니다.
+			log.error("쇼핑몰 로그아웃 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "로그아웃 처리에 실패했습니다."));
+		}
+	}
+
 	// 쿠키 응답 객체를 생성합니다.
 	private ResponseCookie buildCookie(String name, String value) {
 		return ResponseCookie.from(name, value)
@@ -139,6 +159,27 @@ public class ShopAuthController {
 			.maxAge(Duration.ofSeconds(SESSION_TIMEOUT_SECONDS))
 			.sameSite("Lax")
 			.build();
+	}
+
+	// 로그아웃용 만료 쿠키 응답 객체를 생성합니다.
+	private ResponseCookie buildExpiredCookie(String name) {
+		return ResponseCookie.from(name, "")
+			.httpOnly(true)
+			.secure(jwtCookieSecure)
+			.path("/")
+			.maxAge(Duration.ZERO)
+			.sameSite("Lax")
+			.build();
+	}
+
+	// 쇼핑몰 세션을 무효화합니다.
+	private void invalidateShopSession(HttpServletRequest request) {
+		HttpSession session = request.getSession(false);
+		if (session == null) {
+			return;
+		}
+		session.removeAttribute(SESSION_ATTR_CUST_NO);
+		session.invalidate();
 	}
 
 	// 로그인 성공 응답을 세션/쿠키와 함께 반환합니다.

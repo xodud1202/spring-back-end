@@ -128,6 +128,37 @@ public interface GoodsMapper {
 	// 쇼핑몰 상품 위시리스트 등록 여부 건수를 조회합니다.
 	int countShopWishList(@Param("custNo") Long custNo, @Param("goodsId") String goodsId);
 
+	// 쇼핑몰 상품 위시리스트를 등록합니다.
+	int insertShopWishList(@Param("custNo") Long custNo, @Param("goodsId") String goodsId, @Param("regNo") Long regNo);
+
+	// 쇼핑몰 상품 위시리스트를 삭제합니다.
+	int deleteShopWishList(@Param("custNo") Long custNo, @Param("goodsId") String goodsId);
+
+	// 쇼핑몰 장바구니 등록 여부 건수를 조회합니다.
+	int countShopCart(@Param("custNo") Long custNo, @Param("goodsId") String goodsId, @Param("sizeId") String sizeId);
+
+	// 쇼핑몰 장바구니를 등록합니다.
+	int insertShopCart(
+		@Param("custNo") Long custNo,
+		@Param("goodsId") String goodsId,
+		@Param("sizeId") String sizeId,
+		@Param("qty") Integer qty,
+		@Param("regNo") Long regNo,
+		@Param("udtNo") Long udtNo
+	);
+
+	// 쇼핑몰 장바구니 수량을 추가합니다.
+	int addShopCartQty(
+		@Param("custNo") Long custNo,
+		@Param("goodsId") String goodsId,
+		@Param("sizeId") String sizeId,
+		@Param("qty") Integer qty,
+		@Param("udtNo") Long udtNo
+	);
+
+	// 쇼핑몰 장바구니 현재 수량을 조회합니다.
+	Integer getShopCartQty(@Param("custNo") Long custNo, @Param("goodsId") String goodsId, @Param("sizeId") String sizeId);
+
 	// 쇼핑몰 상품상세 사이트 배송 기준 정보를 조회합니다.
 	ShopGoodsSiteInfoVO getShopGoodsSiteInfo(@Param("siteId") String siteId);
 
