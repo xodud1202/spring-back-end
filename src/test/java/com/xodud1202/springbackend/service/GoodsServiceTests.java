@@ -6,6 +6,15 @@ import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSavePO;
 import com.xodud1202.springbackend.domain.shop.category.ShopCategoryGoodsItemVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsBasicVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsCouponTargetVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsCouponVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsDescItemVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsDetailVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsGroupItemVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsImageVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSiteInfoVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSizeItemVO;
 import com.xodud1202.springbackend.mapper.GoodsMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -154,6 +163,159 @@ class GoodsServiceTests {
 		assertThat(result).hasSize(1);
 		assertThat(result.get(0).getImgUrl()).isEqualTo("https://image.test/goods/GOODS001/main.png");
 		assertThat(result.get(0).getSecondaryImgUrl()).isEqualTo("https://image.test/goods/GOODS001/sub.png");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 상품상세 조회 시 가격/포인트/배송비/쿠폰/위시리스트를 조합해 반환한다")
+	// 상품상세 상단 응답 조합 로직이 요구사항대로 계산되는지 검증합니다.
+	void getShopGoodsDetail_returnsComposedShopGoodsDetail() {
+		// 상품 기본/이미지/사이즈/그룹/설명 테스트 데이터를 구성합니다.
+		ShopGoodsBasicVO goods = new ShopGoodsBasicVO();
+		goods.setGoodsId("CAMEUEP02MG");
+		goods.setGoodsNm("테스트 상품");
+		goods.setGoodsGroupId("CAMEUEP0");
+		goods.setBrandNo(1);
+		goods.setBrandLogoPath("https://image.test/brand/logo.png");
+		goods.setBrandNoti("<p>브랜드 공지</p>");
+		goods.setSupplyAmt(89000);
+		goods.setSaleAmt(39900);
+
+		ShopGoodsImageVO image = new ShopGoodsImageVO();
+		image.setGoodsId("CAMEUEP02MG");
+		image.setImgPath("main.png");
+		image.setDispOrd(1);
+
+		ShopGoodsSizeItemVO soldOutSize = new ShopGoodsSizeItemVO();
+		soldOutSize.setGoodsId("CAMEUEP02MG");
+		soldOutSize.setSizeId("095");
+		soldOutSize.setStockQty(0);
+		soldOutSize.setDispOrd(1);
+
+		ShopGoodsSizeItemVO normalSize = new ShopGoodsSizeItemVO();
+		normalSize.setGoodsId("CAMEUEP02MG");
+		normalSize.setSizeId("100");
+		normalSize.setStockQty(5);
+		normalSize.setDispOrd(2);
+
+		ShopGoodsGroupItemVO groupItem = new ShopGoodsGroupItemVO();
+		groupItem.setGoodsId("CAMEUEP01BL");
+		groupItem.setFirstImgPath("group.png");
+
+		ShopGoodsDescItemVO pcDesc = new ShopGoodsDescItemVO();
+		pcDesc.setDeviceGbCd("PC");
+		pcDesc.setGoodsDesc("<p>PC 상세</p>");
+
+		ShopGoodsDescItemVO moDesc = new ShopGoodsDescItemVO();
+		moDesc.setDeviceGbCd("MO");
+		moDesc.setGoodsDesc("<p>MO 상세</p>");
+
+		ShopGoodsSiteInfoVO siteInfo = new ShopGoodsSiteInfoVO();
+		siteInfo.setSiteId("xodud1202");
+		siteInfo.setDeliveryFee(3000);
+		siteInfo.setDeliveryFeeLimit(30000);
+
+		ShopGoodsCouponVO brandCoupon = new ShopGoodsCouponVO();
+		brandCoupon.setCpnNo(1L);
+		brandCoupon.setCpnTargetCd("CPN_TARGET_04");
+
+		ShopGoodsCouponTargetVO brandApplyTarget = new ShopGoodsCouponTargetVO();
+		brandApplyTarget.setCpnNo(1L);
+		brandApplyTarget.setTargetGbCd("TARGET_GB_01");
+		brandApplyTarget.setTargetValue("1");
+
+		ShopGoodsCouponVO excludedCoupon = new ShopGoodsCouponVO();
+		excludedCoupon.setCpnNo(2L);
+		excludedCoupon.setCpnTargetCd("CPN_TARGET_01");
+
+		ShopGoodsCouponTargetVO excludedApplyTarget = new ShopGoodsCouponTargetVO();
+		excludedApplyTarget.setCpnNo(2L);
+		excludedApplyTarget.setTargetGbCd("TARGET_GB_01");
+		excludedApplyTarget.setTargetValue("CAMEUEP02MG");
+
+		ShopGoodsCouponTargetVO excludedTarget = new ShopGoodsCouponTargetVO();
+		excludedTarget.setCpnNo(2L);
+		excludedTarget.setTargetGbCd("TARGET_GB_02");
+		excludedTarget.setTargetValue("CAMEUEP02MG");
+
+		// 매퍼/FTP 목 응답을 설정합니다.
+		when(goodsMapper.getShopGoodsBasic("CAMEUEP02MG")).thenReturn(goods);
+		when(goodsMapper.getShopGoodsImageList("CAMEUEP02MG")).thenReturn(List.of(image));
+		when(goodsMapper.getShopGoodsSizeList("CAMEUEP02MG")).thenReturn(List.of(soldOutSize, normalSize));
+		when(goodsMapper.getShopGoodsGroupItemList("CAMEUEP0")).thenReturn(List.of(groupItem));
+		when(goodsMapper.getShopGoodsDescItemList("CAMEUEP02MG")).thenReturn(List.of(pcDesc, moDesc));
+		when(goodsMapper.countShopWishList(1L, "CAMEUEP02MG")).thenReturn(1);
+		when(goodsMapper.getShopGoodsSiteInfo("xodud1202")).thenReturn(siteInfo);
+		when(goodsMapper.getShopPointSaveRateByCustGradeCd("CUST_GRADE_03")).thenReturn(5);
+		when(goodsMapper.getShopActiveGoodsCouponList()).thenReturn(List.of(brandCoupon, excludedCoupon));
+		when(goodsMapper.getShopGoodsCategoryIdList("CAMEUEP02MG")).thenReturn(List.of("2000020002"));
+		when(goodsMapper.getShopGoodsExhibitionTabNoList("CAMEUEP02MG")).thenReturn(List.of());
+		when(goodsMapper.getShopCouponTargetList(1L)).thenReturn(List.of(brandApplyTarget));
+		when(goodsMapper.getShopCouponTargetList(2L)).thenReturn(List.of(excludedApplyTarget, excludedTarget));
+		when(ftpFileService.buildGoodsImageUrl("CAMEUEP02MG", "main.png")).thenReturn("https://image.test/goods/CAMEUEP02MG/main.png");
+		when(ftpFileService.buildGoodsImageUrl("CAMEUEP01BL", "group.png")).thenReturn("https://image.test/goods/CAMEUEP01BL/group.png");
+
+		// 상품상세 조합 결과를 조회합니다.
+		ShopGoodsDetailVO result = goodsService.getShopGoodsDetail("CAMEUEP02MG", 1L, "CUST_GRADE_03");
+
+		// 가격/포인트/배송비/쿠폰/위시리스트 계산 결과를 검증합니다.
+		assertThat(result).isNotNull();
+		assertThat(result.getPriceSummary().getDiscountRate()).isEqualTo(55);
+		assertThat(result.getPointSummary().getExpectedPoint()).isEqualTo(1995);
+		assertThat(result.getPointSummary().getPointSaveRate()).isEqualTo(5);
+		assertThat(result.getShippingSummary().isFreeDelivery()).isTrue();
+		assertThat(result.getWishlist().isWished()).isTrue();
+		assertThat(result.getImages().get(0).getImgUrl()).isEqualTo("https://image.test/goods/CAMEUEP02MG/main.png");
+		assertThat(result.getGroupGoods().get(0).getFirstImgUrl()).isEqualTo("https://image.test/goods/CAMEUEP01BL/group.png");
+		assertThat(result.getSizes().get(0).isSoldOut()).isTrue();
+		assertThat(result.getSizes().get(1).isSoldOut()).isFalse();
+		assertThat(result.getCoupons()).extracting(ShopGoodsCouponVO::getCpnNo).containsExactly(1L);
+		assertThat(result.getDetailDesc().getPcDesc()).isEqualTo("<p>PC 상세</p>");
+		assertThat(result.getDetailDesc().getMoDesc()).isEqualTo("<p>MO 상세</p>");
+		assertThat(result.getGoods().getBrandLogoPath()).isEqualTo("https://image.test/brand/logo.png");
+		assertThat(result.getGoods().getBrandNoti()).isEqualTo("<p>브랜드 공지</p>");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 상품상세 조회 시 고객등급이 없으면 WELCOME 적립률을 사용한다")
+	// 고객등급 쿠키가 없는 경우 기본 등급 기준 포인트가 계산되는지 검증합니다.
+	void getShopGoodsDetail_usesWelcomeGradeWhenCustGradeMissing() {
+		// 최소 상품 테스트 데이터를 구성합니다.
+		ShopGoodsBasicVO goods = new ShopGoodsBasicVO();
+		goods.setGoodsId("GOODS001");
+		goods.setGoodsNm("기본 상품");
+		goods.setGoodsGroupId("");
+		goods.setSaleAmt(10000);
+		goods.setSupplyAmt(10000);
+
+		// 매퍼 기본 응답을 설정합니다.
+		when(goodsMapper.getShopGoodsBasic("GOODS001")).thenReturn(goods);
+		when(goodsMapper.getShopGoodsImageList("GOODS001")).thenReturn(List.of());
+		when(goodsMapper.getShopGoodsSizeList("GOODS001")).thenReturn(List.of());
+		when(goodsMapper.getShopGoodsDescItemList("GOODS001")).thenReturn(List.of());
+		when(goodsMapper.getShopGoodsSiteInfo("xodud1202")).thenReturn(null);
+		when(goodsMapper.getShopPointSaveRateByCustGradeCd("CUST_GRADE_01")).thenReturn(2);
+		when(goodsMapper.getShopActiveGoodsCouponList()).thenReturn(List.of());
+
+		// 고객등급 없이 상품상세를 조회합니다.
+		ShopGoodsDetailVO result = goodsService.getShopGoodsDetail("GOODS001", null, null);
+
+		// WELCOME 등급 기준 포인트 계산 결과를 검증합니다.
+		assertThat(result).isNotNull();
+		assertThat(result.getPointSummary().getCustGradeCd()).isEqualTo("CUST_GRADE_01");
+		assertThat(result.getPointSummary().getPointSaveRate()).isEqualTo(2);
+		assertThat(result.getPointSummary().getExpectedPoint()).isEqualTo(200);
+		assertThat(result.getWishlist().isWished()).isFalse();
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 상품상세 조회 시 상품 기본 정보가 없으면 null을 반환한다")
+	// 조회 가능한 상품이 없을 때 null 반환으로 404 처리 가능한지 검증합니다.
+	void getShopGoodsDetail_returnsNullWhenGoodsMissing() {
+		// 상품 기본 정보를 찾지 못한 상황을 목으로 설정합니다.
+		when(goodsMapper.getShopGoodsBasic("NOT_FOUND")).thenReturn(null);
+
+		// 상품상세 조회 결과가 null인지 확인합니다.
+		assertThat(goodsService.getShopGoodsDetail("NOT_FOUND", null, null)).isNull();
 	}
 
 	// 테스트용 카테고리 계층 목 데이터를 구성합니다.

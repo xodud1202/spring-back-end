@@ -416,6 +416,180 @@
 		 LIMIT #{pageSize} OFFSET #{offset}
 	</select>
 
+	<select id="getShopGoodsBasic" resultType="com.xodud1202.springbackend.domain.shop.goods.ShopGoodsBasicVO">
+		/* GoodsMapper.getShopGoodsBasic: 쇼핑몰 상품상세 기본 상품 정보 조회 */
+		SELECT GB.GOODS_ID
+		     , GB.GOODS_NM
+		     , GB.GOODS_GROUP_ID
+		     , GB.BRAND_NO
+		     , BB.BRAND_NM
+		     , BB.BRAND_LOGO_PATH
+		     , BB.BRAND_NOTI
+		     , GB.ERP_COLOR_CD
+		     , GC.COLOR_NM
+		     , GC.COLOR_RGB
+		     , GB.SUPPLY_AMT
+		     , GB.SALE_AMT
+		     , GB.SHOW_YN
+		     , GB.GOODS_STAT_CD
+		  FROM GOODS_BASE GB
+		  LEFT JOIN BRAND_BASE BB
+		    ON BB.BRAND_NO = GB.BRAND_NO
+		  LEFT JOIN GOODS_COLOR GC
+		    ON GC.ERP_COLOR_CD = GB.ERP_COLOR_CD
+		 WHERE GB.GOODS_ID = #{goodsId}
+		   AND GB.SHOW_YN = 'Y'
+		   AND GB.GOODS_STAT_CD = 'GOODS_STAT_02'
+		 LIMIT 1
+	</select>
+
+	<select id="getShopGoodsImageList" resultType="com.xodud1202.springbackend.domain.shop.goods.ShopGoodsImageVO">
+		/* GoodsMapper.getShopGoodsImageList: 쇼핑몰 상품상세 이미지 목록 조회 */
+		SELECT IMG_NO
+		     , GOODS_ID
+		     , DISP_ORD
+		     , IMG_PATH
+		  FROM GOODS_IMG
+		 WHERE GOODS_ID = #{goodsId}
+		 ORDER BY DISP_ORD ASC, IMG_NO ASC
+	</select>
+
+	<select id="getShopGoodsSizeList" resultType="com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSizeItemVO">
+		/* GoodsMapper.getShopGoodsSizeList: 쇼핑몰 상품상세 사이즈/재고 목록 조회 */
+		SELECT GOODS_ID
+		     , SIZE_ID
+		     , STOCK_QTY
+		     , ADD_AMT
+		     , DISP_ORD
+		  FROM GOODS_SIZE
+		 WHERE GOODS_ID = #{goodsId}
+		   AND DEL_YN = 'N'
+		 ORDER BY DISP_ORD ASC, SIZE_ID ASC
+	</select>
+
+	<select id="getShopGoodsGroupItemList" resultType="com.xodud1202.springbackend.domain.shop.goods.ShopGoodsGroupItemVO">
+		/* GoodsMapper.getShopGoodsGroupItemList: 쇼핑몰 상품상세 동일 그룹 상품 목록 조회 */
+		SELECT GB.GOODS_ID
+		     , GB.ERP_COLOR_CD
+		     , GC.COLOR_NM
+		     , GC.COLOR_RGB
+		     , (
+		         SELECT GI.IMG_PATH
+		           FROM GOODS_IMG GI
+		          WHERE GI.GOODS_ID = GB.GOODS_ID
+		          ORDER BY GI.DISP_ORD ASC, GI.IMG_NO ASC
+		          LIMIT 1
+		       ) AS FIRST_IMG_PATH
+		  FROM GOODS_BASE GB
+		  LEFT JOIN GOODS_COLOR GC
+		    ON GC.ERP_COLOR_CD = GB.ERP_COLOR_CD
+		 WHERE GB.GOODS_GROUP_ID = #{goodsGroupId}
+		   AND GB.SHOW_YN = 'Y'
+		   AND GB.GOODS_STAT_CD = 'GOODS_STAT_02'
+		 ORDER BY GB.GOODS_ID ASC
+	</select>
+
+	<select id="getShopGoodsDescItemList" resultType="com.xodud1202.springbackend.domain.shop.goods.ShopGoodsDescItemVO">
+		/* GoodsMapper.getShopGoodsDescItemList: 쇼핑몰 상품상세 기기별 설명 목록 조회 */
+		SELECT GOODS_ID
+		     , DEVICE_GB_CD
+		     , GOODS_DESC
+		  FROM GOODS_DESC
+		 WHERE GOODS_ID = #{goodsId}
+		 ORDER BY DEVICE_GB_CD ASC
+	</select>
+
+	<select id="countShopWishList" resultType="int">
+		/* GoodsMapper.countShopWishList: 쇼핑몰 상품 위시리스트 등록 여부 건수 조회 */
+		SELECT COUNT(1)
+		  FROM WISH_LIST
+		 WHERE CUST_NO = #{custNo}
+		   AND GOODS_ID = #{goodsId}
+	</select>
+
+	<select id="getShopGoodsSiteInfo" resultType="com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSiteInfoVO">
+		/* GoodsMapper.getShopGoodsSiteInfo: 쇼핑몰 상품상세 사이트 배송 기준 정보 조회 */
+		SELECT SITE_ID
+		     , SITE_NM
+		     , DELIVERY_FEE
+		     , DELIVERY_FEE_LIMIT
+		  FROM SITE_INFO
+		 WHERE SITE_ID = #{siteId}
+		 LIMIT 1
+	</select>
+
+	<select id="getShopPointSaveRateByCustGradeCd" resultType="int">
+		/* GoodsMapper.getShopPointSaveRateByCustGradeCd: 고객등급별 포인트 적립률 조회 */
+		SELECT POINT_SAVE_RATE
+		  FROM CUSTOMER_GRADE_BENEFIT
+		 WHERE CUST_GRADE_CD = #{custGradeCd}
+		 LIMIT 1
+	</select>
+
+	<select id="getShopGoodsCategoryIdList" resultType="java.lang.String">
+		/* GoodsMapper.getShopGoodsCategoryIdList: 상품의 카테고리 코드 목록 조회 */
+		SELECT CATEGORY_ID
+		  FROM CATEGORY_GOODS
+		 WHERE GOODS_ID = #{goodsId}
+		 ORDER BY CATEGORY_ID ASC
+	</select>
+
+	<select id="getShopGoodsExhibitionTabNoList" resultType="java.lang.String">
+		/* GoodsMapper.getShopGoodsExhibitionTabNoList: 상품의 기획전 탭 번호 목록 조회 */
+		SELECT CAST(EXHIBITION_TAB_NO AS CHAR) AS EXHIBITION_TAB_NO
+		  FROM EXHIBITION_TAB_GOODS
+		 WHERE GOODS_ID = #{goodsId}
+		   AND VIEW_YN = 'Y'
+		 ORDER BY EXHIBITION_TAB_NO ASC
+	</select>
+
+	<select id="getShopActiveGoodsCouponList" resultType="com.xodud1202.springbackend.domain.shop.goods.ShopGoodsCouponVO">
+		/* GoodsMapper.getShopActiveGoodsCouponList: 다운로드 가능한 상품쿠폰 목록 조회 */
+		SELECT CB.CPN_NO
+		     , CB.CPN_NM
+		     , CB.CPN_STAT_CD
+		     , CB.CPN_GB_CD
+		     , CB.CPN_TARGET_CD
+		     , CB.CPN_DC_GB_CD
+		     , CB.CPN_DC_VAL
+		     , CASE
+		         WHEN CB.CPN_DOWN_START_DT IS NULL OR CB.CPN_DOWN_START_DT = '0000-00-00 00:00:00' THEN NULL
+		         ELSE DATE_FORMAT(CB.CPN_DOWN_START_DT, '%Y-%m-%d %H:%i:%s')
+		       END AS CPN_DOWN_START_DT
+		     , CASE
+		         WHEN CB.CPN_DOWN_END_DT IS NULL OR CB.CPN_DOWN_END_DT = '0000-00-00 00:00:00' THEN NULL
+		         ELSE DATE_FORMAT(CB.CPN_DOWN_END_DT, '%Y-%m-%d %H:%i:%s')
+		       END AS CPN_DOWN_END_DT
+		     , CB.CPN_USE_DT_GB
+		     , CB.CPN_USABLE_DT
+		     , CASE
+		         WHEN CB.CPN_USE_START_DT IS NULL OR CB.CPN_USE_START_DT = '0000-00-00 00:00:00' THEN NULL
+		         ELSE DATE_FORMAT(CB.CPN_USE_START_DT, '%Y-%m-%d %H:%i:%s')
+		       END AS CPN_USE_START_DT
+		     , CASE
+		         WHEN CB.CPN_USE_END_DT IS NULL OR CB.CPN_USE_END_DT = '0000-00-00 00:00:00' THEN NULL
+		         ELSE DATE_FORMAT(CB.CPN_USE_END_DT, '%Y-%m-%d %H:%i:%s')
+		       END AS CPN_USE_END_DT
+		  FROM COUPON_BASE CB
+		 WHERE IFNULL(CB.DEL_YN, 'N') = 'N'
+		   AND CB.CPN_STAT_CD = 'CPN_STAT_02'
+		   AND CB.CPN_GB_CD = 'CPN_GB_01'
+		   AND IFNULL(CB.CPN_DOWN_ABLE_YN, 'Y') = 'Y'
+		   AND NOW() &gt;= IFNULL(NULLIF(CB.CPN_DOWN_START_DT, '0000-00-00 00:00:00'), '1000-01-01 00:00:00')
+		   AND NOW() &lt;= IFNULL(NULLIF(CB.CPN_DOWN_END_DT, '0000-00-00 00:00:00'), '9999-12-31 23:59:59')
+		 ORDER BY CB.CPN_NO DESC
+	</select>
+
+	<select id="getShopCouponTargetList" resultType="com.xodud1202.springbackend.domain.shop.goods.ShopGoodsCouponTargetVO">
+		/* GoodsMapper.getShopCouponTargetList: 상품쿠폰 적용/제외 대상 목록 조회 */
+		SELECT CPN_NO
+		     , TARGET_GB_CD
+		     , TARGET_VALUE
+		  FROM COUPON_TARGET
+		 WHERE CPN_NO = #{cpnNo}
+		 ORDER BY TARGET_GB_CD ASC, TARGET_VALUE ASC
+	</select>
+
 	<insert id="insertCategoryGoods">
 		/* GoodsMapper.insertCategoryGoods: 카테고리 상품 등록 */
 		INSERT INTO CATEGORY_GOODS (

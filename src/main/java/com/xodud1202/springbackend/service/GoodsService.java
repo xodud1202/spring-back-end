@@ -12,6 +12,20 @@ import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsSavePO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsVO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
 import com.xodud1202.springbackend.domain.shop.category.ShopCategoryGoodsItemVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsBasicVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsCouponTargetVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsCouponVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsDescItemVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsDescVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsDetailVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsGroupItemVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsImageVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsPointSummaryVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsPriceSummaryVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsShippingSummaryVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSiteInfoVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSizeItemVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsWishlistVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryVO;
@@ -48,9 +62,11 @@ import java.io.ByteArrayOutputStream;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -60,6 +76,15 @@ public class GoodsService {
 	private final FtpFileService ftpFileService;
 	private static final int GOODS_IMAGE_MIN_SIZE = 500;
 	private static final int GOODS_IMAGE_MAX_SIZE = 1500;
+	private static final String SHOP_SITE_ID = "xodud1202";
+	private static final String DEFAULT_CUST_GRADE_CD = "CUST_GRADE_01";
+	private static final String TARGET_GB_APPLY = "TARGET_GB_01";
+	private static final String TARGET_GB_EXCLUDE = "TARGET_GB_02";
+	private static final String CPN_TARGET_ALL = "CPN_TARGET_99";
+	private static final String CPN_TARGET_GOODS = "CPN_TARGET_01";
+	private static final String CPN_TARGET_BRAND = "CPN_TARGET_04";
+	private static final String CPN_TARGET_CATEGORY = "CPN_TARGET_03";
+	private static final String CPN_TARGET_EXHIBITION = "CPN_TARGET_02";
 
 	// 관리자 상품 목록을 페이징 조건으로 조회합니다.
 	public Map<String, Object> getAdminGoodsList(GoodsPO param) {
@@ -554,6 +579,358 @@ public class GoodsService {
 		// 상품 이미지 URL을 세팅합니다.
 		applyShopCategoryGoodsImageUrls(list);
 		return list;
+	}
+
+	// 쇼핑몰 상품상세 상단 렌더링에 필요한 데이터를 조회합니다.
+	public ShopGoodsDetailVO getShopGoodsDetail(String goodsId, Long custNo, String custGradeCd) {
+		// 상품 코드가 없으면 조회하지 않습니다.
+		if (isBlank(goodsId)) {
+			return null;
+		}
+
+		// 판매중/노출중 상품 기본 정보를 조회합니다.
+		ShopGoodsBasicVO goods = goodsMapper.getShopGoodsBasic(goodsId.trim());
+		if (goods == null) {
+			return null;
+		}
+
+		// 상품 이미지/사이즈/그룹상품/상세설명 데이터를 조회합니다.
+		List<ShopGoodsImageVO> imageList = goodsMapper.getShopGoodsImageList(goods.getGoodsId());
+		List<ShopGoodsSizeItemVO> sizeList = goodsMapper.getShopGoodsSizeList(goods.getGoodsId());
+		List<ShopGoodsGroupItemVO> groupGoodsList = isBlank(goods.getGoodsGroupId())
+			? List.of()
+			: goodsMapper.getShopGoodsGroupItemList(goods.getGoodsGroupId());
+		List<ShopGoodsDescItemVO> goodsDescItemList = goodsMapper.getShopGoodsDescItemList(goods.getGoodsId());
+
+		// 화면에서 바로 사용할 수 있도록 URL/품절 상태를 보정합니다.
+		applyShopGoodsImageUrlList(imageList);
+		applyShopGoodsGroupItemImageUrlList(groupGoodsList);
+		applyShopGoodsSizeSoldOutState(sizeList);
+
+		// 위시리스트/사이트정보/가격/포인트/배송비/상품쿠폰 정보를 계산합니다.
+		ShopGoodsWishlistVO wishlist = buildShopGoodsWishlist(custNo, goods.getGoodsId());
+		ShopGoodsSiteInfoVO siteInfo = resolveShopGoodsSiteInfo();
+		ShopGoodsPriceSummaryVO priceSummary = buildShopGoodsPriceSummary(goods);
+		ShopGoodsPointSummaryVO pointSummary = buildShopGoodsPointSummary(goods, custGradeCd);
+		ShopGoodsShippingSummaryVO shippingSummary = buildShopGoodsShippingSummary(goods, siteInfo);
+		List<ShopGoodsCouponVO> couponList = filterAvailableShopGoodsCouponList(goods.getGoodsId(), goods.getBrandNo());
+
+		// 응답 객체를 구성해 반환합니다.
+		ShopGoodsDetailVO result = new ShopGoodsDetailVO();
+		result.setGoods(goods);
+		result.setImages(imageList == null ? List.of() : imageList);
+		result.setGroupGoods(groupGoodsList == null ? List.of() : groupGoodsList);
+		result.setSizes(sizeList == null ? List.of() : sizeList);
+		result.setDetailDesc(buildShopGoodsDesc(goodsDescItemList));
+		result.setWishlist(wishlist);
+		result.setSiteInfo(siteInfo);
+		result.setCoupons(couponList);
+		result.setPriceSummary(priceSummary);
+		result.setPointSummary(pointSummary);
+		result.setShippingSummary(shippingSummary);
+		return result;
+	}
+
+	// 쇼핑몰 상품 위시리스트 상태를 계산합니다.
+	private ShopGoodsWishlistVO buildShopGoodsWishlist(Long custNo, String goodsId) {
+		// 기본값은 비등록 상태로 반환합니다.
+		ShopGoodsWishlistVO result = new ShopGoodsWishlistVO();
+		result.setWished(false);
+		if (custNo == null || custNo < 1 || isBlank(goodsId)) {
+			return result;
+		}
+
+		// 로그인 고객의 위시리스트 등록 여부를 조회합니다.
+		result.setWished(goodsMapper.countShopWishList(custNo, goodsId) > 0);
+		return result;
+	}
+
+	// 쇼핑몰 상품상세의 사이트 배송 기준 정보를 조회합니다.
+	private ShopGoodsSiteInfoVO resolveShopGoodsSiteInfo() {
+		// 사이트 아이디 기준 배송 기준 정보를 조회합니다.
+		ShopGoodsSiteInfoVO siteInfo = goodsMapper.getShopGoodsSiteInfo(SHOP_SITE_ID);
+		if (siteInfo != null) {
+			return siteInfo;
+		}
+
+		// 데이터가 없으면 기본값을 반환합니다.
+		ShopGoodsSiteInfoVO fallback = new ShopGoodsSiteInfoVO();
+		fallback.setSiteId(SHOP_SITE_ID);
+		fallback.setSiteNm("");
+		fallback.setDeliveryFee(0);
+		fallback.setDeliveryFeeLimit(0);
+		return fallback;
+	}
+
+	// 쇼핑몰 상품상세 가격 요약 정보를 계산합니다.
+	private ShopGoodsPriceSummaryVO buildShopGoodsPriceSummary(ShopGoodsBasicVO goods) {
+		// 공급가/판매가를 안전한 값으로 보정합니다.
+		int supplyAmt = goods != null && goods.getSupplyAmt() != null ? Math.max(goods.getSupplyAmt(), 0) : 0;
+		int saleAmt = goods != null && goods.getSaleAmt() != null ? Math.max(goods.getSaleAmt(), 0) : 0;
+		boolean showSupplyStrike = supplyAmt > saleAmt;
+
+		// 할인율은 소수점 버림 정수로 계산합니다.
+		int discountRate = 0;
+		if (showSupplyStrike && supplyAmt > 0) {
+			discountRate = (int) Math.floor(((double) (supplyAmt - saleAmt) / (double) supplyAmt) * 100.0d);
+		}
+
+		// 가격 요약 정보를 구성합니다.
+		ShopGoodsPriceSummaryVO result = new ShopGoodsPriceSummaryVO();
+		result.setSupplyAmt(supplyAmt);
+		result.setSaleAmt(saleAmt);
+		result.setShowSupplyStrike(showSupplyStrike);
+		result.setDiscountRate(Math.max(discountRate, 0));
+		return result;
+	}
+
+	// 쇼핑몰 상품상세 예정 포인트 정보를 계산합니다.
+	private ShopGoodsPointSummaryVO buildShopGoodsPointSummary(ShopGoodsBasicVO goods, String custGradeCd) {
+		// 고객등급 기준 적립률을 조회합니다.
+		String resolvedCustGradeCd = resolveCustGradeCd(custGradeCd);
+		int pointSaveRate = resolveShopPointSaveRate(resolvedCustGradeCd);
+
+		// 판매가 기준 예정 포인트를 계산합니다.
+		int saleAmt = goods != null && goods.getSaleAmt() != null ? Math.max(goods.getSaleAmt(), 0) : 0;
+		int expectedPoint = (int) ((long) saleAmt * (long) pointSaveRate / 100L);
+
+		// 포인트 요약 정보를 구성합니다.
+		ShopGoodsPointSummaryVO result = new ShopGoodsPointSummaryVO();
+		result.setCustGradeCd(resolvedCustGradeCd);
+		result.setPointSaveRate(pointSaveRate);
+		result.setExpectedPoint(Math.max(expectedPoint, 0));
+		return result;
+	}
+
+	// 쇼핑몰 상품상세 배송비 요약 정보를 계산합니다.
+	private ShopGoodsShippingSummaryVO buildShopGoodsShippingSummary(ShopGoodsBasicVO goods, ShopGoodsSiteInfoVO siteInfo) {
+		// 판매가/배송비/무료배송 기준 금액을 안전한 값으로 보정합니다.
+		int saleAmt = goods != null && goods.getSaleAmt() != null ? Math.max(goods.getSaleAmt(), 0) : 0;
+		int deliveryFee = siteInfo != null && siteInfo.getDeliveryFee() != null ? Math.max(siteInfo.getDeliveryFee(), 0) : 0;
+		int deliveryFeeLimit = siteInfo != null && siteInfo.getDeliveryFeeLimit() != null ? Math.max(siteInfo.getDeliveryFeeLimit(), 0) : 0;
+
+		// 판매가가 무료배송 기준보다 큰 경우 무료배송으로 계산합니다.
+		boolean isFreeDelivery = saleAmt > deliveryFeeLimit;
+		String shippingMessage = isFreeDelivery
+			? "무료배송"
+			: String.format("%,d원 (%,d원 이상 구매시 무료 배송)", deliveryFee, deliveryFeeLimit);
+
+		// 배송비 요약 정보를 구성합니다.
+		ShopGoodsShippingSummaryVO result = new ShopGoodsShippingSummaryVO();
+		result.setFreeDelivery(isFreeDelivery);
+		result.setDeliveryFee(deliveryFee);
+		result.setDeliveryFeeLimit(deliveryFeeLimit);
+		result.setShippingMessage(shippingMessage);
+		return result;
+	}
+
+	// 쇼핑몰 상품상세 쿠폰 목록에서 사용 가능한 상품쿠폰만 필터링합니다.
+	private List<ShopGoodsCouponVO> filterAvailableShopGoodsCouponList(String goodsId, Integer brandNo) {
+		// 활성 상품쿠폰 원본 목록이 없으면 빈 목록을 반환합니다.
+		List<ShopGoodsCouponVO> sourceCouponList = goodsMapper.getShopActiveGoodsCouponList();
+		if (sourceCouponList == null || sourceCouponList.isEmpty() || isBlank(goodsId)) {
+			return List.of();
+		}
+
+		// 쿠폰 타겟 매칭용 상품 기준값을 조회합니다.
+		String brandNoValue = brandNo == null ? null : String.valueOf(brandNo);
+		Set<String> categoryIdSet = toSafeStringSet(goodsMapper.getShopGoodsCategoryIdList(goodsId));
+		Set<String> exhibitionTabNoSet = toSafeStringSet(goodsMapper.getShopGoodsExhibitionTabNoList(goodsId));
+
+		// 쿠폰 타겟(적용/제외) 매칭 결과를 기준으로 목록을 필터링합니다.
+		List<ShopGoodsCouponVO> resultList = new ArrayList<>();
+		for (ShopGoodsCouponVO coupon : sourceCouponList) {
+			if (coupon == null || coupon.getCpnNo() == null) {
+				continue;
+			}
+			List<ShopGoodsCouponTargetVO> targetList = goodsMapper.getShopCouponTargetList(coupon.getCpnNo());
+			if (isMatchedShopGoodsCoupon(coupon, targetList, goodsId, brandNoValue, categoryIdSet, exhibitionTabNoSet)) {
+				resultList.add(coupon);
+			}
+		}
+		return resultList;
+	}
+
+	// 쿠폰 1건이 현재 상품에 적용 가능한지 판정합니다.
+	private boolean isMatchedShopGoodsCoupon(
+		ShopGoodsCouponVO coupon,
+		List<ShopGoodsCouponTargetVO> targetList,
+		String goodsId,
+		String brandNoValue,
+		Set<String> categoryIdSet,
+		Set<String> exhibitionTabNoSet
+	) {
+		// 쿠폰 타겟 기준으로 적용 여부를 계산합니다.
+		String cpnTargetCd = coupon.getCpnTargetCd();
+		boolean applied = false;
+		if (CPN_TARGET_ALL.equals(cpnTargetCd)) {
+			applied = true;
+		} else if (CPN_TARGET_GOODS.equals(cpnTargetCd)) {
+			applied = hasCouponApplyTarget(targetList, goodsId);
+		} else if (CPN_TARGET_BRAND.equals(cpnTargetCd)) {
+			applied = hasCouponApplyTarget(targetList, brandNoValue);
+		} else if (CPN_TARGET_CATEGORY.equals(cpnTargetCd)) {
+			applied = hasCouponApplyAnyTarget(targetList, categoryIdSet);
+		} else if (CPN_TARGET_EXHIBITION.equals(cpnTargetCd)) {
+			applied = hasCouponApplyAnyTarget(targetList, exhibitionTabNoSet);
+		}
+		if (!applied) {
+			return false;
+		}
+
+		// 상품 제외 타겟이 존재하면 미적용 처리합니다.
+		return !hasCouponExcludeTarget(targetList, goodsId);
+	}
+
+	// 쿠폰 적용 타겟이 단일 값과 일치하는지 확인합니다.
+	private boolean hasCouponApplyTarget(List<ShopGoodsCouponTargetVO> targetList, String expectedValue) {
+		// 비교값이 없으면 매칭하지 않습니다.
+		if (isBlank(expectedValue) || targetList == null || targetList.isEmpty()) {
+			return false;
+		}
+		for (ShopGoodsCouponTargetVO target : targetList) {
+			if (target == null) {
+				continue;
+			}
+			if (TARGET_GB_APPLY.equals(target.getTargetGbCd()) && expectedValue.equals(target.getTargetValue())) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// 쿠폰 적용 타겟이 다중 후보값 중 하나와 일치하는지 확인합니다.
+	private boolean hasCouponApplyAnyTarget(List<ShopGoodsCouponTargetVO> targetList, Set<String> candidateValueSet) {
+		// 비교 후보가 없으면 매칭하지 않습니다.
+		if (candidateValueSet == null || candidateValueSet.isEmpty() || targetList == null || targetList.isEmpty()) {
+			return false;
+		}
+		for (ShopGoodsCouponTargetVO target : targetList) {
+			if (target == null || !TARGET_GB_APPLY.equals(target.getTargetGbCd())) {
+				continue;
+			}
+			if (candidateValueSet.contains(target.getTargetValue())) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// 쿠폰 제외 타겟에 현재 상품코드가 포함되는지 확인합니다.
+	private boolean hasCouponExcludeTarget(List<ShopGoodsCouponTargetVO> targetList, String goodsId) {
+		// 상품코드가 없으면 제외 판정을 수행하지 않습니다.
+		if (isBlank(goodsId) || targetList == null || targetList.isEmpty()) {
+			return false;
+		}
+		for (ShopGoodsCouponTargetVO target : targetList) {
+			if (target == null) {
+				continue;
+			}
+			if (TARGET_GB_EXCLUDE.equals(target.getTargetGbCd()) && goodsId.equals(target.getTargetValue())) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// 기기별 상세설명 원본 목록을 PC/MO 응답 형태로 변환합니다.
+	private ShopGoodsDescVO buildShopGoodsDesc(List<ShopGoodsDescItemVO> descItemList) {
+		// 기본값은 빈 문자열로 반환합니다.
+		ShopGoodsDescVO result = new ShopGoodsDescVO();
+		result.setPcDesc("");
+		result.setMoDesc("");
+		if (descItemList == null || descItemList.isEmpty()) {
+			return result;
+		}
+
+		// 디바이스 구분 코드 기준으로 상세설명을 매핑합니다.
+		for (ShopGoodsDescItemVO item : descItemList) {
+			if (item == null || isBlank(item.getDeviceGbCd())) {
+				continue;
+			}
+			if ("PC".equals(item.getDeviceGbCd())) {
+				result.setPcDesc(item.getGoodsDesc() == null ? "" : item.getGoodsDesc());
+				continue;
+			}
+			if ("MO".equals(item.getDeviceGbCd())) {
+				result.setMoDesc(item.getGoodsDesc() == null ? "" : item.getGoodsDesc());
+			}
+		}
+		return result;
+	}
+
+	// 고객등급 코드를 화면 계산용 기본값 규칙으로 보정합니다.
+	private String resolveCustGradeCd(String custGradeCd) {
+		// 쿠키 고객등급이 비어있으면 WELCOME 등급을 기본값으로 사용합니다.
+		if (isBlank(custGradeCd)) {
+			return DEFAULT_CUST_GRADE_CD;
+		}
+		return custGradeCd.trim();
+	}
+
+	// 고객등급별 포인트 적립률을 조회하고 기본값으로 보정합니다.
+	private int resolveShopPointSaveRate(String custGradeCd) {
+		// 지정 등급의 적립률을 조회합니다.
+		Integer pointSaveRate = goodsMapper.getShopPointSaveRateByCustGradeCd(custGradeCd);
+		if (pointSaveRate != null && pointSaveRate >= 0) {
+			return pointSaveRate;
+		}
+
+		// 지정 등급이 없으면 WELCOME 등급 적립률로 재조회합니다.
+		Integer defaultPointSaveRate = goodsMapper.getShopPointSaveRateByCustGradeCd(DEFAULT_CUST_GRADE_CD);
+		if (defaultPointSaveRate != null && defaultPointSaveRate >= 0) {
+			return defaultPointSaveRate;
+		}
+		return 0;
+	}
+
+	// 상품상세 이미지 목록의 표시용 URL을 보정합니다.
+	private void applyShopGoodsImageUrlList(List<ShopGoodsImageVO> imageList) {
+		if (imageList == null || imageList.isEmpty()) {
+			return;
+		}
+		for (ShopGoodsImageVO item : imageList) {
+			if (item == null) {
+				continue;
+			}
+			item.setImgUrl(resolveShopGoodsImageUrl(item.getGoodsId(), item.getImgPath()));
+		}
+	}
+
+	// 그룹상품 목록의 대표 이미지 URL을 보정합니다.
+	private void applyShopGoodsGroupItemImageUrlList(List<ShopGoodsGroupItemVO> groupGoodsList) {
+		if (groupGoodsList == null || groupGoodsList.isEmpty()) {
+			return;
+		}
+		for (ShopGoodsGroupItemVO item : groupGoodsList) {
+			if (item == null) {
+				continue;
+			}
+			item.setFirstImgUrl(resolveShopGoodsImageUrl(item.getGoodsId(), item.getFirstImgPath()));
+		}
+	}
+
+	// 사이즈 목록의 품절 여부 상태를 계산합니다.
+	private void applyShopGoodsSizeSoldOutState(List<ShopGoodsSizeItemVO> sizeList) {
+		if (sizeList == null || sizeList.isEmpty()) {
+			return;
+		}
+		for (ShopGoodsSizeItemVO size : sizeList) {
+			if (size == null) {
+				continue;
+			}
+			int stockQty = size.getStockQty() == null ? 0 : size.getStockQty();
+			size.setSoldOut(stockQty <= 0);
+		}
+	}
+
+	// 문자열 목록을 null 안전한 Set으로 변환합니다.
+	private Set<String> toSafeStringSet(List<String> sourceList) {
+		// 원본 목록이 없으면 빈 Set을 반환합니다.
+		if (sourceList == null || sourceList.isEmpty()) {
+			return Set.of();
+		}
+		return new HashSet<>(sourceList);
 	}
 
 	// 카테고리 상품 정렬 순서 저장 요청을 검증합니다.

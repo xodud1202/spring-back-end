@@ -21,6 +21,14 @@ import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsSavePO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsVO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
 import com.xodud1202.springbackend.domain.shop.category.ShopCategoryGoodsItemVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsBasicVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsCouponTargetVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsCouponVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsDescItemVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsGroupItemVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsImageVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSiteInfoVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSizeItemVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -101,6 +109,42 @@ public interface GoodsMapper {
 		@Param("offset") int offset,
 		@Param("pageSize") int pageSize
 	);
+
+	// 쇼핑몰 상품상세 기본 상품 정보를 조회합니다.
+	ShopGoodsBasicVO getShopGoodsBasic(@Param("goodsId") String goodsId);
+
+	// 쇼핑몰 상품상세 이미지 목록을 조회합니다.
+	List<ShopGoodsImageVO> getShopGoodsImageList(@Param("goodsId") String goodsId);
+
+	// 쇼핑몰 상품상세 사이즈 목록을 조회합니다.
+	List<ShopGoodsSizeItemVO> getShopGoodsSizeList(@Param("goodsId") String goodsId);
+
+	// 쇼핑몰 상품상세 동일 그룹 상품 목록을 조회합니다.
+	List<ShopGoodsGroupItemVO> getShopGoodsGroupItemList(@Param("goodsGroupId") String goodsGroupId);
+
+	// 쇼핑몰 상품상세 기기별 설명 목록을 조회합니다.
+	List<ShopGoodsDescItemVO> getShopGoodsDescItemList(@Param("goodsId") String goodsId);
+
+	// 쇼핑몰 상품 위시리스트 등록 여부 건수를 조회합니다.
+	int countShopWishList(@Param("custNo") Long custNo, @Param("goodsId") String goodsId);
+
+	// 쇼핑몰 상품상세 사이트 배송 기준 정보를 조회합니다.
+	ShopGoodsSiteInfoVO getShopGoodsSiteInfo(@Param("siteId") String siteId);
+
+	// 고객등급별 포인트 적립률을 조회합니다.
+	Integer getShopPointSaveRateByCustGradeCd(@Param("custGradeCd") String custGradeCd);
+
+	// 상품의 카테고리 코드 목록을 조회합니다.
+	List<String> getShopGoodsCategoryIdList(@Param("goodsId") String goodsId);
+
+	// 상품의 기획전 탭 번호 목록을 조회합니다.
+	List<String> getShopGoodsExhibitionTabNoList(@Param("goodsId") String goodsId);
+
+	// 다운로드 가능한 상품쿠폰 목록을 조회합니다.
+	List<ShopGoodsCouponVO> getShopActiveGoodsCouponList();
+
+	// 상품쿠폰 대상(적용/제외) 목록을 조회합니다.
+	List<ShopGoodsCouponTargetVO> getShopCouponTargetList(@Param("cpnNo") Long cpnNo);
 
 	// 카테고리 상품 단건을 등록합니다.
 	int insertCategoryGoods(CategoryGoodsSavePO param);
