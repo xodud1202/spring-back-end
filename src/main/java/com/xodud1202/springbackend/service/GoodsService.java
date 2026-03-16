@@ -12,6 +12,13 @@ import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsSavePO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsVO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
 import com.xodud1202.springbackend.domain.shop.category.ShopCategoryGoodsItemVO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartDeleteItemPO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartDeletePO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartItemVO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartOptionUpdatePO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartPageVO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartSiteInfoVO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartSizeOptionVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsBasicVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsCouponTargetVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsCouponVO;
@@ -793,6 +800,237 @@ public class GoodsService {
 		return latestQty == null ? resolvedQty : latestQty;
 	}
 
+	// 쇼핑몰 장바구니 페이지 데이터를 조회합니다.
+	public ShopCartPageVO getShopCartPage(Long custNo) {
+		// 로그인 고객번호 유효성을 확인합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+
+		// 장바구니 목록과 배송비 기준 정보를 조회합니다.
+		List<ShopCartItemVO> cartItemList = goodsMapper.getShopCartItemList(custNo);
+		applyShopCartItemImageUrls(cartItemList);
+		Map<String, List<ShopCartSizeOptionVO>> sizeOptionMap = buildShopCartSizeOptionMap(cartItemList);
+		ShopCartSiteInfoVO siteInfo = resolveShopCartSiteInfo();
+
+		// 장바구니 행별 사이즈 옵션 목록을 매핑합니다.
+		for (ShopCartItemVO cartItem : cartItemList == null ? List.<ShopCartItemVO>of() : cartItemList) {
+			if (cartItem == null || isBlank(cartItem.getGoodsId())) {
+				continue;
+			}
+			String normalizedGoodsId = cartItem.getGoodsId().trim();
+			cartItem.setSizeOptions(sizeOptionMap.getOrDefault(normalizedGoodsId, List.of()));
+		}
+
+		// 장바구니 페이지 응답 객체를 구성합니다.
+		List<ShopCartItemVO> safeCartItemList = cartItemList == null ? List.of() : cartItemList;
+		ShopCartPageVO result = new ShopCartPageVO();
+		result.setCartList(safeCartItemList);
+		result.setCartCount(safeCartItemList.size());
+		result.setSiteInfo(siteInfo);
+		return result;
+	}
+
+	// 쇼핑몰 장바구니 상품별 사이즈 옵션 목록을 구성합니다.
+	private Map<String, List<ShopCartSizeOptionVO>> buildShopCartSizeOptionMap(List<ShopCartItemVO> cartItemList) {
+		// 장바구니 목록이 없으면 빈 매핑을 반환합니다.
+		Map<String, List<ShopCartSizeOptionVO>> sizeOptionMap = new HashMap<>();
+		if (cartItemList == null || cartItemList.isEmpty()) {
+			return sizeOptionMap;
+		}
+
+		// 상품코드별로 한 번씩만 사이즈 목록을 조회해 옵션으로 변환합니다.
+		for (ShopCartItemVO cartItem : cartItemList) {
+			if (cartItem == null || isBlank(cartItem.getGoodsId())) {
+				continue;
+			}
+			String normalizedGoodsId = cartItem.getGoodsId().trim();
+			if (sizeOptionMap.containsKey(normalizedGoodsId)) {
+				continue;
+			}
+
+			// 상품 사이즈 목록을 장바구니 옵션 응답 형식으로 변환합니다.
+			List<ShopGoodsSizeItemVO> sizeList = goodsMapper.getShopGoodsSizeList(normalizedGoodsId);
+			List<ShopCartSizeOptionVO> optionList = new ArrayList<>();
+			for (ShopGoodsSizeItemVO sizeItem : sizeList == null ? List.<ShopGoodsSizeItemVO>of() : sizeList) {
+				if (sizeItem == null || isBlank(sizeItem.getSizeId())) {
+					continue;
+				}
+				int stockQty = sizeItem.getStockQty() == null ? 0 : Math.max(sizeItem.getStockQty(), 0);
+				ShopCartSizeOptionVO option = new ShopCartSizeOptionVO();
+				option.setSizeId(sizeItem.getSizeId());
+				option.setStockQty(stockQty);
+				option.setSoldOut(stockQty < 1);
+				optionList.add(option);
+			}
+			sizeOptionMap.put(normalizedGoodsId, optionList);
+		}
+		return sizeOptionMap;
+	}
+
+	// 쇼핑몰 장바구니 상품 옵션(사이즈/수량)을 변경합니다.
+	@Transactional
+	public void updateShopCartOption(ShopCartOptionUpdatePO param, Long custNo) {
+		// 요청 데이터와 필수 입력값을 검증합니다.
+		if (param == null) {
+			throw new IllegalArgumentException("요청 데이터를 확인해주세요.");
+		}
+		if (isBlank(param.getGoodsId())) {
+			throw new IllegalArgumentException("상품코드를 확인해주세요.");
+		}
+		if (isBlank(param.getSizeId())) {
+			throw new IllegalArgumentException("변경 대상 사이즈를 확인해주세요.");
+		}
+		if (isBlank(param.getTargetSizeId())) {
+			throw new IllegalArgumentException("변경할 사이즈를 선택해주세요.");
+		}
+		if (param.getQty() == null || param.getQty() < 1) {
+			throw new IllegalArgumentException("수량을 확인해주세요.");
+		}
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+
+		// 변경 대상 장바구니 존재 여부를 확인합니다.
+		String normalizedGoodsId = param.getGoodsId().trim();
+		String normalizedSizeId = param.getSizeId().trim();
+		String normalizedTargetSizeId = param.getTargetSizeId().trim();
+		int resolvedQty = param.getQty();
+		if (goodsMapper.countShopCart(custNo, normalizedGoodsId, normalizedSizeId) < 1) {
+			throw new IllegalArgumentException("변경할 장바구니 상품을 찾을 수 없습니다.");
+		}
+
+		// 변경할 사이즈의 유효성/품절 상태를 확인합니다.
+		List<ShopGoodsSizeItemVO> sizeList = goodsMapper.getShopGoodsSizeList(normalizedGoodsId);
+		ShopGoodsSizeItemVO targetSize = findShopGoodsSizeBySizeId(sizeList, normalizedTargetSizeId);
+		if (targetSize == null) {
+			throw new IllegalArgumentException("사이즈를 확인해주세요.");
+		}
+		int stockQty = targetSize.getStockQty() == null ? 0 : targetSize.getStockQty();
+		if (stockQty < 1) {
+			throw new IllegalArgumentException("품절된 사이즈입니다.");
+		}
+
+		// 동일 사이즈 변경이면 수량만 수정합니다.
+		if (normalizedSizeId.equals(normalizedTargetSizeId)) {
+			int updatedCount = goodsMapper.updateShopCartQty(custNo, normalizedGoodsId, normalizedTargetSizeId, resolvedQty, custNo);
+			if (updatedCount < 1) {
+				throw new IllegalArgumentException("변경할 장바구니 상품을 찾을 수 없습니다.");
+			}
+			return;
+		}
+
+		// 목표 사이즈가 이미 있으면 수량을 병합하고 기존 행은 삭제합니다.
+		int existedTargetCount = goodsMapper.countShopCart(custNo, normalizedGoodsId, normalizedTargetSizeId);
+		if (existedTargetCount > 0) {
+			Integer existedTargetQty = goodsMapper.getShopCartQty(custNo, normalizedGoodsId, normalizedTargetSizeId);
+			int mergedQty = Math.max(existedTargetQty == null ? 0 : existedTargetQty, 0) + resolvedQty;
+			goodsMapper.updateShopCartQty(custNo, normalizedGoodsId, normalizedTargetSizeId, mergedQty, custNo);
+			goodsMapper.deleteShopCartItem(custNo, normalizedGoodsId, normalizedSizeId);
+			return;
+		}
+
+		// 목표 사이즈가 없으면 기존 행의 사이즈/수량을 직접 변경합니다.
+		int updatedCount = goodsMapper.updateShopCartOption(
+			custNo,
+			normalizedGoodsId,
+			normalizedSizeId,
+			normalizedTargetSizeId,
+			resolvedQty,
+			custNo
+		);
+		if (updatedCount < 1) {
+			throw new IllegalArgumentException("변경할 장바구니 상품을 찾을 수 없습니다.");
+		}
+	}
+
+	// 쇼핑몰 장바구니 선택 상품을 삭제합니다.
+	@Transactional
+	public int deleteShopCartItems(ShopCartDeletePO param, Long custNo) {
+		// 로그인 고객번호와 삭제 요청 목록 유효성을 확인합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+		if (param == null || param.getCartItemList() == null || param.getCartItemList().isEmpty()) {
+			throw new IllegalArgumentException("삭제할 상품을 선택해주세요.");
+		}
+
+		// 중복 선택된 키를 제거하며 장바구니 항목을 삭제합니다.
+		int deletedCount = 0;
+		Set<String> deletedKeySet = new HashSet<>();
+		for (ShopCartDeleteItemPO deleteItem : param.getCartItemList()) {
+			if (deleteItem == null) {
+				continue;
+			}
+			String normalizedGoodsId = deleteItem.getGoodsId() == null ? "" : deleteItem.getGoodsId().trim();
+			String normalizedSizeId = deleteItem.getSizeId() == null ? "" : deleteItem.getSizeId().trim();
+			if (normalizedGoodsId.isEmpty() || normalizedSizeId.isEmpty()) {
+				throw new IllegalArgumentException("삭제할 상품 정보를 확인해주세요.");
+			}
+
+			String deletedKey = normalizedGoodsId + "|" + normalizedSizeId;
+			if (deletedKeySet.contains(deletedKey)) {
+				continue;
+			}
+			deletedKeySet.add(deletedKey);
+			deletedCount += goodsMapper.deleteShopCartItem(custNo, normalizedGoodsId, normalizedSizeId);
+		}
+		if (deletedKeySet.isEmpty()) {
+			throw new IllegalArgumentException("삭제할 상품을 선택해주세요.");
+		}
+		return deletedCount;
+	}
+
+	// 쇼핑몰 장바구니 전체 상품을 삭제합니다.
+	@Transactional
+	public int deleteShopCartAll(Long custNo) {
+		// 로그인 고객번호 유효성을 확인합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+
+		// 장바구니 전체 삭제를 수행합니다.
+		return goodsMapper.deleteShopCartAll(custNo);
+	}
+
+	// 상품 사이즈 목록에서 지정한 사이즈코드와 일치하는 항목을 찾습니다.
+	private ShopGoodsSizeItemVO findShopGoodsSizeBySizeId(List<ShopGoodsSizeItemVO> sizeList, String sizeId) {
+		// 비교할 사이즈코드가 없으면 null을 반환합니다.
+		if (isBlank(sizeId) || sizeList == null || sizeList.isEmpty()) {
+			return null;
+		}
+
+		// 사이즈 목록을 순회하며 일치 항목을 반환합니다.
+		for (ShopGoodsSizeItemVO sizeItem : sizeList) {
+			if (sizeItem == null || isBlank(sizeItem.getSizeId())) {
+				continue;
+			}
+			if (sizeId.equals(sizeItem.getSizeId().trim())) {
+				return sizeItem;
+			}
+		}
+		return null;
+	}
+
+	// 쇼핑몰 장바구니 배송 기준 정보를 조회합니다.
+	private ShopCartSiteInfoVO resolveShopCartSiteInfo() {
+		// 사이트 아이디 기준 배송 기준 정보를 조회합니다.
+		ShopCartSiteInfoVO siteInfo = goodsMapper.getShopCartSiteInfo(SHOP_SITE_ID);
+		if (siteInfo != null) {
+			siteInfo.setSiteId(isBlank(siteInfo.getSiteId()) ? SHOP_SITE_ID : siteInfo.getSiteId());
+			siteInfo.setDeliveryFee(siteInfo.getDeliveryFee() == null ? 0 : Math.max(siteInfo.getDeliveryFee(), 0));
+			siteInfo.setDeliveryFeeLimit(siteInfo.getDeliveryFeeLimit() == null ? 0 : Math.max(siteInfo.getDeliveryFeeLimit(), 0));
+			return siteInfo;
+		}
+
+		// 데이터가 없으면 기본값을 반환합니다.
+		ShopCartSiteInfoVO fallback = new ShopCartSiteInfoVO();
+		fallback.setSiteId(SHOP_SITE_ID);
+		fallback.setDeliveryFee(0);
+		fallback.setDeliveryFeeLimit(0);
+		return fallback;
+	}
+
 	// 쇼핑몰 상품 위시리스트 상태를 계산합니다.
 	private ShopGoodsWishlistVO buildShopGoodsWishlist(Long custNo, String goodsId) {
 		// 기본값은 비등록 상태로 반환합니다.
@@ -1560,6 +1798,19 @@ public class GoodsService {
 			return;
 		}
 		for (ShopMypageWishGoodsItemVO item : list) {
+			if (item == null) {
+				continue;
+			}
+			item.setImgUrl(resolveShopGoodsImageUrl(item.getGoodsId(), item.getImgPath()));
+		}
+	}
+
+	// 쇼핑몰 장바구니 상품 목록에 이미지 URL을 세팅합니다.
+	private void applyShopCartItemImageUrls(List<ShopCartItemVO> list) {
+		if (list == null || list.isEmpty()) {
+			return;
+		}
+		for (ShopCartItemVO item : list) {
 			if (item == null) {
 				continue;
 			}

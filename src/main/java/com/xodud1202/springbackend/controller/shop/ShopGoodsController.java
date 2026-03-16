@@ -1,5 +1,8 @@
 package com.xodud1202.springbackend.controller.shop;
 
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartDeletePO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartOptionUpdatePO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartPageVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsDetailVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishPageVO;
 import com.xodud1202.springbackend.service.GoodsService;
@@ -202,6 +205,108 @@ public class ShopGoodsController {
 			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
 			log.error("쇼핑몰 장바구니 등록 실패 message={}", exception.getMessage(), exception);
 			return ResponseEntity.internalServerError().body(Map.of("message", "장바구니 처리에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 장바구니 페이지 데이터를 조회합니다.
+	@GetMapping("/api/shop/cart/page")
+	public ResponseEntity<Object> getShopCartPage(HttpServletRequest request) {
+		try {
+			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			// 장바구니 페이지 데이터를 조회해 반환합니다.
+			ShopCartPageVO result = goodsService.getShopCartPage(custNo);
+			return ResponseEntity.ok(result);
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
+			log.error("쇼핑몰 장바구니 페이지 조회 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "장바구니 조회에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 장바구니 옵션(사이즈/수량)을 변경합니다.
+	@PostMapping("/api/shop/cart/option/update")
+	public ResponseEntity<Object> updateShopCartOption(
+		@RequestBody(required = false) ShopCartOptionUpdatePO requestBody,
+		HttpServletRequest request
+	) {
+		try {
+			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			// 장바구니 옵션(사이즈/수량) 변경을 수행합니다.
+			goodsService.updateShopCartOption(requestBody, custNo);
+			return ResponseEntity.ok(Map.of("message", "장바구니 옵션을 변경했습니다."));
+		} catch (IllegalArgumentException exception) {
+			// 장바구니 대상 미존재는 404 응답으로 반환합니다.
+			if ("변경할 장바구니 상품을 찾을 수 없습니다.".equals(exception.getMessage())) {
+				return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", exception.getMessage()));
+			}
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
+			log.error("쇼핑몰 장바구니 옵션 변경 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "장바구니 옵션 변경에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 장바구니 선택 상품을 삭제합니다.
+	@PostMapping("/api/shop/cart/delete")
+	public ResponseEntity<Object> deleteShopCartItems(
+		@RequestBody(required = false) ShopCartDeletePO requestBody,
+		HttpServletRequest request
+	) {
+		try {
+			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			// 선택된 장바구니 상품을 삭제합니다.
+			int deletedCount = goodsService.deleteShopCartItems(requestBody, custNo);
+			return ResponseEntity.ok(Map.of("deletedCount", deletedCount, "message", "선택한 장바구니 상품을 삭제했습니다."));
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
+			log.error("쇼핑몰 장바구니 선택 삭제 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "장바구니 선택 삭제에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 장바구니 전체 상품을 삭제합니다.
+	@PostMapping("/api/shop/cart/delete/all")
+	public ResponseEntity<Object> deleteShopCartAll(HttpServletRequest request) {
+		try {
+			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			// 장바구니 전체 상품을 삭제합니다.
+			int deletedCount = goodsService.deleteShopCartAll(custNo);
+			return ResponseEntity.ok(Map.of("deletedCount", deletedCount, "message", "장바구니 상품을 전체 삭제했습니다."));
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
+			log.error("쇼핑몰 장바구니 전체 삭제 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "장바구니 전체 삭제에 실패했습니다."));
 		}
 	}
 

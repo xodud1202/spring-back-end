@@ -6,6 +6,12 @@ import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSavePO;
 import com.xodud1202.springbackend.domain.shop.category.ShopCategoryGoodsItemVO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartDeleteItemPO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartDeletePO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartItemVO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartOptionUpdatePO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartPageVO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartSiteInfoVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsBasicVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsCouponTargetVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsCouponVO;
@@ -493,6 +499,199 @@ class GoodsServiceTests {
 		assertThatThrownBy(() -> goodsService.addShopGoodsCart("GOODS003", "110", 1, 9L))
 			.isInstanceOf(IllegalArgumentException.class)
 			.hasMessage("사이즈를 확인해주세요.");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 장바구니 페이지 조회 시 이미지 URL, 사이즈 옵션, 배송비 기준 정보를 함께 반환한다")
+	// 장바구니 페이지 조회 시 화면 렌더링에 필요한 조합 데이터가 정상 구성되는지 검증합니다.
+	void getShopCartPage_returnsComposedCartPage() {
+		// 장바구니 목록 테스트 데이터를 구성합니다.
+		ShopCartItemVO cartItem = new ShopCartItemVO();
+		cartItem.setCustNo(7L);
+		cartItem.setGoodsId("GOODS001");
+		cartItem.setGoodsNm("테스트 상품");
+		cartItem.setSizeId("095");
+		cartItem.setQty(2);
+		cartItem.setSupplyAmt(20000);
+		cartItem.setSaleAmt(15000);
+		cartItem.setImgPath("cart-main.png");
+
+		ShopGoodsSizeItemVO size095 = new ShopGoodsSizeItemVO();
+		size095.setGoodsId("GOODS001");
+		size095.setSizeId("095");
+		size095.setStockQty(5);
+
+		ShopGoodsSizeItemVO size100 = new ShopGoodsSizeItemVO();
+		size100.setGoodsId("GOODS001");
+		size100.setSizeId("100");
+		size100.setStockQty(0);
+
+		ShopCartSiteInfoVO siteInfo = new ShopCartSiteInfoVO();
+		siteInfo.setSiteId("xodud1202");
+		siteInfo.setDeliveryFee(3000);
+		siteInfo.setDeliveryFeeLimit(30000);
+
+		// 매퍼/FTP 목 응답을 설정합니다.
+		when(goodsMapper.getShopCartItemList(7L)).thenReturn(List.of(cartItem));
+		when(goodsMapper.getShopGoodsSizeList("GOODS001")).thenReturn(List.of(size095, size100));
+		when(goodsMapper.getShopCartSiteInfo("xodud1202")).thenReturn(siteInfo);
+		when(ftpFileService.buildGoodsImageUrl("GOODS001", "cart-main.png"))
+			.thenReturn("https://image.test/goods/GOODS001/cart-main.png");
+
+		// 장바구니 페이지 조회 결과를 확인합니다.
+		ShopCartPageVO result = goodsService.getShopCartPage(7L);
+
+		// 이미지 URL/사이즈 옵션/배송비 기준 정보가 정상 구성되었는지 검증합니다.
+		assertThat(result).isNotNull();
+		assertThat(result.getCartCount()).isEqualTo(1);
+		assertThat(result.getSiteInfo().getDeliveryFee()).isEqualTo(3000);
+		assertThat(result.getSiteInfo().getDeliveryFeeLimit()).isEqualTo(30000);
+		assertThat(result.getCartList()).hasSize(1);
+		assertThat(result.getCartList().get(0).getImgUrl()).isEqualTo("https://image.test/goods/GOODS001/cart-main.png");
+		assertThat(result.getCartList().get(0).getSizeOptions()).hasSize(2);
+		assertThat(result.getCartList().get(0).getSizeOptions().get(0).isSoldOut()).isFalse();
+		assertThat(result.getCartList().get(0).getSizeOptions().get(1).isSoldOut()).isTrue();
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 장바구니 옵션 변경 시 목표 옵션이 이미 존재하면 수량을 병합하고 기존 행을 삭제한다")
+	// 장바구니 옵션 변경 시 동일 상품의 목표 사이즈 행이 있으면 병합 로직이 동작하는지 검증합니다.
+	void updateShopCartOption_mergesWhenTargetSizeExists() {
+		// 옵션 변경 요청 데이터를 구성합니다.
+		ShopCartOptionUpdatePO param = new ShopCartOptionUpdatePO();
+		param.setGoodsId("GOODS001");
+		param.setSizeId("095");
+		param.setTargetSizeId("100");
+		param.setQty(2);
+
+		ShopGoodsSizeItemVO targetSize = new ShopGoodsSizeItemVO();
+		targetSize.setGoodsId("GOODS001");
+		targetSize.setSizeId("100");
+		targetSize.setStockQty(8);
+
+		// 소스/목표 행 존재 및 기존 수량 목 응답을 설정합니다.
+		when(goodsMapper.countShopCart(7L, "GOODS001", "095")).thenReturn(1);
+		when(goodsMapper.getShopGoodsSizeList("GOODS001")).thenReturn(List.of(targetSize));
+		when(goodsMapper.countShopCart(7L, "GOODS001", "100")).thenReturn(1);
+		when(goodsMapper.getShopCartQty(7L, "GOODS001", "100")).thenReturn(3);
+		when(goodsMapper.updateShopCartQty(7L, "GOODS001", "100", 5, 7L)).thenReturn(1);
+		when(goodsMapper.deleteShopCartItem(7L, "GOODS001", "095")).thenReturn(1);
+
+		// 옵션 변경을 수행합니다.
+		goodsService.updateShopCartOption(param, 7L);
+
+		// 목표 행 수량 병합과 기존 행 삭제 호출 여부를 검증합니다.
+		verify(goodsMapper).updateShopCartQty(7L, "GOODS001", "100", 5, 7L);
+		verify(goodsMapper).deleteShopCartItem(7L, "GOODS001", "095");
+		verify(goodsMapper, times(0)).updateShopCartOption(7L, "GOODS001", "095", "100", 2, 7L);
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 장바구니 옵션 변경 시 동일 사이즈 선택이면 수량만 갱신한다")
+	// 옵션 변경 요청의 기존/목표 사이즈가 같으면 수량 업데이트만 수행하는지 검증합니다.
+	void updateShopCartOption_updatesQtyWhenSameSize() {
+		// 옵션 변경 요청 데이터를 구성합니다.
+		ShopCartOptionUpdatePO param = new ShopCartOptionUpdatePO();
+		param.setGoodsId("GOODS002");
+		param.setSizeId("100");
+		param.setTargetSizeId("100");
+		param.setQty(4);
+
+		ShopGoodsSizeItemVO sameSize = new ShopGoodsSizeItemVO();
+		sameSize.setGoodsId("GOODS002");
+		sameSize.setSizeId("100");
+		sameSize.setStockQty(10);
+
+		// 소스 행 존재와 동일 사이즈 재고를 목으로 설정합니다.
+		when(goodsMapper.countShopCart(8L, "GOODS002", "100")).thenReturn(1);
+		when(goodsMapper.getShopGoodsSizeList("GOODS002")).thenReturn(List.of(sameSize));
+		when(goodsMapper.updateShopCartQty(8L, "GOODS002", "100", 4, 8L)).thenReturn(1);
+
+		// 옵션 변경을 수행합니다.
+		goodsService.updateShopCartOption(param, 8L);
+
+		// 동일 사이즈 수량 갱신만 호출되는지 검증합니다.
+		verify(goodsMapper).updateShopCartQty(8L, "GOODS002", "100", 4, 8L);
+		verify(goodsMapper, times(0)).deleteShopCartItem(8L, "GOODS002", "100");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 장바구니 옵션 변경 시 수량이 1 미만이면 예외를 반환한다")
+	// 옵션 변경 요청의 경계값 수량 검증(0 이하)을 수행하는지 확인합니다.
+	void updateShopCartOption_throwsWhenQtyInvalid() {
+		// 수량 0 경계값으로 옵션 변경 요청 데이터를 구성합니다.
+		ShopCartOptionUpdatePO param = new ShopCartOptionUpdatePO();
+		param.setGoodsId("GOODS003");
+		param.setSizeId("095");
+		param.setTargetSizeId("100");
+		param.setQty(0);
+
+		// 수량 검증 예외 메시지를 확인합니다.
+		assertThatThrownBy(() -> goodsService.updateShopCartOption(param, 9L))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessage("수량을 확인해주세요.");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 장바구니 선택 삭제 시 중복 선택 키는 한 번만 삭제한다")
+	// 선택 삭제 요청에 동일 상품/사이즈가 중복되어도 단건 삭제가 중복 호출되지 않는지 검증합니다.
+	void deleteShopCartItems_deletesUniqueSelectionOnlyOnce() {
+		// 중복 키를 포함한 선택 삭제 요청 데이터를 구성합니다.
+		ShopCartDeleteItemPO first = new ShopCartDeleteItemPO();
+		first.setGoodsId("GOODS001");
+		first.setSizeId("095");
+
+		ShopCartDeleteItemPO duplicated = new ShopCartDeleteItemPO();
+		duplicated.setGoodsId("GOODS001");
+		duplicated.setSizeId("095");
+
+		ShopCartDeleteItemPO second = new ShopCartDeleteItemPO();
+		second.setGoodsId("GOODS002");
+		second.setSizeId("100");
+
+		ShopCartDeletePO param = new ShopCartDeletePO();
+		param.setCartItemList(List.of(first, duplicated, second));
+
+		// 장바구니 단건 삭제 목 응답을 설정합니다.
+		when(goodsMapper.deleteShopCartItem(7L, "GOODS001", "095")).thenReturn(1);
+		when(goodsMapper.deleteShopCartItem(7L, "GOODS002", "100")).thenReturn(1);
+
+		// 선택 삭제를 수행합니다.
+		int deletedCount = goodsService.deleteShopCartItems(param, 7L);
+
+		// 중복 키를 제외한 2건만 삭제되었는지 검증합니다.
+		assertThat(deletedCount).isEqualTo(2);
+		verify(goodsMapper, times(1)).deleteShopCartItem(7L, "GOODS001", "095");
+		verify(goodsMapper, times(1)).deleteShopCartItem(7L, "GOODS002", "100");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 장바구니 선택 삭제 시 삭제 대상이 비어 있으면 예외를 반환한다")
+	// 선택 삭제 요청에 대상 목록이 없을 때 필수값 예외를 반환하는지 검증합니다.
+	void deleteShopCartItems_throwsWhenSelectionMissing() {
+		// 빈 선택 삭제 요청 데이터를 구성합니다.
+		ShopCartDeletePO param = new ShopCartDeletePO();
+		param.setCartItemList(List.of());
+
+		// 삭제 대상 누락 예외 메시지를 확인합니다.
+		assertThatThrownBy(() -> goodsService.deleteShopCartItems(param, 7L))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessage("삭제할 상품을 선택해주세요.");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 장바구니 전체 삭제 시 고객번호 기준으로 전체 삭제를 수행한다")
+	// 전체 삭제 요청 시 cart 테이블의 고객번호 기준 delete가 호출되는지 검증합니다.
+	void deleteShopCartAll_deletesByCustNo() {
+		// 전체 삭제 건수를 4건으로 목 설정합니다.
+		when(goodsMapper.deleteShopCartAll(10L)).thenReturn(4);
+
+		// 전체 삭제를 수행합니다.
+		int deletedCount = goodsService.deleteShopCartAll(10L);
+
+		// 삭제 건수와 삭제 호출 여부를 검증합니다.
+		assertThat(deletedCount).isEqualTo(4);
+		verify(goodsMapper).deleteShopCartAll(10L);
 	}
 
 	// 테스트용 카테고리 계층 목 데이터를 구성합니다.

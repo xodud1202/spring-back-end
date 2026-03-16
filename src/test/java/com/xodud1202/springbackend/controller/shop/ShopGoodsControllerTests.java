@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.controller.shop;
 
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartPageVO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartSiteInfoVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsBasicVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsDetailVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishGoodsItemVO;
@@ -17,6 +19,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doNothing;
@@ -324,5 +327,121 @@ class ShopGoodsControllerTests {
 			)
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.message").value("상품 정보를 찾을 수 없습니다."));
+	}
+
+	@Test
+	@DisplayName("장바구니 페이지 조회 API는 로그인 사용자가 요청하면 장바구니 데이터를 반환한다")
+	// 장바구니 페이지 조회 성공 시 200 응답과 장바구니 필드를 반환하는지 검증합니다.
+	void getShopCartPage_returnsOk() throws Exception {
+		// 장바구니 페이지 응답 객체를 구성합니다.
+		ShopCartSiteInfoVO siteInfo = new ShopCartSiteInfoVO();
+		siteInfo.setSiteId("xodud1202");
+		siteInfo.setDeliveryFee(3000);
+		siteInfo.setDeliveryFeeLimit(30000);
+
+		ShopCartPageVO page = new ShopCartPageVO();
+		page.setCartList(List.of());
+		page.setCartCount(0);
+		page.setSiteInfo(siteInfo);
+		when(goodsService.getShopCartPage(1L)).thenReturn(page);
+
+		// 로그인 쿠키와 함께 요청하면 200 응답과 장바구니 필드를 검증합니다.
+		mockMvc.perform(
+				get("/api/shop/cart/page")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.cartCount").value(0))
+			.andExpect(jsonPath("$.siteInfo.deliveryFee").value(3000))
+			.andExpect(jsonPath("$.siteInfo.deliveryFeeLimit").value(30000));
+	}
+
+	@Test
+	@DisplayName("장바구니 페이지 조회 API는 비로그인 요청이면 401을 반환한다")
+	// 비로그인 상태에서 장바구니 페이지 조회 요청 시 401 응답을 검증합니다.
+	void getShopCartPage_returnsUnauthorizedWhenNotLoggedIn() throws Exception {
+		// 로그인 쿠키 없이 요청하면 401 응답과 메시지를 검증합니다.
+		mockMvc.perform(get("/api/shop/cart/page").contentType(MediaType.APPLICATION_JSON))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
+	}
+
+	@Test
+	@DisplayName("장바구니 옵션 변경 API는 로그인 사용자가 요청하면 변경 완료 메시지를 반환한다")
+	// 장바구니 옵션 변경 성공 시 200 응답과 메시지 반환 여부를 검증합니다.
+	void updateShopCartOption_returnsOk() throws Exception {
+		// 로그인 쿠키와 함께 요청하면 200 응답과 메시지를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/cart/option/update")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"goodsId":"GOODS001","sizeId":"095","targetSizeId":"100","qty":2}
+						""")
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.message").value("장바구니 옵션을 변경했습니다."));
+	}
+
+	@Test
+	@DisplayName("장바구니 옵션 변경 API는 변경 대상이 없으면 404를 반환한다")
+	// 서비스에서 장바구니 대상 미존재 예외를 반환하면 404 응답으로 변환되는지 검증합니다.
+	void updateShopCartOption_returnsNotFoundWhenCartItemMissing() throws Exception {
+		// 장바구니 대상 미존재 예외를 발생하도록 목 동작을 설정합니다.
+		org.mockito.Mockito.doThrow(new IllegalArgumentException("변경할 장바구니 상품을 찾을 수 없습니다."))
+			.when(goodsService)
+			.updateShopCartOption(any(), eq(1L));
+
+		// 옵션 변경 요청 후 404 응답과 메시지를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/cart/option/update")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"goodsId":"GOODS001","sizeId":"095","targetSizeId":"100","qty":2}
+						""")
+			)
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.message").value("변경할 장바구니 상품을 찾을 수 없습니다."));
+	}
+
+	@Test
+	@DisplayName("장바구니 선택 삭제 API는 로그인 사용자가 요청하면 삭제 건수를 반환한다")
+	// 장바구니 선택 삭제 성공 시 200 응답과 삭제 건수 반환 여부를 검증합니다.
+	void deleteShopCartItems_returnsOk() throws Exception {
+		// 선택 삭제 건수를 2건으로 반환하도록 설정합니다.
+		when(goodsService.deleteShopCartItems(any(), eq(1L))).thenReturn(2);
+
+		// 로그인 쿠키와 함께 요청하면 200 응답과 삭제 결과를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/cart/delete")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"cartItemList":[{"goodsId":"GOODS001","sizeId":"095"},{"goodsId":"GOODS002","sizeId":"100"}]}
+						""")
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.deletedCount").value(2))
+			.andExpect(jsonPath("$.message").value("선택한 장바구니 상품을 삭제했습니다."));
+	}
+
+	@Test
+	@DisplayName("장바구니 전체 삭제 API는 로그인 사용자가 요청하면 삭제 건수를 반환한다")
+	// 장바구니 전체 삭제 성공 시 200 응답과 삭제 건수 반환 여부를 검증합니다.
+	void deleteShopCartAll_returnsOk() throws Exception {
+		// 전체 삭제 건수를 3건으로 반환하도록 설정합니다.
+		when(goodsService.deleteShopCartAll(1L)).thenReturn(3);
+
+		// 로그인 쿠키와 함께 요청하면 200 응답과 삭제 결과를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/cart/delete/all")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.deletedCount").value(3))
+			.andExpect(jsonPath("$.message").value("장바구니 상품을 전체 삭제했습니다."));
 	}
 }
