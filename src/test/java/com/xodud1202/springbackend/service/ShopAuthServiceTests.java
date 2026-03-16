@@ -517,6 +517,60 @@ class ShopAuthServiceTests {
 		}
 	}
 
+	@Test
+	@DisplayName("고객 쿠폰 직접 발급: 고정일시형 쿠폰은 설정된 시작/종료 일시로 1건 지급한다")
+	// 고정일시형 다운로드 쿠폰 발급 시 설정된 사용 가능 기간으로 고객 쿠폰이 저장되는지 검증합니다.
+	void issueShopCustomerCoupon_issuesFixedDateCouponWithConfiguredWindow() {
+		// 고정일시형 쿠폰 규칙을 구성합니다.
+		ShopCouponIssueRuleVO fixedDateCouponRule = new ShopCouponIssueRuleVO();
+		fixedDateCouponRule.setCpnNo(11L);
+		fixedDateCouponRule.setCpnStatCd("CPN_STAT_02");
+		fixedDateCouponRule.setCpnUseDtGb("CPN_USE_DT_02");
+		fixedDateCouponRule.setCpnUseStartDt(LocalDateTime.of(2026, 3, 1, 0, 0, 0));
+		fixedDateCouponRule.setCpnUseEndDt(LocalDateTime.of(2026, 3, 31, 23, 59, 59));
+		when(shopAuthMapper.getIssuableCouponIssueRule(11L)).thenReturn(fixedDateCouponRule);
+		when(shopAuthMapper.insertCustomerCoupon(any(ShopCustomerCouponSavePO.class))).thenReturn(1);
+
+		// 고객 쿠폰 1건 발급을 수행합니다.
+		int issuedCount = shopAuthService.issueShopCustomerCoupon(71L, 11L, 1);
+
+		// 고정일시형 쿠폰이 지정 기간으로 1건 저장되는지 검증합니다.
+		assertEquals(1, issuedCount);
+		ArgumentCaptor<ShopCustomerCouponSavePO> couponSaveCaptor = ArgumentCaptor.forClass(ShopCustomerCouponSavePO.class);
+		verify(shopAuthMapper).insertCustomerCoupon(couponSaveCaptor.capture());
+		assertEquals(71L, couponSaveCaptor.getValue().getCustNo());
+		assertEquals(11L, couponSaveCaptor.getValue().getCpnNo());
+		assertEquals(LocalDateTime.of(2026, 3, 1, 0, 0, 0), couponSaveCaptor.getValue().getCpnUsableStartDt());
+		assertEquals(LocalDateTime.of(2026, 3, 31, 23, 59, 59), couponSaveCaptor.getValue().getCpnUsableEndDt());
+	}
+
+	@Test
+	@DisplayName("고객 쿠폰 직접 발급: 기간형 쿠폰은 현재 시점 기준으로 사용 시작/종료 일시를 계산한다")
+	// 기간형 다운로드 쿠폰 발급 시 현재 시각 기준 사용 가능 기간 계산이 적용되는지 검증합니다.
+	void issueShopCustomerCoupon_issuesPeriodCouponWithNowBasedWindow() {
+		// 기간형 쿠폰 규칙을 구성합니다.
+		ShopCouponIssueRuleVO periodCouponRule = new ShopCouponIssueRuleVO();
+		periodCouponRule.setCpnNo(12L);
+		periodCouponRule.setCpnStatCd("CPN_STAT_02");
+		periodCouponRule.setCpnUseDtGb("CPN_USE_DT_01");
+		periodCouponRule.setCpnUsableDt(30);
+		when(shopAuthMapper.getIssuableCouponIssueRule(12L)).thenReturn(periodCouponRule);
+		when(shopAuthMapper.insertCustomerCoupon(any(ShopCustomerCouponSavePO.class))).thenReturn(1);
+
+		// 발급 직전/직후 시각을 저장해 시작일 검증 범위를 확보합니다.
+		LocalDateTime beforeIssue = LocalDateTime.now();
+		int issuedCount = shopAuthService.issueShopCustomerCoupon(72L, 12L, 1);
+		LocalDateTime afterIssue = LocalDateTime.now();
+
+		// 기간형 쿠폰이 1건 저장되고 현재 시점 기준으로 종료일이 계산되는지 검증합니다.
+		assertEquals(1, issuedCount);
+		ArgumentCaptor<ShopCustomerCouponSavePO> couponSaveCaptor = ArgumentCaptor.forClass(ShopCustomerCouponSavePO.class);
+		verify(shopAuthMapper).insertCustomerCoupon(couponSaveCaptor.capture());
+		assertTrue(!couponSaveCaptor.getValue().getCpnUsableStartDt().isBefore(beforeIssue));
+		assertTrue(!couponSaveCaptor.getValue().getCpnUsableStartDt().isAfter(afterIssue));
+		assertEquals(couponSaveCaptor.getValue().getCpnUsableStartDt().plusDays(30), couponSaveCaptor.getValue().getCpnUsableEndDt());
+	}
+
 	// 기본 구글 회원가입 요청 객체를 생성합니다.
 	private ShopGoogleJoinRequest createDefaultJoinRequest() {
 		// 필수값이 포함된 기본 요청 객체를 구성합니다.

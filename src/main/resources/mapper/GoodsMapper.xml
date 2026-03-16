@@ -541,6 +541,238 @@
 		 LIMIT #{pageSize} OFFSET #{offset}
 	</select>
 
+	<select id="countShopMypageOwnedCoupon" resultType="int">
+		/* GoodsMapper.countShopMypageOwnedCoupon: 쇼핑몰 마이페이지 쿠폰함 사용 가능 보유 쿠폰 전체 건수 조회 */
+		SELECT COUNT(*)
+		  FROM CUSTOMER_COUPON CC
+		  JOIN COUPON_BASE CB
+		    ON CB.CPN_NO = CC.CPN_NO
+		 WHERE CC.CUST_NO = #{custNo}
+		   AND IFNULL(CC.CPN_USE_YN, 'N') = 'N'
+		   AND IFNULL(CB.DEL_YN, 'N') = 'N'
+		   AND CB.CPN_STAT_CD = 'CPN_STAT_02'
+		   AND NOW() &gt;= CC.CPN_USABLE_START_DT
+		   AND NOW() &lt;= CC.CPN_USABLE_END_DT
+	</select>
+
+	<select id="getShopMypageOwnedCouponPageList" resultType="com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOwnedCouponVO">
+		/* GoodsMapper.getShopMypageOwnedCouponPageList: 쇼핑몰 마이페이지 쿠폰함 사용 가능 보유 쿠폰 목록 페이징 조회 */
+		SELECT CC.CUST_CPN_NO
+		     , CC.CPN_NO
+		     , CB.CPN_NM
+		     , CB.CPN_GB_CD
+		     , CCG.CD_NM AS CPN_GB_NM
+		     , CB.CPN_DC_GB_CD
+		     , CB.CPN_DC_VAL
+		     , CB.CPN_TARGET_CD
+		     , CASE
+		         WHEN CC.CPN_USABLE_START_DT IS NULL OR CC.CPN_USABLE_START_DT = '0000-00-00 00:00:00' THEN NULL
+		         ELSE CC.CPN_USABLE_START_DT
+		       END AS CPN_USABLE_START_DT
+		     , CASE
+		         WHEN CC.CPN_USABLE_END_DT IS NULL OR CC.CPN_USABLE_END_DT = '0000-00-00 00:00:00' THEN NULL
+		         ELSE CC.CPN_USABLE_END_DT
+		       END AS CPN_USABLE_END_DT
+		  FROM CUSTOMER_COUPON CC
+		  JOIN COUPON_BASE CB
+		    ON CB.CPN_NO = CC.CPN_NO
+		  LEFT JOIN COMMON_CODE CCG
+		    ON CCG.GRP_CD = 'CPN_GB'
+		   AND CCG.CD = CB.CPN_GB_CD
+		 WHERE CC.CUST_NO = #{custNo}
+		   AND IFNULL(CC.CPN_USE_YN, 'N') = 'N'
+		   AND IFNULL(CB.DEL_YN, 'N') = 'N'
+		   AND CB.CPN_STAT_CD = 'CPN_STAT_02'
+		   AND NOW() &gt;= CC.CPN_USABLE_START_DT
+		   AND NOW() &lt;= CC.CPN_USABLE_END_DT
+		 ORDER BY CC.CUST_CPN_NO DESC
+		 LIMIT #{pageSize} OFFSET #{offset}
+	</select>
+
+	<select id="countShopMypageDownloadableCoupon" resultType="int">
+		/* GoodsMapper.countShopMypageDownloadableCoupon: 쇼핑몰 마이페이지 현재 다운로드 가능 쿠폰 전체 건수 조회 */
+		SELECT COUNT(*)
+		  FROM COUPON_BASE CB
+		 WHERE IFNULL(CB.DEL_YN, 'N') = 'N'
+		   AND CB.CPN_STAT_CD = 'CPN_STAT_02'
+		   AND IFNULL(CB.CPN_DOWN_ABLE_YN, 'Y') = 'Y'
+		   AND NOW() &gt;= IFNULL(NULLIF(CB.CPN_DOWN_START_DT, '0000-00-00 00:00:00'), '1000-01-01 00:00:00')
+		   AND NOW() &lt;= IFNULL(NULLIF(CB.CPN_DOWN_END_DT, '0000-00-00 00:00:00'), '9999-12-31 23:59:59')
+	</select>
+
+	<select id="getShopMypageDownloadableCouponPageList" resultType="com.xodud1202.springbackend.domain.shop.mypage.ShopMypageDownloadableCouponVO">
+		/* GoodsMapper.getShopMypageDownloadableCouponPageList: 쇼핑몰 마이페이지 현재 다운로드 가능 쿠폰 목록 페이징 조회 */
+		SELECT CB.CPN_NO
+		     , CB.CPN_NM
+		     , CB.CPN_GB_CD
+		     , CCG.CD_NM AS CPN_GB_NM
+		     , CB.CPN_DC_GB_CD
+		     , CB.CPN_DC_VAL
+		     , CB.CPN_TARGET_CD
+		     , CASE
+		         WHEN CB.CPN_DOWN_START_DT IS NULL OR CB.CPN_DOWN_START_DT = '0000-00-00 00:00:00' THEN NULL
+		         ELSE CB.CPN_DOWN_START_DT
+		       END AS CPN_DOWN_START_DT
+		     , CASE
+		         WHEN CB.CPN_DOWN_END_DT IS NULL OR CB.CPN_DOWN_END_DT = '0000-00-00 00:00:00' THEN NULL
+		         ELSE CB.CPN_DOWN_END_DT
+		       END AS CPN_DOWN_END_DT
+		     , CB.CPN_USE_DT_GB
+		     , CB.CPN_USABLE_DT
+		     , CASE
+		         WHEN CB.CPN_USE_DT_GB = 'CPN_USE_DT_02'
+		         THEN NULLIF(CB.CPN_USE_START_DT, '0000-00-00 00:00:00')
+		         ELSE NULL
+		       END AS CPN_USE_START_DT
+		     , CASE
+		         WHEN CB.CPN_USE_DT_GB = 'CPN_USE_DT_02'
+		         THEN NULLIF(CB.CPN_USE_END_DT, '0000-00-00 00:00:00')
+		         ELSE NULL
+		       END AS CPN_USE_END_DT
+		  FROM COUPON_BASE CB
+		  LEFT JOIN COMMON_CODE CCG
+		    ON CCG.GRP_CD = 'CPN_GB'
+		   AND CCG.CD = CB.CPN_GB_CD
+		 WHERE IFNULL(CB.DEL_YN, 'N') = 'N'
+		   AND CB.CPN_STAT_CD = 'CPN_STAT_02'
+		   AND IFNULL(CB.CPN_DOWN_ABLE_YN, 'Y') = 'Y'
+		   AND NOW() &gt;= IFNULL(NULLIF(CB.CPN_DOWN_START_DT, '0000-00-00 00:00:00'), '1000-01-01 00:00:00')
+		   AND NOW() &lt;= IFNULL(NULLIF(CB.CPN_DOWN_END_DT, '0000-00-00 00:00:00'), '9999-12-31 23:59:59')
+		 ORDER BY CB.CPN_NO DESC
+		 LIMIT #{pageSize} OFFSET #{offset}
+	</select>
+
+	<select id="getShopMypageDownloadableCouponList" resultType="com.xodud1202.springbackend.domain.shop.mypage.ShopMypageDownloadableCouponVO">
+		/* GoodsMapper.getShopMypageDownloadableCouponList: 쇼핑몰 마이페이지 현재 다운로드 가능 쿠폰 목록 조회 */
+		SELECT CB.CPN_NO
+		     , CB.CPN_NM
+		     , CB.CPN_GB_CD
+		     , CCG.CD_NM AS CPN_GB_NM
+		     , CB.CPN_DC_GB_CD
+		     , CB.CPN_DC_VAL
+		     , CB.CPN_TARGET_CD
+		     , CASE
+		         WHEN CB.CPN_DOWN_START_DT IS NULL OR CB.CPN_DOWN_START_DT = '0000-00-00 00:00:00' THEN NULL
+		         ELSE CB.CPN_DOWN_START_DT
+		       END AS CPN_DOWN_START_DT
+		     , CASE
+		         WHEN CB.CPN_DOWN_END_DT IS NULL OR CB.CPN_DOWN_END_DT = '0000-00-00 00:00:00' THEN NULL
+		         ELSE CB.CPN_DOWN_END_DT
+		       END AS CPN_DOWN_END_DT
+		     , CB.CPN_USE_DT_GB
+		     , CB.CPN_USABLE_DT
+		     , CASE
+		         WHEN CB.CPN_USE_DT_GB = 'CPN_USE_DT_02'
+		         THEN NULLIF(CB.CPN_USE_START_DT, '0000-00-00 00:00:00')
+		         ELSE NULL
+		       END AS CPN_USE_START_DT
+		     , CASE
+		         WHEN CB.CPN_USE_DT_GB = 'CPN_USE_DT_02'
+		         THEN NULLIF(CB.CPN_USE_END_DT, '0000-00-00 00:00:00')
+		         ELSE NULL
+		       END AS CPN_USE_END_DT
+		  FROM COUPON_BASE CB
+		  LEFT JOIN COMMON_CODE CCG
+		    ON CCG.GRP_CD = 'CPN_GB'
+		   AND CCG.CD = CB.CPN_GB_CD
+		 WHERE IFNULL(CB.DEL_YN, 'N') = 'N'
+		   AND CB.CPN_STAT_CD = 'CPN_STAT_02'
+		   AND IFNULL(CB.CPN_DOWN_ABLE_YN, 'Y') = 'Y'
+		   AND NOW() &gt;= IFNULL(NULLIF(CB.CPN_DOWN_START_DT, '0000-00-00 00:00:00'), '1000-01-01 00:00:00')
+		   AND NOW() &lt;= IFNULL(NULLIF(CB.CPN_DOWN_END_DT, '0000-00-00 00:00:00'), '9999-12-31 23:59:59')
+		 ORDER BY CB.CPN_NO DESC
+	</select>
+
+	<select id="countShopMypageCouponUnavailableGoods" resultType="int">
+		/* GoodsMapper.countShopMypageCouponUnavailableGoods: 쇼핑몰 마이페이지 쿠폰 사용 불가 상품 전체 건수 조회 */
+		SELECT COUNT(*)
+		  FROM (
+		        SELECT DISTINCT GB.GOODS_ID
+		          FROM GOODS_BASE GB
+		          <choose>
+		            <when test="cpnTargetCd == 'CPN_TARGET_01' or cpnTargetCd == 'CPN_TARGET_99'">
+		              WHERE GB.GOODS_ID IN
+		              <foreach collection="targetValueList" item="targetValue" open="(" separator="," close=")">
+		                #{targetValue}
+		              </foreach>
+		            </when>
+		            <when test="cpnTargetCd == 'CPN_TARGET_04'">
+		              WHERE CAST(GB.BRAND_NO AS CHAR) IN
+		              <foreach collection="targetValueList" item="targetValue" open="(" separator="," close=")">
+		                #{targetValue}
+		              </foreach>
+		            </when>
+		            <when test="cpnTargetCd == 'CPN_TARGET_03'">
+		              JOIN CATEGORY_GOODS CG
+		                ON CG.GOODS_ID = GB.GOODS_ID
+		              WHERE CG.CATEGORY_ID IN
+		              <foreach collection="targetValueList" item="targetValue" open="(" separator="," close=")">
+		                #{targetValue}
+		              </foreach>
+		            </when>
+		            <when test="cpnTargetCd == 'CPN_TARGET_02'">
+		              JOIN EXHIBITION_TAB_GOODS ETG
+		                ON ETG.GOODS_ID = GB.GOODS_ID
+		               AND ETG.VIEW_YN = 'Y'
+		              WHERE CAST(ETG.EXHIBITION_TAB_NO AS CHAR) IN
+		              <foreach collection="targetValueList" item="targetValue" open="(" separator="," close=")">
+		                #{targetValue}
+		              </foreach>
+		            </when>
+		            <otherwise>
+		              WHERE 1 = 0
+		            </otherwise>
+		          </choose>
+		           AND GB.SHOW_YN = 'Y'
+		           AND GB.GOODS_STAT_CD = 'GOODS_STAT_02'
+		       ) TEMP
+	</select>
+
+	<select id="getShopMypageCouponUnavailableGoodsList" resultType="com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponUnavailableGoodsVO">
+		/* GoodsMapper.getShopMypageCouponUnavailableGoodsList: 쇼핑몰 마이페이지 쿠폰 사용 불가 상품 목록 조회 */
+		SELECT DISTINCT GB.GOODS_ID
+		     , GB.GOODS_NM
+		  FROM GOODS_BASE GB
+		  <choose>
+		    <when test="cpnTargetCd == 'CPN_TARGET_01' or cpnTargetCd == 'CPN_TARGET_99'">
+		      WHERE GB.GOODS_ID IN
+		      <foreach collection="targetValueList" item="targetValue" open="(" separator="," close=")">
+		        #{targetValue}
+		      </foreach>
+		    </when>
+		    <when test="cpnTargetCd == 'CPN_TARGET_04'">
+		      WHERE CAST(GB.BRAND_NO AS CHAR) IN
+		      <foreach collection="targetValueList" item="targetValue" open="(" separator="," close=")">
+		        #{targetValue}
+		      </foreach>
+		    </when>
+		    <when test="cpnTargetCd == 'CPN_TARGET_03'">
+		      JOIN CATEGORY_GOODS CG
+		        ON CG.GOODS_ID = GB.GOODS_ID
+		      WHERE CG.CATEGORY_ID IN
+		      <foreach collection="targetValueList" item="targetValue" open="(" separator="," close=")">
+		        #{targetValue}
+		      </foreach>
+		    </when>
+		    <when test="cpnTargetCd == 'CPN_TARGET_02'">
+		      JOIN EXHIBITION_TAB_GOODS ETG
+		        ON ETG.GOODS_ID = GB.GOODS_ID
+		       AND ETG.VIEW_YN = 'Y'
+		      WHERE CAST(ETG.EXHIBITION_TAB_NO AS CHAR) IN
+		      <foreach collection="targetValueList" item="targetValue" open="(" separator="," close=")">
+		        #{targetValue}
+		      </foreach>
+		    </when>
+		    <otherwise>
+		      WHERE 1 = 0
+		    </otherwise>
+		  </choose>
+		   AND GB.SHOW_YN = 'Y'
+		   AND GB.GOODS_STAT_CD = 'GOODS_STAT_02'
+		 ORDER BY GB.GOODS_ID ASC
+		 LIMIT #{limit}
+	</select>
+
 	<select id="getShopCartItemList" resultType="com.xodud1202.springbackend.domain.shop.cart.ShopCartItemVO">
 		/* GoodsMapper.getShopCartItemList: 쇼핑몰 장바구니 목록 조회 */
 		SELECT C.CUST_NO

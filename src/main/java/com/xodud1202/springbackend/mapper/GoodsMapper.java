@@ -32,6 +32,9 @@ import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsGroupItemVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsImageVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSiteInfoVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSizeItemVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponUnavailableGoodsVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageDownloadableCouponVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOwnedCouponVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishGoodsItemVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -140,6 +143,41 @@ public interface GoodsMapper {
 		@Param("custNo") Long custNo,
 		@Param("offset") int offset,
 		@Param("pageSize") int pageSize
+	);
+
+	// 쇼핑몰 마이페이지 쿠폰함의 현재 사용 가능한 보유 쿠폰 전체 건수를 조회합니다.
+	int countShopMypageOwnedCoupon(@Param("custNo") Long custNo);
+
+	// 쇼핑몰 마이페이지 쿠폰함의 현재 사용 가능한 보유 쿠폰 목록을 페이징 조회합니다.
+	List<ShopMypageOwnedCouponVO> getShopMypageOwnedCouponPageList(
+		@Param("custNo") Long custNo,
+		@Param("offset") int offset,
+		@Param("pageSize") int pageSize
+	);
+
+	// 쇼핑몰 마이페이지 쿠폰 다운로드 탭의 현재 다운로드 가능 쿠폰 전체 건수를 조회합니다.
+	int countShopMypageDownloadableCoupon();
+
+	// 쇼핑몰 마이페이지 쿠폰 다운로드 탭의 현재 다운로드 가능 쿠폰 목록을 페이징 조회합니다.
+	List<ShopMypageDownloadableCouponVO> getShopMypageDownloadableCouponPageList(
+		@Param("offset") int offset,
+		@Param("pageSize") int pageSize
+	);
+
+	// 쇼핑몰 마이페이지 쿠폰 다운로드 탭의 현재 다운로드 가능 쿠폰 목록을 조회합니다.
+	List<ShopMypageDownloadableCouponVO> getShopMypageDownloadableCouponList();
+
+	// 쿠폰 사용 불가 상품 전체 건수를 대상 유형과 값 기준으로 조회합니다.
+	int countShopMypageCouponUnavailableGoods(
+		@Param("cpnTargetCd") String cpnTargetCd,
+		@Param("targetValueList") List<String> targetValueList
+	);
+
+	// 쿠폰 사용 불가 상품 목록을 대상 유형과 값 기준으로 제한 건수만큼 조회합니다.
+	List<ShopMypageCouponUnavailableGoodsVO> getShopMypageCouponUnavailableGoodsList(
+		@Param("cpnTargetCd") String cpnTargetCd,
+		@Param("targetValueList") List<String> targetValueList,
+		@Param("limit") int limit
 	);
 
 	// 쇼핑몰 장바구니 목록을 조회합니다.

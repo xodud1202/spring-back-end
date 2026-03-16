@@ -210,22 +210,23 @@ public class ShopAuthService {
 		}
 
 		// 혜택 쿠폰 번호/수량이 설정된 항목을 고객에게 발급합니다.
-		issueCouponByCount(custNo, benefitVO.getGoodsCpnNo(), benefitVO.getGoodsCpnCnt());
-		issueCouponByCount(custNo, benefitVO.getCartCpnNo(), benefitVO.getCartCpnCnt());
-		issueCouponByCount(custNo, benefitVO.getDeliveryCpnNo(), benefitVO.getDeliveryCpnCnt());
+		issueShopCustomerCoupon(custNo, benefitVO.getGoodsCpnNo(), benefitVO.getGoodsCpnCnt());
+		issueShopCustomerCoupon(custNo, benefitVO.getCartCpnNo(), benefitVO.getCartCpnCnt());
+		issueShopCustomerCoupon(custNo, benefitVO.getDeliveryCpnNo(), benefitVO.getDeliveryCpnCnt());
 	}
 
-	// 단일 쿠폰을 지정 수량만큼 고객에게 지급합니다.
-	private void issueCouponByCount(Long custNo, Long cpnNo, Integer issueCount) {
+	// 단일 쿠폰을 지정 수량만큼 고객에게 지급하고 실제 지급 건수를 반환합니다.
+	@Transactional
+	public int issueShopCustomerCoupon(Long custNo, Long cpnNo, Integer issueCount) {
 		// 쿠폰번호/수량이 유효하지 않으면 지급을 생략합니다.
-		if (cpnNo == null || issueCount == null || issueCount < 1) {
-			return;
+		if (custNo == null || custNo < 1L || cpnNo == null || issueCount == null || issueCount < 1) {
+			return 0;
 		}
 
 		// 정상 상태(CPN_STAT_02) 쿠폰만 발급 규칙을 조회합니다.
 		ShopCouponIssueRuleVO couponRule = shopAuthMapper.getIssuableCouponIssueRule(cpnNo);
 		if (couponRule == null) {
-			return;
+			return 0;
 		}
 
 		// 쿠폰 사용 가능 시작/종료 일시를 계산합니다.
@@ -233,10 +234,11 @@ public class ShopAuthService {
 		LocalDateTime usableStartDt = resolveCouponUsableStartDateTime(couponRule, now);
 		LocalDateTime usableEndDt = resolveCouponUsableEndDateTime(couponRule, now);
 		if (usableStartDt == null || usableEndDt == null || usableStartDt.isAfter(usableEndDt)) {
-			return;
+			return 0;
 		}
 
 		// 요청 수량만큼 고객 쿠폰을 반복 지급합니다.
+		int issuedCount = 0;
 		for (int issueIndex = 0; issueIndex < issueCount; issueIndex += 1) {
 			ShopCustomerCouponSavePO couponSavePO = new ShopCustomerCouponSavePO();
 			couponSavePO.setCustNo(custNo);
@@ -245,8 +247,9 @@ public class ShopAuthService {
 			couponSavePO.setCpnUsableEndDt(usableEndDt);
 			couponSavePO.setRegNo(custNo);
 			couponSavePO.setUdtNo(custNo);
-			shopAuthMapper.insertCustomerCoupon(couponSavePO);
+			issuedCount += shopAuthMapper.insertCustomerCoupon(couponSavePO);
 		}
+		return issuedCount;
 	}
 
 	// 쿠폰 사용 가능 시작 일시를 계산합니다.

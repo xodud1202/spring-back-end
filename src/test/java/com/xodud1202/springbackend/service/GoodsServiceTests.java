@@ -25,6 +25,11 @@ import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsGroupItemVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsImageVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSiteInfoVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSizeItemVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponDownloadRequestPO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponPageVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponUnavailableGoodsVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageDownloadableCouponVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOwnedCouponVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishGoodsItemVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishPageVO;
 import com.xodud1202.springbackend.mapper.GoodsMapper;
@@ -54,6 +59,9 @@ class GoodsServiceTests {
 
 	@Mock
 	private FtpFileService ftpFileService;
+
+	@Mock
+	private ShopAuthService shopAuthService;
 
 	@InjectMocks
 	private GoodsService goodsService;
@@ -231,6 +239,134 @@ class GoodsServiceTests {
 
 		// trim 처리된 상품코드로 삭제 호출되는지 검증합니다.
 		verify(goodsMapper, times(1)).deleteShopWishList(7L, "GOODS001");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 마이페이지 쿠폰함 조회 시 탭별 페이징 정보와 쿠폰 사용 불가 상품 요약을 함께 반환한다")
+	// 쿠폰함 페이지 조회 시 탭별 페이지 정보와 카드 툴팁용 사용 불가 상품 목록이 함께 구성되는지 검증합니다.
+	void getShopMypageCouponPage_returnsPagedCouponListsWithUnavailableGoodsSummary() {
+		// 사용 가능 보유 쿠폰과 다운로드 가능 쿠폰 테스트 데이터를 구성합니다.
+		ShopMypageOwnedCouponVO ownedCoupon = new ShopMypageOwnedCouponVO();
+		ownedCoupon.setCustCpnNo(1001L);
+		ownedCoupon.setCpnNo(11L);
+		ownedCoupon.setCpnNm("보유 상품 쿠폰");
+		ownedCoupon.setCpnGbNm("상품 쿠폰");
+		ownedCoupon.setCpnTargetCd("CPN_TARGET_01");
+
+		ShopMypageDownloadableCouponVO downloadableCoupon = new ShopMypageDownloadableCouponVO();
+		downloadableCoupon.setCpnNo(21L);
+		downloadableCoupon.setCpnNm("다운로드 장바구니 쿠폰");
+		downloadableCoupon.setCpnGbNm("장바구니 쿠폰");
+		downloadableCoupon.setCpnTargetCd("CPN_TARGET_04");
+
+		ShopGoodsCouponTargetVO ownedExcludeTarget = createCouponTarget("TARGET_GB_02", "GOODS001");
+		ShopGoodsCouponTargetVO downloadableExcludeTarget = createCouponTarget("TARGET_GB_02", "1");
+		ShopMypageCouponUnavailableGoodsVO ownedUnavailableGoods = new ShopMypageCouponUnavailableGoodsVO();
+		ownedUnavailableGoods.setGoodsId("GOODS001");
+		ownedUnavailableGoods.setGoodsNm("사용 불가 상품");
+		ShopMypageCouponUnavailableGoodsVO downloadableUnavailableGoods = new ShopMypageCouponUnavailableGoodsVO();
+		downloadableUnavailableGoods.setGoodsId("GOODS002");
+		downloadableUnavailableGoods.setGoodsNm("브랜드 제외 상품");
+
+		// 매퍼 응답을 탭별 건수/목록과 사용 불가 상품 요약으로 설정합니다.
+		when(goodsMapper.countShopMypageOwnedCoupon(7L)).thenReturn(12);
+		when(goodsMapper.countShopMypageDownloadableCoupon()).thenReturn(3);
+		when(goodsMapper.getShopMypageOwnedCouponPageList(7L, 10, 10)).thenReturn(List.of(ownedCoupon));
+		when(goodsMapper.getShopMypageDownloadableCouponPageList(0, 10)).thenReturn(List.of(downloadableCoupon));
+		when(goodsMapper.getShopCouponTargetList(11L)).thenReturn(List.of(ownedExcludeTarget));
+		when(goodsMapper.getShopCouponTargetList(21L)).thenReturn(List.of(downloadableExcludeTarget));
+		when(goodsMapper.countShopMypageCouponUnavailableGoods("CPN_TARGET_01", List.of("GOODS001"))).thenReturn(1);
+		when(goodsMapper.getShopMypageCouponUnavailableGoodsList("CPN_TARGET_01", List.of("GOODS001"), 10))
+			.thenReturn(List.of(ownedUnavailableGoods));
+		when(goodsMapper.countShopMypageCouponUnavailableGoods("CPN_TARGET_04", List.of("1"))).thenReturn(12);
+		when(goodsMapper.getShopMypageCouponUnavailableGoodsList("CPN_TARGET_04", List.of("1"), 10))
+			.thenReturn(List.of(downloadableUnavailableGoods));
+
+		// 쿠폰함 페이지 데이터를 조회합니다.
+		ShopMypageCouponPageVO result = goodsService.getShopMypageCouponPage(7L, 2, 1);
+
+		// 탭별 페이지 정보와 사용 불가 상품 요약이 함께 반환되는지 검증합니다.
+		assertThat(result).isNotNull();
+		assertThat(result.getOwnedCouponCount()).isEqualTo(12);
+		assertThat(result.getOwnedPageNo()).isEqualTo(2);
+		assertThat(result.getOwnedTotalPageCount()).isEqualTo(2);
+		assertThat(result.getOwnedCouponList()).hasSize(1);
+		assertThat(result.getOwnedCouponList().get(0).getCustCpnNo()).isEqualTo(1001L);
+		assertThat(result.getOwnedCouponList().get(0).getUnavailableGoodsCount()).isEqualTo(1);
+		assertThat(result.getOwnedCouponList().get(0).getUnavailableGoodsList()).hasSize(1);
+		assertThat(result.getOwnedCouponList().get(0).getUnavailableGoodsList().get(0).getGoodsId()).isEqualTo("GOODS001");
+		assertThat(result.getDownloadableCouponCount()).isEqualTo(3);
+		assertThat(result.getDownloadablePageNo()).isEqualTo(1);
+		assertThat(result.getDownloadableTotalPageCount()).isEqualTo(1);
+		assertThat(result.getDownloadableCouponList()).hasSize(1);
+		assertThat(result.getDownloadableCouponList().get(0).getCpnNo()).isEqualTo(21L);
+		assertThat(result.getDownloadableCouponList().get(0).getUnavailableGoodsCount()).isEqualTo(12);
+		assertThat(result.getDownloadableCouponList().get(0).getUnavailableGoodsList()).hasSize(1);
+		assertThat(result.getDownloadableCouponList().get(0).getUnavailableGoodsList().get(0).getGoodsId()).isEqualTo("GOODS002");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 마이페이지 쿠폰 다운로드 시 현재 다운로드 가능한 쿠폰이면 1건 발급한다")
+	// 개별 쿠폰 다운로드 시 다운로드 가능 여부 확인 후 발급 서비스가 1건 호출되는지 검증합니다.
+	void downloadShopMypageCoupon_issuesCouponWhenDownloadable() {
+		// 다운로드 요청과 다운로드 가능 쿠폰 데이터를 구성합니다.
+		ShopMypageCouponDownloadRequestPO param = new ShopMypageCouponDownloadRequestPO();
+		param.setCpnNo(31L);
+
+		ShopMypageDownloadableCouponVO downloadableCoupon = new ShopMypageDownloadableCouponVO();
+		downloadableCoupon.setCpnNo(31L);
+		downloadableCoupon.setCpnNm("다운로드 가능 쿠폰");
+
+		// 다운로드 가능 목록과 발급 서비스 응답을 설정합니다.
+		when(goodsMapper.getShopMypageDownloadableCouponList()).thenReturn(List.of(downloadableCoupon));
+		when(shopAuthService.issueShopCustomerCoupon(7L, 31L, 1)).thenReturn(1);
+
+		// 개별 쿠폰 다운로드를 수행합니다.
+		goodsService.downloadShopMypageCoupon(param, 7L);
+
+		// 발급 서비스가 1건 호출되는지 검증합니다.
+		verify(shopAuthService).issueShopCustomerCoupon(7L, 31L, 1);
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 마이페이지 전체 쿠폰 다운로드 시 다운로드 가능 쿠폰별로 1건씩 발급한다")
+	// 전체 다운로드 시 현재 다운로드 가능 쿠폰 종류별로 1건씩 발급되는지 검증합니다.
+	void downloadAllShopMypageCoupon_issuesEachCouponOnce() {
+		// 다운로드 가능 쿠폰 목록 데이터를 구성합니다.
+		ShopMypageDownloadableCouponVO firstCoupon = new ShopMypageDownloadableCouponVO();
+		firstCoupon.setCpnNo(41L);
+		ShopMypageDownloadableCouponVO secondCoupon = new ShopMypageDownloadableCouponVO();
+		secondCoupon.setCpnNo(42L);
+
+		// 다운로드 가능 목록과 발급 서비스 응답을 설정합니다.
+		when(goodsMapper.getShopMypageDownloadableCouponList()).thenReturn(List.of(firstCoupon, secondCoupon));
+		when(shopAuthService.issueShopCustomerCoupon(7L, 41L, 1)).thenReturn(1);
+		when(shopAuthService.issueShopCustomerCoupon(7L, 42L, 1)).thenReturn(1);
+
+		// 전체 쿠폰 다운로드를 수행합니다.
+		int result = goodsService.downloadAllShopMypageCoupon(7L);
+
+		// 쿠폰별 발급 호출과 다운로드 건수를 검증합니다.
+		assertThat(result).isEqualTo(2);
+		verify(shopAuthService).issueShopCustomerCoupon(7L, 41L, 1);
+		verify(shopAuthService).issueShopCustomerCoupon(7L, 42L, 1);
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 마이페이지 쿠폰 다운로드 시 현재 다운로드 가능한 쿠폰이 아니면 예외를 반환한다")
+	// 다운로드 가능 목록에 없는 쿠폰번호를 요청하면 검증 예외를 반환하는지 확인합니다.
+	void downloadShopMypageCoupon_throwsWhenCouponMissing() {
+		// 존재하지 않는 쿠폰번호로 다운로드 요청 데이터를 구성합니다.
+		ShopMypageCouponDownloadRequestPO param = new ShopMypageCouponDownloadRequestPO();
+		param.setCpnNo(99L);
+
+		// 다운로드 가능 목록을 비워둡니다.
+		when(goodsMapper.getShopMypageDownloadableCouponList()).thenReturn(List.of());
+
+		// 다운로드 가능 쿠폰 검증 예외 메시지를 확인합니다.
+		assertThatThrownBy(() -> goodsService.downloadShopMypageCoupon(param, 7L))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessage("다운로드 가능한 쿠폰을 확인해주세요.");
 	}
 
 	@Test

@@ -6,6 +6,8 @@ import com.xodud1202.springbackend.domain.shop.cart.ShopCartCouponEstimateVO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartOptionUpdatePO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartPageVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsDetailVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponDownloadRequestPO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponPageVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishPageVO;
 import com.xodud1202.springbackend.service.GoodsService;
 import jakarta.servlet.http.Cookie;
@@ -162,6 +164,83 @@ public class ShopGoodsController {
 		}
 	}
 
+	// 쇼핑몰 마이페이지 쿠폰함 페이지 데이터를 조회합니다.
+	@GetMapping("/api/shop/mypage/coupon/page")
+	public ResponseEntity<Object> getShopMypageCouponPage(
+		@RequestParam(required = false) Integer ownedPageNo,
+		@RequestParam(required = false) Integer downloadablePageNo,
+		HttpServletRequest request
+	) {
+		try {
+			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			// 쿠폰함 페이지 데이터를 조회해 반환합니다.
+			ShopMypageCouponPageVO result = goodsService.getShopMypageCouponPage(custNo, ownedPageNo, downloadablePageNo);
+			return ResponseEntity.ok(result);
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
+			log.error("쇼핑몰 마이페이지 쿠폰함 조회 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "쿠폰함 조회에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 마이페이지에서 쿠폰 1건을 다운로드합니다.
+	@PostMapping("/api/shop/mypage/coupon/download")
+	public ResponseEntity<Object> downloadShopMypageCoupon(
+		@RequestBody(required = false) ShopMypageCouponDownloadRequestPO requestBody,
+		HttpServletRequest request
+	) {
+		try {
+			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			// 쿠폰 1건 다운로드를 수행합니다.
+			goodsService.downloadShopMypageCoupon(requestBody, custNo);
+			return ResponseEntity.ok(Map.of("message", "쿠폰을 다운로드했습니다."));
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
+			log.error("쇼핑몰 마이페이지 쿠폰 다운로드 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "쿠폰 다운로드에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 마이페이지에서 현재 다운로드 가능한 쿠폰을 전체 다운로드합니다.
+	@PostMapping("/api/shop/mypage/coupon/download/all")
+	public ResponseEntity<Object> downloadAllShopMypageCoupon(HttpServletRequest request) {
+		try {
+			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			// 현재 다운로드 가능한 쿠폰 전체 다운로드를 수행합니다.
+			int downloadedCount = goodsService.downloadAllShopMypageCoupon(custNo);
+			String message = downloadedCount > 0 ? "전체 쿠폰을 다운로드했습니다." : "다운로드 가능한 쿠폰이 없습니다.";
+			return ResponseEntity.ok(Map.of("downloadedCount", downloadedCount, "message", message));
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
+			log.error("쇼핑몰 마이페이지 전체 쿠폰 다운로드 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "전체 쿠폰 다운로드에 실패했습니다."));
+		}
+	}
+
 	// 쇼핑몰 상품 장바구니를 등록(기존 건은 수량 가산)합니다.
 	@PostMapping("/api/shop/goods/cart/add")
 	public ResponseEntity<Object> addShopGoodsCart(
@@ -176,13 +255,13 @@ public class ShopGoodsController {
 				return ResponseEntity.badRequest().body(Map.of("message", "상품코드를 확인해주세요."));
 			}
 
-			Object sizeIdValue = requestBody == null ? null : requestBody.get("sizeId");
+			Object sizeIdValue = requestBody.get("sizeId");
 			String sizeId = sizeIdValue instanceof String ? ((String) sizeIdValue).trim() : "";
 			if (sizeId.isEmpty()) {
 				return ResponseEntity.badRequest().body(Map.of("message", "사이즈를 선택해주세요."));
 			}
 
-			Integer qty = parseIntegerValue(requestBody == null ? null : requestBody.get("qty"));
+			Integer qty = parseIntegerValue(requestBody.get("qty"));
 			if (qty == null || qty < 1) {
 				return ResponseEntity.badRequest().body(Map.of("message", "수량을 확인해주세요."));
 			}
@@ -369,23 +448,29 @@ public class ShopGoodsController {
 	// 숫자 또는 문자열 값을 정수로 변환합니다.
 	private Integer parseIntegerValue(Object rawValue) {
 		// 값이 없으면 null을 반환합니다.
-		if (rawValue == null) {
-			return null;
-		}
-		// 숫자 타입은 int 값으로 변환합니다.
-		if (rawValue instanceof Number numberValue) {
-			return numberValue.intValue();
-		}
-		// 문자열 타입은 공백 제거 후 정수 변환을 시도합니다.
-		if (rawValue instanceof String stringValue) {
-			String normalizedValue = stringValue.trim();
-			if (normalizedValue.isEmpty()) {
+		switch (rawValue) {
+			case null -> {
 				return null;
 			}
-			try {
-				return Integer.valueOf(normalizedValue);
-			} catch (NumberFormatException exception) {
-				return null;
+
+			// 숫자 타입은 int 값으로 변환합니다.
+			case Number numberValue -> {
+				return numberValue.intValue();
+			}
+
+			// 문자열 타입은 공백 제거 후 정수 변환을 시도합니다.
+			case String stringValue -> {
+				String normalizedValue = stringValue.trim();
+				if (normalizedValue.isEmpty()) {
+					return null;
+				}
+				try {
+					return Integer.valueOf(normalizedValue);
+				} catch (NumberFormatException exception) {
+					return null;
+				}
+			}
+			default -> {
 			}
 		}
 		// 변환 불가능한 타입이면 null을 반환합니다.

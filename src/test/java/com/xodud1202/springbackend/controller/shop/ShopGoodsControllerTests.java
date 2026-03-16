@@ -5,6 +5,9 @@ import com.xodud1202.springbackend.domain.shop.cart.ShopCartCouponEstimateVO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartSiteInfoVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsBasicVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsDetailVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponPageVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageDownloadableCouponVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOwnedCouponVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishGoodsItemVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishPageVO;
 import com.xodud1202.springbackend.service.GoodsService;
@@ -253,6 +256,110 @@ class ShopGoodsControllerTests {
 			)
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.message").value("위시리스트에서 삭제했습니다."));
+	}
+
+	@Test
+	@DisplayName("마이페이지 쿠폰함 조회 API는 로그인 사용자가 요청하면 쿠폰함 목록을 반환한다")
+	// 쿠폰함 조회 성공 시 200 응답과 탭별 페이지 정보/쿠폰 목록 필드를 반환하는지 검증합니다.
+	void getShopMypageCouponPage_returnsOk() throws Exception {
+		// 쿠폰함 페이지 응답 객체를 구성합니다.
+		ShopMypageOwnedCouponVO ownedCoupon = new ShopMypageOwnedCouponVO();
+		ownedCoupon.setCustCpnNo(101L);
+		ownedCoupon.setCpnNo(11L);
+		ownedCoupon.setCpnNm("보유 쿠폰");
+
+		ShopMypageDownloadableCouponVO downloadableCoupon = new ShopMypageDownloadableCouponVO();
+		downloadableCoupon.setCpnNo(21L);
+		downloadableCoupon.setCpnNm("다운로드 쿠폰");
+
+		ShopMypageCouponPageVO page = new ShopMypageCouponPageVO();
+		page.setOwnedCouponList(List.of(ownedCoupon));
+		page.setOwnedCouponCount(11);
+		page.setOwnedPageNo(2);
+		page.setOwnedPageSize(10);
+		page.setOwnedTotalPageCount(2);
+		page.setDownloadableCouponList(List.of(downloadableCoupon));
+		page.setDownloadableCouponCount(4);
+		page.setDownloadablePageNo(1);
+		page.setDownloadablePageSize(10);
+		page.setDownloadableTotalPageCount(1);
+		when(goodsService.getShopMypageCouponPage(1L, 2, 1)).thenReturn(page);
+
+		// 로그인 쿠키와 함께 요청하면 200 응답과 쿠폰 목록 필드를 검증합니다.
+		mockMvc.perform(
+				get("/api/shop/mypage/coupon/page")
+					.param("ownedPageNo", "2")
+					.param("downloadablePageNo", "1")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.ownedCouponCount").value(11))
+			.andExpect(jsonPath("$.ownedPageNo").value(2))
+			.andExpect(jsonPath("$.ownedCouponList[0].custCpnNo").value(101))
+			.andExpect(jsonPath("$.downloadableCouponCount").value(4))
+			.andExpect(jsonPath("$.downloadableCouponList[0].cpnNo").value(21));
+	}
+
+	@Test
+	@DisplayName("마이페이지 쿠폰함 조회 API는 비로그인 요청이면 401을 반환한다")
+	// 비로그인 상태에서 쿠폰함 조회 요청 시 401 응답을 검증합니다.
+	void getShopMypageCouponPage_returnsUnauthorizedWhenNotLoggedIn() throws Exception {
+		// 로그인 쿠키 없이 요청하면 401 응답과 메시지를 검증합니다.
+		mockMvc.perform(get("/api/shop/mypage/coupon/page").contentType(MediaType.APPLICATION_JSON))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
+	}
+
+	@Test
+	@DisplayName("마이페이지 쿠폰 다운로드 API는 로그인 사용자가 요청하면 다운로드 메시지를 반환한다")
+	// 개별 쿠폰 다운로드 성공 시 200 응답과 메시지를 반환하는지 검증합니다.
+	void downloadShopMypageCoupon_returnsOk() throws Exception {
+		// 로그인 쿠키와 함께 요청하면 200 응답과 메시지를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/mypage/coupon/download")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"cpnNo":21}
+						""")
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.message").value("쿠폰을 다운로드했습니다."));
+	}
+
+	@Test
+	@DisplayName("마이페이지 쿠폰 다운로드 API는 비로그인 요청이면 401을 반환한다")
+	// 비로그인 상태에서 개별 쿠폰 다운로드 요청 시 401 응답을 검증합니다.
+	void downloadShopMypageCoupon_returnsUnauthorizedWhenNotLoggedIn() throws Exception {
+		// 로그인 쿠키 없이 요청하면 401 응답과 메시지를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/mypage/coupon/download")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"cpnNo":21}
+						""")
+			)
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
+	}
+
+	@Test
+	@DisplayName("마이페이지 전체 쿠폰 다운로드 API는 다운로드 건수를 반환한다")
+	// 전체 다운로드 성공 시 200 응답과 다운로드 건수 반환 여부를 검증합니다.
+	void downloadAllShopMypageCoupon_returnsOk() throws Exception {
+		// 전체 다운로드 건수를 3건으로 반환하도록 설정합니다.
+		when(goodsService.downloadAllShopMypageCoupon(1L)).thenReturn(3);
+
+		// 로그인 쿠키와 함께 요청하면 200 응답과 다운로드 결과를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/mypage/coupon/download/all")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.downloadedCount").value(3))
+			.andExpect(jsonPath("$.message").value("전체 쿠폰을 다운로드했습니다."));
 	}
 
 	@Test

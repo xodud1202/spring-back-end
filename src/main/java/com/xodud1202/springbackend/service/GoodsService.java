@@ -36,6 +36,11 @@ import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsPriceSummaryVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsShippingSummaryVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSiteInfoVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSizeItemVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponDownloadRequestPO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponPageVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponUnavailableGoodsVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageDownloadableCouponVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOwnedCouponVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsWishlistVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishGoodsItemVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishPageVO;
@@ -78,6 +83,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -88,6 +94,7 @@ import java.util.Set;
 public class GoodsService {
 	private final GoodsMapper goodsMapper;
 	private final FtpFileService ftpFileService;
+	private final ShopAuthService shopAuthService;
 	private static final int GOODS_IMAGE_MIN_SIZE = 500;
 	private static final int GOODS_IMAGE_MAX_SIZE = 1500;
 	private static final String SHOP_SITE_ID = "xodud1202";
@@ -105,6 +112,8 @@ public class GoodsService {
 	private static final String CPN_DC_GB_AMOUNT = "CPN_DC_GB_01";
 	private static final String CPN_DC_GB_RATE = "CPN_DC_GB_02";
 	private static final int SHOP_MYPAGE_WISH_PAGE_SIZE = 10;
+	private static final int SHOP_MYPAGE_COUPON_PAGE_SIZE = 10;
+	private static final int SHOP_MYPAGE_COUPON_TOOLTIP_LIMIT = 10;
 
 	// 관리자 상품 목록을 페이징 조건으로 조회합니다.
 	public Map<String, Object> getAdminGoodsList(GoodsPO param) {
@@ -647,12 +656,250 @@ public class GoodsService {
 		goodsMapper.deleteShopWishList(custNo, goodsId.trim());
 	}
 
+	// 쇼핑몰 마이페이지 쿠폰함 페이지 데이터를 조회합니다.
+	public ShopMypageCouponPageVO getShopMypageCouponPage(Long custNo, Integer requestedOwnedPageNo, Integer requestedDownloadablePageNo) {
+		// 고객번호가 없으면 로그인 예외를 반환합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+
+		// 보유 쿠폰/다운로드 쿠폰 요청 페이지 번호를 각각 보정합니다.
+		int resolvedRequestedOwnedPageNo = resolveRequestedPageNo(requestedOwnedPageNo);
+		int resolvedRequestedDownloadablePageNo = resolveRequestedPageNo(requestedDownloadablePageNo);
+
+		// 보유 쿠폰/다운로드 쿠폰 전체 건수와 전체 페이지 수를 계산합니다.
+		int ownedCouponCount = goodsMapper.countShopMypageOwnedCoupon(custNo);
+		int downloadableCouponCount = goodsMapper.countShopMypageDownloadableCoupon();
+		int ownedTotalPageCount = calculateTotalPageCount(ownedCouponCount, SHOP_MYPAGE_COUPON_PAGE_SIZE);
+		int downloadableTotalPageCount = calculateTotalPageCount(downloadableCouponCount, SHOP_MYPAGE_COUPON_PAGE_SIZE);
+		int resolvedOwnedPageNo = resolvePageNoWithinRange(resolvedRequestedOwnedPageNo, ownedTotalPageCount);
+		int resolvedDownloadablePageNo = resolvePageNoWithinRange(resolvedRequestedDownloadablePageNo, downloadableTotalPageCount);
+
+		// 현재 페이지의 보유 쿠폰/다운로드 쿠폰 목록을 각각 조회합니다.
+		int ownedOffset = calculateOffset(resolvedOwnedPageNo, SHOP_MYPAGE_COUPON_PAGE_SIZE);
+		int downloadableOffset = calculateOffset(resolvedDownloadablePageNo, SHOP_MYPAGE_COUPON_PAGE_SIZE);
+		List<ShopMypageOwnedCouponVO> ownedCouponList =
+			goodsMapper.getShopMypageOwnedCouponPageList(custNo, ownedOffset, SHOP_MYPAGE_COUPON_PAGE_SIZE);
+		List<ShopMypageDownloadableCouponVO> downloadableCouponList =
+			goodsMapper.getShopMypageDownloadableCouponPageList(downloadableOffset, SHOP_MYPAGE_COUPON_PAGE_SIZE);
+
+		// 쿠폰 번호 기준 사용 불가 상품 요약을 캐시하여 카드별 부가정보를 채웁니다.
+		Map<Long, ShopMypageCouponUnavailableGoodsSummary> unavailableGoodsSummaryMap = new HashMap<>();
+		applyShopMypageCouponUnavailableGoodsToOwnedCouponList(ownedCouponList, unavailableGoodsSummaryMap);
+		applyShopMypageCouponUnavailableGoodsToDownloadableCouponList(downloadableCouponList, unavailableGoodsSummaryMap);
+
+		// 쿠폰 페이지 응답 객체를 구성합니다.
+		ShopMypageCouponPageVO result = new ShopMypageCouponPageVO();
+		result.setOwnedCouponList(ownedCouponList == null ? List.of() : ownedCouponList);
+		result.setOwnedCouponCount(ownedCouponCount);
+		result.setOwnedPageNo(resolvedOwnedPageNo);
+		result.setOwnedPageSize(SHOP_MYPAGE_COUPON_PAGE_SIZE);
+		result.setOwnedTotalPageCount(ownedTotalPageCount);
+		result.setDownloadableCouponList(downloadableCouponList == null ? List.of() : downloadableCouponList);
+		result.setDownloadableCouponCount(downloadableCouponCount);
+		result.setDownloadablePageNo(resolvedDownloadablePageNo);
+		result.setDownloadablePageSize(SHOP_MYPAGE_COUPON_PAGE_SIZE);
+		result.setDownloadableTotalPageCount(downloadableTotalPageCount);
+		return result;
+	}
+
+	// 쇼핑몰 마이페이지에서 쿠폰 1건을 다운로드합니다.
+	@Transactional
+	public void downloadShopMypageCoupon(ShopMypageCouponDownloadRequestPO param, Long custNo) {
+		// 로그인 고객번호와 다운로드 쿠폰번호를 검증합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+		Long cpnNo = param == null ? null : param.getCpnNo();
+		if (cpnNo == null || cpnNo < 1L) {
+			throw new IllegalArgumentException("쿠폰번호를 확인해주세요.");
+		}
+
+		// 현재 다운로드 가능한 쿠폰인지 확인합니다.
+		ShopMypageDownloadableCouponVO downloadableCoupon = findShopMypageDownloadableCoupon(cpnNo);
+		if (downloadableCoupon == null) {
+			throw new IllegalArgumentException("다운로드 가능한 쿠폰을 확인해주세요.");
+		}
+
+		// 쿠폰 1건을 고객에게 발급합니다.
+		int issuedCount = shopAuthService.issueShopCustomerCoupon(custNo, cpnNo, 1);
+		if (issuedCount < 1) {
+			throw new IllegalArgumentException("쿠폰 다운로드에 실패했습니다.");
+		}
+	}
+
+	// 쇼핑몰 마이페이지에서 현재 다운로드 가능한 쿠폰을 전체 다운로드합니다.
+	@Transactional
+	public int downloadAllShopMypageCoupon(Long custNo) {
+		// 로그인 고객번호를 검증합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+
+		// 현재 다운로드 가능한 쿠폰 목록을 조회합니다.
+		List<ShopMypageDownloadableCouponVO> downloadableCouponList = goodsMapper.getShopMypageDownloadableCouponList();
+		if (downloadableCouponList == null || downloadableCouponList.isEmpty()) {
+			return 0;
+		}
+
+		// 쿠폰별로 1장씩만 전체 다운로드를 수행합니다.
+		int downloadedCount = 0;
+		Set<Long> issuedCouponNoSet = new HashSet<>();
+		for (ShopMypageDownloadableCouponVO downloadableCoupon : downloadableCouponList) {
+			if (downloadableCoupon == null || downloadableCoupon.getCpnNo() == null) {
+				continue;
+			}
+			if (!issuedCouponNoSet.add(downloadableCoupon.getCpnNo())) {
+				continue;
+			}
+
+			// 개별 쿠폰 발급 실패 시 전체 다운로드를 실패 처리합니다.
+			int issuedCount = shopAuthService.issueShopCustomerCoupon(custNo, downloadableCoupon.getCpnNo(), 1);
+			if (issuedCount < 1) {
+				throw new IllegalArgumentException("쿠폰 다운로드에 실패했습니다.");
+			}
+			downloadedCount += issuedCount;
+		}
+		return downloadedCount;
+	}
+
+	// 보유 쿠폰 목록에 쿠폰 사용 불가 상품 요약 정보를 채웁니다.
+	private void applyShopMypageCouponUnavailableGoodsToOwnedCouponList(
+		List<ShopMypageOwnedCouponVO> ownedCouponList,
+		Map<Long, ShopMypageCouponUnavailableGoodsSummary> unavailableGoodsSummaryMap
+	) {
+		// 보유 쿠폰 목록이 없으면 처리하지 않습니다.
+		if (ownedCouponList == null || ownedCouponList.isEmpty()) {
+			return;
+		}
+
+		// 동일 쿠폰번호는 캐시를 재사용하여 사용 불가 상품 요약을 채웁니다.
+		for (ShopMypageOwnedCouponVO ownedCoupon : ownedCouponList) {
+			if (ownedCoupon == null) {
+				continue;
+			}
+			ShopMypageCouponUnavailableGoodsSummary unavailableGoodsSummary = resolveShopMypageCouponUnavailableGoodsSummary(
+				unavailableGoodsSummaryMap,
+				ownedCoupon.getCpnNo(),
+				ownedCoupon.getCpnTargetCd()
+			);
+			ownedCoupon.setUnavailableGoodsCount(unavailableGoodsSummary.getUnavailableGoodsCount());
+			ownedCoupon.setUnavailableGoodsList(unavailableGoodsSummary.getUnavailableGoodsList());
+		}
+	}
+
+	// 다운로드 가능 쿠폰 목록에 쿠폰 사용 불가 상품 요약 정보를 채웁니다.
+	private void applyShopMypageCouponUnavailableGoodsToDownloadableCouponList(
+		List<ShopMypageDownloadableCouponVO> downloadableCouponList,
+		Map<Long, ShopMypageCouponUnavailableGoodsSummary> unavailableGoodsSummaryMap
+	) {
+		// 다운로드 가능 쿠폰 목록이 없으면 처리하지 않습니다.
+		if (downloadableCouponList == null || downloadableCouponList.isEmpty()) {
+			return;
+		}
+
+		// 동일 쿠폰번호는 캐시를 재사용하여 사용 불가 상품 요약을 채웁니다.
+		for (ShopMypageDownloadableCouponVO downloadableCoupon : downloadableCouponList) {
+			if (downloadableCoupon == null) {
+				continue;
+			}
+			ShopMypageCouponUnavailableGoodsSummary unavailableGoodsSummary = resolveShopMypageCouponUnavailableGoodsSummary(
+				unavailableGoodsSummaryMap,
+				downloadableCoupon.getCpnNo(),
+				downloadableCoupon.getCpnTargetCd()
+			);
+			downloadableCoupon.setUnavailableGoodsCount(unavailableGoodsSummary.getUnavailableGoodsCount());
+			downloadableCoupon.setUnavailableGoodsList(unavailableGoodsSummary.getUnavailableGoodsList());
+		}
+	}
+
+	// 쿠폰번호 기준 사용 불가 상품 요약 캐시를 조회하거나 새로 계산합니다.
+	private ShopMypageCouponUnavailableGoodsSummary resolveShopMypageCouponUnavailableGoodsSummary(
+		Map<Long, ShopMypageCouponUnavailableGoodsSummary> unavailableGoodsSummaryMap,
+		Long cpnNo,
+		String cpnTargetCd
+	) {
+		// 쿠폰번호가 없으면 빈 요약을 반환합니다.
+		if (cpnNo == null || cpnNo < 1L) {
+			return ShopMypageCouponUnavailableGoodsSummary.empty();
+		}
+		if (unavailableGoodsSummaryMap != null && unavailableGoodsSummaryMap.containsKey(cpnNo)) {
+			return unavailableGoodsSummaryMap.get(cpnNo);
+		}
+
+		// 쿠폰 타겟 목록과 제외 대상 값을 기준으로 사용 불가 상품 요약을 계산합니다.
+		List<ShopGoodsCouponTargetVO> targetList = goodsMapper.getShopCouponTargetList(cpnNo);
+		List<String> excludeTargetValueList = extractCouponTargetValueList(targetList, TARGET_GB_EXCLUDE);
+		ShopMypageCouponUnavailableGoodsSummary unavailableGoodsSummary =
+			buildShopMypageCouponUnavailableGoodsSummary(cpnTargetCd, excludeTargetValueList);
+		if (unavailableGoodsSummaryMap != null) {
+			unavailableGoodsSummaryMap.put(cpnNo, unavailableGoodsSummary);
+		}
+		return unavailableGoodsSummary;
+	}
+
+	// 쿠폰 대상 코드와 제외 대상값 목록을 기준으로 사용 불가 상품 요약을 계산합니다.
+	private ShopMypageCouponUnavailableGoodsSummary buildShopMypageCouponUnavailableGoodsSummary(
+		String cpnTargetCd,
+		List<String> excludeTargetValueList
+	) {
+		// 제외 대상이 없거나 해석할 수 없는 쿠폰 타겟이면 빈 요약을 반환합니다.
+		if (excludeTargetValueList == null || excludeTargetValueList.isEmpty() || isBlank(cpnTargetCd)) {
+			return ShopMypageCouponUnavailableGoodsSummary.empty();
+		}
+
+		// 현재 쿠폰 타겟 유형에 맞는 사용 불가 상품 목록과 건수를 조회합니다.
+		if (!CPN_TARGET_GOODS.equals(cpnTargetCd)
+			&& !CPN_TARGET_ALL.equals(cpnTargetCd)
+			&& !CPN_TARGET_BRAND.equals(cpnTargetCd)
+			&& !CPN_TARGET_CATEGORY.equals(cpnTargetCd)
+			&& !CPN_TARGET_EXHIBITION.equals(cpnTargetCd)) {
+			return ShopMypageCouponUnavailableGoodsSummary.empty();
+		}
+		int unavailableGoodsCount = goodsMapper.countShopMypageCouponUnavailableGoods(cpnTargetCd, excludeTargetValueList);
+		List<ShopMypageCouponUnavailableGoodsVO> unavailableGoodsList = goodsMapper.getShopMypageCouponUnavailableGoodsList(
+			cpnTargetCd,
+			excludeTargetValueList,
+			SHOP_MYPAGE_COUPON_TOOLTIP_LIMIT
+		);
+		return new ShopMypageCouponUnavailableGoodsSummary(
+			unavailableGoodsCount,
+			unavailableGoodsList == null ? List.of() : unavailableGoodsList
+		);
+	}
+
+	// 쿠폰 타겟 목록에서 지정 대상 구분의 대상값 목록을 중복 없이 추출합니다.
+	private List<String> extractCouponTargetValueList(List<ShopGoodsCouponTargetVO> targetList, String targetGbCd) {
+		// 타겟 목록 또는 요청 대상 구분이 없으면 빈 목록을 반환합니다.
+		if (targetList == null || targetList.isEmpty() || isBlank(targetGbCd)) {
+			return List.of();
+		}
+
+		// 대상 구분이 일치하는 대상값만 중복 없이 순서대로 수집합니다.
+		Set<String> targetValueSet = new LinkedHashSet<>();
+		for (ShopGoodsCouponTargetVO target : targetList) {
+			if (target == null || !targetGbCd.equals(target.getTargetGbCd()) || isBlank(target.getTargetValue())) {
+				continue;
+			}
+			targetValueSet.add(target.getTargetValue().trim());
+		}
+		return targetValueSet.isEmpty() ? List.of() : new ArrayList<>(targetValueSet);
+	}
+
 	// 요청 페이지 번호를 1 이상 값으로 보정합니다.
 	private int resolveRequestedPageNo(Integer requestedPageNo) {
 		if (requestedPageNo == null || requestedPageNo < 1) {
 			return 1;
 		}
 		return requestedPageNo;
+	}
+
+	// 전체 페이지 수 범위 안으로 현재 페이지 번호를 보정합니다.
+	private int resolvePageNoWithinRange(int requestedPageNo, int totalPageCount) {
+		if (totalPageCount <= 0) {
+			return 1;
+		}
+		return Math.min(Math.max(requestedPageNo, 1), totalPageCount);
 	}
 
 	// 전체 건수와 페이지 크기를 기준으로 전체 페이지 수를 계산합니다.
@@ -669,6 +916,26 @@ public class GoodsService {
 			return 0;
 		}
 		return (pageNo - 1) * pageSize;
+	}
+
+	// 현재 다운로드 가능한 쿠폰 목록에서 지정 쿠폰번호 1건을 조회합니다.
+	private ShopMypageDownloadableCouponVO findShopMypageDownloadableCoupon(Long cpnNo) {
+		// 쿠폰번호가 없으면 조회하지 않습니다.
+		if (cpnNo == null || cpnNo < 1L) {
+			return null;
+		}
+
+		// 현재 다운로드 가능 목록에서 동일 쿠폰번호를 찾습니다.
+		List<ShopMypageDownloadableCouponVO> downloadableCouponList = goodsMapper.getShopMypageDownloadableCouponList();
+		for (ShopMypageDownloadableCouponVO downloadableCoupon : downloadableCouponList == null ? List.<ShopMypageDownloadableCouponVO>of() : downloadableCouponList) {
+			if (downloadableCoupon == null || downloadableCoupon.getCpnNo() == null) {
+				continue;
+			}
+			if (cpnNo.equals(downloadableCoupon.getCpnNo())) {
+				return downloadableCoupon;
+			}
+		}
+		return null;
 	}
 
 	// 쇼핑몰 상품상세 상단 렌더링에 필요한 데이터를 조회합니다.
@@ -2347,6 +2614,38 @@ public class GoodsService {
 		// 상품 기획전 탭 번호 목록을 반환합니다.
 		private Set<String> getExhibitionTabNoSet() {
 			return exhibitionTabNoSet;
+		}
+	}
+
+	// 쿠폰 사용 불가 상품 요약 정보를 내부 계산용으로 전달합니다.
+	private static class ShopMypageCouponUnavailableGoodsSummary {
+		// 쿠폰 사용 불가 상품 전체 건수입니다.
+		private final int unavailableGoodsCount;
+		// 쿠폰 사용 불가 상품 목록입니다.
+		private final List<ShopMypageCouponUnavailableGoodsVO> unavailableGoodsList;
+
+		// 쿠폰 사용 불가 상품 요약 정보를 생성합니다.
+		private ShopMypageCouponUnavailableGoodsSummary(
+			int unavailableGoodsCount,
+			List<ShopMypageCouponUnavailableGoodsVO> unavailableGoodsList
+		) {
+			this.unavailableGoodsCount = Math.max(unavailableGoodsCount, 0);
+			this.unavailableGoodsList = unavailableGoodsList == null ? List.of() : unavailableGoodsList;
+		}
+
+		// 빈 요약 정보를 반환합니다.
+		private static ShopMypageCouponUnavailableGoodsSummary empty() {
+			return new ShopMypageCouponUnavailableGoodsSummary(0, List.of());
+		}
+
+		// 쿠폰 사용 불가 상품 전체 건수를 반환합니다.
+		private int getUnavailableGoodsCount() {
+			return unavailableGoodsCount;
+		}
+
+		// 쿠폰 사용 불가 상품 목록을 반환합니다.
+		private List<ShopMypageCouponUnavailableGoodsVO> getUnavailableGoodsList() {
+			return unavailableGoodsList;
 		}
 	}
 
