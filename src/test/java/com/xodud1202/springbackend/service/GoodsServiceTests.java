@@ -6,6 +6,10 @@ import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSavePO;
 import com.xodud1202.springbackend.domain.shop.category.ShopCategoryGoodsItemVO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartCouponEstimateItemPO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartCouponEstimateRequestPO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartCouponEstimateVO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartCustomerCouponVO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartDeleteItemPO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartDeletePO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartItemVO;
@@ -554,6 +558,102 @@ class GoodsServiceTests {
 	}
 
 	@Test
+	@DisplayName("쇼핑몰 장바구니 쿠폰 예상 할인 계산 시 상품쿠폰 최적 매칭과 장바구니/배송비쿠폰 최대값을 합산한다")
+	// 예상 할인 계산 시 상품쿠폰 최대 가중치 매칭과 후순위 쿠폰 합산 규칙이 올바르게 동작하는지 검증합니다.
+	void getShopCartCouponEstimate_returnsMaximumCombinedDiscount() {
+		// 선택 장바구니와 예상 할인 계산 요청 데이터를 구성합니다.
+		ShopCartItemVO firstCartItem = createCartItem("GOODS001", 1, "095", 2, 20000);
+		ShopCartItemVO secondCartItem = createCartItem("GOODS002", 2, "100", 1, 10000);
+		ShopCartCouponEstimateRequestPO param = createCouponEstimateRequest(
+			createCouponEstimateItem("GOODS001", "095"),
+			createCouponEstimateItem("GOODS002", "100")
+		);
+
+		ShopCartCustomerCouponVO allGoodsCoupon = createCustomerCoupon(1001L, 101L, "CPN_GB_01", "CPN_TARGET_99", "CPN_DC_GB_01", 3000);
+		ShopCartCustomerCouponVO brandGoodsCoupon = createCustomerCoupon(1002L, 102L, "CPN_GB_01", "CPN_TARGET_04", "CPN_DC_GB_02", 10);
+		ShopCartCustomerCouponVO goodsTargetCoupon = createCustomerCoupon(1003L, 103L, "CPN_GB_01", "CPN_TARGET_01", "CPN_DC_GB_01", 5000);
+		ShopCartCustomerCouponVO cartCoupon = createCustomerCoupon(2001L, 201L, "CPN_GB_03", "CPN_TARGET_99", "CPN_DC_GB_01", 7000);
+		ShopCartCustomerCouponVO deliveryCoupon = createCustomerCoupon(3001L, 301L, "CPN_GB_04", "CPN_TARGET_99", "CPN_DC_GB_01", 3000);
+
+		ShopCartSiteInfoVO siteInfo = new ShopCartSiteInfoVO();
+		siteInfo.setSiteId("xodud1202");
+		siteInfo.setDeliveryFee(3000);
+		siteInfo.setDeliveryFeeLimit(100000);
+
+		// 장바구니/쿠폰/쿠폰 타겟/배송비 기준 목 응답을 설정합니다.
+		when(goodsMapper.getShopCartItemList(7L)).thenReturn(List.of(firstCartItem, secondCartItem));
+		when(goodsMapper.getShopCustomerCouponList(7L))
+			.thenReturn(List.of(allGoodsCoupon, brandGoodsCoupon, goodsTargetCoupon, cartCoupon, deliveryCoupon));
+		when(goodsMapper.getShopCouponTargetList(101L)).thenReturn(List.of());
+		when(goodsMapper.getShopCouponTargetList(102L)).thenReturn(List.of(createCouponTarget("TARGET_GB_01", "1")));
+		when(goodsMapper.getShopCouponTargetList(103L)).thenReturn(List.of(createCouponTarget("TARGET_GB_01", "GOODS002")));
+		when(goodsMapper.getShopGoodsCategoryIdList("GOODS001")).thenReturn(List.of());
+		when(goodsMapper.getShopGoodsCategoryIdList("GOODS002")).thenReturn(List.of());
+		when(goodsMapper.getShopGoodsExhibitionTabNoList("GOODS001")).thenReturn(List.of());
+		when(goodsMapper.getShopGoodsExhibitionTabNoList("GOODS002")).thenReturn(List.of());
+		when(goodsMapper.getShopCartSiteInfo("xodud1202")).thenReturn(siteInfo);
+
+		// 예상 할인 계산 결과를 조회합니다.
+		ShopCartCouponEstimateVO result = goodsService.getShopCartCouponEstimate(param, 7L);
+
+		// 상품쿠폰 9,000원 + 장바구니쿠폰 7,000원 + 배송비쿠폰 3,000원 조합이 선택되는지 검증합니다.
+		assertThat(result).isNotNull();
+		assertThat(result.getGoodsCouponDiscountAmt()).isEqualTo(9000);
+		assertThat(result.getCartCouponDiscountAmt()).isEqualTo(7000);
+		assertThat(result.getDeliveryCouponDiscountAmt()).isEqualTo(3000);
+		assertThat(result.getExpectedMaxDiscountAmt()).isEqualTo(19000);
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 장바구니 쿠폰 예상 할인 계산 시 선택 대상이 비어 있으면 0원 결과를 반환한다")
+	// 빈 선택 요청에서는 장바구니/쿠폰 조회 없이 0원 결과를 반환하는지 검증합니다.
+	void getShopCartCouponEstimate_returnsZeroWhenSelectionMissing() {
+		// 빈 선택 요청 데이터를 구성합니다.
+		ShopCartCouponEstimateRequestPO param = new ShopCartCouponEstimateRequestPO();
+		param.setCartItemList(List.of());
+
+		// 예상 할인 계산 결과를 조회합니다.
+		ShopCartCouponEstimateVO result = goodsService.getShopCartCouponEstimate(param, 7L);
+
+		// 모든 예상 할인 금액이 0원인지 확인합니다.
+		assertThat(result).isNotNull();
+		assertThat(result.getGoodsCouponDiscountAmt()).isEqualTo(0);
+		assertThat(result.getCartCouponDiscountAmt()).isEqualTo(0);
+		assertThat(result.getDeliveryCouponDiscountAmt()).isEqualTo(0);
+		assertThat(result.getExpectedMaxDiscountAmt()).isEqualTo(0);
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 장바구니 쿠폰 예상 할인 계산 시 무료배송이면 배송비쿠폰 할인 금액은 0원이다")
+	// 무료배송 조건 충족 시 배송비쿠폰이 있어도 예상 배송비 할인 금액이 0원으로 유지되는지 검증합니다.
+	void getShopCartCouponEstimate_returnsZeroDeliveryDiscountWhenFreeDelivery() {
+		// 무료배송 조건을 충족하는 장바구니와 배송비쿠폰 요청 데이터를 구성합니다.
+		ShopCartItemVO cartItem = createCartItem("GOODS001", 1, "095", 1, 50000);
+		ShopCartCouponEstimateRequestPO param = createCouponEstimateRequest(createCouponEstimateItem("GOODS001", "095"));
+		ShopCartCustomerCouponVO deliveryCoupon = createCustomerCoupon(3001L, 301L, "CPN_GB_04", "CPN_TARGET_99", "CPN_DC_GB_01", 3000);
+
+		ShopCartSiteInfoVO siteInfo = new ShopCartSiteInfoVO();
+		siteInfo.setSiteId("xodud1202");
+		siteInfo.setDeliveryFee(3000);
+		siteInfo.setDeliveryFeeLimit(30000);
+
+		// 장바구니/쿠폰/배송비 기준 목 응답을 설정합니다.
+		when(goodsMapper.getShopCartItemList(7L)).thenReturn(List.of(cartItem));
+		when(goodsMapper.getShopCustomerCouponList(7L)).thenReturn(List.of(deliveryCoupon));
+		when(goodsMapper.getShopGoodsCategoryIdList("GOODS001")).thenReturn(List.of());
+		when(goodsMapper.getShopGoodsExhibitionTabNoList("GOODS001")).thenReturn(List.of());
+		when(goodsMapper.getShopCartSiteInfo("xodud1202")).thenReturn(siteInfo);
+
+		// 예상 할인 계산 결과를 조회합니다.
+		ShopCartCouponEstimateVO result = goodsService.getShopCartCouponEstimate(param, 7L);
+
+		// 무료배송 조건 충족으로 배송비 할인과 총 예상 할인이 0원인지 검증합니다.
+		assertThat(result).isNotNull();
+		assertThat(result.getDeliveryCouponDiscountAmt()).isEqualTo(0);
+		assertThat(result.getExpectedMaxDiscountAmt()).isEqualTo(0);
+	}
+
+	@Test
 	@DisplayName("쇼핑몰 장바구니 옵션 변경 시 목표 옵션이 이미 존재하면 수량을 병합하고 기존 행을 삭제한다")
 	// 장바구니 옵션 변경 시 동일 상품의 목표 사이즈 행이 있으면 병합 로직이 동작하는지 검증합니다.
 	void updateShopCartOption_mergesWhenTargetSizeExists() {
@@ -692,6 +792,68 @@ class GoodsServiceTests {
 		// 삭제 건수와 삭제 호출 여부를 검증합니다.
 		assertThat(deletedCount).isEqualTo(4);
 		verify(goodsMapper).deleteShopCartAll(10L);
+	}
+
+	// 테스트용 장바구니 상품 행 데이터를 생성합니다.
+	private ShopCartItemVO createCartItem(String goodsId, Integer brandNo, String sizeId, Integer qty, Integer saleAmt) {
+		// 상품/브랜드/수량/판매가 정보를 세팅합니다.
+		ShopCartItemVO cartItem = new ShopCartItemVO();
+		cartItem.setCustNo(7L);
+		cartItem.setGoodsId(goodsId);
+		cartItem.setBrandNo(brandNo);
+		cartItem.setGoodsNm(goodsId + "_NAME");
+		cartItem.setSizeId(sizeId);
+		cartItem.setQty(qty);
+		cartItem.setSaleAmt(saleAmt);
+		cartItem.setSupplyAmt(saleAmt);
+		return cartItem;
+	}
+
+	// 테스트용 장바구니 쿠폰 예상 할인 요청 행 데이터를 생성합니다.
+	private ShopCartCouponEstimateItemPO createCouponEstimateItem(String goodsId, String sizeId) {
+		// 선택 상품코드와 사이즈코드를 세팅합니다.
+		ShopCartCouponEstimateItemPO cartItem = new ShopCartCouponEstimateItemPO();
+		cartItem.setGoodsId(goodsId);
+		cartItem.setSizeId(sizeId);
+		return cartItem;
+	}
+
+	// 테스트용 장바구니 쿠폰 예상 할인 요청 객체를 생성합니다.
+	private ShopCartCouponEstimateRequestPO createCouponEstimateRequest(ShopCartCouponEstimateItemPO... cartItemList) {
+		// 가변 인자 행 목록을 요청 객체에 세팅합니다.
+		ShopCartCouponEstimateRequestPO request = new ShopCartCouponEstimateRequestPO();
+		request.setCartItemList(List.of(cartItemList));
+		return request;
+	}
+
+	// 테스트용 고객 보유 쿠폰 정보를 생성합니다.
+	private ShopCartCustomerCouponVO createCustomerCoupon(
+		Long custCpnNo,
+		Long cpnNo,
+		String cpnGbCd,
+		String cpnTargetCd,
+		String cpnDcGbCd,
+		Integer cpnDcVal
+	) {
+		// 고객 보유 쿠폰 번호와 할인 정보를 세팅합니다.
+		ShopCartCustomerCouponVO coupon = new ShopCartCustomerCouponVO();
+		coupon.setCustCpnNo(custCpnNo);
+		coupon.setCustNo(7L);
+		coupon.setCpnNo(cpnNo);
+		coupon.setCpnGbCd(cpnGbCd);
+		coupon.setCpnTargetCd(cpnTargetCd);
+		coupon.setCpnDcGbCd(cpnDcGbCd);
+		coupon.setCpnDcVal(cpnDcVal);
+		return coupon;
+	}
+
+	// 테스트용 쿠폰 타겟 정보를 생성합니다.
+	private ShopGoodsCouponTargetVO createCouponTarget(String targetGbCd, String targetValue) {
+		// 타겟 구분 코드와 타겟 값을 세팅합니다.
+		ShopGoodsCouponTargetVO target = new ShopGoodsCouponTargetVO();
+		target.setTargetGbCd(targetGbCd);
+		target.setTargetValue(targetValue);
+		return target;
 	}
 
 	// 테스트용 카테고리 계층 목 데이터를 구성합니다.

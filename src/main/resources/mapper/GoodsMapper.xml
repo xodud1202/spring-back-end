@@ -545,6 +545,7 @@
 		/* GoodsMapper.getShopCartItemList: 쇼핑몰 장바구니 목록 조회 */
 		SELECT C.CUST_NO
 		     , C.GOODS_ID
+		     , GB.BRAND_NO
 		     , GB.GOODS_NM
 		     , C.SIZE_ID
 		     , C.QTY
@@ -766,6 +767,32 @@
 		  FROM COUPON_TARGET
 		 WHERE CPN_NO = #{cpnNo}
 		 ORDER BY TARGET_GB_CD ASC, TARGET_VALUE ASC
+	</select>
+
+	<select id="getShopCustomerCouponList" resultType="com.xodud1202.springbackend.domain.shop.cart.ShopCartCustomerCouponVO">
+		/* GoodsMapper.getShopCustomerCouponList: 고객의 현재 사용 가능한 보유 쿠폰 목록 조회 */
+		SELECT CC.CUST_CPN_NO
+		     , CC.CUST_NO
+		     , CC.CPN_NO
+		     , CB.CPN_NM
+		     , CB.CPN_STAT_CD
+		     , CB.CPN_GB_CD
+		     , CB.CPN_TARGET_CD
+		     , CB.CPN_DC_GB_CD
+		     , CB.CPN_DC_VAL
+		     , CC.CPN_USABLE_START_DT
+		     , CC.CPN_USABLE_END_DT
+		  FROM CUSTOMER_COUPON CC
+		  JOIN COUPON_BASE CB
+		    ON CB.CPN_NO = CC.CPN_NO
+		 WHERE CC.CUST_NO = #{custNo}
+		   AND IFNULL(CC.CPN_USE_YN, 'N') = 'N'
+		   AND IFNULL(CB.DEL_YN, 'N') = 'N'
+		   AND CB.CPN_STAT_CD = 'CPN_STAT_02'
+		   AND CB.CPN_GB_CD IN ('CPN_GB_01', 'CPN_GB_03', 'CPN_GB_04')
+		   AND NOW() &gt;= CC.CPN_USABLE_START_DT
+		   AND NOW() &lt;= CC.CPN_USABLE_END_DT
+		 ORDER BY CC.CUST_CPN_NO DESC
 	</select>
 
 	<insert id="insertCategoryGoods">

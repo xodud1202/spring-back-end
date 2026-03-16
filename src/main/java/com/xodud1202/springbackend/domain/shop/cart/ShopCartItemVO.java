@@ -11,6 +11,8 @@ public class ShopCartItemVO {
 	private Long custNo;
 	// 상품코드입니다.
 	private String goodsId;
+	// 브랜드 번호입니다.
+	private Integer brandNo;
 	// 상품명입니다.
 	private String goodsNm;
 	// 선택된 사이즈 코드입니다.

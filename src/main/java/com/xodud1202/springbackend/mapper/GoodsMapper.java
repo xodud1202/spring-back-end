@@ -21,6 +21,7 @@ import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsSavePO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsVO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
 import com.xodud1202.springbackend.domain.shop.category.ShopCategoryGoodsItemVO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartCustomerCouponVO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartItemVO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartSiteInfoVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsBasicVO;
@@ -220,6 +221,9 @@ public interface GoodsMapper {
 
 	// 상품쿠폰 대상(적용/제외) 목록을 조회합니다.
 	List<ShopGoodsCouponTargetVO> getShopCouponTargetList(@Param("cpnNo") Long cpnNo);
+
+	// 고객이 현재 사용할 수 있는 보유 쿠폰 목록을 조회합니다.
+	List<ShopCartCustomerCouponVO> getShopCustomerCouponList(@Param("custNo") Long custNo);
 
 	// 카테고리 상품 단건을 등록합니다.
 	int insertCategoryGoods(CategoryGoodsSavePO param);

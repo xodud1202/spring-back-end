@@ -1,6 +1,8 @@
 package com.xodud1202.springbackend.controller.shop;
 
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartDeletePO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartCouponEstimateRequestPO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartCouponEstimateVO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartOptionUpdatePO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartPageVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsDetailVO;
@@ -228,6 +230,32 @@ public class ShopGoodsController {
 			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
 			log.error("쇼핑몰 장바구니 페이지 조회 실패 message={}", exception.getMessage(), exception);
 			return ResponseEntity.internalServerError().body(Map.of("message", "장바구니 조회에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 장바구니 선택 상품 기준 예상 최대 쿠폰 할인 금액을 계산합니다.
+	@PostMapping("/api/shop/cart/coupon/estimate")
+	public ResponseEntity<Object> estimateShopCartCoupon(
+		@RequestBody(required = false) ShopCartCouponEstimateRequestPO requestBody,
+		HttpServletRequest request
+	) {
+		try {
+			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			// 장바구니 선택 상품 기준 예상 최대 쿠폰 할인 금액을 계산합니다.
+			ShopCartCouponEstimateVO result = goodsService.getShopCartCouponEstimate(requestBody, custNo);
+			return ResponseEntity.ok(result);
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
+			log.error("쇼핑몰 장바구니 쿠폰 예상 할인 계산 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "장바구니 예상 할인 계산에 실패했습니다."));
 		}
 	}
 

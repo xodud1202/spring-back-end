@@ -1,6 +1,7 @@
 package com.xodud1202.springbackend.controller.shop;
 
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartPageVO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartCouponEstimateVO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartSiteInfoVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsBasicVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsDetailVO;
@@ -365,6 +366,78 @@ class ShopGoodsControllerTests {
 		mockMvc.perform(get("/api/shop/cart/page").contentType(MediaType.APPLICATION_JSON))
 			.andExpect(status().isUnauthorized())
 			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
+	}
+
+	@Test
+	@DisplayName("장바구니 쿠폰 예상 할인 API는 로그인 사용자가 요청하면 할인 금액 필드를 반환한다")
+	// 예상 할인 계산 성공 시 200 응답과 할인 금액 필드 반환 여부를 검증합니다.
+	void estimateShopCartCoupon_returnsOk() throws Exception {
+		// 예상 할인 응답 객체를 구성합니다.
+		ShopCartCouponEstimateVO result = new ShopCartCouponEstimateVO();
+		result.setExpectedMaxDiscountAmt(19000);
+		result.setGoodsCouponDiscountAmt(9000);
+		result.setCartCouponDiscountAmt(7000);
+		result.setDeliveryCouponDiscountAmt(3000);
+		when(goodsService.getShopCartCouponEstimate(any(), eq(1L))).thenReturn(result);
+
+		// 로그인 쿠키와 함께 요청하면 200 응답과 할인 금액 필드를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/cart/coupon/estimate")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"cartItemList":[{"goodsId":"GOODS001","sizeId":"095"}]}
+						""")
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.expectedMaxDiscountAmt").value(19000))
+			.andExpect(jsonPath("$.goodsCouponDiscountAmt").value(9000))
+			.andExpect(jsonPath("$.cartCouponDiscountAmt").value(7000))
+			.andExpect(jsonPath("$.deliveryCouponDiscountAmt").value(3000));
+	}
+
+	@Test
+	@DisplayName("장바구니 쿠폰 예상 할인 API는 비로그인 요청이면 401을 반환한다")
+	// 비로그인 상태에서 예상 할인 계산 요청 시 401 응답을 검증합니다.
+	void estimateShopCartCoupon_returnsUnauthorizedWhenNotLoggedIn() throws Exception {
+		// 로그인 쿠키 없이 요청하면 401 응답과 메시지를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/cart/coupon/estimate")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"cartItemList":[{"goodsId":"GOODS001","sizeId":"095"}]}
+						""")
+			)
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
+	}
+
+	@Test
+	@DisplayName("장바구니 쿠폰 예상 할인 API는 빈 선택 요청이면 0원 결과를 반환한다")
+	// 빈 선택 요청 시 200 응답과 0원 할인 결과를 반환하는지 검증합니다.
+	void estimateShopCartCoupon_returnsZeroWhenSelectionMissing() throws Exception {
+		// 빈 선택 결과 응답 객체를 구성합니다.
+		ShopCartCouponEstimateVO result = new ShopCartCouponEstimateVO();
+		result.setExpectedMaxDiscountAmt(0);
+		result.setGoodsCouponDiscountAmt(0);
+		result.setCartCouponDiscountAmt(0);
+		result.setDeliveryCouponDiscountAmt(0);
+		when(goodsService.getShopCartCouponEstimate(any(), eq(1L))).thenReturn(result);
+
+		// 로그인 쿠키와 함께 빈 선택 요청 시 0원 필드를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/cart/coupon/estimate")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"cartItemList":[]}
+						""")
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.expectedMaxDiscountAmt").value(0))
+			.andExpect(jsonPath("$.goodsCouponDiscountAmt").value(0))
+			.andExpect(jsonPath("$.cartCouponDiscountAmt").value(0))
+			.andExpect(jsonPath("$.deliveryCouponDiscountAmt").value(0));
 	}
 
 	@Test
