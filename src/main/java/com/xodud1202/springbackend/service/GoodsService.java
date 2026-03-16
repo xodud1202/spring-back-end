@@ -970,7 +970,7 @@ public class GoodsService {
 		ShopGoodsPriceSummaryVO priceSummary = buildShopGoodsPriceSummary(goods);
 		ShopGoodsPointSummaryVO pointSummary = buildShopGoodsPointSummary(goods, custGradeCd);
 		ShopGoodsShippingSummaryVO shippingSummary = buildShopGoodsShippingSummary(goods, siteInfo);
-		List<ShopGoodsCouponVO> couponList = filterAvailableShopGoodsCouponList(goods.getGoodsId(), goods.getBrandNo());
+		List<ShopGoodsCouponVO> couponList = getAvailableShopGoodsCouponList(goods.getGoodsId(), goods.getBrandNo());
 
 		// 응답 객체를 구성해 반환합니다.
 		ShopGoodsDetailVO result = new ShopGoodsDetailVO();
@@ -986,6 +986,40 @@ public class GoodsService {
 		result.setPointSummary(pointSummary);
 		result.setShippingSummary(shippingSummary);
 		return result;
+	}
+
+	// 쇼핑몰 상품상세에서 현재 상품에 다운로드 가능한 상품쿠폰 1건을 발급합니다.
+	@Transactional
+	public void downloadShopGoodsCoupon(String goodsId, Long cpnNo, Long custNo) {
+		// 로그인 고객번호와 필수 요청값을 검증합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+		if (isBlank(goodsId)) {
+			throw new IllegalArgumentException("상품코드를 확인해주세요.");
+		}
+		if (cpnNo == null || cpnNo < 1L) {
+			throw new IllegalArgumentException("쿠폰번호를 확인해주세요.");
+		}
+
+		// 현재 조회 가능한 상품인지 먼저 확인합니다.
+		String normalizedGoodsId = goodsId.trim();
+		ShopGoodsBasicVO goods = goodsMapper.getShopGoodsBasic(normalizedGoodsId);
+		if (goods == null) {
+			throw new IllegalArgumentException("상품 정보를 찾을 수 없습니다.");
+		}
+
+		// 상품상세에 실제 노출 가능한 상품쿠폰인지 동일 기준으로 다시 검증합니다.
+		ShopGoodsCouponVO downloadableCoupon = findAvailableShopGoodsCoupon(normalizedGoodsId, goods.getBrandNo(), cpnNo);
+		if (downloadableCoupon == null) {
+			throw new IllegalArgumentException("다운로드 가능한 상품쿠폰을 확인해주세요.");
+		}
+
+		// 검증된 상품쿠폰 1건을 고객에게 발급합니다.
+		int issuedCount = shopAuthService.issueShopCustomerCoupon(custNo, cpnNo, 1);
+		if (issuedCount < 1) {
+			throw new IllegalArgumentException("쿠폰 다운로드에 실패했습니다.");
+		}
 	}
 
 	// 쇼핑몰 상품 위시리스트를 토글(등록/삭제)하고 최종 상태를 반환합니다.
@@ -1823,8 +1857,8 @@ public class GoodsService {
 		return result;
 	}
 
-	// 쇼핑몰 상품상세 쿠폰 목록에서 사용 가능한 상품쿠폰만 필터링합니다.
-	private List<ShopGoodsCouponVO> filterAvailableShopGoodsCouponList(String goodsId, Integer brandNo) {
+	// 쇼핑몰 상품상세에 노출 가능한 상품쿠폰 목록을 조회합니다.
+	private List<ShopGoodsCouponVO> getAvailableShopGoodsCouponList(String goodsId, Integer brandNo) {
 		// 활성 상품쿠폰 원본 목록이 없으면 빈 목록을 반환합니다.
 		List<ShopGoodsCouponVO> sourceCouponList = goodsMapper.getShopActiveGoodsCouponList();
 		if (sourceCouponList == null || sourceCouponList.isEmpty() || isBlank(goodsId)) {
@@ -1842,12 +1876,35 @@ public class GoodsService {
 			if (coupon == null || coupon.getCpnNo() == null) {
 				continue;
 			}
+			if (!CPN_GB_GOODS.equals(coupon.getCpnGbCd())) {
+				continue;
+			}
 			List<ShopGoodsCouponTargetVO> targetList = goodsMapper.getShopCouponTargetList(coupon.getCpnNo());
 			if (isMatchedShopGoodsCoupon(coupon, targetList, goodsId, brandNoValue, categoryIdSet, exhibitionTabNoSet)) {
 				resultList.add(coupon);
 			}
 		}
 		return resultList;
+	}
+
+	// 쇼핑몰 상품상세에 노출 가능한 상품쿠폰 목록에서 지정 쿠폰번호 1건을 찾습니다.
+	private ShopGoodsCouponVO findAvailableShopGoodsCoupon(String goodsId, Integer brandNo, Long cpnNo) {
+		// 비교할 쿠폰번호가 없으면 null을 반환합니다.
+		if (cpnNo == null || cpnNo < 1L) {
+			return null;
+		}
+
+		// 현재 상품에 노출 가능한 쿠폰 목록에서 동일 쿠폰번호를 탐색합니다.
+		List<ShopGoodsCouponVO> availableCouponList = getAvailableShopGoodsCouponList(goodsId, brandNo);
+		for (ShopGoodsCouponVO coupon : availableCouponList) {
+			if (coupon == null || coupon.getCpnNo() == null) {
+				continue;
+			}
+			if (cpnNo.equals(coupon.getCpnNo())) {
+				return coupon;
+			}
+		}
+		return null;
 	}
 
 	// 쿠폰 1건이 현재 상품에 적용 가능한지 판정합니다.

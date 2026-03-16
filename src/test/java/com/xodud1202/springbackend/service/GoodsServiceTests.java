@@ -370,6 +370,131 @@ class GoodsServiceTests {
 	}
 
 	@Test
+	@DisplayName("쇼핑몰 상품상세 쿠폰 다운로드 시 현재 상품에 적용 가능한 상품쿠폰이면 1건 발급한다")
+	// 상품상세 쿠폰 다운로드 요청 시 현재 상품에 노출 가능한 상품쿠폰만 발급되는지 검증합니다.
+	void downloadShopGoodsCoupon_issuesCouponWhenApplicableToGoods() {
+		// 다운로드 대상 상품과 상품쿠폰 데이터를 구성합니다.
+		ShopGoodsBasicVO goods = new ShopGoodsBasicVO();
+		goods.setGoodsId("GOODS001");
+		goods.setBrandNo(1);
+
+		ShopGoodsCouponVO goodsCoupon = new ShopGoodsCouponVO();
+		goodsCoupon.setCpnNo(51L);
+		goodsCoupon.setCpnGbCd("CPN_GB_01");
+		goodsCoupon.setCpnTargetCd("CPN_TARGET_99");
+
+		// 현재 상품에 노출 가능한 상품쿠폰과 발급 서비스 응답을 설정합니다.
+		when(goodsMapper.getShopGoodsBasic("GOODS001")).thenReturn(goods);
+		when(goodsMapper.getShopActiveGoodsCouponList()).thenReturn(List.of(goodsCoupon));
+		when(goodsMapper.getShopGoodsCategoryIdList("GOODS001")).thenReturn(List.of());
+		when(goodsMapper.getShopGoodsExhibitionTabNoList("GOODS001")).thenReturn(List.of());
+		when(goodsMapper.getShopCouponTargetList(51L)).thenReturn(List.of());
+		when(shopAuthService.issueShopCustomerCoupon(7L, 51L, 1)).thenReturn(1);
+
+		// 상품상세 쿠폰 다운로드를 수행합니다.
+		goodsService.downloadShopGoodsCoupon("GOODS001", 51L, 7L);
+
+		// 발급 서비스가 1건 호출되는지 검증합니다.
+		verify(shopAuthService).issueShopCustomerCoupon(7L, 51L, 1);
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 상품상세 쿠폰 다운로드 시 같은 상품쿠폰을 반복 요청해도 매번 발급을 시도한다")
+	// 상품상세 쿠폰 다운로드는 동일 쿠폰을 이미 보유 중이어도 반복 다운로드를 허용하는지 검증합니다.
+	void downloadShopGoodsCoupon_allowsDuplicateCouponDownload() {
+		// 반복 다운로드 대상 상품과 상품쿠폰 데이터를 구성합니다.
+		ShopGoodsBasicVO goods = new ShopGoodsBasicVO();
+		goods.setGoodsId("GOODS001");
+		goods.setBrandNo(1);
+
+		ShopGoodsCouponVO goodsCoupon = new ShopGoodsCouponVO();
+		goodsCoupon.setCpnNo(52L);
+		goodsCoupon.setCpnGbCd("CPN_GB_01");
+		goodsCoupon.setCpnTargetCd("CPN_TARGET_99");
+
+		// 반복 호출해도 동일 쿠폰이 계속 발급 가능하도록 목 응답을 설정합니다.
+		when(goodsMapper.getShopGoodsBasic("GOODS001")).thenReturn(goods);
+		when(goodsMapper.getShopActiveGoodsCouponList()).thenReturn(List.of(goodsCoupon));
+		when(goodsMapper.getShopGoodsCategoryIdList("GOODS001")).thenReturn(List.of());
+		when(goodsMapper.getShopGoodsExhibitionTabNoList("GOODS001")).thenReturn(List.of());
+		when(goodsMapper.getShopCouponTargetList(52L)).thenReturn(List.of());
+		when(shopAuthService.issueShopCustomerCoupon(7L, 52L, 1)).thenReturn(1);
+
+		// 동일 상품쿠폰 다운로드를 두 번 수행합니다.
+		goodsService.downloadShopGoodsCoupon("GOODS001", 52L, 7L);
+		goodsService.downloadShopGoodsCoupon("GOODS001", 52L, 7L);
+
+		// 동일 쿠폰 발급 서비스가 요청 횟수만큼 호출되는지 검증합니다.
+		verify(shopAuthService, times(2)).issueShopCustomerCoupon(7L, 52L, 1);
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 상품상세 쿠폰 다운로드 시 장바구니 쿠폰이면 예외를 반환한다")
+	// 상품상세 다운로드 대상은 상품쿠폰만 허용되고 장바구니 쿠폰은 차단되는지 검증합니다.
+	void downloadShopGoodsCoupon_throwsWhenCouponIsNotGoodsCoupon() {
+		// 상품상세 조회 가능한 상품과 장바구니 쿠폰 데이터를 구성합니다.
+		ShopGoodsBasicVO goods = new ShopGoodsBasicVO();
+		goods.setGoodsId("GOODS001");
+		goods.setBrandNo(1);
+
+		ShopGoodsCouponVO cartCoupon = new ShopGoodsCouponVO();
+		cartCoupon.setCpnNo(61L);
+		cartCoupon.setCpnGbCd("CPN_GB_03");
+		cartCoupon.setCpnTargetCd("CPN_TARGET_99");
+
+		// 상품 기본 정보와 활성 쿠폰 목록을 설정합니다.
+		when(goodsMapper.getShopGoodsBasic("GOODS001")).thenReturn(goods);
+		when(goodsMapper.getShopActiveGoodsCouponList()).thenReturn(List.of(cartCoupon));
+		when(goodsMapper.getShopGoodsCategoryIdList("GOODS001")).thenReturn(List.of());
+		when(goodsMapper.getShopGoodsExhibitionTabNoList("GOODS001")).thenReturn(List.of());
+
+		// 상품쿠폰 전용 검증 예외 메시지를 확인합니다.
+		assertThatThrownBy(() -> goodsService.downloadShopGoodsCoupon("GOODS001", 61L, 7L))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessage("다운로드 가능한 상품쿠폰을 확인해주세요.");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 상품상세 쿠폰 다운로드 시 제외상품이면 예외를 반환한다")
+	// 현재 상품이 쿠폰 제외 대상으로 잡혀 있으면 다운로드를 차단하는지 검증합니다.
+	void downloadShopGoodsCoupon_throwsWhenGoodsExcluded() {
+		// 상품상세 조회 가능한 상품과 제외 대상 상품쿠폰 데이터를 구성합니다.
+		ShopGoodsBasicVO goods = new ShopGoodsBasicVO();
+		goods.setGoodsId("GOODS001");
+		goods.setBrandNo(1);
+
+		ShopGoodsCouponVO goodsCoupon = new ShopGoodsCouponVO();
+		goodsCoupon.setCpnNo(71L);
+		goodsCoupon.setCpnGbCd("CPN_GB_01");
+		goodsCoupon.setCpnTargetCd("CPN_TARGET_99");
+
+		// 상품 기본 정보와 제외 타겟 쿠폰 응답을 설정합니다.
+		when(goodsMapper.getShopGoodsBasic("GOODS001")).thenReturn(goods);
+		when(goodsMapper.getShopActiveGoodsCouponList()).thenReturn(List.of(goodsCoupon));
+		when(goodsMapper.getShopGoodsCategoryIdList("GOODS001")).thenReturn(List.of());
+		when(goodsMapper.getShopGoodsExhibitionTabNoList("GOODS001")).thenReturn(List.of());
+		when(goodsMapper.getShopCouponTargetList(71L)).thenReturn(List.of(createCouponTarget("TARGET_GB_02", "GOODS001")));
+
+		// 제외상품 검증 예외 메시지를 확인합니다.
+		assertThatThrownBy(() -> goodsService.downloadShopGoodsCoupon("GOODS001", 71L, 7L))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessage("다운로드 가능한 상품쿠폰을 확인해주세요.");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 상품상세 쿠폰 다운로드 시 상품이 없으면 예외를 반환한다")
+	// 다운로드 대상 상품을 찾지 못하면 상품 미존재 예외를 반환하는지 검증합니다.
+	void downloadShopGoodsCoupon_throwsWhenGoodsMissing() {
+		// 상품 기본 정보를 찾지 못한 상황을 목으로 설정합니다.
+		when(goodsMapper.getShopGoodsBasic("UNKNOWN")).thenReturn(null);
+
+		// 상품 미존재 예외 메시지를 확인합니다.
+		assertThatThrownBy(() -> goodsService.downloadShopGoodsCoupon("UNKNOWN", 81L, 7L))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessage("상품 정보를 찾을 수 없습니다.");
+	}
+
+	@Test
 	@DisplayName("쇼핑몰 상품상세 조회 시 가격/포인트/배송비/쿠폰/위시리스트를 조합해 반환한다")
 	// 상품상세 상단 응답 조합 로직이 요구사항대로 계산되는지 검증합니다.
 	void getShopGoodsDetail_returnsComposedShopGoodsDetail() {
@@ -420,6 +545,7 @@ class GoodsServiceTests {
 
 		ShopGoodsCouponVO brandCoupon = new ShopGoodsCouponVO();
 		brandCoupon.setCpnNo(1L);
+		brandCoupon.setCpnGbCd("CPN_GB_01");
 		brandCoupon.setCpnTargetCd("CPN_TARGET_04");
 
 		ShopGoodsCouponTargetVO brandApplyTarget = new ShopGoodsCouponTargetVO();
@@ -429,6 +555,7 @@ class GoodsServiceTests {
 
 		ShopGoodsCouponVO excludedCoupon = new ShopGoodsCouponVO();
 		excludedCoupon.setCpnNo(2L);
+		excludedCoupon.setCpnGbCd("CPN_GB_01");
 		excludedCoupon.setCpnTargetCd("CPN_TARGET_01");
 
 		ShopGoodsCouponTargetVO excludedApplyTarget = new ShopGoodsCouponTargetVO();

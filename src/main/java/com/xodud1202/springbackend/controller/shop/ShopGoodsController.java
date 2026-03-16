@@ -5,6 +5,7 @@ import com.xodud1202.springbackend.domain.shop.cart.ShopCartCouponEstimateReques
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartCouponEstimateVO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartOptionUpdatePO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartPageVO;
+import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsCouponDownloadRequestPO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsDetailVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponDownloadRequestPO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponPageVO;
@@ -65,6 +66,39 @@ public class ShopGoodsController {
 			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
 			log.error("쇼핑몰 상품상세 조회 실패 message={} goodsId={}", exception.getMessage(), goodsId, exception);
 			return ResponseEntity.internalServerError().body(Map.of("message", "상품상세 조회에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 상품상세에서 현재 상품에 다운로드 가능한 상품쿠폰 1건을 다운로드합니다.
+	@PostMapping("/api/shop/goods/coupon/download")
+	public ResponseEntity<Object> downloadShopGoodsCoupon(
+		@RequestBody(required = false) ShopGoodsCouponDownloadRequestPO requestBody,
+		HttpServletRequest request
+	) {
+		try {
+			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			// 상품상세 기준 쿠폰 다운로드를 수행합니다.
+			String goodsId = requestBody == null ? null : requestBody.getGoodsId();
+			Long cpnNo = requestBody == null ? null : requestBody.getCpnNo();
+			goodsService.downloadShopGoodsCoupon(goodsId, cpnNo, custNo);
+			return ResponseEntity.ok(Map.of("message", "쿠폰을 다운로드했습니다."));
+		} catch (IllegalArgumentException exception) {
+			// 상품 미존재는 404 응답으로 반환합니다.
+			if ("상품 정보를 찾을 수 없습니다.".equals(exception.getMessage())) {
+				return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", exception.getMessage()));
+			}
+
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
+			log.error("쇼핑몰 상품상세 쿠폰 다운로드 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "쿠폰 다운로드에 실패했습니다."));
 		}
 	}
 

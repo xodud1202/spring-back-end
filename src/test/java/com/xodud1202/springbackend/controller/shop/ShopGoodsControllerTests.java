@@ -142,6 +142,61 @@ class ShopGoodsControllerTests {
 	}
 
 	@Test
+	@DisplayName("상품상세 쿠폰 다운로드 API는 로그인 사용자가 요청하면 다운로드 메시지를 반환한다")
+	// 상품상세 쿠폰 다운로드 성공 시 200 응답과 메시지 반환 여부를 검증합니다.
+	void downloadShopGoodsCoupon_returnsOk() throws Exception {
+		// 로그인 쿠키와 함께 요청하면 200 응답과 메시지를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/goods/coupon/download")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"goodsId":"CAMEUEP02MG","cpnNo":21}
+						""")
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.message").value("쿠폰을 다운로드했습니다."));
+	}
+
+	@Test
+	@DisplayName("상품상세 쿠폰 다운로드 API는 비로그인 요청이면 401을 반환한다")
+	// 비로그인 상태에서 상품상세 쿠폰 다운로드 요청 시 401 응답을 검증합니다.
+	void downloadShopGoodsCoupon_returnsUnauthorizedWhenNotLoggedIn() throws Exception {
+		// 로그인 쿠키 없이 요청하면 401 응답과 메시지를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/goods/coupon/download")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"goodsId":"CAMEUEP02MG","cpnNo":21}
+						""")
+			)
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
+	}
+
+	@Test
+	@DisplayName("상품상세 쿠폰 다운로드 API는 잘못된 상품/쿠폰 조합이면 400을 반환한다")
+	// 서비스에서 상품상세 기준 쿠폰 검증 예외를 반환하면 400 응답으로 변환되는지 검증합니다.
+	void downloadShopGoodsCoupon_returnsBadRequestWhenCouponInvalidForGoods() throws Exception {
+		// 상품상세 기준 쿠폰 검증 예외를 발생하도록 목 동작을 설정합니다.
+		org.mockito.Mockito.doThrow(new IllegalArgumentException("다운로드 가능한 상품쿠폰을 확인해주세요."))
+			.when(goodsService)
+			.downloadShopGoodsCoupon("CAMEUEP02MG", 21L, 1L);
+
+		// 로그인 쿠키와 함께 요청하면 400 응답과 메시지를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/goods/coupon/download")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"goodsId":"CAMEUEP02MG","cpnNo":21}
+						""")
+			)
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("다운로드 가능한 상품쿠폰을 확인해주세요."));
+	}
+
+	@Test
 	@DisplayName("위시리스트 토글 API는 비로그인 요청이면 401을 반환한다")
 	// 비로그인 상태에서 위시리스트 토글 요청 시 401 응답을 검증합니다.
 	void toggleShopGoodsWishlist_returnsUnauthorizedWhenNotLoggedIn() throws Exception {
