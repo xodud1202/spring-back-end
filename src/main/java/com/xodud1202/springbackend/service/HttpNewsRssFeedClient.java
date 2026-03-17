@@ -58,6 +58,9 @@ public class HttpNewsRssFeedClient implements NewsRssFeedClient {
 			// 조회한 XML을 파싱해 기사 목록으로 변환합니다.
 			Document document = parseXml(response.body());
 			return extractArticleItems(document);
+		} catch (InterruptedException exception) {
+			Thread.currentThread().interrupt();
+			throw new IllegalStateException("RSS 조회가 인터럽트로 중단되었습니다. url=" + normalizedUrl, exception);
 		} catch (Exception exception) {
 			throw new IllegalStateException("RSS 조회/파싱에 실패했습니다. url=" + normalizedUrl, exception);
 		}

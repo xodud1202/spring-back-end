@@ -11,14 +11,19 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 @Service
 @RequiredArgsConstructor
+// FTP 파일 업로드/삭제와 경로 계산을 제공하는 서비스입니다.
 public class FtpFileService {
 	private static final DateTimeFormatter FTP_TEMP_FILE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
+	private static final int ATOMIC_TEXT_UPLOAD_CONNECT_TIMEOUT_MILLIS = 10000;
+	private static final int ATOMIC_TEXT_UPLOAD_SOCKET_TIMEOUT_MILLIS = 30000;
+	private static final int ATOMIC_TEXT_UPLOAD_DATA_TIMEOUT_MILLIS = 30000;
 	
 	private final FtpProperties ftpProperties;
 
@@ -240,8 +245,12 @@ public class FtpFileService {
 		byte[] contentBytes = (content == null ? "" : content).getBytes(StandardCharsets.UTF_8);
 
 		try {
+			// 뉴스 스냅샷 업로드가 무한 대기하지 않도록 접속 타임아웃을 먼저 적용합니다.
+			configureAtomicTextUploadPreConnectTimeout(ftpClient);
+
 			// FTP 서버 접속 및 로그인 후 이진 업로드 모드를 설정합니다.
 			connectAndLoginFtpClient(ftpClient);
+			configureAtomicTextUploadPostConnectTimeout(ftpClient);
 			ftpClient.enterLocalPassiveMode();
 			ftpClient.setFileType(FTP.BINARY_FILE_TYPE);
 
@@ -271,6 +280,25 @@ public class FtpFileService {
 				ftpClient.disconnect();
 			}
 		}
+	}
+
+	/**
+	 * 원자적 텍스트 업로드용 FTP 접속 전 타임아웃을 적용합니다.
+	 * @param ftpClient FTP 클라이언트
+	 */
+	private void configureAtomicTextUploadPreConnectTimeout(FTPClient ftpClient) {
+		ftpClient.setConnectTimeout(ATOMIC_TEXT_UPLOAD_CONNECT_TIMEOUT_MILLIS);
+		ftpClient.setDefaultTimeout(ATOMIC_TEXT_UPLOAD_SOCKET_TIMEOUT_MILLIS);
+	}
+
+	/**
+	 * 원자적 텍스트 업로드용 FTP 접속 후 타임아웃을 적용합니다.
+	 * @param ftpClient FTP 클라이언트
+	 * @throws IOException FTP 소켓 타임아웃 적용 실패 시 발생
+	 */
+	private void configureAtomicTextUploadPostConnectTimeout(FTPClient ftpClient) throws IOException {
+		ftpClient.setSoTimeout(ATOMIC_TEXT_UPLOAD_SOCKET_TIMEOUT_MILLIS);
+		ftpClient.setDataTimeout(Duration.ofMillis(ATOMIC_TEXT_UPLOAD_DATA_TIMEOUT_MILLIS));
 	}
 
 	/**

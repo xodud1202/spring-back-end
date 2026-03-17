@@ -476,6 +476,8 @@ public class NewsService {
 
 	// 뉴스 확장프로그램용 직접 조회 JSON 스냅샷 객체를 생성합니다.
 	public NewsListJsonSnapshotVO buildNewsListJsonSnapshot() {
+		throwIfSchedulerInterrupted("뉴스 JSON 스냅샷 생성 시작 전에 인터럽트가 감지되었습니다.");
+
 		// 스냅샷 생성 기준 시각과 메타 카운터를 초기화합니다.
 		LocalDateTime generatedAt = LocalDateTime.now();
 		String generatedAtText = generatedAt.format(DATE_TIME_FORMATTER);
@@ -521,6 +523,8 @@ public class NewsService {
 		// 2차 패스: RSS 대상 순회로 카테고리/기사를 함께 채웁니다.
 		for (NewsRssTargetVO target : rssTargetList) {
 			try {
+				throwIfSchedulerInterrupted("뉴스 JSON 스냅샷 생성 중 인터럽트가 감지되었습니다.");
+
 				Long pressNo = target == null ? null : target.getPressNo();
 				String categoryId = trimToNull(target == null ? null : target.getCategoryCd());
 				String pressId = pressIdByPressNo.getOrDefault(pressNo, String.valueOf(pressNo));
@@ -549,6 +553,7 @@ public class NewsService {
 					snapshot.getArticleListByPressCategoryKey().put(categoryKey, new ArrayList<>());
 				}
 				RssFetchResult rssFetchResult = fetchArticleItemsWithRetry(target);
+				throwIfSchedulerInterrupted("뉴스 JSON 스냅샷 기사 구성 중 인터럽트가 감지되었습니다.");
 				if (RSS_FETCH_RESULT_OK.equals(rssFetchResult.resultCode())) {
 					// RSS 조회에 성공하면 원본 피드 기사 목록을 스냅샷에 반영합니다.
 					articleItemList = buildSnapshotArticleItemListFromRss(target, rssFetchResult.articleItemList(), generatedAtText);
@@ -583,6 +588,10 @@ public class NewsService {
 					failedTargetCount += 1;
 				}
 			} catch (Exception exception) {
+				if (isSchedulerInterrupted(exception)) {
+					Thread.currentThread().interrupt();
+					throw new IllegalStateException("뉴스 JSON 스냅샷 생성이 인터럽트로 중단되었습니다.", exception);
+				}
 				failedTargetCount += 1;
 				log.warn(
 					"뉴스 JSON 스냅샷 RSS 조회 실패 pressNo={}, categoryCd={}, rssUrl={}, message={}",
@@ -593,6 +602,8 @@ public class NewsService {
 				);
 			}
 		}
+
+		throwIfSchedulerInterrupted("뉴스 JSON 스냅샷 메타 구성 중 인터럽트가 감지되었습니다.");
 
 		// 최종 기사 키 목록을 맵 순서대로 추출합니다.
 		List<String> categoryKeyList = new ArrayList<>(snapshot.getArticleListByPressCategoryKey().keySet());
@@ -627,6 +638,8 @@ public class NewsService {
 	) {
 		List<NewsListJsonSnapshotVO.ArticleItem> articleItemList = new ArrayList<>();
 		for (int feedIndex = 0; feedIndex < feedItemList.size(); feedIndex += 1) {
+			throwIfSchedulerInterrupted("뉴스 RSS 기사 목록 변환 중 인터럽트가 감지되었습니다.");
+
 			// RSS 항목 순서를 점수로 사용해 스냅샷 기사 항목을 구성합니다.
 			RssArticleItem feedItem = feedItemList.get(feedIndex);
 			articleItemList.add(buildSnapshotArticleItem(target, feedItem, feedIndex + 1, collectedDt));
@@ -639,6 +652,8 @@ public class NewsService {
 		NewsRssTargetVO target,
 		String collectedDt
 	) {
+		throwIfSchedulerInterrupted("뉴스 DB fallback 기사 조회 전에 인터럽트가 감지되었습니다.");
+
 		List<NewsTopArticleVO> fallbackArticleList = newsMapper.getTopArticleListByPressNoAndCategoryCd(
 			target.getPressNo(),
 			target.getCategoryCd(),
@@ -650,6 +665,8 @@ public class NewsService {
 
 		List<NewsListJsonSnapshotVO.ArticleItem> articleItemList = new ArrayList<>();
 		for (int index = 0; index < fallbackArticleList.size(); index += 1) {
+			throwIfSchedulerInterrupted("뉴스 DB fallback 기사 변환 중 인터럽트가 감지되었습니다.");
+
 			// DB 상위 기사 정보를 스냅샷 기사 구조로 변환합니다.
 			NewsTopArticleVO fallbackArticle = fallbackArticleList.get(index);
 			articleItemList.add(buildSnapshotArticleItemFromDbFallback(target, fallbackArticle, index + 1, collectedDt));
@@ -694,8 +711,11 @@ public class NewsService {
 		String lastMessage = null;
 		for (int attempt = 1; attempt <= RSS_FETCH_MAX_ATTEMPT_COUNT; attempt += 1) {
 			try {
+				throwIfSchedulerInterrupted("뉴스 RSS 조회 재시도 전에 인터럽트가 감지되었습니다.");
+
 				// RSS 조회가 성공하면 item 비어있음 여부를 검증합니다.
 				List<RssArticleItem> feedItemList = newsRssFeedClient.fetchArticleItems(target.getRssUrl());
+				throwIfSchedulerInterrupted("뉴스 RSS 조회 응답 처리 중 인터럽트가 감지되었습니다.");
 				if (!feedItemList.isEmpty()) {
 					return new RssFetchResult(feedItemList, attempt, RSS_FETCH_RESULT_OK, null);
 				}
@@ -707,6 +727,10 @@ public class NewsService {
 				}
 				return new RssFetchResult(List.of(), attempt, RSS_FETCH_RESULT_EMPTY, lastMessage);
 			} catch (Exception exception) {
+				if (isSchedulerInterrupted(exception)) {
+					Thread.currentThread().interrupt();
+					throw new IllegalStateException("뉴스 RSS 조회가 인터럽트로 중단되었습니다.", exception);
+				}
 				lastMessage = exception.getMessage();
 				if (attempt < RSS_FETCH_MAX_ATTEMPT_COUNT) {
 					sleepBeforeRetry(attempt, target, lastMessage);
@@ -737,6 +761,29 @@ public class NewsService {
 			Thread.currentThread().interrupt();
 			throw new IllegalStateException("RSS 재시도 대기 중 인터럽트가 발생했습니다.", exception);
 		}
+	}
+
+	// 현재 스케줄러 워커 스레드의 인터럽트 여부를 확인하고 배치를 중단합니다.
+	private void throwIfSchedulerInterrupted(String message) {
+		if (Thread.currentThread().isInterrupted()) {
+			throw new IllegalStateException(message, new InterruptedException(message));
+		}
+	}
+
+	// 예외 체인에 인터럽트가 포함되었는지 확인합니다.
+	private boolean isSchedulerInterrupted(Throwable throwable) {
+		if (Thread.currentThread().isInterrupted()) {
+			return true;
+		}
+
+		Throwable current = throwable;
+		while (current != null) {
+			if (current instanceof InterruptedException) {
+				return true;
+			}
+			current = current.getCause();
+		}
+		return false;
 	}
 
 	// 뉴스 확장프로그램용 직접 조회 JSON 스냅샷 문자열을 생성합니다.
@@ -806,6 +853,8 @@ public class NewsService {
 
 	// 뉴스 확장프로그램용 직접 조회 JSON 스냅샷 파일을 FTP에 원자적으로 업로드합니다.
 	public NewsListJsonSnapshotPublishResultVO publishNewsListJsonSnapshot() {
+		throwIfSchedulerInterrupted("뉴스 JSON 스냅샷 업로드 시작 전에 인터럽트가 감지되었습니다.");
+
 		NewsListJsonSnapshotVO snapshot = buildNewsListJsonSnapshot();
 		String snapshotJson;
 		try {
@@ -816,6 +865,7 @@ public class NewsService {
 
 		String targetPath = resolveNewsSnapshotTargetPath();
 		try {
+			throwIfSchedulerInterrupted("뉴스 JSON 스냅샷 FTP 업로드 전에 인터럽트가 감지되었습니다.");
 			String tempFileName = ftpFileService.uploadUtf8TextFileAtomically(targetPath, NEWS_LIST_JSON_FILE_NAME, snapshotJson);
 			return NewsListJsonSnapshotPublishResultVO.builder()
 				.targetPath(targetPath)
@@ -854,6 +904,8 @@ public class NewsService {
 
 	// 뉴스 목록 메타+언론사 shard JSON 파일을 FTP에 원자적으로 업로드합니다.
 	public NewsListPressShardSnapshotPublishResultVO publishNewsListPressShardJsonSnapshot() {
+		throwIfSchedulerInterrupted("뉴스 메타+언론사 shard JSON 업로드 시작 전에 인터럽트가 감지되었습니다.");
+
 		NewsListJsonSnapshotVO snapshot = buildNewsListJsonSnapshot();
 		NewsListMetaJsonVO metaJson = buildNewsListMetaJson(snapshot);
 		Map<String, NewsListPressArticleShardJsonVO> shardJsonByPressId = buildNewsListPressArticleShardJsonMap(snapshot);
@@ -866,6 +918,8 @@ public class NewsService {
 		// 기사 shard 파일을 먼저 모두 업로드/교체하고, 하나라도 실패하면 메타 교체를 중단합니다.
 		try {
 			for (NewsListJsonSnapshotVO.PressItem pressItem : snapshot.getPressList()) {
+				throwIfSchedulerInterrupted("뉴스 기사 shard JSON 업로드 중 인터럽트가 감지되었습니다.");
+
 				if (pressItem == null || trimToNull(pressItem.getId()) == null) {
 					continue;
 				}
@@ -886,6 +940,7 @@ public class NewsService {
 
 		// 메타 파일은 기사 shard가 모두 교체된 뒤 마지막에 교체합니다.
 		try {
+			throwIfSchedulerInterrupted("뉴스 메타 JSON 업로드 전에 인터럽트가 감지되었습니다.");
 			String metaJsonText = objectMapper.writeValueAsString(metaJson);
 			ftpFileService.uploadUtf8TextFileAtomically(baseTargetPath, NEWS_LIST_META_FILE_NAME, metaJsonText);
 			return NewsListPressShardSnapshotPublishResultVO.builder()
