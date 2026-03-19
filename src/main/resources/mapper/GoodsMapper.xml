@@ -837,6 +837,94 @@
 		 ORDER BY C.REG_DT DESC, C.CART_ID DESC
 	</select>
 
+	<select id="getShopOrderAddressList" resultType="com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressVO">
+		/* GoodsMapper.getShopOrderAddressList: 쇼핑몰 주문서 배송지 목록 조회 */
+		SELECT CUST_NO
+		     , ADDRESS_NM
+		     , POST_NO
+		     , BASE_ADDRESS
+		     , DETAIL_ADDRESS
+		     , PHONE_NUMBER
+		     , RSV_NM
+		     , DEFAULT_YN
+		  FROM CUSTOMER_ADDRESS
+		 WHERE CUST_NO = #{custNo}
+		 ORDER BY CASE DEFAULT_YN
+		            WHEN 'Y' THEN 0
+		            ELSE 1
+		          END ASC
+		        , REG_DT DESC
+		        , ADDRESS_NM ASC
+	</select>
+
+	<select id="countShopOrderAddressName" resultType="int">
+		/* GoodsMapper.countShopOrderAddressName: 쇼핑몰 주문서 배송지 별칭 중복 건수 조회 */
+		SELECT COUNT(1)
+		  FROM CUSTOMER_ADDRESS
+		 WHERE CUST_NO = #{custNo}
+		   AND ADDRESS_NM = #{addressNm}
+	</select>
+
+	<select id="countShopOrderAddress" resultType="int">
+		/* GoodsMapper.countShopOrderAddress: 쇼핑몰 주문서 배송지 단건 존재 여부 조회 */
+		SELECT COUNT(1)
+		  FROM CUSTOMER_ADDRESS
+		 WHERE CUST_NO = #{custNo}
+		   AND ADDRESS_NM = #{addressNm}
+	</select>
+
+	<update id="updateShopOrderAddressDefaultYn">
+		/* GoodsMapper.updateShopOrderAddressDefaultYn: 쇼핑몰 주문서 기본 배송지 여부 일괄 변경 */
+		UPDATE CUSTOMER_ADDRESS
+		   SET DEFAULT_YN = #{defaultYn}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE CUST_NO = #{custNo}
+	</update>
+
+	<insert id="insertShopOrderAddress">
+		/* GoodsMapper.insertShopOrderAddress: 쇼핑몰 주문서 배송지 등록 */
+		INSERT INTO CUSTOMER_ADDRESS (
+		       CUST_NO
+		     , ADDRESS_NM
+		     , POST_NO
+		     , BASE_ADDRESS
+		     , DETAIL_ADDRESS
+		     , PHONE_NUMBER
+		     , RSV_NM
+		     , DEFAULT_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{custNo}
+		     , #{addressNm}
+		     , #{postNo}
+		     , #{baseAddress}
+		     , #{detailAddress}
+		     , #{phoneNumber}
+		     , #{rsvNm}
+		     , #{defaultYn}
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+
+	<update id="updateShopOrderAddress">
+		/* GoodsMapper.updateShopOrderAddress: 쇼핑몰 주문서 배송지 수정 */
+		UPDATE CUSTOMER_ADDRESS
+		   SET ADDRESS_NM = #{addressNm}
+		     , POST_NO = #{postNo}
+		     , BASE_ADDRESS = #{baseAddress}
+		     , DETAIL_ADDRESS = #{detailAddress}
+		     , PHONE_NUMBER = #{phoneNumber}
+		     , RSV_NM = #{rsvNm}
+		     , DEFAULT_YN = #{defaultYn}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE CUST_NO = #{custNo}
+		   AND ADDRESS_NM = #{originAddressNm}
+	</update>
+
 	<insert id="insertShopWishList">
 		/* GoodsMapper.insertShopWishList: 쇼핑몰 상품 위시리스트 등록 */
 		INSERT INTO WISH_LIST (

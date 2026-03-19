@@ -45,6 +45,13 @@ import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOwnedCouponVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsWishlistVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishGoodsItemVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishPageVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressRegisterPO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSavePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSaveResultVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSearchResponseVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressUpdatePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPageVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryVO;
@@ -96,11 +103,14 @@ public class GoodsService {
 	private final GoodsMapper goodsMapper;
 	private final FtpFileService ftpFileService;
 	private final ShopAuthService shopAuthService;
+	private final JusoAddressApiClient jusoAddressApiClient;
 	private static final int GOODS_IMAGE_MIN_SIZE = 500;
 	private static final int GOODS_IMAGE_MAX_SIZE = 1500;
 	private static final String SHOP_SITE_ID = "xodud1202";
 	private static final String SHOP_CART_GB_CART = "C";
 	private static final String SHOP_CART_GB_ORDER = "O";
+	private static final String YES = "Y";
+	private static final String NO = "N";
 	private static final String DEFAULT_CUST_GRADE_CD = "CUST_GRADE_01";
 	private static final String TARGET_GB_APPLY = "TARGET_GB_01";
 	private static final String TARGET_GB_EXCLUDE = "TARGET_GB_02";
@@ -117,6 +127,9 @@ public class GoodsService {
 	private static final int SHOP_MYPAGE_WISH_PAGE_SIZE = 10;
 	private static final int SHOP_MYPAGE_COUPON_PAGE_SIZE = 10;
 	private static final int SHOP_MYPAGE_COUPON_TOOLTIP_LIMIT = 10;
+	private static final int SHOP_ORDER_ADDRESS_SEARCH_DEFAULT_PAGE = 1;
+	private static final int SHOP_ORDER_ADDRESS_SEARCH_DEFAULT_COUNT = 10;
+	private static final int SHOP_ORDER_ADDRESS_SEARCH_MAX_COUNT = 100;
 
 	// 관리자 상품 목록을 페이징 조건으로 조회합니다.
 	public Map<String, Object> getAdminGoodsList(GoodsPO param) {
@@ -318,6 +331,20 @@ public class GoodsService {
 	// 문자열 공백 여부를 확인합니다.
 	private boolean isBlank(String value) {
 		return value == null || value.trim().isEmpty();
+	}
+
+	// 문자열을 trim 처리하고 비어 있으면 null을 반환합니다.
+	private String trimToNull(String value) {
+		if (value == null) {
+			return null;
+		}
+		String trimmed = value.trim();
+		return trimmed.isEmpty() ? null : trimmed;
+	}
+
+	// Y/N 값을 보정하고 그 외 값은 N으로 반환합니다.
+	private String normalizeYesNo(String value) {
+		return YES.equalsIgnoreCase(trimToNull(value)) ? YES : NO;
 	}
 
 	// 관리자 상품 사이즈 목록을 조회합니다.
@@ -1100,7 +1127,7 @@ public class GoodsService {
 	}
 
 	// 쇼핑몰 주문서 페이지 데이터를 cartId 기준으로 조회합니다.
-	public ShopCartPageVO getShopOrderPage(List<Long> cartIdList, Long custNo) {
+	public ShopOrderPageVO getShopOrderPage(List<Long> cartIdList, Long custNo) {
 		// 로그인 고객번호 유효성을 확인합니다.
 		if (custNo == null || custNo < 1L) {
 			throw new IllegalArgumentException("로그인이 필요합니다.");
@@ -1117,7 +1144,127 @@ public class GoodsService {
 		if (orderCartItemList == null || orderCartItemList.size() != normalizedCartIdList.size()) {
 			throw new IllegalArgumentException("주문 정보가 맞지 않습니다.");
 		}
-		return buildShopCartPage(orderCartItemList);
+		return buildShopOrderPage(orderCartItemList, custNo);
+	}
+
+	// 쇼핑몰 주문서 배송지 검색 결과를 조회합니다.
+	public ShopOrderAddressSearchResponseVO searchShopOrderAddress(String keyword, Integer currentPage, Integer countPerPage, Long custNo) {
+		// 로그인 고객번호와 검색어 유효성을 확인합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+		String normalizedKeyword = trimToNull(keyword);
+		if (normalizedKeyword == null) {
+			throw new IllegalArgumentException("주소 검색어를 입력해주세요.");
+		}
+
+		// 주소 검색 페이지 번호와 페이지당 건수를 허용 범위로 정규화합니다.
+		int resolvedCurrentPage = normalizeShopOrderAddressSearchCurrentPage(currentPage);
+		int resolvedCountPerPage = normalizeShopOrderAddressSearchCountPerPage(countPerPage);
+		return jusoAddressApiClient.searchRoadAddress(normalizedKeyword, resolvedCurrentPage, resolvedCountPerPage);
+	}
+
+	// 쇼핑몰 주문서 배송지를 등록하고 최신 목록을 반환합니다.
+	@Transactional
+	public ShopOrderAddressSaveResultVO registerShopOrderAddress(ShopOrderAddressRegisterPO param, Long custNo) {
+		// 로그인 고객번호와 배송지 등록 입력값을 검증합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+		ShopOrderAddressSavePO savePO = validateShopOrderAddressRegisterInput(param, custNo);
+
+		// 배송지 별칭 중복 여부를 확인합니다.
+		if (goodsMapper.countShopOrderAddressName(custNo, savePO.getAddressNm()) > 0) {
+			throw new IllegalArgumentException("이미 사용 중인 배송지명입니다.");
+		}
+
+		// 기본 배송지 저장 요청이면 기존 기본 배송지를 모두 해제합니다.
+		if (YES.equals(savePO.getDefaultYn())) {
+			goodsMapper.updateShopOrderAddressDefaultYn(custNo, NO, custNo);
+		}
+
+		// 배송지를 등록한 뒤 최신 배송지 목록과 기본 배송지를 구성합니다.
+		goodsMapper.insertShopOrderAddress(savePO);
+		List<ShopOrderAddressVO> addressList = resolveShopOrderAddressList(custNo);
+		ShopOrderAddressVO defaultAddress = findShopOrderDefaultAddress(addressList);
+		ShopOrderAddressVO savedAddress = findShopOrderAddressByName(addressList, savePO.getAddressNm());
+		if (savedAddress == null) {
+			throw new IllegalStateException("등록된 배송지 정보를 찾을 수 없습니다.");
+		}
+
+		// 등록 결과 응답 객체를 구성합니다.
+		ShopOrderAddressSaveResultVO result = new ShopOrderAddressSaveResultVO();
+		result.setAddressList(addressList);
+		result.setDefaultAddress(defaultAddress);
+		result.setSavedAddress(savedAddress);
+		return result;
+	}
+
+	// 쇼핑몰 주문서 배송지를 수정하고 최신 목록을 반환합니다.
+	@Transactional
+	public ShopOrderAddressSaveResultVO updateShopOrderAddress(ShopOrderAddressUpdatePO param, Long custNo) {
+		// 로그인 고객번호와 배송지 수정 입력값을 검증합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+		if (param == null || isBlank(param.getOriginAddressNm())) {
+			throw new IllegalArgumentException("수정할 배송지 정보를 확인해주세요.");
+		}
+		String normalizedOriginAddressNm = param.getOriginAddressNm().trim();
+		if (goodsMapper.countShopOrderAddress(custNo, normalizedOriginAddressNm) < 1) {
+			throw new IllegalArgumentException("수정할 배송지를 찾을 수 없습니다.");
+		}
+
+		// 수정 입력값을 등록 검증과 동일한 기준으로 검증합니다.
+		ShopOrderAddressRegisterPO registerPO = new ShopOrderAddressRegisterPO();
+		registerPO.setAddressNm(param.getAddressNm());
+		registerPO.setPostNo(param.getPostNo());
+		registerPO.setBaseAddress(param.getBaseAddress());
+		registerPO.setDetailAddress(param.getDetailAddress());
+		registerPO.setPhoneNumber(param.getPhoneNumber());
+		registerPO.setRsvNm(param.getRsvNm());
+		registerPO.setDefaultYn(param.getDefaultYn());
+		ShopOrderAddressSavePO savePO = validateShopOrderAddressRegisterInput(registerPO, custNo);
+
+		// 배송지 별칭이 변경될 때만 중복 여부를 확인합니다.
+		if (!normalizedOriginAddressNm.equals(savePO.getAddressNm()) && goodsMapper.countShopOrderAddressName(custNo, savePO.getAddressNm()) > 0) {
+			throw new IllegalArgumentException("이미 사용 중인 배송지명입니다.");
+		}
+
+		// 기본 배송지 저장 요청이면 기존 기본 배송지를 모두 해제합니다.
+		if (YES.equals(savePO.getDefaultYn())) {
+			goodsMapper.updateShopOrderAddressDefaultYn(custNo, NO, custNo);
+		}
+
+		// 수정 대상 배송지를 갱신한 뒤 최신 목록과 수정 결과를 반환합니다.
+		int updatedCount = goodsMapper.updateShopOrderAddress(
+			custNo,
+			normalizedOriginAddressNm,
+			savePO.getAddressNm(),
+			savePO.getPostNo(),
+			savePO.getBaseAddress(),
+			savePO.getDetailAddress(),
+			savePO.getPhoneNumber(),
+			savePO.getRsvNm(),
+			savePO.getDefaultYn(),
+			custNo
+		);
+		if (updatedCount < 1) {
+			throw new IllegalArgumentException("수정할 배송지를 찾을 수 없습니다.");
+		}
+
+		// 최신 배송지 목록과 수정된 배송지/기본 배송지를 조합합니다.
+		List<ShopOrderAddressVO> addressList = resolveShopOrderAddressList(custNo);
+		ShopOrderAddressVO defaultAddress = findShopOrderDefaultAddress(addressList);
+		ShopOrderAddressVO savedAddress = findShopOrderAddressByName(addressList, savePO.getAddressNm());
+		if (savedAddress == null) {
+			throw new IllegalStateException("수정된 배송지 정보를 찾을 수 없습니다.");
+		}
+		ShopOrderAddressSaveResultVO result = new ShopOrderAddressSaveResultVO();
+		result.setAddressList(addressList);
+		result.setDefaultAddress(defaultAddress);
+		result.setSavedAddress(savedAddress);
+		return result;
 	}
 
 	// 쇼핑몰 장바구니 선택 상품 기준 예상 최대 쿠폰 할인 금액을 계산합니다.
@@ -1634,6 +1781,147 @@ public class GoodsService {
 		result.setCartCount(safeCartItemList.size());
 		result.setSiteInfo(siteInfo);
 		return result;
+	}
+
+	// 주문 대상 장바구니 목록과 배송지 목록을 주문서 페이지 응답 형식으로 조합합니다.
+	private ShopOrderPageVO buildShopOrderPage(List<ShopCartItemVO> cartItemList, Long custNo) {
+		// 기존 장바구니 조합 결과에 배송지 목록과 기본 배송지를 추가합니다.
+		ShopCartPageVO cartPage = buildShopCartPage(cartItemList);
+		List<ShopOrderAddressVO> addressList = resolveShopOrderAddressList(custNo);
+		ShopOrderPageVO result = new ShopOrderPageVO();
+		result.setCartList(cartPage.getCartList());
+		result.setCartCount(cartPage.getCartCount());
+		result.setSiteInfo(cartPage.getSiteInfo());
+		result.setAddressList(addressList);
+		result.setDefaultAddress(findShopOrderDefaultAddress(addressList));
+		return result;
+	}
+
+	// 현재 고객의 배송지 목록을 기본 배송지 우선 순서로 조회합니다.
+	private List<ShopOrderAddressVO> resolveShopOrderAddressList(Long custNo) {
+		List<ShopOrderAddressVO> addressList = goodsMapper.getShopOrderAddressList(custNo);
+		return addressList == null ? List.of() : addressList;
+	}
+
+	// 배송지 목록에서 기본 배송지를 조회합니다.
+	private ShopOrderAddressVO findShopOrderDefaultAddress(List<ShopOrderAddressVO> addressList) {
+		if (addressList == null || addressList.isEmpty()) {
+			return null;
+		}
+
+		// 기본 배송지 표시가 Y인 첫 행을 반환합니다.
+		for (ShopOrderAddressVO address : addressList) {
+			if (address == null || !YES.equals(address.getDefaultYn())) {
+				continue;
+			}
+			return address;
+		}
+		return null;
+	}
+
+	// 배송지 목록에서 배송지 별칭으로 단건을 조회합니다.
+	private ShopOrderAddressVO findShopOrderAddressByName(List<ShopOrderAddressVO> addressList, String addressNm) {
+		if (addressList == null || addressList.isEmpty() || isBlank(addressNm)) {
+			return null;
+		}
+
+		// 고객 기준 복합키의 두 번째 값인 주소별칭으로 등록 결과를 찾습니다.
+		String normalizedAddressNm = addressNm.trim();
+		for (ShopOrderAddressVO address : addressList) {
+			if (address == null || isBlank(address.getAddressNm())) {
+				continue;
+			}
+			if (normalizedAddressNm.equals(address.getAddressNm().trim())) {
+				return address;
+			}
+		}
+		return null;
+	}
+
+	// 주문서 배송지 등록 입력값을 검증하고 저장 PO로 변환합니다.
+	private ShopOrderAddressSavePO validateShopOrderAddressRegisterInput(ShopOrderAddressRegisterPO param, Long custNo) {
+		// 요청 객체와 필수 문자열 입력값을 검증합니다.
+		if (param == null) {
+			throw new IllegalArgumentException("배송지 정보를 확인해주세요.");
+		}
+		String normalizedAddressNm = trimToNull(param.getAddressNm());
+		String normalizedPostNo = trimToNull(param.getPostNo());
+		String normalizedBaseAddress = trimToNull(param.getBaseAddress());
+		String normalizedDetailAddress = trimToNull(param.getDetailAddress());
+		String normalizedPhoneNumber = trimToNull(param.getPhoneNumber());
+		String normalizedRsvNm = trimToNull(param.getRsvNm());
+		String normalizedDefaultYn = normalizeYesNo(param.getDefaultYn());
+		if (normalizedAddressNm == null) {
+			throw new IllegalArgumentException("배송지명을 입력해주세요.");
+		}
+		if (normalizedAddressNm.length() > 20) {
+			throw new IllegalArgumentException("배송지명은 20자 이내로 입력해주세요.");
+		}
+		if (normalizedPostNo == null || !normalizedPostNo.matches("^\\d{5,6}$")) {
+			throw new IllegalArgumentException("검색한 주소를 확인해주세요.");
+		}
+		if (normalizedBaseAddress == null) {
+			throw new IllegalArgumentException("검색한 주소를 확인해주세요.");
+		}
+		if (normalizedBaseAddress.length() > 125) {
+			throw new IllegalArgumentException("기본주소 길이를 확인해주세요.");
+		}
+		if (normalizedDetailAddress == null) {
+			throw new IllegalArgumentException("상세주소를 입력해주세요.");
+		}
+		if (normalizedDetailAddress.length() > 125) {
+			throw new IllegalArgumentException("상세주소는 125자 이내로 입력해주세요.");
+		}
+		if (normalizedPhoneNumber == null || !isValidShopOrderPhoneNumber(normalizedPhoneNumber)) {
+			throw new IllegalArgumentException("연락처 형식을 확인해주세요.");
+		}
+		if (normalizedPhoneNumber.length() > 20) {
+			throw new IllegalArgumentException("연락처 길이를 확인해주세요.");
+		}
+		if (normalizedRsvNm == null) {
+			throw new IllegalArgumentException("받는 사람을 입력해주세요.");
+		}
+		if (normalizedRsvNm.length() > 20) {
+			throw new IllegalArgumentException("받는 사람은 20자 이내로 입력해주세요.");
+		}
+
+		// 검증 완료된 값을 저장 PO에 채워 반환합니다.
+		ShopOrderAddressSavePO savePO = new ShopOrderAddressSavePO();
+		savePO.setCustNo(custNo);
+		savePO.setAddressNm(normalizedAddressNm);
+		savePO.setPostNo(normalizedPostNo);
+		savePO.setBaseAddress(normalizedBaseAddress);
+		savePO.setDetailAddress(normalizedDetailAddress);
+		savePO.setPhoneNumber(normalizedPhoneNumber);
+		savePO.setRsvNm(normalizedRsvNm);
+		savePO.setDefaultYn(normalizedDefaultYn);
+		savePO.setRegNo(custNo);
+		savePO.setUdtNo(custNo);
+		return savePO;
+	}
+
+	// 주문서 주소 검색 현재 페이지를 1 이상으로 보정합니다.
+	private int normalizeShopOrderAddressSearchCurrentPage(Integer currentPage) {
+		if (currentPage == null || currentPage < 1) {
+			return SHOP_ORDER_ADDRESS_SEARCH_DEFAULT_PAGE;
+		}
+		return currentPage;
+	}
+
+	// 주문서 주소 검색 페이지당 건수를 1~100 범위로 보정합니다.
+	private int normalizeShopOrderAddressSearchCountPerPage(Integer countPerPage) {
+		if (countPerPage == null || countPerPage < 1) {
+			return SHOP_ORDER_ADDRESS_SEARCH_DEFAULT_COUNT;
+		}
+		return Math.min(countPerPage, SHOP_ORDER_ADDRESS_SEARCH_MAX_COUNT);
+	}
+
+	// 주문서 연락처 형식을 확인합니다.
+	private boolean isValidShopOrderPhoneNumber(String phoneNumber) {
+		if (isBlank(phoneNumber)) {
+			return false;
+		}
+		return phoneNumber.matches("^\\d{2,3}-\\d{3,4}-\\d{4}$");
 	}
 
 	// 쇼핑몰 장바구니 상품별 사이즈 옵션 목록을 구성합니다.

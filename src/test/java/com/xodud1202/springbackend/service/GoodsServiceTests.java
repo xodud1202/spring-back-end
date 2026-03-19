@@ -33,6 +33,14 @@ import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageDownloadableCoup
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOwnedCouponVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishGoodsItemVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishPageVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressRegisterPO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSavePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSaveResultVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSearchCommonVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSearchResponseVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressUpdatePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPageVO;
 import com.xodud1202.springbackend.mapper.GoodsMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -63,6 +71,9 @@ class GoodsServiceTests {
 
 	@Mock
 	private ShopAuthService shopAuthService;
+
+	@Mock
+	private JusoAddressApiClient jusoAddressApiClient;
 
 	@InjectMocks
 	private GoodsService goodsService;
@@ -862,7 +873,7 @@ class GoodsServiceTests {
 
 	@Test
 	@DisplayName("쇼핑몰 주문서 페이지 조회 시 요청한 cartId가 모두 현재 고객 장바구니일 때만 데이터를 반환한다")
-	// 주문서 페이지 조회 시 cartId 검증과 이미지 URL/건수 구성 결과를 검증합니다.
+	// 주문서 페이지 조회 시 cartId 검증과 배송지/이미지/건수 구성 결과를 검증합니다.
 	void getShopOrderPage_returnsOrderCartPageWhenCartIdsValid() {
 		// 주문서 대상 장바구니 목록과 배송비 기준 정보를 구성합니다.
 		ShopCartItemVO firstCartItem = new ShopCartItemVO();
@@ -901,8 +912,19 @@ class GoodsServiceTests {
 		siteInfo.setDeliveryFee(3000);
 		siteInfo.setDeliveryFeeLimit(30000);
 
-		// 주문서 대상 cartId 조회와 이미지 URL 보정 목 응답을 설정합니다.
+		ShopOrderAddressVO defaultAddress = new ShopOrderAddressVO();
+		defaultAddress.setCustNo(7L);
+		defaultAddress.setAddressNm("집");
+		defaultAddress.setPostNo("06234");
+		defaultAddress.setBaseAddress("서울특별시 강남구 테헤란로 1");
+		defaultAddress.setDetailAddress("101동 1001호");
+		defaultAddress.setPhoneNumber("010-1234-5678");
+		defaultAddress.setRsvNm("홍길동");
+		defaultAddress.setDefaultYn("Y");
+
+		// 주문서 대상 cartId 조회와 이미지 URL/배송지 보정 목 응답을 설정합니다.
 		when(goodsMapper.getShopOrderCartItemList(7L, List.of(12L, 15L))).thenReturn(List.of(firstCartItem, secondCartItem));
+		when(goodsMapper.getShopOrderAddressList(7L)).thenReturn(List.of(defaultAddress));
 		when(goodsMapper.getShopGoodsSizeList("GOODS100")).thenReturn(List.of(goods100Size));
 		when(goodsMapper.getShopGoodsSizeList("GOODS200")).thenReturn(List.of(goods200Size));
 		when(goodsMapper.getShopCartSiteInfo("xodud1202")).thenReturn(siteInfo);
@@ -910,13 +932,16 @@ class GoodsServiceTests {
 		when(ftpFileService.buildGoodsImageUrl("GOODS200", "order-2.png")).thenReturn("https://image.test/goods/GOODS200/order-2.png");
 
 		// 유효한 cartId 요청 시 주문서 페이지 데이터가 구성되는지 검증합니다.
-		ShopCartPageVO result = goodsService.getShopOrderPage(List.of(12L, 15L), 7L);
+		ShopOrderPageVO result = goodsService.getShopOrderPage(List.of(12L, 15L), 7L);
 		assertThat(result.getCartCount()).isEqualTo(2);
 		assertThat(result.getCartList()).hasSize(2);
 		assertThat(result.getCartList().get(0).getCartId()).isEqualTo(12L);
 		assertThat(result.getCartList().get(0).getImgUrl()).isEqualTo("https://image.test/goods/GOODS100/order-1.png");
 		assertThat(result.getCartList().get(1).getCartId()).isEqualTo(15L);
 		assertThat(result.getSiteInfo().getDeliveryFee()).isEqualTo(3000);
+		assertThat(result.getAddressList()).hasSize(1);
+		assertThat(result.getDefaultAddress()).isNotNull();
+		assertThat(result.getDefaultAddress().getAddressNm()).isEqualTo("집");
 	}
 
 	@Test
@@ -935,6 +960,208 @@ class GoodsServiceTests {
 		assertThatThrownBy(() -> goodsService.getShopOrderPage(List.of(12L, 19L), 7L))
 			.isInstanceOf(IllegalArgumentException.class)
 			.hasMessage("주문 정보가 맞지 않습니다.");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 주문서 배송지 검색 시 검색어와 페이지 정보를 정규화해 Juso API 클라이언트를 호출한다")
+	// 배송지 검색 요청 시 로그인 검증 후 정규화된 검색 조건으로 클라이언트를 호출하는지 검증합니다.
+	void searchShopOrderAddress_callsJusoClientWithNormalizedPaging() {
+		// 주소 검색 결과 응답을 구성합니다.
+		ShopOrderAddressSearchCommonVO common = new ShopOrderAddressSearchCommonVO();
+		common.setErrorCode("0");
+		common.setErrorMessage("정상");
+		common.setTotalCount(1);
+		common.setCurrentPage(1);
+		common.setCountPerPage(100);
+
+		ShopOrderAddressSearchResponseVO response = new ShopOrderAddressSearchResponseVO();
+		response.setCommon(common);
+		response.setJusoList(List.of());
+		when(jusoAddressApiClient.searchRoadAddress("테헤란로", 1, 100)).thenReturn(response);
+
+		// 빈칸이 포함된 검색어와 초과 건수 요청을 정규화해 검색 결과를 조회합니다.
+		ShopOrderAddressSearchResponseVO result = goodsService.searchShopOrderAddress(" 테헤란로 ", 0, 999, 7L);
+		assertThat(result.getCommon().getErrorCode()).isEqualTo("0");
+		verify(jusoAddressApiClient).searchRoadAddress("테헤란로", 1, 100);
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 주문서 배송지 등록 시 기본 배송지 저장 요청이면 기존 기본 배송지를 해제하고 최신 목록을 반환한다")
+	// 배송지 등록 요청 시 기본 배송지 해제, 신규 등록, 최신 목록 구성 순서가 수행되는지 검증합니다.
+	void registerShopOrderAddress_resetsDefaultAndReturnsLatestAddresses() {
+		// 배송지 등록 요청과 최신 배송지 목록 데이터를 구성합니다.
+		ShopOrderAddressRegisterPO param = new ShopOrderAddressRegisterPO();
+		param.setAddressNm("회사");
+		param.setPostNo("06234");
+		param.setBaseAddress("서울특별시 강남구 테헤란로 1");
+		param.setDetailAddress("101동 1001호");
+		param.setPhoneNumber("010-1234-5678");
+		param.setRsvNm("홍길동");
+		param.setDefaultYn("Y");
+
+		ShopOrderAddressVO savedAddress = new ShopOrderAddressVO();
+		savedAddress.setCustNo(7L);
+		savedAddress.setAddressNm("회사");
+		savedAddress.setPostNo("06234");
+		savedAddress.setBaseAddress("서울특별시 강남구 테헤란로 1");
+		savedAddress.setDetailAddress("101동 1001호");
+		savedAddress.setPhoneNumber("010-1234-5678");
+		savedAddress.setRsvNm("홍길동");
+		savedAddress.setDefaultYn("Y");
+
+		// 중복 없음, 기본 배송지 해제, 등록 후 최신 목록 조회 흐름을 목으로 설정합니다.
+		when(goodsMapper.countShopOrderAddressName(7L, "회사")).thenReturn(0);
+		when(goodsMapper.updateShopOrderAddressDefaultYn(7L, "N", 7L)).thenReturn(1);
+		when(goodsMapper.insertShopOrderAddress(any(ShopOrderAddressSavePO.class))).thenReturn(1);
+		when(goodsMapper.getShopOrderAddressList(7L)).thenReturn(List.of(savedAddress));
+
+		// 배송지를 등록한 뒤 기본 배송지 해제 호출과 최신 결과 구성을 검증합니다.
+		ShopOrderAddressSaveResultVO result = goodsService.registerShopOrderAddress(param, 7L);
+		ArgumentCaptor<ShopOrderAddressSavePO> captor = ArgumentCaptor.forClass(ShopOrderAddressSavePO.class);
+		verify(goodsMapper).updateShopOrderAddressDefaultYn(7L, "N", 7L);
+		verify(goodsMapper).insertShopOrderAddress(captor.capture());
+		assertThat(captor.getValue().getAddressNm()).isEqualTo("회사");
+		assertThat(captor.getValue().getDefaultYn()).isEqualTo("Y");
+		assertThat(result.getSavedAddress()).isNotNull();
+		assertThat(result.getSavedAddress().getAddressNm()).isEqualTo("회사");
+		assertThat(result.getDefaultAddress()).isNotNull();
+		assertThat(result.getDefaultAddress().getAddressNm()).isEqualTo("회사");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 주문서 배송지 등록 시 같은 고객의 배송지명이 중복되면 예외를 반환한다")
+	// 배송지 등록 요청 시 고객번호 기준 주소별칭이 이미 있으면 중복 예외를 반환하는지 검증합니다.
+	void registerShopOrderAddress_throwsWhenAddressNameDuplicated() {
+		// 중복 배송지명 등록 요청을 구성합니다.
+		ShopOrderAddressRegisterPO param = new ShopOrderAddressRegisterPO();
+		param.setAddressNm("회사");
+		param.setPostNo("06234");
+		param.setBaseAddress("서울특별시 강남구 테헤란로 1");
+		param.setDetailAddress("101동 1001호");
+		param.setPhoneNumber("010-1234-5678");
+		param.setRsvNm("홍길동");
+		param.setDefaultYn("N");
+
+		// 같은 고객의 동일 배송지명이 이미 존재하는 상태를 목으로 설정합니다.
+		when(goodsMapper.countShopOrderAddressName(7L, "회사")).thenReturn(1);
+
+		// 중복 검증 예외 메시지를 확인합니다.
+		assertThatThrownBy(() -> goodsService.registerShopOrderAddress(param, 7L))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessage("이미 사용 중인 배송지명입니다.");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 주문서 배송지 수정 시 기본 배송지 저장 요청이면 기존 기본 배송지를 해제하고 최신 목록을 반환한다")
+	// 배송지 수정 요청 시 대상 존재 검증, 기본 배송지 해제, 수정 반영, 최신 목록 구성이 수행되는지 검증합니다.
+	void updateShopOrderAddress_resetsDefaultAndReturnsLatestAddresses() {
+		// 배송지 수정 요청과 최신 배송지 목록 데이터를 구성합니다.
+		ShopOrderAddressUpdatePO param = new ShopOrderAddressUpdatePO();
+		param.setOriginAddressNm("집");
+		param.setAddressNm("우리집");
+		param.setPostNo("06234");
+		param.setBaseAddress("서울특별시 강남구 테헤란로 1");
+		param.setDetailAddress("201동 202호");
+		param.setPhoneNumber("010-2222-3333");
+		param.setRsvNm("홍길동");
+		param.setDefaultYn("Y");
+
+		ShopOrderAddressVO savedAddress = new ShopOrderAddressVO();
+		savedAddress.setCustNo(7L);
+		savedAddress.setAddressNm("우리집");
+		savedAddress.setPostNo("06234");
+		savedAddress.setBaseAddress("서울특별시 강남구 테헤란로 1");
+		savedAddress.setDetailAddress("201동 202호");
+		savedAddress.setPhoneNumber("010-2222-3333");
+		savedAddress.setRsvNm("홍길동");
+		savedAddress.setDefaultYn("Y");
+
+		// 수정 대상 존재, 별칭 중복 없음, 기본 배송지 해제, 수정 후 최신 목록 조회 흐름을 목으로 설정합니다.
+		when(goodsMapper.countShopOrderAddress(7L, "집")).thenReturn(1);
+		when(goodsMapper.countShopOrderAddressName(7L, "우리집")).thenReturn(0);
+		when(goodsMapper.updateShopOrderAddressDefaultYn(7L, "N", 7L)).thenReturn(1);
+		when(goodsMapper.updateShopOrderAddress(
+			7L,
+			"집",
+			"우리집",
+			"06234",
+			"서울특별시 강남구 테헤란로 1",
+			"201동 202호",
+			"010-2222-3333",
+			"홍길동",
+			"Y",
+			7L
+		)).thenReturn(1);
+		when(goodsMapper.getShopOrderAddressList(7L)).thenReturn(List.of(savedAddress));
+
+		// 배송지를 수정한 뒤 기본 배송지 해제 호출과 최신 결과 구성을 검증합니다.
+		ShopOrderAddressSaveResultVO result = goodsService.updateShopOrderAddress(param, 7L);
+		verify(goodsMapper).updateShopOrderAddressDefaultYn(7L, "N", 7L);
+		verify(goodsMapper).updateShopOrderAddress(
+			7L,
+			"집",
+			"우리집",
+			"06234",
+			"서울특별시 강남구 테헤란로 1",
+			"201동 202호",
+			"010-2222-3333",
+			"홍길동",
+			"Y",
+			7L
+		);
+		assertThat(result.getSavedAddress()).isNotNull();
+		assertThat(result.getSavedAddress().getAddressNm()).isEqualTo("우리집");
+		assertThat(result.getDefaultAddress()).isNotNull();
+		assertThat(result.getDefaultAddress().getAddressNm()).isEqualTo("우리집");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 주문서 배송지 수정 시 바뀐 배송지명이 같은 고객에게 이미 있으면 예외를 반환한다")
+	// 배송지 수정 요청 시 기존과 다른 배송지명으로 변경하면서 중복이 발생하면 예외를 반환하는지 검증합니다.
+	void updateShopOrderAddress_throwsWhenRenamedAddressNameDuplicated() {
+		// 중복 배송지명 변경 요청을 구성합니다.
+		ShopOrderAddressUpdatePO param = new ShopOrderAddressUpdatePO();
+		param.setOriginAddressNm("집");
+		param.setAddressNm("회사");
+		param.setPostNo("06234");
+		param.setBaseAddress("서울특별시 강남구 테헤란로 1");
+		param.setDetailAddress("101동 1001호");
+		param.setPhoneNumber("010-1234-5678");
+		param.setRsvNm("홍길동");
+		param.setDefaultYn("N");
+
+		// 수정 대상은 존재하지만 변경할 배송지명이 이미 존재하는 상태를 목으로 설정합니다.
+		when(goodsMapper.countShopOrderAddress(7L, "집")).thenReturn(1);
+		when(goodsMapper.countShopOrderAddressName(7L, "회사")).thenReturn(1);
+
+		// 중복 검증 예외 메시지를 확인합니다.
+		assertThatThrownBy(() -> goodsService.updateShopOrderAddress(param, 7L))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessage("이미 사용 중인 배송지명입니다.");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 주문서 배송지 수정 시 수정 대상 배송지가 없으면 예외를 반환한다")
+	// 배송지 수정 요청 시 origin 배송지 자체가 없으면 수정 대상 없음 예외를 반환하는지 검증합니다.
+	void updateShopOrderAddress_throwsWhenOriginAddressMissing() {
+		// 존재하지 않는 배송지 수정 요청을 구성합니다.
+		ShopOrderAddressUpdatePO param = new ShopOrderAddressUpdatePO();
+		param.setOriginAddressNm("집");
+		param.setAddressNm("우리집");
+		param.setPostNo("06234");
+		param.setBaseAddress("서울특별시 강남구 테헤란로 1");
+		param.setDetailAddress("201동 202호");
+		param.setPhoneNumber("010-2222-3333");
+		param.setRsvNm("홍길동");
+		param.setDefaultYn("N");
+
+		// 수정 대상 배송지가 없는 상태를 목으로 설정합니다.
+		when(goodsMapper.countShopOrderAddress(7L, "집")).thenReturn(0);
+
+		// 수정 대상 없음 예외 메시지를 확인합니다.
+		assertThatThrownBy(() -> goodsService.updateShopOrderAddress(param, 7L))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessage("수정할 배송지를 찾을 수 없습니다.");
 	}
 
 	@Test

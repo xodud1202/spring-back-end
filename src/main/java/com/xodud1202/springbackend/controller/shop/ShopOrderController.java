@@ -1,6 +1,8 @@
 package com.xodud1202.springbackend.controller.shop;
 
-import com.xodud1202.springbackend.domain.shop.cart.ShopCartPageVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressRegisterPO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressUpdatePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPageVO;
 import com.xodud1202.springbackend.service.GoodsService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -9,6 +11,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -19,7 +24,7 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequiredArgsConstructor
-// 쇼핑몰 주문서 조회 API를 제공합니다.
+// 쇼핑몰 주문서 조회 및 배송지 API를 제공합니다.
 public class ShopOrderController {
 	private static final String COOKIE_CUST_NO = "cust_no";
 
@@ -39,7 +44,7 @@ public class ShopOrderController {
 			}
 
 			// 주문서 페이지 데이터를 조회해 반환합니다.
-			ShopCartPageVO result = goodsService.getShopOrderPage(cartIdList, custNo);
+			ShopOrderPageVO result = goodsService.getShopOrderPage(cartIdList, custNo);
 			return ResponseEntity.ok(result);
 		} catch (IllegalArgumentException exception) {
 			// 요청값 오류는 400 응답으로 반환합니다.
@@ -48,6 +53,83 @@ public class ShopOrderController {
 			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
 			log.error("쇼핑몰 주문서 페이지 조회 실패 message={} cartIdList={}", exception.getMessage(), cartIdList, exception);
 			return ResponseEntity.internalServerError().body(Map.of("message", "주문서 조회에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 주문서 배송지 검색 결과를 조회합니다.
+	@GetMapping("/api/shop/order/address/search")
+	public ResponseEntity<Object> searchShopOrderAddress(
+		@RequestParam(value = "keyword", required = false) String keyword,
+		@RequestParam(value = "currentPage", required = false) Integer currentPage,
+		@RequestParam(value = "countPerPage", required = false) Integer countPerPage,
+		HttpServletRequest request
+	) {
+		try {
+			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			// 배송지 검색 결과를 조회해 반환합니다.
+			return ResponseEntity.ok(goodsService.searchShopOrderAddress(keyword, currentPage, countPerPage, custNo));
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
+			log.error("쇼핑몰 배송지 검색 실패 message={} keyword={}", exception.getMessage(), keyword, exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "배송지 검색에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 주문서 배송지를 등록합니다.
+	@PostMapping("/api/shop/order/address")
+	public ResponseEntity<Object> registerShopOrderAddress(
+		@RequestBody(required = false) ShopOrderAddressRegisterPO param,
+		HttpServletRequest request
+	) {
+		try {
+			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			// 배송지 등록 결과를 조회해 반환합니다.
+			return ResponseEntity.ok(goodsService.registerShopOrderAddress(param, custNo));
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
+			log.error("쇼핑몰 배송지 등록 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "배송지 등록에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 주문서 배송지를 수정합니다.
+	@PutMapping("/api/shop/order/address")
+	public ResponseEntity<Object> updateShopOrderAddress(
+		@RequestBody(required = false) ShopOrderAddressUpdatePO param,
+		HttpServletRequest request
+	) {
+		try {
+			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			// 배송지 수정 결과를 조회해 반환합니다.
+			return ResponseEntity.ok(goodsService.updateShopOrderAddress(param, custNo));
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
+			log.error("쇼핑몰 배송지 수정 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "배송지 수정에 실패했습니다."));
 		}
 	}
 

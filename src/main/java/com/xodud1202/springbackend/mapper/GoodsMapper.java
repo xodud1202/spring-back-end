@@ -37,6 +37,8 @@ import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponUnavailabl
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageDownloadableCouponVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOwnedCouponVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishGoodsItemVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSavePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -186,6 +188,35 @@ public interface GoodsMapper {
 
 	// 쇼핑몰 주문서 대상 장바구니 목록을 조회합니다.
 	List<ShopCartItemVO> getShopOrderCartItemList(@Param("custNo") Long custNo, @Param("cartIdList") List<Long> cartIdList);
+
+	// 쇼핑몰 주문서 배송지 목록을 조회합니다.
+	List<ShopOrderAddressVO> getShopOrderAddressList(@Param("custNo") Long custNo);
+
+	// 쇼핑몰 주문서 배송지 별칭 중복 건수를 조회합니다.
+	int countShopOrderAddressName(@Param("custNo") Long custNo, @Param("addressNm") String addressNm);
+
+	// 쇼핑몰 주문서 배송지 단건 존재 여부를 조회합니다.
+	int countShopOrderAddress(@Param("custNo") Long custNo, @Param("addressNm") String addressNm);
+
+	// 쇼핑몰 주문서 기본 배송지 여부를 일괄 변경합니다.
+	int updateShopOrderAddressDefaultYn(@Param("custNo") Long custNo, @Param("defaultYn") String defaultYn, @Param("udtNo") Long udtNo);
+
+	// 쇼핑몰 주문서 배송지를 등록합니다.
+	int insertShopOrderAddress(ShopOrderAddressSavePO param);
+
+	// 쇼핑몰 주문서 배송지를 수정합니다.
+	int updateShopOrderAddress(
+		@Param("custNo") Long custNo,
+		@Param("originAddressNm") String originAddressNm,
+		@Param("addressNm") String addressNm,
+		@Param("postNo") String postNo,
+		@Param("baseAddress") String baseAddress,
+		@Param("detailAddress") String detailAddress,
+		@Param("phoneNumber") String phoneNumber,
+		@Param("rsvNm") String rsvNm,
+		@Param("defaultYn") String defaultYn,
+		@Param("udtNo") Long udtNo
+	);
 
 	// 쇼핑몰 상품 위시리스트를 등록합니다.
 	int insertShopWishList(@Param("custNo") Long custNo, @Param("goodsId") String goodsId, @Param("regNo") Long regNo);
