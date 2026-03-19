@@ -99,6 +99,7 @@ import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsVO;
 import com.xodud1202.springbackend.mapper.GoodsMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -133,6 +134,7 @@ import java.util.Map;
 import java.util.Set;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 // 관리자 상품 관련 비즈니스 로직을 처리합니다.
 public class GoodsService {
@@ -1499,17 +1501,37 @@ public class GoodsService {
 			return;
 		}
 
-		// 결제키와 상태를 읽어 현재 결제 row를 조회합니다.
+		// 결제키 또는 주문번호와 상태를 읽어 현재 결제 row를 조회합니다.
 		JsonNode rootNode = readShopOrderJsonNode(normalizedRawBody);
 		JsonNode dataNode = rootNode.path("data");
+		String eventType = firstNonBlank(resolveJsonText(rootNode, "eventType"), "");
 		String paymentKey = firstNonBlank(resolveJsonText(dataNode, "paymentKey"), resolveJsonText(rootNode, "paymentKey"));
+		String ordNo = firstNonBlank(resolveJsonText(rootNode, "orderId"), resolveJsonText(dataNode, "orderId"));
 		String paymentStatus = firstNonBlank(resolveJsonText(dataNode, "status"), resolveJsonText(rootNode, "status"));
-		if (isBlank(paymentKey) || isBlank(paymentStatus)) {
+		if (isBlank(paymentKey) && isBlank(ordNo)) {
 			return;
 		}
-		ShopOrderPaymentVO payment = goodsMapper.getShopPaymentByTossPaymentKeyHash(sha256Hex(paymentKey));
+		if (isBlank(paymentStatus)) {
+			return;
+		}
+
+		// PAYMENT_STATUS_CHANGED, DEPOSIT_CALLBACK 모두 처리할 수 있도록 결제 row를 조회합니다.
+		ShopOrderPaymentVO payment = resolveShopOrderWebhookPayment(paymentKey, ordNo);
 		if (payment == null || !SHOP_ORDER_PAYMENT_METHOD_VIRTUAL_ACCOUNT.equals(payment.getPayMethodCd())) {
 			return;
+		}
+		log.info(
+			"쇼핑몰 주문 결제 웹훅 수신 eventType={} ordNo={} paymentKey={} payNo={} status={}",
+			eventType,
+			firstNonBlank(ordNo, payment.getOrdNo()),
+			firstNonBlank(paymentKey, payment.getTossPaymentKey()),
+			payment.getPayNo(),
+			paymentStatus
+		);
+
+		// DEPOSIT_CALLBACK은 secret 값을 비교해 토스 승인 응답과 일치하는지 확인합니다.
+		if ("DEPOSIT_CALLBACK".equals(eventType) || (isBlank(paymentKey) && !isBlank(ordNo))) {
+			validateShopOrderDepositWebhookSecret(payment, trimToNull(resolveJsonText(rootNode, "secret")));
 		}
 
 		// 무통장입금 완료는 결제 완료 상태로 승격하고, 만료/취소는 원복 처리합니다.
@@ -1551,6 +1573,47 @@ public class GoodsService {
 		goodsMapper.updateShopOrderBaseStatus(payment.getOrdNo(), SHOP_ORDER_STAT_CANCEL, payment.getCustNo());
 		goodsMapper.updateShopOrderDetailStatus(payment.getOrdNo(), SHOP_ORDER_DTL_STAT_CANCEL, payment.getCustNo());
 		restoreShopOrderSuccessSideEffects(payment, payment.getCustNo());
+	}
+
+	// 웹훅 본문에서 결제키 또는 주문번호 기준으로 현재 결제 row를 조회합니다.
+	private ShopOrderPaymentVO resolveShopOrderWebhookPayment(String paymentKey, String ordNo) {
+		// paymentKey가 있으면 우선 결제키 해시 기준으로 조회합니다.
+		if (!isBlank(paymentKey)) {
+			ShopOrderPaymentVO payment = goodsMapper.getShopPaymentByTossPaymentKeyHash(sha256Hex(paymentKey));
+			if (payment != null) {
+				return payment;
+			}
+		}
+
+		// DEPOSIT_CALLBACK처럼 orderId만 전달되면 주문번호 기준으로 최신 결제 row를 조회합니다.
+		if (isBlank(ordNo)) {
+			return null;
+		}
+		return goodsMapper.getShopPaymentByOrdNo(ordNo.trim());
+	}
+
+	// DEPOSIT_CALLBACK secret 값이 승인 응답의 secret과 같은지 확인합니다.
+	private void validateShopOrderDepositWebhookSecret(ShopOrderPaymentVO payment, String webhookSecret) {
+		// secret이 비어 있으면 비교하지 않습니다.
+		if (payment == null || isBlank(webhookSecret)) {
+			return;
+		}
+
+		// 승인 응답 원본 JSON에 저장된 secret 값을 꺼내 비교합니다.
+		String savedSecret = trimToNull(resolveJsonText(readShopOrderJsonNode(payment.getRspRawJson()), "secret"));
+		if (savedSecret == null) {
+			return;
+		}
+		if (!savedSecret.equals(webhookSecret.trim())) {
+			log.warn(
+				"쇼핑몰 주문 결제 웹훅 secret 불일치 ordNo={} payNo={} webhookSecret={} savedSecret={}",
+				payment.getOrdNo(),
+				payment.getPayNo(),
+				webhookSecret,
+				savedSecret
+			);
+			throw new IllegalArgumentException("웹훅 검증에 실패했습니다.");
+		}
 	}
 
 	// 쇼핑몰 주문서 배송지 검색 결과를 조회합니다.

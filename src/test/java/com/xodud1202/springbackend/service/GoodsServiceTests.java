@@ -1,5 +1,6 @@
 package com.xodud1202.springbackend.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsSavePO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryItem;
@@ -45,6 +46,7 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountQuotePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountQuoteVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderGoodsCouponSelectionVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPageVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentVO;
 import com.xodud1202.springbackend.mapper.GoodsMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -52,6 +54,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
@@ -78,6 +81,12 @@ class GoodsServiceTests {
 
 	@Mock
 	private JusoAddressApiClient jusoAddressApiClient;
+
+	@Mock
+	private TossPaymentsClient tossPaymentsClient;
+
+	@Spy
+	private ObjectMapper objectMapper = new ObjectMapper();
 
 	@InjectMocks
 	private GoodsService goodsService;
@@ -1139,6 +1148,52 @@ class GoodsServiceTests {
 		ShopOrderAddressSearchResponseVO result = goodsService.searchShopOrderAddress(" 테헤란로 ", 0, 999, 7L);
 		assertThat(result.getCommon().getErrorCode()).isEqualTo("0");
 		verify(jusoAddressApiClient).searchRoadAddress("테헤란로", 1, 100);
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 주문 결제 웹훅은 DEPOSIT_CALLBACK DONE 본문을 주문번호 기준으로 처리한다")
+	// DEPOSIT_CALLBACK 형식의 입금완료 웹훅이 들어오면 주문번호 기준으로 결제를 찾아 완료 상태로 반영하는지 검증합니다.
+	void handleShopOrderPaymentWebhook_processesDepositCallbackDoneByOrderId() {
+		// 무통장입금 대기 상태의 결제 정보를 구성합니다.
+		ShopOrderPaymentVO payment = new ShopOrderPaymentVO();
+		payment.setPayNo(901L);
+		payment.setOrdNo("O220260319170925876");
+		payment.setCustNo(7L);
+		payment.setPayMethodCd("PAY_METHOD_02");
+		payment.setPayStatCd("PAY_STAT_05");
+		payment.setRspRawJson("""
+			{"secret":"ps_LkKEypNArWdRengm2gYL8lmeaxYG"}
+			""");
+
+		String rawBody = """
+			{
+			  "createdAt": "2026-03-19T17:28:08.000000",
+			  "secret": "ps_LkKEypNArWdRengm2gYL8lmeaxYG",
+			  "orderId": "O220260319170925876",
+			  "status": "DONE",
+			  "transactionKey": "txrd_a01km2kb38p1zca4bh97qgvaseb"
+			}
+			""";
+
+		// 주문번호 기준으로 결제 row를 찾도록 목 응답을 설정합니다.
+		when(goodsMapper.getShopPaymentByOrdNo("O220260319170925876")).thenReturn(payment);
+
+		// DEPOSIT_CALLBACK DONE 웹훅을 반영합니다.
+		goodsService.handleShopOrderPaymentWebhook(rawBody);
+
+		// 주문번호 기준 조회 후 결제/주문 상태를 완료로 갱신하는지 검증합니다.
+		verify(goodsMapper).getShopPaymentByOrdNo("O220260319170925876");
+		verify(goodsMapper).updateShopPaymentWebhook(
+			901L,
+			"PAY_STAT_02",
+			"DONE",
+			"무통장입금 완료",
+			rawBody.trim(),
+			"2026-03-19 17:28:08",
+			7L
+		);
+		verify(goodsMapper).updateShopOrderBaseStatus("O220260319170925876", "ORD_STAT_02", 7L);
+		verify(goodsMapper).updateShopOrderDetailStatus("O220260319170925876", "ORD_DTL_STAT_02", 7L);
 	}
 
 	@Test

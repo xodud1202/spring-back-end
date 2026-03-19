@@ -1102,6 +1102,53 @@
 		 LIMIT 1
 	</select>
 
+	<select id="getShopPaymentByOrdNo" resultType="com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentVO">
+		/* GoodsMapper.getShopPaymentByOrdNo: 주문번호 기준 결제 정보 조회 */
+		SELECT PAY_NO
+		     , ORD_NO
+		     , CUST_NO
+		     , PAY_STAT_CD
+		     , PAY_GB_CD
+		     , PAY_METHOD_CD
+		     , ORD_GB_CD
+		     , PG_GB_CD
+		     , PAY_AMT
+		     , APRV_AMT
+		     , CNL_AMT
+		     , TOSS_PAYMENT_KEY
+		     , TOSS_PAYMENT_KEY_HASH
+		     , TRADE_NO
+		     , APPR_NO
+		     , RSP_CODE
+		     , RSP_MSG
+		     , BANK_CD
+		     , BANK_NO
+		     , VACT_HOLDER_NM
+		     , CASE
+		         WHEN VACT_DUE_DT IS NULL OR VACT_DUE_DT = '0000-00-00 00:00:00' THEN NULL
+		         ELSE DATE_FORMAT(VACT_DUE_DT, '%Y-%m-%d %H:%i:%s')
+		       END AS VACT_DUE_DT
+		     , CARD_CD
+		     , CARD_NO
+		     , DEVICE_GB_CD
+		     , DATE_FORMAT(REQ_DT, '%Y-%m-%d %H:%i:%s') AS REQ_DT
+		     , CASE
+		         WHEN APPR_DT IS NULL OR APPR_DT = '0000-00-00 00:00:00' THEN NULL
+		         ELSE DATE_FORMAT(APPR_DT, '%Y-%m-%d %H:%i:%s')
+		       END AS APPR_DT
+		     , CASE
+		         WHEN WEBHOOK_DT IS NULL OR WEBHOOK_DT = '0000-00-00 00:00:00' THEN NULL
+		         ELSE DATE_FORMAT(WEBHOOK_DT, '%Y-%m-%d %H:%i:%s')
+		       END AS WEBHOOK_DT
+		     , REQ_RAW_JSON
+		     , RSP_RAW_JSON
+		     , WEBHOOK_RAW_JSON
+		  FROM PAYMENT
+		 WHERE ORD_NO = #{ordNo}
+		 ORDER BY PAY_NO DESC
+		 LIMIT 1
+	</select>
+
 	<update id="updateShopOrderBaseStatus">
 		/* GoodsMapper.updateShopOrderBaseStatus: 쇼핑몰 주문 마스터 상태 변경 */
 		UPDATE ORDER_BASE

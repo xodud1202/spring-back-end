@@ -225,6 +225,9 @@ public interface GoodsMapper {
 	// Toss 결제키 해시 기준 결제 정보를 조회합니다.
 	ShopOrderPaymentVO getShopPaymentByTossPaymentKeyHash(@Param("tossPaymentKeyHash") String tossPaymentKeyHash);
 
+	// 주문번호 기준 결제 정보를 조회합니다.
+	ShopOrderPaymentVO getShopPaymentByOrdNo(@Param("ordNo") String ordNo);
+
 	// 쇼핑몰 주문 마스터 상태를 변경합니다.
 	int updateShopOrderBaseStatus(@Param("ordNo") String ordNo, @Param("ordStatCd") String ordStatCd, @Param("udtNo") Long udtNo);
 
