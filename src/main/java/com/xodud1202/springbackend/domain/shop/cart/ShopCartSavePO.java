@@ -17,6 +17,8 @@ public class ShopCartSavePO {
 	private String sizeId;
 	// 수량입니다.
 	private Integer qty;
+	// 등록 기획전 번호입니다.
+	private Integer exhibitionNo;
 	// 등록자 번호입니다.
 	private Long regNo;
 	// 수정자 번호입니다.

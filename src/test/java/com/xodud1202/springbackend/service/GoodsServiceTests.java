@@ -39,6 +39,7 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSaveResultV
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSearchCommonVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSearchResponseVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressUpdatePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderCustomerInfoVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountQuotePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountQuoteVO;
@@ -931,10 +932,18 @@ class GoodsServiceTests {
 		ShopCartCustomerCouponVO goodsTargetCoupon = createCustomerCoupon(1003L, 103L, "CPN_GB_01", "CPN_TARGET_01", "CPN_DC_GB_01", 5000);
 		ShopCartCustomerCouponVO cartCoupon = createCustomerCoupon(2001L, 201L, "CPN_GB_03", "CPN_TARGET_99", "CPN_DC_GB_01", 7000);
 		ShopCartCustomerCouponVO deliveryCoupon = createCustomerCoupon(3001L, 301L, "CPN_GB_04", "CPN_TARGET_99", "CPN_DC_GB_01", 3000);
+		ShopOrderCustomerInfoVO customerInfo = new ShopOrderCustomerInfoVO();
+		customerInfo.setCustNo(7L);
+		customerInfo.setCustNm("홍길동");
+		customerInfo.setEmail("test@test.com");
+		customerInfo.setPhoneNumber("010-1234-5678");
+		customerInfo.setCustGradeCd("WELCOME");
 
 		// 주문서 대상 cartId 조회와 이미지 URL/배송지 보정 목 응답을 설정합니다.
 		when(goodsMapper.getShopOrderCartItemList(7L, List.of(12L, 15L))).thenReturn(List.of(firstCartItem, secondCartItem));
 		when(goodsMapper.getShopOrderAddressList(7L)).thenReturn(List.of(defaultAddress));
+		when(goodsMapper.getShopOrderCustomerInfo(7L)).thenReturn(customerInfo);
+		when(goodsMapper.getShopPointSaveRateByCustGradeCd("WELCOME")).thenReturn(1);
 		when(goodsMapper.getShopGoodsSizeList("GOODS100")).thenReturn(List.of(goods100Size));
 		when(goodsMapper.getShopGoodsSizeList("GOODS200")).thenReturn(List.of(goods200Size));
 		when(goodsMapper.getShopCartSiteInfo("xodud1202")).thenReturn(siteInfo);
@@ -950,7 +959,7 @@ class GoodsServiceTests {
 		when(ftpFileService.buildGoodsImageUrl("GOODS200", "order-2.png")).thenReturn("https://image.test/goods/GOODS200/order-2.png");
 
 		// 유효한 cartId 요청 시 주문서 페이지 데이터가 구성되는지 검증합니다.
-		ShopOrderPageVO result = goodsService.getShopOrderPage(List.of(12L, 15L), 7L);
+		ShopOrderPageVO result = goodsService.getShopOrderPage(List.of(12L, 15L), 7L, "PC", "http://127.0.0.1:3014");
 		assertThat(result.getCartCount()).isEqualTo(2);
 		assertThat(result.getCartList()).hasSize(2);
 		assertThat(result.getCartList().get(0).getCartId()).isEqualTo(12L);
@@ -975,6 +984,16 @@ class GoodsServiceTests {
 		assertThat(result.getDiscountAmount().getDeliveryCouponDiscountAmt()).isEqualTo(3000);
 		assertThat(result.getDiscountAmount().getCouponDiscountAmt()).isEqualTo(18000);
 		assertThat(result.getDiscountAmount().getMaxPointUseAmt()).isEqualTo(9000);
+		assertThat(result.getPaymentConfig()).isNotNull();
+		assertThat(result.getPaymentConfig().getApiVersion()).isEqualTo("2022-11-16");
+		assertThat(result.getPaymentConfig().getSuccessUrlBase()).isEqualTo("http://127.0.0.1:3014/order/success");
+		assertThat(result.getPaymentConfig().getFailUrlBase()).isEqualTo("http://127.0.0.1:3014/order/fail");
+		assertThat(result.getCustomerInfo()).isNotNull();
+		assertThat(result.getCustomerInfo().getCustomerKey()).isEqualTo("SHOP-CUST-7");
+		assertThat(result.getCustomerInfo().getDeviceGbCd()).isEqualTo("PC");
+		assertThat(result.getPointSaveSummary()).isNotNull();
+		assertThat(result.getPointSaveSummary().getPointSaveRate()).isEqualTo(1);
+		assertThat(result.getPointSaveSummary().getTotalExpectedPoint()).isEqualTo(520);
 	}
 
 	@Test
@@ -990,7 +1009,7 @@ class GoodsServiceTests {
 		when(goodsMapper.getShopOrderCartItemList(7L, List.of(12L, 19L))).thenReturn(List.of(firstCartItem));
 
 		// cartId 누락 시 주문 정보 검증 예외 메시지를 확인합니다.
-		assertThatThrownBy(() -> goodsService.getShopOrderPage(List.of(12L, 19L), 7L))
+		assertThatThrownBy(() -> goodsService.getShopOrderPage(List.of(12L, 19L), 7L, "PC", "http://127.0.0.1:3014"))
 			.isInstanceOf(IllegalArgumentException.class)
 			.hasMessage("주문 정보가 맞지 않습니다.");
 	}

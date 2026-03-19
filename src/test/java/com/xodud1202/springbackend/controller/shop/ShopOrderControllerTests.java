@@ -10,6 +10,8 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountAmountVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountQuoteVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountSelectionVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPageVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentConfirmVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentPrepareVO;
 import com.xodud1202.springbackend.service.GoodsService;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,6 +29,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -74,7 +77,7 @@ class ShopOrderControllerTests {
 		page.setAddressList(List.of(defaultAddress));
 		page.setDefaultAddress(defaultAddress);
 		page.setAvailablePointAmt(5000);
-		when(goodsService.getShopOrderPage(List.of(12L, 15L), 1L)).thenReturn(page);
+		when(goodsService.getShopOrderPage(eq(List.of(12L, 15L)), eq(1L), anyString(), anyString())).thenReturn(page);
 
 		// 로그인 쿠키와 함께 요청하면 200 응답과 주문서 기본 필드를 검증합니다.
 		mockMvc.perform(
@@ -112,7 +115,7 @@ class ShopOrderControllerTests {
 	// 주문서 페이지 조회 시 cartId 검증 예외가 발생하면 400 응답으로 변환되는지 검증합니다.
 	void getShopOrderPage_returnsBadRequestWhenCartIdInvalid() throws Exception {
 		// 주문 정보 검증 예외를 발생하도록 목 동작을 설정합니다.
-		when(goodsService.getShopOrderPage(List.of(12L, 19L), 1L))
+		when(goodsService.getShopOrderPage(eq(List.of(12L, 19L)), eq(1L), anyString(), anyString()))
 			.thenThrow(new IllegalArgumentException("주문 정보가 맞지 않습니다."));
 
 		// 로그인 쿠키와 함께 잘못된 cartId를 요청하면 400 응답과 메시지를 검증합니다.
@@ -397,5 +400,119 @@ class ShopOrderControllerTests {
 			)
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.message").value("할인 혜택 정보를 확인해주세요."));
+	}
+
+	@Test
+	@DisplayName("주문 결제 준비 API는 로그인 사용자가 요청하면 Toss 결제 준비 정보를 반환한다")
+	// 결제 준비 성공 시 주문번호/결제번호/결제수단과 리다이렉트 URL이 반환되는지 검증합니다.
+	void prepareShopOrderPayment_returnsOk() throws Exception {
+		// 결제 준비 결과 응답 객체를 구성합니다.
+		ShopOrderPaymentPrepareVO result = new ShopOrderPaymentPrepareVO();
+		result.setOrdNo("ORD202603190001");
+		result.setPayNo(101L);
+		result.setClientKey("test_client_key");
+		result.setMethod("CARD");
+		result.setOrderId("ORD202603190001");
+		result.setOrderName("주문상품 외 1건");
+		result.setAmount(39000L);
+		result.setCustomerKey("SHOP-CUST-1");
+		result.setCustomerName("홍길동");
+		result.setCustomerEmail("hong@test.com");
+		result.setCustomerMobilePhone("01012345678");
+		result.setSuccessUrl("http://127.0.0.1:3014/order/success?payNo=101");
+		result.setFailUrl("http://127.0.0.1:3014/order/fail?payNo=101");
+		when(goodsService.prepareShopOrderPayment(any(), eq(1L), anyString(), anyString())).thenReturn(result);
+
+		// 로그인 쿠키와 함께 요청하면 200 응답과 결제 준비 결과 필드를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/order/payment/prepare")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"from":"cart","cartIdList":[12,15],"addressNm":"집","discountSelection":{"goodsCouponSelectionList":[],"cartCouponCustCpnNo":null,"deliveryCouponCustCpnNo":null},"pointUseAmt":0,"paymentMethodCd":"PAY_METHOD_01"}
+						""")
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.ordNo").value("ORD202603190001"))
+			.andExpect(jsonPath("$.payNo").value(101))
+			.andExpect(jsonPath("$.method").value("CARD"))
+			.andExpect(jsonPath("$.successUrl").value("http://127.0.0.1:3014/order/success?payNo=101"));
+	}
+
+	@Test
+	@DisplayName("주문 결제 준비 API는 비로그인 요청이면 401을 반환한다")
+	// 비로그인 상태에서 결제 준비 요청 시 401 응답을 검증합니다.
+	void prepareShopOrderPayment_returnsUnauthorizedWhenNotLoggedIn() throws Exception {
+		// 로그인 쿠키 없이 요청하면 401 응답과 메시지를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/order/payment/prepare")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"from":"cart","cartIdList":[12],"addressNm":"집","discountSelection":{"goodsCouponSelectionList":[],"cartCouponCustCpnNo":null,"deliveryCouponCustCpnNo":null},"pointUseAmt":0,"paymentMethodCd":"PAY_METHOD_01"}
+						""")
+			)
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
+	}
+
+	@Test
+	@DisplayName("주문 결제 승인 API는 로그인 사용자가 요청하면 승인 결과를 반환한다")
+	// 결제 승인 성공 시 주문번호/결제금액/결제수단이 응답으로 반환되는지 검증합니다.
+	void confirmShopOrderPayment_returnsOk() throws Exception {
+		// 결제 승인 결과 응답 객체를 구성합니다.
+		ShopOrderPaymentConfirmVO result = new ShopOrderPaymentConfirmVO();
+		result.setOrdNo("ORD202603190001");
+		result.setPayNo(101L);
+		result.setPayMethodCd("PAY_METHOD_01");
+		result.setOrderName("주문상품 외 1건");
+		result.setAmount(39000L);
+		when(goodsService.confirmShopOrderPayment(any(), eq(1L))).thenReturn(result);
+
+		// 로그인 쿠키와 함께 요청하면 200 응답과 결제 승인 결과를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/order/payment/confirm")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"payNo":101,"ordNo":"ORD202603190001","paymentKey":"payment-key","amount":39000}
+						""")
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.ordNo").value("ORD202603190001"))
+			.andExpect(jsonPath("$.payNo").value(101))
+			.andExpect(jsonPath("$.payMethodCd").value("PAY_METHOD_01"));
+	}
+
+	@Test
+	@DisplayName("주문 결제 실패 반영 API는 로그인 사용자가 요청하면 성공 응답을 반환한다")
+	// 결제 실패 또는 사용자 취소 결과 저장 후 success 플래그가 반환되는지 검증합니다.
+	void failShopOrderPayment_returnsOk() throws Exception {
+		// 로그인 쿠키와 함께 요청하면 200 응답과 success=true를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/order/payment/fail")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"payNo":101,"ordNo":"ORD202603190001","code":"USER_CANCEL","message":"사용자가 취소했습니다."}
+						""")
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.success").value(true));
+	}
+
+	@Test
+	@DisplayName("Toss 웹훅 API는 본문을 전달하면 성공 응답을 반환한다")
+	// 웹훅 본문을 서비스에 전달한 뒤 success 플래그를 응답하는지 검증합니다.
+	void handleShopOrderPaymentWebhook_returnsOk() throws Exception {
+		// 웹훅 요청 시 200 응답과 success=true를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/order/payment/webhook")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"eventType":"PAYMENT_STATUS_CHANGED","data":{"paymentKey":"payment-key","status":"DONE"}}
+						""")
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.success").value(true));
 	}
 }

@@ -3,6 +3,9 @@ package com.xodud1202.springbackend.controller.shop;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressRegisterPO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressUpdatePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountQuotePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentConfirmPO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentFailPO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentPreparePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPageVO;
 import com.xodud1202.springbackend.service.GoodsService;
 import jakarta.servlet.http.Cookie;
@@ -28,6 +31,8 @@ import java.util.Map;
 // 쇼핑몰 주문서 조회 및 배송지 API를 제공합니다.
 public class ShopOrderController {
 	private static final String COOKIE_CUST_NO = "cust_no";
+	private static final String DEVICE_GB_PC = "PC";
+	private static final String DEVICE_GB_MO = "MO";
 
 	private final GoodsService goodsService;
 
@@ -45,7 +50,12 @@ public class ShopOrderController {
 			}
 
 			// 주문서 페이지 데이터를 조회해 반환합니다.
-			ShopOrderPageVO result = goodsService.getShopOrderPage(cartIdList, custNo);
+			ShopOrderPageVO result = goodsService.getShopOrderPage(
+				cartIdList,
+				custNo,
+				resolveDeviceGbCd(request),
+				resolveShopOrigin(request)
+			);
 			return ResponseEntity.ok(result);
 		} catch (IllegalArgumentException exception) {
 			// 요청값 오류는 400 응답으로 반환합니다.
@@ -159,6 +169,96 @@ public class ShopOrderController {
 		}
 	}
 
+	// 쇼핑몰 주문 결제 준비 정보를 생성합니다.
+	@PostMapping("/api/shop/order/payment/prepare")
+	public ResponseEntity<Object> prepareShopOrderPayment(
+		@RequestBody(required = false) ShopOrderPaymentPreparePO param,
+		HttpServletRequest request
+	) {
+		try {
+			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			// 주문 결제 준비 결과를 생성해 반환합니다.
+			return ResponseEntity.ok(
+				goodsService.prepareShopOrderPayment(
+					param,
+					custNo,
+					resolveDeviceGbCd(request),
+					resolveShopOrigin(request)
+				)
+			);
+		} catch (IllegalArgumentException exception) {
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			log.error("쇼핑몰 주문 결제 준비 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "주문 결제 준비에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 주문 결제를 승인합니다.
+	@PostMapping("/api/shop/order/payment/confirm")
+	public ResponseEntity<Object> confirmShopOrderPayment(
+		@RequestBody(required = false) ShopOrderPaymentConfirmPO param,
+		HttpServletRequest request
+	) {
+		try {
+			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			// 결제 승인 결과를 반환합니다.
+			return ResponseEntity.ok(goodsService.confirmShopOrderPayment(param, custNo));
+		} catch (IllegalArgumentException exception) {
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			log.error("쇼핑몰 주문 결제 승인 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "결제 승인 처리에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 주문 결제 실패/취소 결과를 반영합니다.
+	@PostMapping("/api/shop/order/payment/fail")
+	public ResponseEntity<Object> failShopOrderPayment(
+		@RequestBody(required = false) ShopOrderPaymentFailPO param,
+		HttpServletRequest request
+	) {
+		try {
+			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			// 결제 실패/취소 결과를 저장한 뒤 성공 응답을 반환합니다.
+			goodsService.failShopOrderPayment(param, custNo);
+			return ResponseEntity.ok(Map.of("success", true));
+		} catch (IllegalArgumentException exception) {
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			log.error("쇼핑몰 주문 결제 실패 반영 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "결제 실패 반영에 실패했습니다."));
+		}
+	}
+
+	// Toss 웹훅을 반영합니다.
+	@PostMapping("/api/shop/order/payment/webhook")
+	public ResponseEntity<Object> handleShopOrderPaymentWebhook(@RequestBody(required = false) String rawBody) {
+		try {
+			// 웹훅 본문을 서비스에 전달해 상태를 반영합니다.
+			goodsService.handleShopOrderPaymentWebhook(rawBody);
+			return ResponseEntity.ok(Map.of("success", true));
+		} catch (Exception exception) {
+			log.error("쇼핑몰 주문 결제 웹훅 반영 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "웹훅 처리에 실패했습니다."));
+		}
+	}
+
 	// 요청 쿠키에서 고객번호를 파싱해 반환합니다.
 	private Long parseCustNoCookie(HttpServletRequest request) {
 		// 고객번호 쿠키 값이 없으면 null을 반환합니다.
@@ -185,5 +285,54 @@ public class ShopOrderController {
 			.findFirst()
 			.map(Cookie::getValue)
 			.orElse(null);
+	}
+
+	// 요청 헤더를 기준으로 결제 디바이스 코드를 반환합니다.
+	private String resolveDeviceGbCd(HttpServletRequest request) {
+		// 모바일 User-Agent면 MO, 그 외는 PC로 판단합니다.
+		String userAgent = request == null ? null : request.getHeader("User-Agent");
+		if (userAgent == null) {
+			return DEVICE_GB_PC;
+		}
+		String normalizedUserAgent = userAgent.toLowerCase();
+		if (normalizedUserAgent.contains("android")
+			|| normalizedUserAgent.contains("iphone")
+			|| normalizedUserAgent.contains("ipad")
+			|| normalizedUserAgent.contains("mobile")) {
+			return DEVICE_GB_MO;
+		}
+		return DEVICE_GB_PC;
+	}
+
+	// 요청 헤더를 기준으로 프론트 절대 Origin 값을 추론합니다.
+	private String resolveShopOrigin(HttpServletRequest request) {
+		// Origin, X-Forwarded, Referer 순으로 프론트 Origin을 추론합니다.
+		String origin = trimToNull(request == null ? null : request.getHeader("Origin"));
+		if (origin != null) {
+			return origin;
+		}
+		String forwardedHost = trimToNull(request == null ? null : request.getHeader("X-Forwarded-Host"));
+		String forwardedProto = trimToNull(request == null ? null : request.getHeader("X-Forwarded-Proto"));
+		if (forwardedHost != null) {
+			return (forwardedProto == null ? "http" : forwardedProto) + "://" + forwardedHost;
+		}
+		String referer = trimToNull(request == null ? null : request.getHeader("Referer"));
+		if (referer != null) {
+			int slashIndex = referer.indexOf('/', referer.indexOf("://") + 3);
+			return slashIndex > -1 ? referer.substring(0, slashIndex) : referer;
+		}
+		if (request == null) {
+			return "";
+		}
+		return request.getScheme() + "://" + request.getServerName() + ":" + request.getServerPort();
+	}
+
+	// 문자열을 trim 처리하고 비어 있으면 null을 반환합니다.
+	private String trimToNull(String value) {
+		if (value == null) {
+			return null;
+		}
+		String trimmed = value.trim();
+		return trimmed.isEmpty() ? null : trimmed;
 	}
 }

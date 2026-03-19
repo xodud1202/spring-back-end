@@ -1,5 +1,9 @@
 package com.xodud1202.springbackend.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xodud1202.springbackend.domain.admin.brand.BrandVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsPO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsDetailVO;
@@ -51,8 +55,11 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSaveResultV
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSearchResponseVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressUpdatePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderBaseSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderCouponItemVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderCouponOptionVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderCustomerInfoVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderDetailSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountAmountVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountQuotePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountQuoteVO;
@@ -60,6 +67,19 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountSelectionV
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderGoodsCouponGroupVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderGoodsCouponSelectionVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPageVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentConfirmPO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentConfirmVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentConfigVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentFailPO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentPreparePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentPrepareVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentSavePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPointBaseVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPointDetailSavePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPointDetailVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPointSaveSummaryVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderRestoreCartItemVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryVO;
@@ -85,6 +105,7 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -93,6 +114,12 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.ByteArrayOutputStream;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -100,6 +127,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -112,6 +140,11 @@ public class GoodsService {
 	private final FtpFileService ftpFileService;
 	private final ShopAuthService shopAuthService;
 	private final JusoAddressApiClient jusoAddressApiClient;
+	private final TossPaymentsClient tossPaymentsClient;
+	private final ObjectMapper objectMapper;
+
+	@Value("${toss.client-key}")
+	private String tossClientKey;
 	private static final int GOODS_IMAGE_MIN_SIZE = 500;
 	private static final int GOODS_IMAGE_MAX_SIZE = 1500;
 	private static final String SHOP_SITE_ID = "xodud1202";
@@ -139,6 +172,34 @@ public class GoodsService {
 	private static final int SHOP_ORDER_ADDRESS_SEARCH_DEFAULT_COUNT = 10;
 	private static final int SHOP_ORDER_ADDRESS_SEARCH_MAX_COUNT = 100;
 	private static final String SHOP_ORDER_DISCOUNT_INVALID_MESSAGE = "할인 혜택 정보를 확인해주세요.";
+	private static final String SHOP_ORDER_PAYMENT_INVALID_MESSAGE = "결제 정보를 확인해주세요.";
+	private static final String SHOP_ORDER_PAYMENT_PREPARE_MESSAGE = "결제 준비에 실패했습니다.";
+	private static final String SHOP_ORDER_PAYMENT_CONFIRM_MESSAGE = "결제 승인 처리에 실패했습니다.";
+	private static final String SHOP_ORDER_PAYMENT_METHOD_CARD = "PAY_METHOD_01";
+	private static final String SHOP_ORDER_PAYMENT_METHOD_VIRTUAL_ACCOUNT = "PAY_METHOD_02";
+	private static final String SHOP_ORDER_PAYMENT_METHOD_TRANSFER = "PAY_METHOD_03";
+	private static final String SHOP_ORDER_TOSS_METHOD_CARD = "CARD";
+	private static final String SHOP_ORDER_TOSS_METHOD_VIRTUAL_ACCOUNT = "VIRTUAL_ACCOUNT";
+	private static final String SHOP_ORDER_TOSS_METHOD_TRANSFER = "TRANSFER";
+	private static final String SHOP_ORDER_PAY_GB_PAYMENT = "PAY_GB_01";
+	private static final String SHOP_ORDER_PG_GB_TOSS = "TOSS";
+	private static final String SHOP_ORDER_ORD_GB_ORDER = "O";
+	private static final String SHOP_ORDER_STAT_READY = "ORD_STAT_00";
+	private static final String SHOP_ORDER_STAT_WAITING_DEPOSIT = "ORD_STAT_01";
+	private static final String SHOP_ORDER_STAT_DONE = "ORD_STAT_02";
+	private static final String SHOP_ORDER_STAT_CANCEL = "ORD_STAT_99";
+	private static final String SHOP_ORDER_DTL_STAT_READY = "ORD_DTL_STAT_00";
+	private static final String SHOP_ORDER_DTL_STAT_WAITING_DEPOSIT = "ORD_DTL_STAT_01";
+	private static final String SHOP_ORDER_DTL_STAT_DONE = "ORD_DTL_STAT_02";
+	private static final String SHOP_ORDER_DTL_STAT_CANCEL = "ORD_DTL_STAT_99";
+	private static final String SHOP_ORDER_PAY_STAT_READY = "PAY_STAT_01";
+	private static final String SHOP_ORDER_PAY_STAT_DONE = "PAY_STAT_02";
+	private static final String SHOP_ORDER_PAY_STAT_FAIL = "PAY_STAT_03";
+	private static final String SHOP_ORDER_PAY_STAT_CANCEL = "PAY_STAT_04";
+	private static final String SHOP_ORDER_PAY_STAT_WAITING_DEPOSIT = "PAY_STAT_05";
+	private static final String SHOP_ORDER_PAYMENT_API_VERSION = "2022-11-16";
+	private static final String SHOP_ORDER_POINT_USE_MEMO = "주문 결제 포인트 사용";
+	private static final String SHOP_ORDER_POINT_RESTORE_MEMO = "주문 결제 포인트 복구";
 
 	// 관리자 상품 목록을 페이징 조건으로 조회합니다.
 	public Map<String, Object> getAdminGoodsList(GoodsPO param) {
@@ -1136,14 +1197,14 @@ public class GoodsService {
 	}
 
 	// 쇼핑몰 주문서 페이지 데이터를 cartId 기준으로 조회합니다.
-	public ShopOrderPageVO getShopOrderPage(List<Long> cartIdList, Long custNo) {
+	public ShopOrderPageVO getShopOrderPage(List<Long> cartIdList, Long custNo, String deviceGbCd, String shopOrigin) {
 		// 로그인 고객번호 유효성을 확인합니다.
 		if (custNo == null || custNo < 1L) {
 			throw new IllegalArgumentException("로그인이 필요합니다.");
 		}
 
 		// 현재 로그인 고객의 유효한 주문 대상 장바구니 목록을 조회합니다.
-		return buildShopOrderPage(resolveValidatedShopOrderCartItemList(cartIdList, custNo), custNo);
+		return buildShopOrderPage(resolveValidatedShopOrderCartItemList(cartIdList, custNo), custNo, deviceGbCd, shopOrigin);
 	}
 
 	// 쇼핑몰 주문서 할인 금액을 재계산합니다.
@@ -1160,6 +1221,336 @@ public class GoodsService {
 		List<ShopCartItemVO> orderCartItemList = resolveValidatedShopOrderCartItemList(param.getCartIdList(), custNo);
 		ShopOrderDiscountContext discountContext = buildShopOrderDiscountContext(orderCartItemList, custNo);
 		return buildShopOrderDiscountQuoteFromSelection(discountContext, param.getGoodsCouponSelectionList(), param.getCartCouponCustCpnNo(), param.getDeliveryCouponCustCpnNo());
+	}
+
+	// 쇼핑몰 주문 결제 준비 데이터를 생성하고 Toss 결제 요청 정보를 반환합니다.
+	@Transactional
+	public ShopOrderPaymentPrepareVO prepareShopOrderPayment(
+		ShopOrderPaymentPreparePO param,
+		Long custNo,
+		String deviceGbCd,
+		String shopOrigin
+	) {
+		// 로그인 고객번호와 결제 준비 요청값을 검증합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+		if (param == null) {
+			throw new IllegalArgumentException(SHOP_ORDER_PAYMENT_INVALID_MESSAGE);
+		}
+
+		// 현재 유효한 주문 대상 장바구니와 고객/배송지 정보를 조회합니다.
+		List<ShopCartItemVO> orderCartItemList = resolveValidatedShopOrderCartItemList(param.getCartIdList(), custNo);
+		ShopOrderAddressVO selectedAddress = resolveRequiredShopOrderAddress(custNo, param.getAddressNm());
+		ShopOrderCustomerInfoVO customerInfo = resolveShopOrderCustomerInfo(custNo, deviceGbCd);
+		ShopOrderDiscountContext discountContext = buildShopOrderDiscountContext(orderCartItemList, custNo);
+
+		// 현재 장바구니 기준 할인 선택을 다시 검증하고 포인트 사용 금액을 보정합니다.
+		ShopOrderDiscountSelectionVO requestSelection = param.getDiscountSelection() == null ? new ShopOrderDiscountSelectionVO() : param.getDiscountSelection();
+		ShopOrderDiscountQuoteVO discountQuote = buildShopOrderDiscountQuoteFromSelection(
+			discountContext,
+			requestSelection.getGoodsCouponSelectionList(),
+			requestSelection.getCartCouponCustCpnNo(),
+			requestSelection.getDeliveryCouponCustCpnNo()
+		);
+		int normalizedPointUseAmt = clampShopOrderPointUseAmt(param.getPointUseAmt(), discountQuote.getDiscountAmount().getMaxPointUseAmt());
+
+		// 결제금액, 주문명, 결제수단, 적립 예정 포인트를 최종 확정합니다.
+		int totalSaleAmt = calculateSelectedCartSaleAmt(discountContext.getEstimateRowList());
+		int baseDeliveryFee = resolveCouponEstimateDeliveryFee(totalSaleAmt, discountContext.getSiteInfo());
+		int normalizedDeliveryFee = Math.max(baseDeliveryFee - normalizeNonNegativeNumber(discountQuote.getDiscountAmount().getDeliveryCouponDiscountAmt()), 0);
+		int finalPayAmt = Math.max(
+			totalSaleAmt + baseDeliveryFee - normalizeNonNegativeNumber(discountQuote.getDiscountAmount().getCouponDiscountAmt()) - normalizedPointUseAmt,
+			0
+		);
+		if (finalPayAmt < 1) {
+			throw new IllegalArgumentException("결제 금액을 확인해주세요.");
+		}
+		String resolvedPaymentMethodCd = resolveRequiredShopOrderPaymentMethodCd(param.getPaymentMethodCd());
+		String tossMethod = resolveTossMethodByPayMethodCd(resolvedPaymentMethodCd);
+		String ordNo = generateShopOrderNo(custNo);
+		String orderName = buildShopOrderName(orderCartItemList);
+		ShopOrderPointSaveSummaryVO pointSaveSummary = buildShopOrderPointSaveSummary(orderCartItemList, customerInfo.getCustGradeCd());
+
+		// 주문 마스터/상세와 결제 준비 스냅샷을 생성합니다.
+		ShopOrderBaseSavePO orderBaseSavePO = buildShopOrderBaseSavePO(
+			param.getFrom(),
+			ordNo,
+			custNo,
+			selectedAddress,
+			discountQuote.getDiscountSelection().getDeliveryCouponCustCpnNo(),
+			normalizedDeliveryFee,
+			deviceGbCd
+		);
+		Map<String, Object> paymentSnapshot = buildShopOrderPaymentSnapshot(
+			param.getFrom(),
+			param.getGoodsId(),
+			orderCartItemList,
+			selectedAddress.getAddressNm(),
+			discountQuote.getDiscountSelection(),
+			normalizedPointUseAmt,
+			orderName,
+			finalPayAmt
+		);
+		String paymentSnapshotJson = writeShopOrderJson(paymentSnapshot);
+		insertShopOrderBaseAndDetail(
+			orderBaseSavePO,
+			custNo,
+			orderCartItemList,
+			discountQuote,
+			normalizedPointUseAmt,
+			pointSaveSummary.getPointSaveRate(),
+			orderBaseSavePO.getRegNo()
+		);
+
+		// 결제 준비 row를 생성하고 Toss 결제창 요청 응답을 반환합니다.
+		ShopOrderPaymentSavePO paymentSavePO = new ShopOrderPaymentSavePO();
+		paymentSavePO.setOrdNo(ordNo);
+		paymentSavePO.setCustNo(custNo);
+		paymentSavePO.setPayStatCd(SHOP_ORDER_PAY_STAT_READY);
+		paymentSavePO.setPayGbCd(SHOP_ORDER_PAY_GB_PAYMENT);
+		paymentSavePO.setPayMethodCd(resolvedPaymentMethodCd);
+		paymentSavePO.setOrdGbCd(SHOP_ORDER_ORD_GB_ORDER);
+		paymentSavePO.setPgGbCd(SHOP_ORDER_PG_GB_TOSS);
+		paymentSavePO.setPayAmt((long) finalPayAmt);
+		paymentSavePO.setDeviceGbCd(deviceGbCd);
+		paymentSavePO.setReqRawJson(paymentSnapshotJson);
+		paymentSavePO.setRegNo(custNo);
+		paymentSavePO.setUdtNo(custNo);
+		goodsMapper.insertShopPayment(paymentSavePO);
+		if (paymentSavePO.getPayNo() == null || paymentSavePO.getPayNo() < 1L) {
+			throw new IllegalStateException(SHOP_ORDER_PAYMENT_PREPARE_MESSAGE);
+		}
+
+		// 결제창 성공/실패 URL과 고객 정보를 함께 응답합니다.
+		String normalizedShopOrigin = normalizeShopOrigin(shopOrigin);
+		ShopOrderPaymentPrepareVO result = new ShopOrderPaymentPrepareVO();
+		result.setOrdNo(ordNo);
+		result.setPayNo(paymentSavePO.getPayNo());
+		result.setClientKey(resolveShopOrderClientKey());
+		result.setMethod(tossMethod);
+		result.setOrderId(ordNo);
+		result.setOrderName(orderName);
+		result.setAmount((long) finalPayAmt);
+		result.setCustomerKey(customerInfo.getCustomerKey());
+		result.setCustomerName(customerInfo.getCustNm());
+		result.setCustomerEmail(customerInfo.getEmail());
+		result.setCustomerMobilePhone(customerInfo.getPhoneNumber());
+		result.setSuccessUrl(buildShopOrderSuccessUrl(normalizedShopOrigin, paymentSavePO.getPayNo()));
+		result.setFailUrl(buildShopOrderFailUrl(normalizedShopOrigin, paymentSavePO.getPayNo(), param.getFrom(), param.getGoodsId(), orderCartItemList));
+		return result;
+	}
+
+	// 쇼핑몰 주문 결제 승인을 완료하고 주문/결제 상태를 갱신합니다.
+	@Transactional
+	public ShopOrderPaymentConfirmVO confirmShopOrderPayment(ShopOrderPaymentConfirmPO param, Long custNo) {
+		// 로그인 고객번호와 승인 요청값을 검증합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+		if (param == null || param.getPayNo() == null || isBlank(param.getOrdNo()) || isBlank(param.getPaymentKey()) || param.getAmount() == null) {
+			throw new IllegalArgumentException(SHOP_ORDER_PAYMENT_INVALID_MESSAGE);
+		}
+
+		// 현재 결제번호 기준 결제 준비 상태와 고객 소유 여부를 확인합니다.
+		ShopOrderPaymentVO payment = goodsMapper.getShopPaymentByPayNo(param.getPayNo());
+		if (payment == null || payment.getCustNo() == null || !custNo.equals(payment.getCustNo()) || !param.getOrdNo().trim().equals(payment.getOrdNo())) {
+			throw new IllegalArgumentException(SHOP_ORDER_PAYMENT_INVALID_MESSAGE);
+		}
+		if (payment.getPayAmt() == null || payment.getPayAmt().longValue() != param.getAmount().longValue()) {
+			throw new IllegalArgumentException("승인 금액을 확인해주세요.");
+		}
+
+		// 이미 승인 또는 입금대기 처리된 결제는 저장된 결과를 그대로 반환합니다.
+		if (SHOP_ORDER_PAY_STAT_DONE.equals(payment.getPayStatCd()) || SHOP_ORDER_PAY_STAT_WAITING_DEPOSIT.equals(payment.getPayStatCd())) {
+			return buildShopOrderPaymentConfirmResult(payment);
+		}
+
+		// Toss 승인 API를 호출하고 상태/수단별 후속 처리를 수행합니다.
+		String rawResponse;
+		try {
+			rawResponse = confirmTossPayment(param);
+		} catch (TossPaymentClientException exception) {
+			JsonNode errorNode = readShopOrderJsonNode(exception.getResponseBody());
+			String errorCode = firstNonBlank(resolveJsonText(errorNode, "code"), "TOSS_CONFIRM_ERROR");
+			String errorMessage = firstNonBlank(resolveJsonText(errorNode, "message"), SHOP_ORDER_PAYMENT_CONFIRM_MESSAGE);
+			goodsMapper.updateShopPaymentFailure(
+				payment.getPayNo(),
+				SHOP_ORDER_PAY_STAT_FAIL,
+				errorCode,
+				errorMessage,
+				exception.getResponseBody(),
+				custNo
+			);
+			goodsMapper.updateShopOrderBaseStatus(param.getOrdNo().trim(), SHOP_ORDER_STAT_CANCEL, custNo);
+			goodsMapper.updateShopOrderDetailStatus(param.getOrdNo().trim(), SHOP_ORDER_DTL_STAT_CANCEL, custNo);
+			throw new IllegalArgumentException(errorMessage);
+		}
+		JsonNode responseNode = readShopOrderJsonNode(rawResponse);
+		String paymentStatus = resolveJsonText(responseNode, "status");
+		String paymentKey = resolveJsonText(responseNode, "paymentKey");
+		String paymentKeyHash = sha256Hex(paymentKey);
+		String tradeNo = firstNonBlank(resolveJsonText(responseNode, "lastTransactionKey"), paymentKey);
+		String approvedAt = normalizeShopOrderDateTime(resolveJsonText(responseNode, "approvedAt"));
+		String orderName = firstNonBlank(resolveJsonText(responseNode, "orderName"), readShopOrderSnapshotValue(payment.getReqRawJson(), "orderName"));
+
+		// 무통장입금 발급 성공과 일반 승인 성공을 분기 처리합니다.
+		if (SHOP_ORDER_PAYMENT_METHOD_VIRTUAL_ACCOUNT.equals(payment.getPayMethodCd()) && "WAITING_FOR_DEPOSIT".equals(paymentStatus)) {
+			String dueDate = normalizeShopOrderDateTime(resolveJsonText(responseNode.path("virtualAccount"), "dueDate"));
+			goodsMapper.updateShopPaymentWaitingDeposit(
+				payment.getPayNo(),
+				SHOP_ORDER_PAY_STAT_WAITING_DEPOSIT,
+				param.getAmount(),
+				paymentKey,
+				paymentKeyHash,
+				tradeNo,
+				paymentStatus,
+				"무통장입금 발급 완료",
+				resolveJsonText(responseNode.path("virtualAccount"), "bankCode"),
+				resolveJsonText(responseNode.path("virtualAccount"), "accountNumber"),
+				resolveJsonText(responseNode.path("virtualAccount"), "customerName"),
+				dueDate,
+				rawResponse,
+				approvedAt,
+				custNo
+			);
+			goodsMapper.updateShopOrderBaseStatus(param.getOrdNo().trim(), SHOP_ORDER_STAT_WAITING_DEPOSIT, custNo);
+			goodsMapper.updateShopOrderDetailStatus(param.getOrdNo().trim(), SHOP_ORDER_DTL_STAT_WAITING_DEPOSIT, custNo);
+			applyShopOrderSuccessSideEffects(payment, custNo);
+			ShopOrderPaymentVO updatedPayment = goodsMapper.getShopPaymentByPayNo(payment.getPayNo());
+			ShopOrderPaymentConfirmVO result = buildShopOrderPaymentConfirmResult(updatedPayment);
+			result.setOrderName(orderName);
+			return result;
+		}
+
+		if (!"DONE".equals(paymentStatus)) {
+			throw new IllegalArgumentException(SHOP_ORDER_PAYMENT_CONFIRM_MESSAGE);
+		}
+
+		// 카드/퀵계좌이체 승인 성공 정보를 저장하고 후처리를 수행합니다.
+		goodsMapper.updateShopPaymentSuccess(
+			payment.getPayNo(),
+			SHOP_ORDER_PAY_STAT_DONE,
+			param.getAmount(),
+			paymentKey,
+			paymentKeyHash,
+			tradeNo,
+			resolveJsonText(responseNode.path("card"), "approveNo"),
+			paymentStatus,
+			"결제 승인 완료",
+			firstNonBlank(resolveJsonText(responseNode.path("card"), "issuerCode"), resolveJsonText(responseNode.path("easyPay"), "provider")),
+			resolveJsonText(responseNode.path("card"), "number"),
+			rawResponse,
+			approvedAt,
+			custNo
+		);
+		goodsMapper.updateShopOrderBaseStatus(param.getOrdNo().trim(), SHOP_ORDER_STAT_DONE, custNo);
+		goodsMapper.updateShopOrderDetailStatus(param.getOrdNo().trim(), SHOP_ORDER_DTL_STAT_DONE, custNo);
+		applyShopOrderSuccessSideEffects(payment, custNo);
+		ShopOrderPaymentVO updatedPayment = goodsMapper.getShopPaymentByPayNo(payment.getPayNo());
+		ShopOrderPaymentConfirmVO result = buildShopOrderPaymentConfirmResult(updatedPayment);
+		result.setOrderName(orderName);
+		return result;
+	}
+
+	// 쇼핑몰 주문 결제 실패/취소 결과를 저장합니다.
+	@Transactional
+	public void failShopOrderPayment(ShopOrderPaymentFailPO param, Long custNo) {
+		// 로그인 고객번호와 실패 요청값을 검증합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+		if (param == null || param.getPayNo() == null || isBlank(param.getOrdNo())) {
+			throw new IllegalArgumentException(SHOP_ORDER_PAYMENT_INVALID_MESSAGE);
+		}
+
+		// 현재 결제 준비 row가 로그인 고객 소유인지 확인합니다.
+		ShopOrderPaymentVO payment = goodsMapper.getShopPaymentByPayNo(param.getPayNo());
+		if (payment == null || payment.getCustNo() == null || !custNo.equals(payment.getCustNo()) || !param.getOrdNo().trim().equals(payment.getOrdNo())) {
+			throw new IllegalArgumentException(SHOP_ORDER_PAYMENT_INVALID_MESSAGE);
+		}
+
+		// 이미 성공 또는 입금대기 상태가 아니면 실패/취소 상태와 주문 취소 상태를 반영합니다.
+		if (SHOP_ORDER_PAY_STAT_DONE.equals(payment.getPayStatCd()) || SHOP_ORDER_PAY_STAT_WAITING_DEPOSIT.equals(payment.getPayStatCd())) {
+			return;
+		}
+		String payStatCd = isShopOrderCancelFailureCode(param.getCode()) ? SHOP_ORDER_PAY_STAT_CANCEL : SHOP_ORDER_PAY_STAT_FAIL;
+		goodsMapper.updateShopPaymentFailure(
+			payment.getPayNo(),
+			payStatCd,
+			trimToNull(param.getCode()),
+			trimToNull(param.getMessage()),
+			writeShopOrderJson(Map.of(
+				"code", firstNonBlank(trimToNull(param.getCode()), ""),
+				"message", firstNonBlank(trimToNull(param.getMessage()), "")
+			)),
+			custNo
+		);
+		goodsMapper.updateShopOrderBaseStatus(param.getOrdNo().trim(), SHOP_ORDER_STAT_CANCEL, custNo);
+		goodsMapper.updateShopOrderDetailStatus(param.getOrdNo().trim(), SHOP_ORDER_DTL_STAT_CANCEL, custNo);
+	}
+
+	// Toss 웹훅 결과를 반영해 무통장입금 입금완료/만료/취소 후속 처리를 수행합니다.
+	@Transactional
+	public void handleShopOrderPaymentWebhook(String rawBody) {
+		// 웹훅 본문이 비어 있으면 처리하지 않습니다.
+		String normalizedRawBody = trimToNull(rawBody);
+		if (normalizedRawBody == null) {
+			return;
+		}
+
+		// 결제키와 상태를 읽어 현재 결제 row를 조회합니다.
+		JsonNode rootNode = readShopOrderJsonNode(normalizedRawBody);
+		JsonNode dataNode = rootNode.path("data");
+		String paymentKey = firstNonBlank(resolveJsonText(dataNode, "paymentKey"), resolveJsonText(rootNode, "paymentKey"));
+		String paymentStatus = firstNonBlank(resolveJsonText(dataNode, "status"), resolveJsonText(rootNode, "status"));
+		if (isBlank(paymentKey) || isBlank(paymentStatus)) {
+			return;
+		}
+		ShopOrderPaymentVO payment = goodsMapper.getShopPaymentByTossPaymentKeyHash(sha256Hex(paymentKey));
+		if (payment == null || !SHOP_ORDER_PAYMENT_METHOD_VIRTUAL_ACCOUNT.equals(payment.getPayMethodCd())) {
+			return;
+		}
+
+		// 무통장입금 완료는 결제 완료 상태로 승격하고, 만료/취소는 원복 처리합니다.
+		String normalizedWebhookDt = normalizeShopOrderDateTime(firstNonBlank(resolveJsonText(rootNode, "createdAt"), resolveJsonText(dataNode, "approvedAt")));
+		if ("DONE".equals(paymentStatus)) {
+			if (SHOP_ORDER_PAY_STAT_DONE.equals(payment.getPayStatCd())) {
+				return;
+			}
+			goodsMapper.updateShopPaymentWebhook(
+				payment.getPayNo(),
+				SHOP_ORDER_PAY_STAT_DONE,
+				paymentStatus,
+				"무통장입금 완료",
+				normalizedRawBody,
+				normalizedWebhookDt,
+				payment.getCustNo()
+			);
+			goodsMapper.updateShopOrderBaseStatus(payment.getOrdNo(), SHOP_ORDER_STAT_DONE, payment.getCustNo());
+			goodsMapper.updateShopOrderDetailStatus(payment.getOrdNo(), SHOP_ORDER_DTL_STAT_DONE, payment.getCustNo());
+			return;
+		}
+
+		if (!"EXPIRED".equals(paymentStatus) && !"CANCELED".equals(paymentStatus)) {
+			return;
+		}
+		if (!SHOP_ORDER_PAY_STAT_WAITING_DEPOSIT.equals(payment.getPayStatCd())) {
+			return;
+		}
+		String payStatCd = "CANCELED".equals(paymentStatus) ? SHOP_ORDER_PAY_STAT_CANCEL : SHOP_ORDER_PAY_STAT_FAIL;
+		goodsMapper.updateShopPaymentWebhook(
+			payment.getPayNo(),
+			payStatCd,
+			paymentStatus,
+			"CANCELED".equals(paymentStatus) ? "무통장입금 취소" : "무통장입금 만료",
+			normalizedRawBody,
+			normalizedWebhookDt,
+			payment.getCustNo()
+		);
+		goodsMapper.updateShopOrderBaseStatus(payment.getOrdNo(), SHOP_ORDER_STAT_CANCEL, payment.getCustNo());
+		goodsMapper.updateShopOrderDetailStatus(payment.getOrdNo(), SHOP_ORDER_DTL_STAT_CANCEL, payment.getCustNo());
+		restoreShopOrderSuccessSideEffects(payment, payment.getCustNo());
 	}
 
 	// 쇼핑몰 주문서 배송지 검색 결과를 조회합니다.
@@ -2274,12 +2665,16 @@ public class GoodsService {
 	}
 
 	// 주문 대상 장바구니 목록과 배송지 목록을 주문서 페이지 응답 형식으로 조합합니다.
-	private ShopOrderPageVO buildShopOrderPage(List<ShopCartItemVO> cartItemList, Long custNo) {
-		// 기존 장바구니 조합 결과에 배송지/쿠폰/포인트 정보를 추가합니다.
+	private ShopOrderPageVO buildShopOrderPage(List<ShopCartItemVO> cartItemList, Long custNo, String deviceGbCd, String shopOrigin) {
+		// 기존 장바구니 조합 결과에 배송지/쿠폰/포인트/결제 기본 정보를 추가합니다.
 		ShopCartPageVO cartPage = buildShopCartPage(cartItemList);
 		List<ShopOrderAddressVO> addressList = resolveShopOrderAddressList(custNo);
 		ShopOrderDiscountContext discountContext = buildShopOrderDiscountContext(cartPage.getCartList(), custNo);
 		ShopOrderDiscountQuoteVO autoDiscountQuote = buildShopOrderAutoDiscountQuote(discountContext);
+		ShopOrderCustomerInfoVO customerInfo = resolveShopOrderCustomerInfo(custNo, deviceGbCd);
+		ShopOrderPointSaveSummaryVO pointSaveSummary = buildShopOrderPointSaveSummary(cartPage.getCartList(), customerInfo.getCustGradeCd());
+
+		// 주문서 응답 객체를 구성합니다.
 		ShopOrderPageVO result = new ShopOrderPageVO();
 		result.setCartList(cartPage.getCartList());
 		result.setCartCount(cartPage.getCartCount());
@@ -2290,7 +2685,665 @@ public class GoodsService {
 		result.setCouponOption(buildShopOrderCouponOption(discountContext));
 		result.setDiscountSelection(autoDiscountQuote.getDiscountSelection());
 		result.setDiscountAmount(autoDiscountQuote.getDiscountAmount());
+		result.setPaymentConfig(buildShopOrderPaymentConfig(shopOrigin));
+		result.setCustomerInfo(customerInfo);
+		result.setPointSaveSummary(pointSaveSummary);
 		return result;
+	}
+
+	// 주문서 결제 환경 정보를 구성합니다.
+	private ShopOrderPaymentConfigVO buildShopOrderPaymentConfig(String shopOrigin) {
+		// 성공/실패 URL 베이스와 클라이언트 키를 응답 객체에 채웁니다.
+		String normalizedShopOrigin = normalizeShopOrigin(shopOrigin);
+		ShopOrderPaymentConfigVO result = new ShopOrderPaymentConfigVO();
+		result.setClientKey(resolveShopOrderClientKey());
+		result.setApiVersion(SHOP_ORDER_PAYMENT_API_VERSION);
+		result.setSuccessUrlBase(buildShopOrderSuccessBaseUrl(normalizedShopOrigin));
+		result.setFailUrlBase(buildShopOrderFailBaseUrl(normalizedShopOrigin));
+		return result;
+	}
+
+	// 현재 주문 고객의 기본 결제 정보를 조회합니다.
+	private ShopOrderCustomerInfoVO resolveShopOrderCustomerInfo(Long custNo, String deviceGbCd) {
+		// 고객번호 기준 기본 정보를 조회하고 Toss 고객 식별키를 보정합니다.
+		ShopOrderCustomerInfoVO customerInfo = goodsMapper.getShopOrderCustomerInfo(custNo);
+		if (customerInfo == null || customerInfo.getCustNo() == null) {
+			throw new IllegalArgumentException("주문 고객 정보를 찾을 수 없습니다.");
+		}
+		customerInfo.setCustomerKey("SHOP-CUST-" + customerInfo.getCustNo());
+		customerInfo.setDeviceGbCd(firstNonBlank(trimToNull(deviceGbCd), "PC"));
+		customerInfo.setCustNm(firstNonBlank(trimToNull(customerInfo.getCustNm()), "고객"));
+		customerInfo.setEmail(firstNonBlank(trimToNull(customerInfo.getEmail()), ""));
+		customerInfo.setPhoneNumber(firstNonBlank(trimToNull(customerInfo.getPhoneNumber()), ""));
+		return customerInfo;
+	}
+
+	// 적립 예정 포인트 요약 정보를 구성합니다.
+	private ShopOrderPointSaveSummaryVO buildShopOrderPointSaveSummary(List<ShopCartItemVO> cartItemList, String custGradeCd) {
+		// 고객등급 적립률과 주문 전체 적립 예정 포인트를 계산합니다.
+		int pointSaveRate = resolveShopPointSaveRate(resolveCustGradeCd(custGradeCd));
+		int totalExpectedPoint = 0;
+		for (ShopCartItemVO cartItem : cartItemList == null ? List.<ShopCartItemVO>of() : cartItemList) {
+			if (cartItem == null) {
+				continue;
+			}
+			totalExpectedPoint += resolveShopOrderPointSaveAmt(cartItem, pointSaveRate);
+		}
+
+		// 적립률과 적립 예정 합계를 응답 객체에 설정합니다.
+		ShopOrderPointSaveSummaryVO result = new ShopOrderPointSaveSummaryVO();
+		result.setPointSaveRate(pointSaveRate);
+		result.setTotalExpectedPoint(Math.max(totalExpectedPoint, 0));
+		return result;
+	}
+
+	// 주문 행 기준 적립 예정 포인트를 계산합니다.
+	private int resolveShopOrderPointSaveAmt(ShopCartItemVO cartItem, int pointSaveRate) {
+		// 판매가 합계 기준으로 적립 예정 포인트를 계산합니다.
+		if (cartItem == null) {
+			return 0;
+		}
+		int rowSaleAmt = normalizeNonNegativeNumber(cartItem.getSaleAmt()) * normalizeQuantity(cartItem.getQty());
+		return (int) ((long) rowSaleAmt * (long) Math.max(pointSaveRate, 0) / 100L);
+	}
+
+	// 주문 마스터 저장 파라미터를 생성합니다.
+	private ShopOrderBaseSavePO buildShopOrderBaseSavePO(
+		String from,
+		String ordNo,
+		Long custNo,
+		ShopOrderAddressVO selectedAddress,
+		Long deliveryCouponCustCpnNo,
+		int deliveryFee,
+		String deviceGbCd
+	) {
+		// 주문 출처와 배송지 기준으로 주문 마스터 저장 파라미터를 구성합니다.
+		ShopOrderBaseSavePO result = new ShopOrderBaseSavePO();
+		result.setOrdNo(ordNo);
+		result.setCustNo(custNo);
+		result.setOrdStatCd(SHOP_ORDER_STAT_READY);
+		result.setRcvNm(selectedAddress.getRsvNm());
+		result.setRcvPostNo(selectedAddress.getPostNo());
+		result.setRcvAddrBase(selectedAddress.getBaseAddress());
+		result.setRcvAddrDtl(selectedAddress.getDetailAddress());
+		result.setDelvCpnNo(deliveryCouponCustCpnNo);
+		result.setOrdDelvAmt(deliveryFee);
+		result.setCartYn("goods".equalsIgnoreCase(firstNonBlank(trimToNull(from), "")) ? NO : YES);
+		result.setDeviceGbCd(firstNonBlank(trimToNull(deviceGbCd), "PC"));
+		result.setRegNo(custNo);
+		result.setUdtNo(custNo);
+		return result;
+	}
+
+	// 주문서에서 선택한 배송지명을 현재 고객 배송지 목록에서 조회합니다.
+	private ShopOrderAddressVO resolveRequiredShopOrderAddress(Long custNo, String addressNm) {
+		// 배송지명이 비어 있으면 주문 진행을 막습니다.
+		if (custNo == null || custNo < 1L || isBlank(addressNm)) {
+			throw new IllegalArgumentException("배송지를 선택해주세요.");
+		}
+
+		// 고객 배송지 목록에서 일치하는 배송지를 찾고, 없으면 예외를 반환합니다.
+		ShopOrderAddressVO selectedAddress = findShopOrderAddressByName(resolveShopOrderAddressList(custNo), addressNm);
+		if (selectedAddress == null) {
+			throw new IllegalArgumentException("배송지를 선택해주세요.");
+		}
+		return selectedAddress;
+	}
+
+	// 결제수단 코드를 필수값 기준으로 검증합니다.
+	private String resolveRequiredShopOrderPaymentMethodCd(String paymentMethodCd) {
+		// 지원하는 결제수단 코드만 허용합니다.
+		String normalizedPaymentMethodCd = trimToNull(paymentMethodCd);
+		if (SHOP_ORDER_PAYMENT_METHOD_CARD.equals(normalizedPaymentMethodCd)
+			|| SHOP_ORDER_PAYMENT_METHOD_VIRTUAL_ACCOUNT.equals(normalizedPaymentMethodCd)
+			|| SHOP_ORDER_PAYMENT_METHOD_TRANSFER.equals(normalizedPaymentMethodCd)) {
+			return normalizedPaymentMethodCd;
+		}
+		throw new IllegalArgumentException("결제수단을 선택해주세요.");
+	}
+
+	// 결제수단 코드 기준 Toss method 값을 반환합니다.
+	private String resolveTossMethodByPayMethodCd(String paymentMethodCd) {
+		// 내부 결제수단 코드와 Toss 결제수단 코드를 매핑합니다.
+		if (SHOP_ORDER_PAYMENT_METHOD_CARD.equals(paymentMethodCd)) {
+			return SHOP_ORDER_TOSS_METHOD_CARD;
+		}
+		if (SHOP_ORDER_PAYMENT_METHOD_VIRTUAL_ACCOUNT.equals(paymentMethodCd)) {
+			return SHOP_ORDER_TOSS_METHOD_VIRTUAL_ACCOUNT;
+		}
+		if (SHOP_ORDER_PAYMENT_METHOD_TRANSFER.equals(paymentMethodCd)) {
+			return SHOP_ORDER_TOSS_METHOD_TRANSFER;
+		}
+		throw new IllegalArgumentException("결제수단을 확인해주세요.");
+	}
+
+	// 입력 포인트 사용 금액을 최대 사용 가능 금액 기준으로 보정합니다.
+	private int clampShopOrderPointUseAmt(Integer pointUseAmt, Integer maxPointUseAmt) {
+		// 음수/비정상 입력은 0원으로 보정한 뒤 최대 사용 가능 금액을 적용합니다.
+		return Math.min(
+			normalizeNonNegativeNumber(pointUseAmt),
+			normalizeNonNegativeNumber(maxPointUseAmt)
+		);
+	}
+
+	// 주문번호를 생성합니다.
+	private String generateShopOrderNo(Long custNo) {
+		// 접두사/고객번호/년월일시분초밀리초를 조합해 주문번호를 생성합니다.
+		String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS"));
+		long safeCustNo = custNo == null ? 0L : Math.max(custNo, 0L);
+		return "O" + safeCustNo + timestamp;
+	}
+
+	// Toss 주문명을 생성합니다.
+	private String buildShopOrderName(List<ShopCartItemVO> cartItemList) {
+		// 첫 상품명을 기준으로 다건 여부를 반영한 주문명을 생성합니다.
+		if (cartItemList == null || cartItemList.isEmpty() || isBlank(cartItemList.get(0).getGoodsNm())) {
+			return "주문 상품";
+		}
+		String firstGoodsName = cartItemList.get(0).getGoodsNm().trim();
+		if (cartItemList.size() < 2) {
+			return firstGoodsName;
+		}
+		return firstGoodsName + " 외 " + (cartItemList.size() - 1) + "건";
+	}
+
+	// 주문 마스터/상세를 함께 등록합니다.
+	private void insertShopOrderBaseAndDetail(
+		ShopOrderBaseSavePO orderBaseSavePO,
+		Long custNo,
+		List<ShopCartItemVO> orderCartItemList,
+		ShopOrderDiscountQuoteVO discountQuote,
+		int pointUseAmt,
+		int pointSaveRate,
+		Long auditNo
+	) {
+		// 주문 마스터를 먼저 등록합니다.
+		goodsMapper.insertShopOrderBase(orderBaseSavePO);
+
+		// 주문 공통 할인 금액을 판매가 비율 기준으로 행별 배분합니다.
+		Map<Long, Long> goodsCouponSelectionMap = buildShopOrderGoodsCouponSelectionMap(discountQuote.getDiscountSelection());
+		List<Integer> cartCouponDistribution = distributeShopOrderSharedAmount(
+			orderCartItemList,
+			normalizeNonNegativeNumber(discountQuote.getDiscountAmount().getCartCouponDiscountAmt())
+		);
+		List<Integer> pointUseDistribution = distributeShopOrderSharedAmount(orderCartItemList, pointUseAmt);
+
+		// 각 주문 행별 상세 정보를 생성합니다.
+		for (int rowIndex = 0; rowIndex < orderCartItemList.size(); rowIndex += 1) {
+			ShopCartItemVO cartItem = orderCartItemList.get(rowIndex);
+			ShopOrderDetailSavePO detailSavePO = new ShopOrderDetailSavePO();
+			detailSavePO.setOrdNo(orderBaseSavePO.getOrdNo());
+			detailSavePO.setOrdDtlNo(rowIndex + 1);
+			detailSavePO.setOrdGbCd(SHOP_ORDER_ORD_GB_ORDER);
+			detailSavePO.setOrdDtlStatCd(SHOP_ORDER_DTL_STAT_READY);
+			detailSavePO.setCustNo(custNo);
+			detailSavePO.setGoodsId(cartItem.getGoodsId());
+			detailSavePO.setSizeId(cartItem.getSizeId());
+			detailSavePO.setSupplyAmt(normalizeNonNegativeNumber(cartItem.getSupplyAmt()));
+			detailSavePO.setSaleAmt(normalizeNonNegativeNumber(cartItem.getSaleAmt()));
+			detailSavePO.setAddAmt(normalizeNonNegativeNumber(cartItem.getAddAmt()));
+			detailSavePO.setOrdQty(normalizeQuantity(cartItem.getQty()));
+			detailSavePO.setCncQty(0);
+			detailSavePO.setRmnQty(normalizeQuantity(cartItem.getQty()));
+			detailSavePO.setGoodsCpnNo(goodsCouponSelectionMap.get(cartItem.getCartId()));
+			detailSavePO.setGoodsCpnDcAmt(resolveShopOrderGoodsCouponDiscountAmt(cartItem, discountQuote, goodsCouponSelectionMap));
+			detailSavePO.setCartCpnNo(discountQuote.getDiscountSelection().getCartCouponCustCpnNo());
+			detailSavePO.setCartCpnDcAmt(cartCouponDistribution.get(rowIndex));
+			detailSavePO.setPointUseAmt(pointUseDistribution.get(rowIndex));
+			detailSavePO.setPointSaveAmt(resolveShopOrderPointSaveAmt(cartItem, pointSaveRate));
+			detailSavePO.setExhibitionNo(cartItem.getExhibitionNo());
+			detailSavePO.setRegNo(auditNo);
+			detailSavePO.setUdtNo(auditNo);
+			goodsMapper.insertShopOrderDetail(detailSavePO);
+		}
+	}
+
+	// 상품쿠폰 선택 상태를 cartId 기준 매핑으로 변환합니다.
+	private Map<Long, Long> buildShopOrderGoodsCouponSelectionMap(ShopOrderDiscountSelectionVO discountSelection) {
+		// 상품쿠폰 선택이 없으면 빈 매핑을 반환합니다.
+		Map<Long, Long> result = new HashMap<>();
+		if (discountSelection == null || discountSelection.getGoodsCouponSelectionList() == null) {
+			return result;
+		}
+
+		// cartId 기준 상품쿠폰 고객쿠폰번호 매핑을 구성합니다.
+		for (ShopOrderGoodsCouponSelectionVO selection : discountSelection.getGoodsCouponSelectionList()) {
+			if (selection == null || selection.getCartId() == null || selection.getCustCpnNo() == null) {
+				continue;
+			}
+			result.put(selection.getCartId(), selection.getCustCpnNo());
+		}
+		return result;
+	}
+
+	// 행별 상품쿠폰 할인 금액을 계산합니다.
+	private int resolveShopOrderGoodsCouponDiscountAmt(
+		ShopCartItemVO cartItem,
+		ShopOrderDiscountQuoteVO discountQuote,
+		Map<Long, Long> goodsCouponSelectionMap
+	) {
+		// 상품쿠폰 미적용 행이면 0원을 반환합니다.
+		if (cartItem == null || cartItem.getCartId() == null || goodsCouponSelectionMap == null || goodsCouponSelectionMap.get(cartItem.getCartId()) == null) {
+			return 0;
+		}
+
+		// 자동/선택 검증이 끝난 쿠폰 항목을 기준으로 행 할인액을 계산합니다.
+		Long selectedCustCpnNo = goodsCouponSelectionMap.get(cartItem.getCartId());
+		ShopCartCustomerCouponVO coupon = findCustomerCouponByCustCpnNo(
+			buildShopOrderDiscountContext(List.of(cartItem), cartItem.getCustNo()).getGoodsCouponList(),
+			selectedCustCpnNo
+		);
+		int rowSaleAmt = normalizeNonNegativeNumber(cartItem.getSaleAmt()) * normalizeQuantity(cartItem.getQty());
+		return calculateCouponDiscountAmount(coupon, rowSaleAmt);
+	}
+
+	// 공통 할인 금액을 판매가 비율 기준으로 행별 배분합니다.
+	private List<Integer> distributeShopOrderSharedAmount(List<ShopCartItemVO> cartItemList, int totalAmt) {
+		// 배분 대상이 없거나 총 금액이 0원이면 같은 길이의 0원 목록을 반환합니다.
+		List<Integer> result = new ArrayList<>();
+		if (cartItemList == null || cartItemList.isEmpty()) {
+			return result;
+		}
+		for (int index = 0; index < cartItemList.size(); index += 1) {
+			result.add(0);
+		}
+		int normalizedTotalAmt = Math.max(totalAmt, 0);
+		if (normalizedTotalAmt < 1) {
+			return result;
+		}
+
+		// 각 행 판매가 비율 기준으로 배분 후 잔여 금액은 마지막 행에 반영합니다.
+		int totalSaleAmt = 0;
+		for (ShopCartItemVO cartItem : cartItemList) {
+			totalSaleAmt += normalizeNonNegativeNumber(cartItem.getSaleAmt()) * normalizeQuantity(cartItem.getQty());
+		}
+		if (totalSaleAmt < 1) {
+			result.set(result.size() - 1, normalizedTotalAmt);
+			return result;
+		}
+		int distributedAmt = 0;
+		for (int index = 0; index < cartItemList.size(); index += 1) {
+			ShopCartItemVO cartItem = cartItemList.get(index);
+			int rowSaleAmt = normalizeNonNegativeNumber(cartItem.getSaleAmt()) * normalizeQuantity(cartItem.getQty());
+			int amount = index == cartItemList.size() - 1
+				? normalizedTotalAmt - distributedAmt
+				: (int) ((long) normalizedTotalAmt * (long) rowSaleAmt / (long) totalSaleAmt);
+			result.set(index, Math.max(amount, 0));
+			distributedAmt += Math.max(amount, 0);
+		}
+		return result;
+	}
+
+	// 결제 준비 요청 스냅샷을 PAYMENT.REQ_RAW_JSON 저장용 객체로 구성합니다.
+	private Map<String, Object> buildShopOrderPaymentSnapshot(
+		String from,
+		String goodsId,
+		List<ShopCartItemVO> cartItemList,
+		String addressNm,
+		ShopOrderDiscountSelectionVO discountSelection,
+		int pointUseAmt,
+		String orderName,
+		int amount
+	) {
+		// 재시도 복귀와 후처리에 필요한 최소 정보를 스냅샷으로 저장합니다.
+		Map<String, Object> result = new LinkedHashMap<>();
+		result.put("from", firstNonBlank(trimToNull(from), isBlank(goodsId) ? "cart" : "goods"));
+		result.put("goodsId", trimToNull(goodsId));
+		result.put("cartIdList", extractShopOrderCartIdList(cartItemList));
+		result.put("addressNm", trimToNull(addressNm));
+		result.put("discountSelection", discountSelection);
+		result.put("pointUseAmt", pointUseAmt);
+		result.put("orderName", orderName);
+		result.put("amount", amount);
+		return result;
+	}
+
+	// 결제 스냅샷에서 장바구니 번호 목록을 추출합니다.
+	private List<Long> extractShopOrderCartIdList(List<ShopCartItemVO> cartItemList) {
+		// 주문 대상 장바구니 목록이 없으면 빈 목록을 반환합니다.
+		List<Long> result = new ArrayList<>();
+		for (ShopCartItemVO cartItem : cartItemList == null ? List.<ShopCartItemVO>of() : cartItemList) {
+			if (cartItem == null || cartItem.getCartId() == null || cartItem.getCartId() < 1L) {
+				continue;
+			}
+			result.add(cartItem.getCartId());
+		}
+		return result;
+	}
+
+	// 주문 결제 승인 성공 후 쿠폰/포인트/장바구니 후처리를 수행합니다.
+	private void applyShopOrderSuccessSideEffects(ShopOrderPaymentVO payment, Long custNo) {
+		// 결제 준비 스냅샷에서 사용 쿠폰/포인트/장바구니 정보를 읽어 후처리를 수행합니다.
+		List<Long> usedCouponList = extractShopOrderUsedCouponList(payment.getReqRawJson());
+		if (!usedCouponList.isEmpty()) {
+			goodsMapper.updateShopCustomerCouponUse(custNo, usedCouponList, payment.getOrdNo(), YES, custNo);
+		}
+
+		int pointUseAmt = extractShopOrderPointUseAmt(payment.getReqRawJson());
+		if (pointUseAmt > 0) {
+			consumeShopOrderPoint(custNo, payment.getOrdNo(), pointUseAmt);
+		}
+
+		List<Long> cartIdList = extractShopOrderCartIdListFromSnapshot(payment.getReqRawJson());
+		if (!cartIdList.isEmpty()) {
+			goodsMapper.deleteShopCartByCartIdList(custNo, cartIdList);
+		}
+	}
+
+	// 무통장입금 만료/취소 시 쿠폰/포인트/장바구니를 원복합니다.
+	private void restoreShopOrderSuccessSideEffects(ShopOrderPaymentVO payment, Long custNo) {
+		// 주문번호 기준 사용 쿠폰과 포인트를 원복하고 장바구니를 다시 생성합니다.
+		goodsMapper.restoreShopCustomerCouponUse(custNo, payment.getOrdNo(), custNo);
+		restoreShopOrderPoint(custNo, payment.getOrdNo());
+
+		for (ShopOrderRestoreCartItemVO restoreCartItem : goodsMapper.getShopOrderRestoreCartItemList(payment.getOrdNo())) {
+			if (restoreCartItem == null) {
+				continue;
+			}
+			ShopCartSavePO savePO = new ShopCartSavePO();
+			savePO.setCartGbCd(SHOP_CART_GB_CART);
+			savePO.setCustNo(restoreCartItem.getCustNo());
+			savePO.setGoodsId(restoreCartItem.getGoodsId());
+			savePO.setSizeId(restoreCartItem.getSizeId());
+			savePO.setQty(restoreCartItem.getOrdQty());
+			savePO.setExhibitionNo(restoreCartItem.getExhibitionNo());
+			savePO.setRegNo(custNo);
+			savePO.setUdtNo(custNo);
+			goodsMapper.insertShopCart(savePO);
+		}
+	}
+
+	// 고객 포인트를 주문 결제 금액만큼 차감합니다.
+	private void consumeShopOrderPoint(Long custNo, String ordNo, int pointUseAmt) {
+		// 사용 가능한 포인트 행을 오래된 순서로 소진합니다.
+		int remainingAmt = Math.max(pointUseAmt, 0);
+		for (ShopOrderPointBaseVO pointBase : goodsMapper.getShopAvailablePointBaseList(custNo)) {
+			if (pointBase == null || pointBase.getPntNo() == null || remainingAmt < 1) {
+				continue;
+			}
+			int usableAmt = Math.min(normalizeNonNegativeNumber(pointBase.getRmnAmt()), remainingAmt);
+			if (usableAmt < 1) {
+				continue;
+			}
+			goodsMapper.updateShopCustomerPointUseAmt(pointBase.getPntNo(), usableAmt, custNo);
+			ShopOrderPointDetailSavePO detailSavePO = new ShopOrderPointDetailSavePO();
+			detailSavePO.setPntNo(pointBase.getPntNo());
+			detailSavePO.setPntAmt(-usableAmt);
+			detailSavePO.setOrdNo(ordNo);
+			detailSavePO.setBigo(SHOP_ORDER_POINT_USE_MEMO);
+			detailSavePO.setRegNo(custNo);
+			goodsMapper.insertShopOrderPointDetail(detailSavePO);
+			remainingAmt -= usableAmt;
+		}
+		if (remainingAmt > 0) {
+			throw new IllegalStateException("포인트 사용 처리에 실패했습니다.");
+		}
+	}
+
+	// 주문번호 기준 차감 포인트를 원복합니다.
+	private void restoreShopOrderPoint(Long custNo, String ordNo) {
+		// 주문번호 기준 음수 사용 상세 이력을 읽어 반대로 복구합니다.
+		for (ShopOrderPointDetailVO pointDetail : goodsMapper.getShopOrderPointDetailList(ordNo)) {
+			if (pointDetail == null || pointDetail.getPntNo() == null) {
+				continue;
+			}
+			int restoreAmt = Math.abs(normalizeNonNegativeNumber(pointDetail.getPntAmt() == null ? null : Math.abs(pointDetail.getPntAmt())));
+			if (restoreAmt < 1) {
+				continue;
+			}
+			goodsMapper.restoreShopCustomerPointUseAmt(pointDetail.getPntNo(), restoreAmt, custNo);
+			ShopOrderPointDetailSavePO restoreDetail = new ShopOrderPointDetailSavePO();
+			restoreDetail.setPntNo(pointDetail.getPntNo());
+			restoreDetail.setPntAmt(restoreAmt);
+			restoreDetail.setOrdNo(ordNo);
+			restoreDetail.setBigo(SHOP_ORDER_POINT_RESTORE_MEMO);
+			restoreDetail.setRegNo(custNo);
+			goodsMapper.insertShopOrderPointDetail(restoreDetail);
+		}
+	}
+
+	// 결제 완료 응답 객체를 PAYMENT 기준으로 구성합니다.
+	private ShopOrderPaymentConfirmVO buildShopOrderPaymentConfirmResult(ShopOrderPaymentVO payment) {
+		// 결제 요약 정보와 가상계좌 정보를 응답 객체에 채웁니다.
+		ShopOrderPaymentConfirmVO result = new ShopOrderPaymentConfirmVO();
+		result.setOrdNo(payment == null ? null : payment.getOrdNo());
+		result.setPayNo(payment == null ? null : payment.getPayNo());
+		result.setPayMethodCd(payment == null ? null : payment.getPayMethodCd());
+		result.setPayStatCd(payment == null ? null : payment.getPayStatCd());
+		result.setOrdStatCd(resolveShopOrderStatusByPayment(payment));
+		result.setOrderName(payment == null ? null : readShopOrderSnapshotValue(payment.getReqRawJson(), "orderName"));
+		result.setAmount(payment == null ? null : payment.getPayAmt());
+		result.setBankCd(payment == null ? null : payment.getBankCd());
+		result.setBankNo(payment == null ? null : payment.getBankNo());
+		result.setVactHolderNm(payment == null ? null : payment.getVactHolderNm());
+		result.setVactDueDt(payment == null ? null : payment.getVactDueDt());
+		return result;
+	}
+
+	// PAYMENT 상태 기준 주문상태 코드를 계산합니다.
+	private String resolveShopOrderStatusByPayment(ShopOrderPaymentVO payment) {
+		// 결제상태 기준으로 주문상태 코드를 맞춰 반환합니다.
+		if (payment == null || isBlank(payment.getPayStatCd())) {
+			return SHOP_ORDER_STAT_READY;
+		}
+		if (SHOP_ORDER_PAY_STAT_DONE.equals(payment.getPayStatCd())) {
+			return SHOP_ORDER_STAT_DONE;
+		}
+		if (SHOP_ORDER_PAY_STAT_WAITING_DEPOSIT.equals(payment.getPayStatCd())) {
+			return SHOP_ORDER_STAT_WAITING_DEPOSIT;
+		}
+		if (SHOP_ORDER_PAY_STAT_FAIL.equals(payment.getPayStatCd()) || SHOP_ORDER_PAY_STAT_CANCEL.equals(payment.getPayStatCd())) {
+			return SHOP_ORDER_STAT_CANCEL;
+		}
+		return SHOP_ORDER_STAT_READY;
+	}
+
+	// 선택 고객쿠폰 번호 목록을 결제 스냅샷에서 추출합니다.
+	private List<Long> extractShopOrderUsedCouponList(String snapshotJson) {
+		// 상품/장바구니/배송비 쿠폰 선택값을 하나의 목록으로 모읍니다.
+		List<Long> result = new ArrayList<>();
+		JsonNode rootNode = readShopOrderJsonNode(snapshotJson);
+		JsonNode selectionNode = rootNode.path("discountSelection");
+		for (JsonNode goodsCouponNode : selectionNode.path("goodsCouponSelectionList")) {
+			long custCpnNo = goodsCouponNode.path("custCpnNo").asLong(0L);
+			if (custCpnNo > 0L) {
+				result.add(custCpnNo);
+			}
+		}
+		long cartCouponCustCpnNo = selectionNode.path("cartCouponCustCpnNo").asLong(0L);
+		long deliveryCouponCustCpnNo = selectionNode.path("deliveryCouponCustCpnNo").asLong(0L);
+		if (cartCouponCustCpnNo > 0L) {
+			result.add(cartCouponCustCpnNo);
+		}
+		if (deliveryCouponCustCpnNo > 0L) {
+			result.add(deliveryCouponCustCpnNo);
+		}
+		return result;
+	}
+
+	// 결제 스냅샷에서 포인트 사용 금액을 추출합니다.
+	private int extractShopOrderPointUseAmt(String snapshotJson) {
+		// pointUseAmt 필드를 정수로 반환합니다.
+		return readShopOrderJsonNode(snapshotJson).path("pointUseAmt").asInt(0);
+	}
+
+	// 결제 스냅샷에서 장바구니 번호 목록을 추출합니다.
+	private List<Long> extractShopOrderCartIdListFromSnapshot(String snapshotJson) {
+		// cartIdList 배열을 Long 목록으로 변환합니다.
+		List<Long> result = new ArrayList<>();
+		for (JsonNode cartIdNode : readShopOrderJsonNode(snapshotJson).path("cartIdList")) {
+			long cartId = cartIdNode.asLong(0L);
+			if (cartId > 0L) {
+				result.add(cartId);
+			}
+		}
+		return result;
+	}
+
+	// 결제 스냅샷에서 지정한 문자열 필드 값을 읽습니다.
+	private String readShopOrderSnapshotValue(String snapshotJson, String fieldName) {
+		// 스냅샷이 비어 있으면 빈 문자열을 반환합니다.
+		return resolveJsonText(readShopOrderJsonNode(snapshotJson), fieldName);
+	}
+
+	// JSON 문자열을 JsonNode로 변환합니다.
+	private JsonNode readShopOrderJsonNode(String rawJson) {
+		// 빈 문자열이면 빈 객체 노드를 반환합니다.
+		String normalizedRawJson = trimToNull(rawJson);
+		if (normalizedRawJson == null) {
+			return objectMapper.createObjectNode();
+		}
+		try {
+			return objectMapper.readTree(normalizedRawJson);
+		} catch (JsonProcessingException exception) {
+			return objectMapper.createObjectNode();
+		}
+	}
+
+	// 객체를 JSON 문자열로 직렬화합니다.
+	private String writeShopOrderJson(Object value) {
+		// 직렬화에 실패해도 빈 JSON 객체 문자열을 반환합니다.
+		try {
+			return objectMapper.writeValueAsString(value);
+		} catch (JsonProcessingException exception) {
+			return "{}";
+		}
+	}
+
+	// Toss 승인 API를 호출하고 원본 응답 문자열을 반환합니다.
+	private String confirmTossPayment(ShopOrderPaymentConfirmPO param) {
+		// 결제키/주문번호/금액 기준으로 Toss 승인 API를 호출합니다.
+		return tossPaymentsClient.confirmPayment(param.getPaymentKey().trim(), param.getOrdNo().trim(), param.getAmount());
+	}
+
+	// JSON 노드에서 지정한 필드 문자열 값을 안전하게 조회합니다.
+	private String resolveJsonText(JsonNode node, String fieldName) {
+		// 노드 또는 필드명이 없으면 빈 문자열을 반환합니다.
+		if (node == null || isBlank(fieldName)) {
+			return "";
+		}
+		JsonNode targetNode = node.path(fieldName);
+		if (targetNode.isMissingNode() || targetNode.isNull()) {
+			return "";
+		}
+		return targetNode.asText("");
+	}
+
+	// 주문 결제용 URL Origin 값을 정규화합니다.
+	private String normalizeShopOrigin(String shopOrigin) {
+		// 끝 슬래시를 제거해 절대 URL 베이스로 정리합니다.
+		String normalizedShopOrigin = trimToNull(shopOrigin);
+		if (normalizedShopOrigin == null) {
+			return "";
+		}
+		return normalizedShopOrigin.endsWith("/") ? normalizedShopOrigin.substring(0, normalizedShopOrigin.length() - 1) : normalizedShopOrigin;
+	}
+
+	// 결제 성공 URL 베이스를 반환합니다.
+	private String buildShopOrderSuccessBaseUrl(String shopOrigin) {
+		// 절대 URL Origin이 있으면 절대 경로를, 없으면 상대 경로를 반환합니다.
+		return isBlank(shopOrigin) ? "/order/success" : shopOrigin + "/order/success";
+	}
+
+	// 결제 실패 URL 베이스를 반환합니다.
+	private String buildShopOrderFailBaseUrl(String shopOrigin) {
+		// 절대 URL Origin이 있으면 절대 경로를, 없으면 상대 경로를 반환합니다.
+		return isBlank(shopOrigin) ? "/order/fail" : shopOrigin + "/order/fail";
+	}
+
+	// 결제 성공 URL을 생성합니다.
+	private String buildShopOrderSuccessUrl(String shopOrigin, Long payNo) {
+		// 결제번호를 포함한 success URL을 반환합니다.
+		return buildShopOrderSuccessBaseUrl(shopOrigin) + "?payNo=" + payNo;
+	}
+
+	// 결제 실패 URL을 생성합니다.
+	private String buildShopOrderFailUrl(
+		String shopOrigin,
+		Long payNo,
+		String from,
+		String goodsId,
+		List<ShopCartItemVO> cartItemList
+	) {
+		// 원래 주문서 복귀에 필요한 출처/상품/장바구니 번호를 fail URL에 담습니다.
+		StringBuilder builder = new StringBuilder(buildShopOrderFailBaseUrl(shopOrigin));
+		builder.append("?payNo=").append(payNo);
+		builder.append("&from=").append(encodeShopOrderUrlValue(firstNonBlank(trimToNull(from), isBlank(goodsId) ? "cart" : "goods")));
+		if (!isBlank(goodsId)) {
+			builder.append("&goodsId=").append(encodeShopOrderUrlValue(goodsId.trim()));
+		}
+		for (Long cartId : extractShopOrderCartIdList(cartItemList)) {
+			builder.append("&cartId=").append(cartId);
+		}
+		return builder.toString();
+	}
+
+	// URL 쿼리값을 인코딩합니다.
+	private String encodeShopOrderUrlValue(String value) {
+		// UTF-8 기준으로 안전하게 인코딩합니다.
+		return URLEncoder.encode(firstNonBlank(value, ""), StandardCharsets.UTF_8);
+	}
+
+	// Toss 클라이언트 키를 반환합니다.
+	private String resolveShopOrderClientKey() {
+		return firstNonBlank(trimToNull(tossClientKey), "");
+	}
+
+	// 다양한 날짜 문자열을 주문 결제 저장용 형식으로 정규화합니다.
+	private String normalizeShopOrderDateTime(String value) {
+		// 빈 문자열이면 null을 반환합니다.
+		String normalizedValue = trimToNull(value);
+		if (normalizedValue == null) {
+			return null;
+		}
+		try {
+			return OffsetDateTime.parse(normalizedValue).toLocalDateTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+		} catch (Exception ignored) {
+			// OffsetDateTime 파싱이 실패하면 다음 형식으로 재시도합니다.
+		}
+		try {
+			return LocalDateTime.parse(normalizedValue).format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+		} catch (Exception ignored) {
+			return normalizedValue.replace('T', ' ');
+		}
+	}
+
+	// SHA-256 해시 문자열을 생성합니다.
+	private String sha256Hex(String value) {
+		// 입력 문자열이 비어 있으면 빈 문자열을 반환합니다.
+		String normalizedValue = trimToNull(value);
+		if (normalizedValue == null) {
+			return "";
+		}
+		try {
+			MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
+			byte[] digest = messageDigest.digest(normalizedValue.getBytes(StandardCharsets.UTF_8));
+			StringBuilder builder = new StringBuilder();
+			for (byte currentByte : digest) {
+				builder.append(String.format("%02x", currentByte));
+			}
+			return builder.toString();
+		} catch (NoSuchAlgorithmException exception) {
+			throw new IllegalStateException("결제키 해시 생성에 실패했습니다.", exception);
+		}
+	}
+
+	// 결제 실패 코드가 사용자 취소 계열인지 확인합니다.
+	private boolean isShopOrderCancelFailureCode(String code) {
+		// 코드에 CANCEL이 포함되면 사용자 취소 계열로 판단합니다.
+		String normalizedCode = trimToNull(code);
+		return normalizedCode != null && normalizedCode.toUpperCase().contains("CANCEL");
+	}
+
+	// 첫 번째 비어 있지 않은 문자열을 반환합니다.
+	private String firstNonBlank(String first, String second) {
+		// 첫 번째 값이 비어 있으면 두 번째 값을 반환합니다.
+		String normalizedFirst = trimToNull(first);
+		if (normalizedFirst != null) {
+			return normalizedFirst;
+		}
+		String normalizedSecond = trimToNull(second);
+		return normalizedSecond == null ? "" : normalizedSecond;
 	}
 
 	// 현재 고객의 배송지 목록을 기본 배송지 우선 순서로 조회합니다.

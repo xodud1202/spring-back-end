@@ -39,6 +39,15 @@ import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOwnedCouponVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishGoodsItemVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderBaseSavePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderCustomerInfoVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderDetailSavePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentSavePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPointBaseVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPointDetailSavePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPointDetailVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderRestoreCartItemVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -197,6 +206,121 @@ public interface GoodsMapper {
 
 	// 쇼핑몰 주문서 배송지 단건 존재 여부를 조회합니다.
 	int countShopOrderAddress(@Param("custNo") Long custNo, @Param("addressNm") String addressNm);
+
+	// 쇼핑몰 주문서 결제 기본 고객 정보를 조회합니다.
+	ShopOrderCustomerInfoVO getShopOrderCustomerInfo(@Param("custNo") Long custNo);
+
+	// 쇼핑몰 주문 마스터를 등록합니다.
+	int insertShopOrderBase(ShopOrderBaseSavePO param);
+
+	// 쇼핑몰 주문 상세를 등록합니다.
+	int insertShopOrderDetail(ShopOrderDetailSavePO param);
+
+	// 쇼핑몰 결제 정보를 등록합니다.
+	int insertShopPayment(ShopOrderPaymentSavePO param);
+
+	// 쇼핑몰 결제번호 기준 결제 정보를 조회합니다.
+	ShopOrderPaymentVO getShopPaymentByPayNo(@Param("payNo") Long payNo);
+
+	// Toss 결제키 해시 기준 결제 정보를 조회합니다.
+	ShopOrderPaymentVO getShopPaymentByTossPaymentKeyHash(@Param("tossPaymentKeyHash") String tossPaymentKeyHash);
+
+	// 쇼핑몰 주문 마스터 상태를 변경합니다.
+	int updateShopOrderBaseStatus(@Param("ordNo") String ordNo, @Param("ordStatCd") String ordStatCd, @Param("udtNo") Long udtNo);
+
+	// 쇼핑몰 주문 상세 상태를 일괄 변경합니다.
+	int updateShopOrderDetailStatus(@Param("ordNo") String ordNo, @Param("ordDtlStatCd") String ordDtlStatCd, @Param("udtNo") Long udtNo);
+
+	// 카드/계좌이체 승인 성공 결과로 결제 정보를 갱신합니다.
+	int updateShopPaymentSuccess(
+		@Param("payNo") Long payNo,
+		@Param("payStatCd") String payStatCd,
+		@Param("aprvAmt") Long aprvAmt,
+		@Param("tossPaymentKey") String tossPaymentKey,
+		@Param("tossPaymentKeyHash") String tossPaymentKeyHash,
+		@Param("tradeNo") String tradeNo,
+		@Param("apprNo") String apprNo,
+		@Param("rspCode") String rspCode,
+		@Param("rspMsg") String rspMsg,
+		@Param("cardCd") String cardCd,
+		@Param("cardNo") String cardNo,
+		@Param("rspRawJson") String rspRawJson,
+		@Param("apprDt") String apprDt,
+		@Param("udtNo") Long udtNo
+	);
+
+	// 무통장입금 발급 성공 결과로 결제 정보를 갱신합니다.
+	int updateShopPaymentWaitingDeposit(
+		@Param("payNo") Long payNo,
+		@Param("payStatCd") String payStatCd,
+		@Param("aprvAmt") Long aprvAmt,
+		@Param("tossPaymentKey") String tossPaymentKey,
+		@Param("tossPaymentKeyHash") String tossPaymentKeyHash,
+		@Param("tradeNo") String tradeNo,
+		@Param("rspCode") String rspCode,
+		@Param("rspMsg") String rspMsg,
+		@Param("bankCd") String bankCd,
+		@Param("bankNo") String bankNo,
+		@Param("vactHolderNm") String vactHolderNm,
+		@Param("vactDueDt") String vactDueDt,
+		@Param("rspRawJson") String rspRawJson,
+		@Param("apprDt") String apprDt,
+		@Param("udtNo") Long udtNo
+	);
+
+	// 결제 실패/취소 결과로 결제 정보를 갱신합니다.
+	int updateShopPaymentFailure(
+		@Param("payNo") Long payNo,
+		@Param("payStatCd") String payStatCd,
+		@Param("rspCode") String rspCode,
+		@Param("rspMsg") String rspMsg,
+		@Param("rspRawJson") String rspRawJson,
+		@Param("udtNo") Long udtNo
+	);
+
+	// 웹훅 반영 결과로 결제 상태와 원본 전문을 갱신합니다.
+	int updateShopPaymentWebhook(
+		@Param("payNo") Long payNo,
+		@Param("payStatCd") String payStatCd,
+		@Param("rspCode") String rspCode,
+		@Param("rspMsg") String rspMsg,
+		@Param("webhookRawJson") String webhookRawJson,
+		@Param("webhookDt") String webhookDt,
+		@Param("udtNo") Long udtNo
+	);
+
+	// 선택 고객쿠폰을 사용 처리합니다.
+	int updateShopCustomerCouponUse(
+		@Param("custNo") Long custNo,
+		@Param("custCpnNoList") List<Long> custCpnNoList,
+		@Param("ordNo") String ordNo,
+		@Param("cpnUseYn") String cpnUseYn,
+		@Param("udtNo") Long udtNo
+	);
+
+	// 주문번호 기준 사용 처리된 고객쿠폰을 원복합니다.
+	int restoreShopCustomerCouponUse(@Param("custNo") Long custNo, @Param("ordNo") String ordNo, @Param("udtNo") Long udtNo);
+
+	// 고객의 현재 사용 가능한 포인트 마스터 목록을 조회합니다.
+	List<ShopOrderPointBaseVO> getShopAvailablePointBaseList(@Param("custNo") Long custNo);
+
+	// 포인트 마스터 사용 금액을 차감합니다.
+	int updateShopCustomerPointUseAmt(@Param("pntNo") Long pntNo, @Param("useAmt") Integer useAmt, @Param("udtNo") Long udtNo);
+
+	// 포인트 마스터 사용 금액을 복구합니다.
+	int restoreShopCustomerPointUseAmt(@Param("pntNo") Long pntNo, @Param("restoreAmt") Integer restoreAmt, @Param("udtNo") Long udtNo);
+
+	// 주문 결제 포인트 상세 이력을 등록합니다.
+	int insertShopOrderPointDetail(ShopOrderPointDetailSavePO param);
+
+	// 주문번호 기준 포인트 사용 상세 이력을 조회합니다.
+	List<ShopOrderPointDetailVO> getShopOrderPointDetailList(@Param("ordNo") String ordNo);
+
+	// 선택 장바구니 번호 목록을 삭제합니다.
+	int deleteShopCartByCartIdList(@Param("custNo") Long custNo, @Param("cartIdList") List<Long> cartIdList);
+
+	// 주문번호 기준 장바구니 복구 대상 목록을 조회합니다.
+	List<ShopOrderRestoreCartItemVO> getShopOrderRestoreCartItemList(@Param("ordNo") String ordNo);
 
 	// 쇼핑몰 주문서 기본 배송지 여부를 일괄 변경합니다.
 	int updateShopOrderAddressDefaultYn(@Param("custNo") Long custNo, @Param("defaultYn") String defaultYn, @Param("udtNo") Long udtNo);

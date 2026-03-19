@@ -27,4 +27,10 @@ public class ShopOrderPageVO {
 	private ShopOrderDiscountSelectionVO discountSelection;
 	// 주문서 초기 할인 금액 요약 정보입니다.
 	private ShopOrderDiscountAmountVO discountAmount;
+	// 결제창 실행에 필요한 환경 정보입니다.
+	private ShopOrderPaymentConfigVO paymentConfig;
+	// 주문 고객 결제 기본 정보입니다.
+	private ShopOrderCustomerInfoVO customerInfo;
+	// 적립 예정 포인트 요약 정보입니다.
+	private ShopOrderPointSaveSummaryVO pointSaveSummary;
 }

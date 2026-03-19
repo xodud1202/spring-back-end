@@ -29,6 +29,10 @@ public class ShopCartItemVO {
 	private Integer supplyAmt;
 	// 판매가 단가입니다.
 	private Integer saleAmt;
+	// 사이즈 추가금액입니다.
+	private Integer addAmt;
+	// 등록 기획전 번호입니다.
+	private Integer exhibitionNo;
 	// 대표 이미지 원본 경로입니다.
 	private String imgPath;
 	// 대표 이미지 조회 URL입니다.
