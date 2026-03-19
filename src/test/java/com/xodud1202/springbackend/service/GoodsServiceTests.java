@@ -40,6 +40,9 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSearchCommo
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSearchResponseVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressUpdatePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountQuotePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountQuoteVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderGoodsCouponSelectionVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPageVO;
 import com.xodud1202.springbackend.mapper.GoodsMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -880,6 +883,7 @@ class GoodsServiceTests {
 		firstCartItem.setCartId(12L);
 		firstCartItem.setCustNo(7L);
 		firstCartItem.setGoodsId("GOODS100");
+		firstCartItem.setBrandNo(1);
 		firstCartItem.setGoodsNm("주문상품1");
 		firstCartItem.setSizeId("095");
 		firstCartItem.setQty(1);
@@ -891,6 +895,7 @@ class GoodsServiceTests {
 		secondCartItem.setCartId(15L);
 		secondCartItem.setCustNo(7L);
 		secondCartItem.setGoodsId("GOODS200");
+		secondCartItem.setBrandNo(2);
 		secondCartItem.setGoodsNm("주문상품2");
 		secondCartItem.setSizeId("100");
 		secondCartItem.setQty(2);
@@ -910,7 +915,7 @@ class GoodsServiceTests {
 		ShopCartSiteInfoVO siteInfo = new ShopCartSiteInfoVO();
 		siteInfo.setSiteId("xodud1202");
 		siteInfo.setDeliveryFee(3000);
-		siteInfo.setDeliveryFeeLimit(30000);
+		siteInfo.setDeliveryFeeLimit(100000);
 
 		ShopOrderAddressVO defaultAddress = new ShopOrderAddressVO();
 		defaultAddress.setCustNo(7L);
@@ -922,12 +927,25 @@ class GoodsServiceTests {
 		defaultAddress.setRsvNm("홍길동");
 		defaultAddress.setDefaultYn("Y");
 
+		ShopCartCustomerCouponVO allGoodsCoupon = createCustomerCoupon(1001L, 101L, "CPN_GB_01", "CPN_TARGET_99", "CPN_DC_GB_01", 3000);
+		ShopCartCustomerCouponVO goodsTargetCoupon = createCustomerCoupon(1003L, 103L, "CPN_GB_01", "CPN_TARGET_01", "CPN_DC_GB_01", 5000);
+		ShopCartCustomerCouponVO cartCoupon = createCustomerCoupon(2001L, 201L, "CPN_GB_03", "CPN_TARGET_99", "CPN_DC_GB_01", 7000);
+		ShopCartCustomerCouponVO deliveryCoupon = createCustomerCoupon(3001L, 301L, "CPN_GB_04", "CPN_TARGET_99", "CPN_DC_GB_01", 3000);
+
 		// 주문서 대상 cartId 조회와 이미지 URL/배송지 보정 목 응답을 설정합니다.
 		when(goodsMapper.getShopOrderCartItemList(7L, List.of(12L, 15L))).thenReturn(List.of(firstCartItem, secondCartItem));
 		when(goodsMapper.getShopOrderAddressList(7L)).thenReturn(List.of(defaultAddress));
 		when(goodsMapper.getShopGoodsSizeList("GOODS100")).thenReturn(List.of(goods100Size));
 		when(goodsMapper.getShopGoodsSizeList("GOODS200")).thenReturn(List.of(goods200Size));
 		when(goodsMapper.getShopCartSiteInfo("xodud1202")).thenReturn(siteInfo);
+		when(goodsMapper.getShopCustomerCouponList(7L)).thenReturn(List.of(allGoodsCoupon, goodsTargetCoupon, cartCoupon, deliveryCoupon));
+		when(goodsMapper.getShopCouponTargetList(101L)).thenReturn(List.of());
+		when(goodsMapper.getShopCouponTargetList(103L)).thenReturn(List.of(createCouponTarget("TARGET_GB_01", "GOODS200")));
+		when(goodsMapper.getShopGoodsCategoryIdList("GOODS100")).thenReturn(List.of());
+		when(goodsMapper.getShopGoodsCategoryIdList("GOODS200")).thenReturn(List.of());
+		when(goodsMapper.getShopGoodsExhibitionTabNoList("GOODS100")).thenReturn(List.of());
+		when(goodsMapper.getShopGoodsExhibitionTabNoList("GOODS200")).thenReturn(List.of());
+		when(goodsMapper.getShopAvailablePointAmt(7L)).thenReturn(9000);
 		when(ftpFileService.buildGoodsImageUrl("GOODS100", "order-1.png")).thenReturn("https://image.test/goods/GOODS100/order-1.png");
 		when(ftpFileService.buildGoodsImageUrl("GOODS200", "order-2.png")).thenReturn("https://image.test/goods/GOODS200/order-2.png");
 
@@ -942,6 +960,21 @@ class GoodsServiceTests {
 		assertThat(result.getAddressList()).hasSize(1);
 		assertThat(result.getDefaultAddress()).isNotNull();
 		assertThat(result.getDefaultAddress().getAddressNm()).isEqualTo("집");
+		assertThat(result.getAvailablePointAmt()).isEqualTo(9000);
+		assertThat(result.getCouponOption()).isNotNull();
+		assertThat(result.getCouponOption().getGoodsCouponGroupList()).hasSize(2);
+		assertThat(result.getCouponOption().getGoodsCouponGroupList().get(0).getCouponList()).hasSize(1);
+		assertThat(result.getCouponOption().getGoodsCouponGroupList().get(1).getCouponList()).hasSize(2);
+		assertThat(result.getDiscountSelection()).isNotNull();
+		assertThat(result.getDiscountSelection().getGoodsCouponSelectionList()).hasSize(2);
+		assertThat(result.getDiscountSelection().getCartCouponCustCpnNo()).isEqualTo(2001L);
+		assertThat(result.getDiscountSelection().getDeliveryCouponCustCpnNo()).isEqualTo(3001L);
+		assertThat(result.getDiscountAmount()).isNotNull();
+		assertThat(result.getDiscountAmount().getGoodsCouponDiscountAmt()).isEqualTo(8000);
+		assertThat(result.getDiscountAmount().getCartCouponDiscountAmt()).isEqualTo(7000);
+		assertThat(result.getDiscountAmount().getDeliveryCouponDiscountAmt()).isEqualTo(3000);
+		assertThat(result.getDiscountAmount().getCouponDiscountAmt()).isEqualTo(18000);
+		assertThat(result.getDiscountAmount().getMaxPointUseAmt()).isEqualTo(9000);
 	}
 
 	@Test
@@ -960,6 +993,110 @@ class GoodsServiceTests {
 		assertThatThrownBy(() -> goodsService.getShopOrderPage(List.of(12L, 19L), 7L))
 			.isInstanceOf(IllegalArgumentException.class)
 			.hasMessage("주문 정보가 맞지 않습니다.");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 주문서 할인 재계산 시 선택한 상품쿠폰/장바구니쿠폰/배송비쿠폰 기준 금액과 최대 포인트를 반환한다")
+	// 할인 재계산 요청 시 선택 상태 검증 후 정규화된 선택값과 할인 금액 요약을 반환하는지 검증합니다.
+	void quoteShopOrderDiscount_returnsDiscountSummaryAndMaxPointUseAmt() {
+		// 주문서 대상 장바구니와 할인 재계산 요청 데이터를 구성합니다.
+		ShopCartItemVO firstCartItem = createCartItem("GOODS001", 1, "095", 2, 20000);
+		firstCartItem.setCartId(12L);
+		firstCartItem.setSupplyAmt(22000);
+		ShopCartItemVO secondCartItem = createCartItem("GOODS002", 2, "100", 1, 10000);
+		secondCartItem.setCartId(15L);
+		secondCartItem.setSupplyAmt(12000);
+
+		ShopOrderDiscountQuotePO param = new ShopOrderDiscountQuotePO();
+		param.setCartIdList(List.of(12L, 15L));
+		param.setGoodsCouponSelectionList(List.of(
+			createShopOrderGoodsCouponSelection(12L, 1001L),
+			createShopOrderGoodsCouponSelection(15L, 1003L)
+		));
+		param.setCartCouponCustCpnNo(2001L);
+		param.setDeliveryCouponCustCpnNo(3001L);
+
+		ShopCartCustomerCouponVO allGoodsCoupon = createCustomerCoupon(1001L, 101L, "CPN_GB_01", "CPN_TARGET_99", "CPN_DC_GB_01", 3000);
+		ShopCartCustomerCouponVO goodsTargetCoupon = createCustomerCoupon(1003L, 103L, "CPN_GB_01", "CPN_TARGET_01", "CPN_DC_GB_01", 5000);
+		ShopCartCustomerCouponVO cartCoupon = createCustomerCoupon(2001L, 201L, "CPN_GB_03", "CPN_TARGET_99", "CPN_DC_GB_01", 7000);
+		ShopCartCustomerCouponVO deliveryCoupon = createCustomerCoupon(3001L, 301L, "CPN_GB_04", "CPN_TARGET_99", "CPN_DC_GB_01", 3000);
+
+		ShopCartSiteInfoVO siteInfo = new ShopCartSiteInfoVO();
+		siteInfo.setSiteId("xodud1202");
+		siteInfo.setDeliveryFee(3000);
+		siteInfo.setDeliveryFeeLimit(100000);
+
+		// 주문 대상 장바구니/쿠폰/배송 기준 목 응답을 설정합니다.
+		when(goodsMapper.getShopOrderCartItemList(7L, List.of(12L, 15L))).thenReturn(List.of(firstCartItem, secondCartItem));
+		when(goodsMapper.getShopCustomerCouponList(7L))
+			.thenReturn(List.of(allGoodsCoupon, goodsTargetCoupon, cartCoupon, deliveryCoupon));
+		when(goodsMapper.getShopCouponTargetList(101L)).thenReturn(List.of());
+		when(goodsMapper.getShopCouponTargetList(103L)).thenReturn(List.of(createCouponTarget("TARGET_GB_01", "GOODS002")));
+		when(goodsMapper.getShopGoodsCategoryIdList("GOODS001")).thenReturn(List.of());
+		when(goodsMapper.getShopGoodsCategoryIdList("GOODS002")).thenReturn(List.of());
+		when(goodsMapper.getShopGoodsExhibitionTabNoList("GOODS001")).thenReturn(List.of());
+		when(goodsMapper.getShopGoodsExhibitionTabNoList("GOODS002")).thenReturn(List.of());
+		when(goodsMapper.getShopCartSiteInfo("xodud1202")).thenReturn(siteInfo);
+		when(goodsMapper.getShopAvailablePointAmt(7L)).thenReturn(6000);
+
+		// 할인 재계산 결과를 조회합니다.
+		ShopOrderDiscountQuoteVO result = goodsService.quoteShopOrderDiscount(param, 7L);
+
+		// 선택 상태 정규화와 할인 금액/최대 포인트 사용 가능 금액을 검증합니다.
+		assertThat(result).isNotNull();
+		assertThat(result.getDiscountSelection()).isNotNull();
+		assertThat(result.getDiscountSelection().getGoodsCouponSelectionList()).hasSize(2);
+		assertThat(result.getDiscountSelection().getCartCouponCustCpnNo()).isEqualTo(2001L);
+		assertThat(result.getDiscountSelection().getDeliveryCouponCustCpnNo()).isEqualTo(3001L);
+		assertThat(result.getDiscountAmount()).isNotNull();
+		assertThat(result.getDiscountAmount().getGoodsCouponDiscountAmt()).isEqualTo(8000);
+		assertThat(result.getDiscountAmount().getCartCouponDiscountAmt()).isEqualTo(7000);
+		assertThat(result.getDiscountAmount().getDeliveryCouponDiscountAmt()).isEqualTo(3000);
+		assertThat(result.getDiscountAmount().getCouponDiscountAmt()).isEqualTo(18000);
+		assertThat(result.getDiscountAmount().getMaxPointUseAmt()).isEqualTo(6000);
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 주문서 할인 재계산 시 같은 상품쿠폰을 중복 선택하면 예외를 반환한다")
+	// 할인 재계산 요청 시 상품쿠폰 1장을 여러 상품에 동시에 선택하면 정합성 예외를 반환하는지 검증합니다.
+	void quoteShopOrderDiscount_throwsWhenGoodsCouponSelectedDuplicated() {
+		// 주문서 대상 장바구니와 중복 상품쿠폰 선택 요청 데이터를 구성합니다.
+		ShopCartItemVO firstCartItem = createCartItem("GOODS001", 1, "095", 2, 20000);
+		firstCartItem.setCartId(12L);
+		ShopCartItemVO secondCartItem = createCartItem("GOODS002", 2, "100", 1, 10000);
+		secondCartItem.setCartId(15L);
+
+		ShopOrderDiscountQuotePO param = new ShopOrderDiscountQuotePO();
+		param.setCartIdList(List.of(12L, 15L));
+		param.setGoodsCouponSelectionList(List.of(
+			createShopOrderGoodsCouponSelection(12L, 1001L),
+			createShopOrderGoodsCouponSelection(15L, 1001L)
+		));
+		param.setCartCouponCustCpnNo(null);
+		param.setDeliveryCouponCustCpnNo(null);
+
+		ShopCartCustomerCouponVO allGoodsCoupon = createCustomerCoupon(1001L, 101L, "CPN_GB_01", "CPN_TARGET_99", "CPN_DC_GB_01", 3000);
+
+		ShopCartSiteInfoVO siteInfo = new ShopCartSiteInfoVO();
+		siteInfo.setSiteId("xodud1202");
+		siteInfo.setDeliveryFee(3000);
+		siteInfo.setDeliveryFeeLimit(100000);
+
+		// 주문 대상 장바구니와 상품쿠폰 후보 목 응답을 설정합니다.
+		when(goodsMapper.getShopOrderCartItemList(7L, List.of(12L, 15L))).thenReturn(List.of(firstCartItem, secondCartItem));
+		when(goodsMapper.getShopCustomerCouponList(7L)).thenReturn(List.of(allGoodsCoupon));
+		when(goodsMapper.getShopCouponTargetList(101L)).thenReturn(List.of());
+		when(goodsMapper.getShopGoodsCategoryIdList("GOODS001")).thenReturn(List.of());
+		when(goodsMapper.getShopGoodsCategoryIdList("GOODS002")).thenReturn(List.of());
+		when(goodsMapper.getShopGoodsExhibitionTabNoList("GOODS001")).thenReturn(List.of());
+		when(goodsMapper.getShopGoodsExhibitionTabNoList("GOODS002")).thenReturn(List.of());
+		when(goodsMapper.getShopCartSiteInfo("xodud1202")).thenReturn(siteInfo);
+		when(goodsMapper.getShopAvailablePointAmt(7L)).thenReturn(0);
+
+		// 중복 상품쿠폰 선택 예외 메시지를 확인합니다.
+		assertThatThrownBy(() -> goodsService.quoteShopOrderDiscount(param, 7L))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessage("할인 혜택 정보를 확인해주세요.");
 	}
 
 	@Test
@@ -1431,6 +1568,15 @@ class GoodsServiceTests {
 		ShopCartCouponEstimateRequestPO request = new ShopCartCouponEstimateRequestPO();
 		request.setCartItemList(List.of(cartItemList));
 		return request;
+	}
+
+	// 테스트용 주문서 상품쿠폰 선택 항목을 생성합니다.
+	private ShopOrderGoodsCouponSelectionVO createShopOrderGoodsCouponSelection(Long cartId, Long custCpnNo) {
+		// 장바구니 번호와 고객 보유 쿠폰 번호를 세팅합니다.
+		ShopOrderGoodsCouponSelectionVO selection = new ShopOrderGoodsCouponSelectionVO();
+		selection.setCartId(cartId);
+		selection.setCustCpnNo(custCpnNo);
+		return selection;
 	}
 
 	// 테스트용 고객 보유 쿠폰 정보를 생성합니다.

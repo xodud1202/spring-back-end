@@ -291,6 +291,9 @@ public interface GoodsMapper {
 	// 고객이 현재 사용할 수 있는 보유 쿠폰 목록을 조회합니다.
 	List<ShopCartCustomerCouponVO> getShopCustomerCouponList(@Param("custNo") Long custNo);
 
+	// 고객의 현재 사용 가능한 보유 포인트 합계를 조회합니다.
+	Integer getShopAvailablePointAmt(@Param("custNo") Long custNo);
+
 	// 카테고리 상품 단건을 등록합니다.
 	int insertCategoryGoods(CategoryGoodsSavePO param);
 

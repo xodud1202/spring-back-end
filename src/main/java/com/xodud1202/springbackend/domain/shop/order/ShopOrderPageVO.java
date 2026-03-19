@@ -19,4 +19,12 @@ public class ShopOrderPageVO {
 	private List<ShopOrderAddressVO> addressList;
 	// 현재 기본 배송지입니다.
 	private ShopOrderAddressVO defaultAddress;
+	// 현재 사용 가능한 보유 포인트입니다.
+	private Integer availablePointAmt;
+	// 주문서 쿠폰 선택 후보 목록입니다.
+	private ShopOrderCouponOptionVO couponOption;
+	// 주문서 초기 자동 선택 쿠폰 정보입니다.
+	private ShopOrderDiscountSelectionVO discountSelection;
+	// 주문서 초기 할인 금액 요약 정보입니다.
+	private ShopOrderDiscountAmountVO discountAmount;
 }

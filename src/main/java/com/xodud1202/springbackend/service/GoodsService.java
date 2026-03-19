@@ -51,6 +51,14 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSaveResultV
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSearchResponseVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressUpdatePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderCouponItemVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderCouponOptionVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountAmountVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountQuotePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountQuoteVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountSelectionVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderGoodsCouponGroupVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderGoodsCouponSelectionVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPageVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySavePO;
@@ -130,6 +138,7 @@ public class GoodsService {
 	private static final int SHOP_ORDER_ADDRESS_SEARCH_DEFAULT_PAGE = 1;
 	private static final int SHOP_ORDER_ADDRESS_SEARCH_DEFAULT_COUNT = 10;
 	private static final int SHOP_ORDER_ADDRESS_SEARCH_MAX_COUNT = 100;
+	private static final String SHOP_ORDER_DISCOUNT_INVALID_MESSAGE = "할인 혜택 정보를 확인해주세요.";
 
 	// 관리자 상품 목록을 페이징 조건으로 조회합니다.
 	public Map<String, Object> getAdminGoodsList(GoodsPO param) {
@@ -1133,18 +1142,24 @@ public class GoodsService {
 			throw new IllegalArgumentException("로그인이 필요합니다.");
 		}
 
-		// 주문서 대상 cartId 목록을 중복 없이 정규화합니다.
-		List<Long> normalizedCartIdList = normalizeShopOrderCartIdList(cartIdList);
-		if (normalizedCartIdList.isEmpty()) {
-			throw new IllegalArgumentException("주문 정보가 맞지 않습니다.");
+		// 현재 로그인 고객의 유효한 주문 대상 장바구니 목록을 조회합니다.
+		return buildShopOrderPage(resolveValidatedShopOrderCartItemList(cartIdList, custNo), custNo);
+	}
+
+	// 쇼핑몰 주문서 할인 금액을 재계산합니다.
+	public ShopOrderDiscountQuoteVO quoteShopOrderDiscount(ShopOrderDiscountQuotePO param, Long custNo) {
+		// 로그인 고객번호와 재계산 입력값 유효성을 확인합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+		if (param == null) {
+			throw new IllegalArgumentException(SHOP_ORDER_DISCOUNT_INVALID_MESSAGE);
 		}
 
-		// 현재 로그인 고객의 cartId 목록을 조회해 모두 유효한지 검증합니다.
-		List<ShopCartItemVO> orderCartItemList = goodsMapper.getShopOrderCartItemList(custNo, normalizedCartIdList);
-		if (orderCartItemList == null || orderCartItemList.size() != normalizedCartIdList.size()) {
-			throw new IllegalArgumentException("주문 정보가 맞지 않습니다.");
-		}
-		return buildShopOrderPage(orderCartItemList, custNo);
+		// 주문 대상 장바구니와 할인 계산 컨텍스트를 조회합니다.
+		List<ShopCartItemVO> orderCartItemList = resolveValidatedShopOrderCartItemList(param.getCartIdList(), custNo);
+		ShopOrderDiscountContext discountContext = buildShopOrderDiscountContext(orderCartItemList, custNo);
+		return buildShopOrderDiscountQuoteFromSelection(discountContext, param.getGoodsCouponSelectionList(), param.getCartCouponCustCpnNo(), param.getDeliveryCouponCustCpnNo());
 	}
 
 	// 쇼핑몰 주문서 배송지 검색 결과를 조회합니다.
@@ -1402,6 +1417,7 @@ public class GoodsService {
 			);
 			int rowSaleAmt = normalizeNonNegativeNumber(cartItem.getSaleAmt()) * normalizeQuantity(cartItem.getQty());
 			ShopCartCouponEstimateRow estimateRow = new ShopCartCouponEstimateRow(
+				cartItem.getCartId(),
 				normalizedGoodsId,
 				isBlank(cartItem.getSizeId()) ? "" : cartItem.getSizeId().trim(),
 				rowSaleAmt,
@@ -1490,7 +1506,7 @@ public class GoodsService {
 		}
 
 		// 최대 가중치 이분 매칭으로 최적 할인 합계를 계산합니다.
-		return solveMaximumWeightAssignment(weightMatrix);
+		return calculateAssignmentDiscountAmount(weightMatrix, solveMaximumWeightAssignmentColumns(weightMatrix));
 	}
 
 	// 장바구니쿠폰/배송비쿠폰처럼 한 장만 적용하는 쿠폰 최대 할인액을 계산합니다.
@@ -1558,9 +1574,15 @@ public class GoodsService {
 
 	// 행별 상품쿠폰 할인 가중치 행렬에서 최대 할인 합계를 계산합니다.
 	private int solveMaximumWeightAssignment(int[][] weightMatrix) {
-		// 유효한 행렬이 없으면 0원을 반환합니다.
+		// 행별 최적 할당 열 목록을 구한 뒤 할인 합계를 계산합니다.
+		return calculateAssignmentDiscountAmount(weightMatrix, solveMaximumWeightAssignmentColumns(weightMatrix));
+	}
+
+	// 행별 상품쿠폰 할인 가중치 행렬에서 최대 할인 열 할당 결과를 계산합니다.
+	private int[] solveMaximumWeightAssignmentColumns(int[][] weightMatrix) {
+		// 유효한 행렬이 없으면 빈 할당 결과를 반환합니다.
 		if (weightMatrix == null || weightMatrix.length == 0 || weightMatrix[0].length == 0) {
-			return 0;
+			return new int[0];
 		}
 
 		// 직사각형 행렬을 정사각형으로 패딩해 헝가리안 알고리즘 입력으로 변환합니다.
@@ -1632,13 +1654,39 @@ public class GoodsService {
 		for (int column = 1; column <= matrixSize; column += 1) {
 			assignment[p[column]] = column;
 		}
-		int result = 0;
+		int[] result = new int[rowCount];
+		Arrays.fill(result, -1);
 		for (int row = 1; row <= rowCount; row += 1) {
 			int assignedColumn = assignment[row];
 			if (assignedColumn < 1 || assignedColumn > columnCount) {
 				continue;
 			}
-			result += paddedMatrix[row][assignedColumn];
+			if (paddedMatrix[row][assignedColumn] < 1) {
+				continue;
+			}
+			result[row - 1] = assignedColumn - 1;
+		}
+		return result;
+	}
+
+	// 행-열 할당 결과 기준 할인 합계를 계산합니다.
+	private int calculateAssignmentDiscountAmount(int[][] weightMatrix, int[] assignmentColumns) {
+		// 유효한 행렬 또는 할당 결과가 없으면 0원을 반환합니다.
+		if (weightMatrix == null || weightMatrix.length == 0 || assignmentColumns == null || assignmentColumns.length == 0) {
+			return 0;
+		}
+
+		// 실제 할당된 할인액만 누적합니다.
+		int result = 0;
+		for (int rowIndex = 0; rowIndex < weightMatrix.length; rowIndex += 1) {
+			if (rowIndex >= assignmentColumns.length) {
+				break;
+			}
+			int assignedColumnIndex = assignmentColumns[rowIndex];
+			if (assignedColumnIndex < 0 || assignedColumnIndex >= weightMatrix[rowIndex].length) {
+				continue;
+			}
+			result += Math.max(weightMatrix[rowIndex][assignedColumnIndex], 0);
 		}
 		return Math.max(result, 0);
 	}
@@ -1758,6 +1806,448 @@ public class GoodsService {
 		return new ArrayList<>(distinctCartIdSet);
 	}
 
+	// 현재 로그인 고객 기준으로 유효한 주문 대상 장바구니 목록을 조회합니다.
+	private List<ShopCartItemVO> resolveValidatedShopOrderCartItemList(List<Long> cartIdList, Long custNo) {
+		// 주문서 대상 cartId 목록을 중복 없이 정규화합니다.
+		List<Long> normalizedCartIdList = normalizeShopOrderCartIdList(cartIdList);
+		if (normalizedCartIdList.isEmpty()) {
+			throw new IllegalArgumentException("주문 정보가 맞지 않습니다.");
+		}
+
+		// 현재 로그인 고객의 cartId 목록을 조회해 모두 유효한지 검증합니다.
+		List<ShopCartItemVO> orderCartItemList = goodsMapper.getShopOrderCartItemList(custNo, normalizedCartIdList);
+		if (orderCartItemList == null || orderCartItemList.size() != normalizedCartIdList.size()) {
+			throw new IllegalArgumentException("주문 정보가 맞지 않습니다.");
+		}
+		return orderCartItemList;
+	}
+
+	// 주문 대상 장바구니 목록 기준 할인 계산 컨텍스트를 생성합니다.
+	private ShopOrderDiscountContext buildShopOrderDiscountContext(List<ShopCartItemVO> cartItemList, Long custNo) {
+		// 쿠폰 계산용 행 목록과 현재 보유 쿠폰/포인트/배송비 기준 정보를 함께 조회합니다.
+		List<ShopCartCouponEstimateRow> estimateRowList = buildShopCartCouponEstimateRowList(cartItemList);
+		List<ShopCartCustomerCouponVO> customerCouponList = goodsMapper.getShopCustomerCouponList(custNo);
+		Map<Long, List<ShopGoodsCouponTargetVO>> couponTargetMap = buildShopCouponTargetMap(customerCouponList);
+		ShopCartSiteInfoVO siteInfo = resolveShopCartSiteInfo();
+		int availablePointAmt = normalizeNonNegativeNumber(goodsMapper.getShopAvailablePointAmt(custNo));
+		return new ShopOrderDiscountContext(
+			cartItemList == null ? List.of() : cartItemList,
+			estimateRowList,
+			customerCouponList == null ? List.of() : customerCouponList,
+			filterShopCustomerCouponListByKind(customerCouponList, CPN_GB_GOODS),
+			filterShopCustomerCouponListByKind(customerCouponList, CPN_GB_CART),
+			filterShopCustomerCouponListByKind(customerCouponList, CPN_GB_DELIVERY),
+			couponTargetMap,
+			siteInfo,
+			availablePointAmt
+		);
+	}
+
+	// 주문서 쿠폰 선택 후보 정보를 구성합니다.
+	private ShopOrderCouponOptionVO buildShopOrderCouponOption(ShopOrderDiscountContext discountContext) {
+		// 상품쿠폰/장바구니쿠폰/배송비쿠폰 후보 목록을 응답 객체로 조합합니다.
+		ShopOrderCouponOptionVO result = new ShopOrderCouponOptionVO();
+		result.setGoodsCouponGroupList(buildShopOrderGoodsCouponGroupList(discountContext));
+		result.setCartCouponList(buildShopOrderCouponItemList(discountContext.getCartCouponList()));
+		result.setDeliveryCouponList(buildShopOrderCouponItemList(discountContext.getDeliveryCouponList()));
+		return result;
+	}
+
+	// 주문 상품 행별 상품쿠폰 선택 후보 목록을 구성합니다.
+	private List<ShopOrderGoodsCouponGroupVO> buildShopOrderGoodsCouponGroupList(ShopOrderDiscountContext discountContext) {
+		// 상품 행이 없으면 빈 목록을 반환합니다.
+		if (discountContext == null || discountContext.getEstimateRowList().isEmpty()) {
+			return List.of();
+		}
+
+		// 주문 상품 행 순서대로 적용 가능한 상품쿠폰 목록을 구성합니다.
+		List<ShopOrderGoodsCouponGroupVO> result = new ArrayList<>();
+		for (int rowIndex = 0; rowIndex < discountContext.getEstimateRowList().size(); rowIndex += 1) {
+			ShopCartCouponEstimateRow estimateRow = discountContext.getEstimateRowList().get(rowIndex);
+			ShopCartItemVO cartItem = discountContext.getCartItemList().get(rowIndex);
+			ShopOrderGoodsCouponGroupVO group = new ShopOrderGoodsCouponGroupVO();
+			group.setCartId(estimateRow == null ? null : estimateRow.getCartId());
+			group.setGoodsId(cartItem == null ? null : cartItem.getGoodsId());
+			group.setGoodsNm(cartItem == null ? null : cartItem.getGoodsNm());
+			group.setSizeId(cartItem == null ? null : cartItem.getSizeId());
+			group.setCouponList(buildMatchedShopOrderGoodsCouponItemList(estimateRow, discountContext));
+			result.add(group);
+		}
+		return result;
+	}
+
+	// 특정 주문 상품 행에 적용 가능한 상품쿠폰 후보 목록을 구성합니다.
+	private List<ShopOrderCouponItemVO> buildMatchedShopOrderGoodsCouponItemList(
+		ShopCartCouponEstimateRow estimateRow,
+		ShopOrderDiscountContext discountContext
+	) {
+		// 비교할 행이 없으면 빈 목록을 반환합니다.
+		if (estimateRow == null || discountContext == null || discountContext.getGoodsCouponList().isEmpty()) {
+			return List.of();
+		}
+
+		// 적용 가능한 상품쿠폰만 선택 후보 목록으로 변환합니다.
+		List<ShopOrderCouponItemVO> result = new ArrayList<>();
+		for (ShopCartCustomerCouponVO coupon : discountContext.getGoodsCouponList()) {
+			List<ShopGoodsCouponTargetVO> targetList = coupon == null || coupon.getCpnNo() == null
+				? List.of()
+				: discountContext.getCouponTargetMap().getOrDefault(coupon.getCpnNo(), List.of());
+			if (!isMatchedShopCartGoodsCoupon(coupon, targetList, estimateRow)) {
+				continue;
+			}
+			if (calculateCouponDiscountAmount(coupon, estimateRow.getRowSaleAmt()) < 1) {
+				continue;
+			}
+			result.add(buildShopOrderCouponItem(coupon));
+		}
+		return result;
+	}
+
+	// 보유 쿠폰 목록을 주문서 쿠폰 선택 항목 목록으로 변환합니다.
+	private List<ShopOrderCouponItemVO> buildShopOrderCouponItemList(List<ShopCartCustomerCouponVO> couponList) {
+		// 쿠폰 목록이 없으면 빈 목록을 반환합니다.
+		if (couponList == null || couponList.isEmpty()) {
+			return List.of();
+		}
+
+		// 보유 쿠폰 정보만 주문서 선택 항목 형태로 변환합니다.
+		List<ShopOrderCouponItemVO> result = new ArrayList<>();
+		for (ShopCartCustomerCouponVO coupon : couponList) {
+			if (coupon == null) {
+				continue;
+			}
+			result.add(buildShopOrderCouponItem(coupon));
+		}
+		return result;
+	}
+
+	// 보유 쿠폰 1건을 주문서 쿠폰 선택 항목으로 변환합니다.
+	private ShopOrderCouponItemVO buildShopOrderCouponItem(ShopCartCustomerCouponVO coupon) {
+		// 쿠폰 식별/할인 정보를 주문서 쿠폰 항목 객체에 매핑합니다.
+		ShopOrderCouponItemVO result = new ShopOrderCouponItemVO();
+		result.setCustCpnNo(coupon == null ? null : coupon.getCustCpnNo());
+		result.setCpnNo(coupon == null ? null : coupon.getCpnNo());
+		result.setCpnNm(coupon == null ? null : coupon.getCpnNm());
+		result.setCpnGbCd(coupon == null ? null : coupon.getCpnGbCd());
+		result.setCpnTargetCd(coupon == null ? null : coupon.getCpnTargetCd());
+		result.setCpnDcGbCd(coupon == null ? null : coupon.getCpnDcGbCd());
+		result.setCpnDcVal(coupon == null ? null : coupon.getCpnDcVal());
+		result.setCpnUsableStartDt(coupon == null ? null : coupon.getCpnUsableStartDt());
+		result.setCpnUsableEndDt(coupon == null ? null : coupon.getCpnUsableEndDt());
+		return result;
+	}
+
+	// 주문서 자동 최대 할인 선택 결과를 계산합니다.
+	private ShopOrderDiscountQuoteVO buildShopOrderAutoDiscountQuote(ShopOrderDiscountContext discountContext) {
+		// 상품쿠폰 자동 선택 결과를 먼저 계산합니다.
+		ShopOrderGoodsCouponMatchResult goodsCouponMatchResult = calculateShopOrderAutoGoodsCouponMatch(discountContext);
+		int selectedSaleAmt = calculateSelectedCartSaleAmt(discountContext.getEstimateRowList());
+		int discountedSaleAmt = Math.max(selectedSaleAmt - goodsCouponMatchResult.getDiscountAmt(), 0);
+		int deliveryFee = resolveCouponEstimateDeliveryFee(selectedSaleAmt, discountContext.getSiteInfo());
+
+		// 장바구니/배송비 쿠폰은 최대 할인 1건을 자동 선택합니다.
+		ShopCartCustomerCouponVO selectedCartCoupon = findMaximumDiscountCoupon(discountContext.getCartCouponList(), discountedSaleAmt);
+		ShopCartCustomerCouponVO selectedDeliveryCoupon = findMaximumDiscountCoupon(discountContext.getDeliveryCouponList(), deliveryFee);
+
+		// 정규화된 선택 상태와 할인 금액을 응답 객체로 조합합니다.
+		ShopOrderDiscountSelectionVO selection = new ShopOrderDiscountSelectionVO();
+		selection.setGoodsCouponSelectionList(goodsCouponMatchResult.getSelectionList());
+		selection.setCartCouponCustCpnNo(selectedCartCoupon == null ? null : selectedCartCoupon.getCustCpnNo());
+		selection.setDeliveryCouponCustCpnNo(selectedDeliveryCoupon == null ? null : selectedDeliveryCoupon.getCustCpnNo());
+		return buildShopOrderDiscountQuote(
+			selection,
+			goodsCouponMatchResult.getDiscountAmt(),
+			calculateCouponDiscountAmount(selectedCartCoupon, discountedSaleAmt),
+			calculateCouponDiscountAmount(selectedDeliveryCoupon, deliveryFee),
+			discountContext.getAvailablePointAmt(),
+			discountedSaleAmt
+		);
+	}
+
+	// 주문서 명시 선택 기준 할인 재계산 결과를 계산합니다.
+	private ShopOrderDiscountQuoteVO buildShopOrderDiscountQuoteFromSelection(
+		ShopOrderDiscountContext discountContext,
+		List<ShopOrderGoodsCouponSelectionVO> goodsCouponSelectionList,
+		Long cartCouponCustCpnNo,
+		Long deliveryCouponCustCpnNo
+	) {
+		// 선택 후보 범위 안의 쿠폰만 남기도록 입력 선택을 정규화합니다.
+		ShopOrderDiscountSelectionVO normalizedSelection = normalizeShopOrderDiscountSelection(
+			discountContext,
+			goodsCouponSelectionList,
+			cartCouponCustCpnNo,
+			deliveryCouponCustCpnNo
+		);
+
+		// 정규화된 선택 상태 기준으로 할인 금액을 계산합니다.
+		int goodsCouponDiscountAmt = calculateSelectedShopOrderGoodsCouponDiscount(discountContext, normalizedSelection.getGoodsCouponSelectionList());
+		int selectedSaleAmt = calculateSelectedCartSaleAmt(discountContext.getEstimateRowList());
+		int discountedSaleAmt = Math.max(selectedSaleAmt - goodsCouponDiscountAmt, 0);
+		int deliveryFee = resolveCouponEstimateDeliveryFee(selectedSaleAmt, discountContext.getSiteInfo());
+		ShopCartCustomerCouponVO cartCoupon = findCustomerCouponByCustCpnNo(discountContext.getCartCouponList(), normalizedSelection.getCartCouponCustCpnNo());
+		ShopCartCustomerCouponVO deliveryCoupon = findCustomerCouponByCustCpnNo(discountContext.getDeliveryCouponList(), normalizedSelection.getDeliveryCouponCustCpnNo());
+		return buildShopOrderDiscountQuote(
+			normalizedSelection,
+			goodsCouponDiscountAmt,
+			calculateCouponDiscountAmount(cartCoupon, discountedSaleAmt),
+			calculateCouponDiscountAmount(deliveryCoupon, deliveryFee),
+			discountContext.getAvailablePointAmt(),
+			discountedSaleAmt
+		);
+	}
+
+	// 주문서 할인 재계산 응답 객체를 구성합니다.
+	private ShopOrderDiscountQuoteVO buildShopOrderDiscountQuote(
+		ShopOrderDiscountSelectionVO selection,
+		int goodsCouponDiscountAmt,
+		int cartCouponDiscountAmt,
+		int deliveryCouponDiscountAmt,
+		int availablePointAmt,
+		int discountedSaleAmt
+	) {
+		// 최대 포인트 사용 가능 금액과 전체 쿠폰 할인 금액을 계산합니다.
+		int normalizedGoodsCouponDiscountAmt = Math.max(goodsCouponDiscountAmt, 0);
+		int normalizedCartCouponDiscountAmt = Math.max(cartCouponDiscountAmt, 0);
+		int normalizedDeliveryCouponDiscountAmt = Math.max(deliveryCouponDiscountAmt, 0);
+		int maxPointUseAmt = Math.min(
+			Math.max(availablePointAmt, 0),
+			Math.max(discountedSaleAmt - normalizedCartCouponDiscountAmt, 0)
+		);
+
+		// 선택 상태와 할인 금액 요약을 응답 객체로 설정합니다.
+		ShopOrderDiscountAmountVO discountAmount = new ShopOrderDiscountAmountVO();
+		discountAmount.setGoodsCouponDiscountAmt(normalizedGoodsCouponDiscountAmt);
+		discountAmount.setCartCouponDiscountAmt(normalizedCartCouponDiscountAmt);
+		discountAmount.setDeliveryCouponDiscountAmt(normalizedDeliveryCouponDiscountAmt);
+		discountAmount.setCouponDiscountAmt(normalizedGoodsCouponDiscountAmt + normalizedCartCouponDiscountAmt + normalizedDeliveryCouponDiscountAmt);
+		discountAmount.setMaxPointUseAmt(maxPointUseAmt);
+
+		ShopOrderDiscountQuoteVO result = new ShopOrderDiscountQuoteVO();
+		result.setDiscountSelection(selection);
+		result.setDiscountAmount(discountAmount);
+		return result;
+	}
+
+	// 상품쿠폰 자동 최대 할인 선택 결과를 계산합니다.
+	private ShopOrderGoodsCouponMatchResult calculateShopOrderAutoGoodsCouponMatch(ShopOrderDiscountContext discountContext) {
+		// 상품 행이 없으면 빈 선택 결과를 반환합니다.
+		if (discountContext == null || discountContext.getEstimateRowList().isEmpty()) {
+			return new ShopOrderGoodsCouponMatchResult(List.of(), 0);
+		}
+
+		// 기본 선택값은 모든 행 미적용 상태로 초기화합니다.
+		List<ShopOrderGoodsCouponSelectionVO> selectionList = createDefaultShopOrderGoodsCouponSelectionList(discountContext.getCartItemList());
+		if (discountContext.getGoodsCouponList().isEmpty()) {
+			return new ShopOrderGoodsCouponMatchResult(selectionList, 0);
+		}
+
+		// 상품행-쿠폰행 조합 가중치 행렬을 구성합니다.
+		int[][] weightMatrix = new int[discountContext.getEstimateRowList().size()][discountContext.getGoodsCouponList().size()];
+		boolean hasPositiveWeight = false;
+		for (int rowIndex = 0; rowIndex < discountContext.getEstimateRowList().size(); rowIndex += 1) {
+			ShopCartCouponEstimateRow estimateRow = discountContext.getEstimateRowList().get(rowIndex);
+			for (int couponIndex = 0; couponIndex < discountContext.getGoodsCouponList().size(); couponIndex += 1) {
+				ShopCartCustomerCouponVO coupon = discountContext.getGoodsCouponList().get(couponIndex);
+				List<ShopGoodsCouponTargetVO> targetList = coupon == null || coupon.getCpnNo() == null
+					? List.of()
+					: discountContext.getCouponTargetMap().getOrDefault(coupon.getCpnNo(), List.of());
+				if (!isMatchedShopCartGoodsCoupon(coupon, targetList, estimateRow)) {
+					continue;
+				}
+				int discountAmt = calculateCouponDiscountAmount(coupon, estimateRow == null ? 0 : estimateRow.getRowSaleAmt());
+				weightMatrix[rowIndex][couponIndex] = discountAmt;
+				if (discountAmt > 0) {
+					hasPositiveWeight = true;
+				}
+			}
+		}
+		if (!hasPositiveWeight) {
+			return new ShopOrderGoodsCouponMatchResult(selectionList, 0);
+		}
+
+		// 최대 가중치 할당 결과를 선택 목록과 할인 합계로 변환합니다.
+		int[] assignmentColumns = solveMaximumWeightAssignmentColumns(weightMatrix);
+		for (int rowIndex = 0; rowIndex < assignmentColumns.length && rowIndex < selectionList.size(); rowIndex += 1) {
+			int couponIndex = assignmentColumns[rowIndex];
+			if (couponIndex < 0 || couponIndex >= discountContext.getGoodsCouponList().size()) {
+				continue;
+			}
+			selectionList.get(rowIndex).setCustCpnNo(discountContext.getGoodsCouponList().get(couponIndex).getCustCpnNo());
+		}
+		return new ShopOrderGoodsCouponMatchResult(selectionList, calculateAssignmentDiscountAmount(weightMatrix, assignmentColumns));
+	}
+
+	// 주문 상품 행 기준 기본 상품쿠폰 선택 목록을 생성합니다.
+	private List<ShopOrderGoodsCouponSelectionVO> createDefaultShopOrderGoodsCouponSelectionList(List<ShopCartItemVO> cartItemList) {
+		// 주문 상품 행이 없으면 빈 목록을 반환합니다.
+		if (cartItemList == null || cartItemList.isEmpty()) {
+			return List.of();
+		}
+
+		// 각 행별 장바구니 번호만 세팅한 미적용 선택 목록을 생성합니다.
+		List<ShopOrderGoodsCouponSelectionVO> result = new ArrayList<>();
+		for (ShopCartItemVO cartItem : cartItemList) {
+			ShopOrderGoodsCouponSelectionVO selection = new ShopOrderGoodsCouponSelectionVO();
+			selection.setCartId(cartItem == null ? null : cartItem.getCartId());
+			selection.setCustCpnNo(null);
+			result.add(selection);
+		}
+		return result;
+	}
+
+	// 주문서 쿠폰 선택 요청을 현재 주문 대상과 후보 목록 기준으로 정규화합니다.
+	private ShopOrderDiscountSelectionVO normalizeShopOrderDiscountSelection(
+		ShopOrderDiscountContext discountContext,
+		List<ShopOrderGoodsCouponSelectionVO> goodsCouponSelectionList,
+		Long cartCouponCustCpnNo,
+		Long deliveryCouponCustCpnNo
+	) {
+		// 비교에 사용할 상품쿠폰 후보 목록을 cartId 기준으로 매핑합니다.
+		ShopOrderCouponOptionVO couponOption = buildShopOrderCouponOption(discountContext);
+		Map<Long, Set<Long>> goodsCouponCandidateMap = new HashMap<>();
+		for (ShopOrderGoodsCouponGroupVO group : couponOption.getGoodsCouponGroupList()) {
+			if (group == null || group.getCartId() == null) {
+				continue;
+			}
+			Set<Long> candidateSet = new HashSet<>();
+			for (ShopOrderCouponItemVO coupon : group.getCouponList() == null ? List.<ShopOrderCouponItemVO>of() : group.getCouponList()) {
+				if (coupon == null || coupon.getCustCpnNo() == null) {
+					continue;
+				}
+				candidateSet.add(coupon.getCustCpnNo());
+			}
+			goodsCouponCandidateMap.put(group.getCartId(), candidateSet);
+		}
+
+		// 요청 상품쿠폰 선택값을 cartId 기준으로 정리합니다.
+		Map<Long, Long> requestedGoodsSelectionMap = new HashMap<>();
+		for (ShopOrderGoodsCouponSelectionVO selection : goodsCouponSelectionList == null ? List.<ShopOrderGoodsCouponSelectionVO>of() : goodsCouponSelectionList) {
+			if (selection == null || selection.getCartId() == null) {
+				continue;
+			}
+			if (!goodsCouponCandidateMap.containsKey(selection.getCartId())) {
+				throw new IllegalArgumentException(SHOP_ORDER_DISCOUNT_INVALID_MESSAGE);
+			}
+			requestedGoodsSelectionMap.put(selection.getCartId(), selection.getCustCpnNo());
+		}
+
+		// 행 순서대로 선택 목록을 정규화하고 상품쿠폰 중복 사용 여부를 검증합니다.
+		List<ShopOrderGoodsCouponSelectionVO> normalizedGoodsSelectionList = new ArrayList<>();
+		Set<Long> usedGoodsCouponSet = new HashSet<>();
+		for (ShopCartItemVO cartItem : discountContext.getCartItemList()) {
+			Long cartId = cartItem == null ? null : cartItem.getCartId();
+			Long selectedCustCpnNo = cartId == null ? null : requestedGoodsSelectionMap.get(cartId);
+			ShopOrderGoodsCouponSelectionVO selection = new ShopOrderGoodsCouponSelectionVO();
+			selection.setCartId(cartId);
+			selection.setCustCpnNo(null);
+			if (selectedCustCpnNo == null) {
+				normalizedGoodsSelectionList.add(selection);
+				continue;
+			}
+			Set<Long> candidateSet = goodsCouponCandidateMap.getOrDefault(cartId, Set.of());
+			if (!candidateSet.contains(selectedCustCpnNo) || !usedGoodsCouponSet.add(selectedCustCpnNo)) {
+				throw new IllegalArgumentException(SHOP_ORDER_DISCOUNT_INVALID_MESSAGE);
+			}
+			selection.setCustCpnNo(selectedCustCpnNo);
+			normalizedGoodsSelectionList.add(selection);
+		}
+
+		// 장바구니/배송비 쿠폰 선택값도 후보 목록 기준으로 정규화합니다.
+		ShopOrderDiscountSelectionVO result = new ShopOrderDiscountSelectionVO();
+		result.setGoodsCouponSelectionList(normalizedGoodsSelectionList);
+		result.setCartCouponCustCpnNo(normalizeSelectedCouponCustCpnNo(couponOption.getCartCouponList(), cartCouponCustCpnNo));
+		result.setDeliveryCouponCustCpnNo(normalizeSelectedCouponCustCpnNo(couponOption.getDeliveryCouponList(), deliveryCouponCustCpnNo));
+		return result;
+	}
+
+	// 선택된 고객 보유 쿠폰 번호가 후보 목록 안에 있는지 검증합니다.
+	private Long normalizeSelectedCouponCustCpnNo(List<ShopOrderCouponItemVO> couponList, Long custCpnNo) {
+		// 미선택이면 그대로 null을 반환합니다.
+		if (custCpnNo == null) {
+			return null;
+		}
+
+		// 후보 목록에 없는 쿠폰이면 예외를 반환합니다.
+		for (ShopOrderCouponItemVO coupon : couponList == null ? List.<ShopOrderCouponItemVO>of() : couponList) {
+			if (coupon == null || coupon.getCustCpnNo() == null) {
+				continue;
+			}
+			if (custCpnNo.equals(coupon.getCustCpnNo())) {
+				return custCpnNo;
+			}
+		}
+		throw new IllegalArgumentException(SHOP_ORDER_DISCOUNT_INVALID_MESSAGE);
+	}
+
+	// 정규화된 상품쿠폰 선택 목록 기준 할인 합계를 계산합니다.
+	private int calculateSelectedShopOrderGoodsCouponDiscount(
+		ShopOrderDiscountContext discountContext,
+		List<ShopOrderGoodsCouponSelectionVO> goodsCouponSelectionList
+	) {
+		// 선택 목록이 없으면 0원을 반환합니다.
+		if (discountContext == null || goodsCouponSelectionList == null || goodsCouponSelectionList.isEmpty()) {
+			return 0;
+		}
+
+		// cartId 기준으로 쿠폰 선택값을 찾아 각 행 할인액을 누적합니다.
+		Map<Long, Long> goodsCouponSelectionMap = new HashMap<>();
+		for (ShopOrderGoodsCouponSelectionVO selection : goodsCouponSelectionList) {
+			if (selection == null || selection.getCartId() == null || selection.getCustCpnNo() == null) {
+				continue;
+			}
+			goodsCouponSelectionMap.put(selection.getCartId(), selection.getCustCpnNo());
+		}
+		int result = 0;
+		for (ShopCartCouponEstimateRow estimateRow : discountContext.getEstimateRowList()) {
+			if (estimateRow == null || estimateRow.getCartId() == null) {
+				continue;
+			}
+			ShopCartCustomerCouponVO coupon = findCustomerCouponByCustCpnNo(discountContext.getGoodsCouponList(), goodsCouponSelectionMap.get(estimateRow.getCartId()));
+			result += calculateCouponDiscountAmount(coupon, estimateRow.getRowSaleAmt());
+		}
+		return Math.max(result, 0);
+	}
+
+	// 기준 금액에 대해 최대 할인 금액을 주는 쿠폰 1건을 반환합니다.
+	private ShopCartCustomerCouponVO findMaximumDiscountCoupon(List<ShopCartCustomerCouponVO> couponList, int baseAmt) {
+		// 기준 금액 또는 쿠폰 목록이 없으면 null을 반환합니다.
+		if (baseAmt < 1 || couponList == null || couponList.isEmpty()) {
+			return null;
+		}
+
+		// 각 쿠폰 할인액 중 가장 큰 쿠폰을 선택합니다.
+		ShopCartCustomerCouponVO result = null;
+		int maxDiscountAmt = 0;
+		for (ShopCartCustomerCouponVO coupon : couponList) {
+			int discountAmt = calculateCouponDiscountAmount(coupon, baseAmt);
+			if (discountAmt <= maxDiscountAmt) {
+				continue;
+			}
+			maxDiscountAmt = discountAmt;
+			result = coupon;
+		}
+		return result;
+	}
+
+	// 고객 보유 쿠폰 번호 기준으로 보유 쿠폰 목록에서 단건을 조회합니다.
+	private ShopCartCustomerCouponVO findCustomerCouponByCustCpnNo(List<ShopCartCustomerCouponVO> couponList, Long custCpnNo) {
+		// 미선택 또는 목록 없음이면 null을 반환합니다.
+		if (custCpnNo == null || couponList == null || couponList.isEmpty()) {
+			return null;
+		}
+
+		// 고객 보유 쿠폰 번호가 일치하는 첫 쿠폰을 반환합니다.
+		for (ShopCartCustomerCouponVO coupon : couponList) {
+			if (coupon == null || coupon.getCustCpnNo() == null) {
+				continue;
+			}
+			if (custCpnNo.equals(coupon.getCustCpnNo())) {
+				return coupon;
+			}
+		}
+		return null;
+	}
+
 	// 장바구니 목록을 페이지 응답 형식으로 조합합니다.
 	private ShopCartPageVO buildShopCartPage(List<ShopCartItemVO> cartItemList) {
 		// 장바구니 이미지 URL/사이즈 옵션/배송비 기준 정보를 조합합니다.
@@ -1785,15 +2275,21 @@ public class GoodsService {
 
 	// 주문 대상 장바구니 목록과 배송지 목록을 주문서 페이지 응답 형식으로 조합합니다.
 	private ShopOrderPageVO buildShopOrderPage(List<ShopCartItemVO> cartItemList, Long custNo) {
-		// 기존 장바구니 조합 결과에 배송지 목록과 기본 배송지를 추가합니다.
+		// 기존 장바구니 조합 결과에 배송지/쿠폰/포인트 정보를 추가합니다.
 		ShopCartPageVO cartPage = buildShopCartPage(cartItemList);
 		List<ShopOrderAddressVO> addressList = resolveShopOrderAddressList(custNo);
+		ShopOrderDiscountContext discountContext = buildShopOrderDiscountContext(cartPage.getCartList(), custNo);
+		ShopOrderDiscountQuoteVO autoDiscountQuote = buildShopOrderAutoDiscountQuote(discountContext);
 		ShopOrderPageVO result = new ShopOrderPageVO();
 		result.setCartList(cartPage.getCartList());
 		result.setCartCount(cartPage.getCartCount());
 		result.setSiteInfo(cartPage.getSiteInfo());
 		result.setAddressList(addressList);
 		result.setDefaultAddress(findShopOrderDefaultAddress(addressList));
+		result.setAvailablePointAmt(discountContext.getAvailablePointAmt());
+		result.setCouponOption(buildShopOrderCouponOption(discountContext));
+		result.setDiscountSelection(autoDiscountQuote.getDiscountSelection());
+		result.setDiscountAmount(autoDiscountQuote.getDiscountAmount());
 		return result;
 	}
 
@@ -3004,6 +3500,8 @@ public class GoodsService {
 
 	// 장바구니 쿠폰 예상 할인 계산용 상품 행 컨텍스트를 전달합니다.
 	private static class ShopCartCouponEstimateRow {
+		// 장바구니 번호입니다.
+		private final Long cartId;
 		// 상품코드입니다.
 		private final String goodsId;
 		// 사이즈코드입니다.
@@ -3019,6 +3517,7 @@ public class GoodsService {
 
 		// 장바구니 쿠폰 예상 할인 계산용 상품 행 컨텍스트를 생성합니다.
 		private ShopCartCouponEstimateRow(
+			Long cartId,
 			String goodsId,
 			String sizeId,
 			int rowSaleAmt,
@@ -3027,12 +3526,18 @@ public class GoodsService {
 			Set<String> exhibitionTabNoSet
 		) {
 			// 생성자 입력값을 그대로 불변 필드에 보관합니다.
+			this.cartId = cartId;
 			this.goodsId = goodsId;
 			this.sizeId = sizeId;
 			this.rowSaleAmt = rowSaleAmt;
 			this.brandNoValue = brandNoValue;
 			this.categoryIdSet = categoryIdSet == null ? Set.of() : categoryIdSet;
 			this.exhibitionTabNoSet = exhibitionTabNoSet == null ? Set.of() : exhibitionTabNoSet;
+		}
+
+		// 장바구니 번호를 반환합니다.
+		private Long getCartId() {
+			return cartId;
 		}
 
 		// 상품코드를 반환합니다.
@@ -3063,6 +3568,120 @@ public class GoodsService {
 		// 상품 기획전 탭 번호 목록을 반환합니다.
 		private Set<String> getExhibitionTabNoSet() {
 			return exhibitionTabNoSet;
+		}
+	}
+
+	// 주문서 할인 계산에 필요한 컨텍스트를 전달합니다.
+	private static class ShopOrderDiscountContext {
+		// 주문 대상 장바구니 목록입니다.
+		private final List<ShopCartItemVO> cartItemList;
+		// 쿠폰 계산용 행 목록입니다.
+		private final List<ShopCartCouponEstimateRow> estimateRowList;
+		// 현재 사용 가능한 전체 보유 쿠폰 목록입니다.
+		private final List<ShopCartCustomerCouponVO> customerCouponList;
+		// 상품쿠폰 목록입니다.
+		private final List<ShopCartCustomerCouponVO> goodsCouponList;
+		// 장바구니 쿠폰 목록입니다.
+		private final List<ShopCartCustomerCouponVO> cartCouponList;
+		// 배송비 쿠폰 목록입니다.
+		private final List<ShopCartCustomerCouponVO> deliveryCouponList;
+		// 쿠폰 번호별 적용 대상 목록입니다.
+		private final Map<Long, List<ShopGoodsCouponTargetVO>> couponTargetMap;
+		// 배송비 기준 사이트 정보입니다.
+		private final ShopCartSiteInfoVO siteInfo;
+		// 현재 사용 가능한 보유 포인트입니다.
+		private final int availablePointAmt;
+
+		// 주문서 할인 계산 컨텍스트를 생성합니다.
+		private ShopOrderDiscountContext(
+			List<ShopCartItemVO> cartItemList,
+			List<ShopCartCouponEstimateRow> estimateRowList,
+			List<ShopCartCustomerCouponVO> customerCouponList,
+			List<ShopCartCustomerCouponVO> goodsCouponList,
+			List<ShopCartCustomerCouponVO> cartCouponList,
+			List<ShopCartCustomerCouponVO> deliveryCouponList,
+			Map<Long, List<ShopGoodsCouponTargetVO>> couponTargetMap,
+			ShopCartSiteInfoVO siteInfo,
+			int availablePointAmt
+		) {
+			this.cartItemList = cartItemList == null ? List.of() : cartItemList;
+			this.estimateRowList = estimateRowList == null ? List.of() : estimateRowList;
+			this.customerCouponList = customerCouponList == null ? List.of() : customerCouponList;
+			this.goodsCouponList = goodsCouponList == null ? List.of() : goodsCouponList;
+			this.cartCouponList = cartCouponList == null ? List.of() : cartCouponList;
+			this.deliveryCouponList = deliveryCouponList == null ? List.of() : deliveryCouponList;
+			this.couponTargetMap = couponTargetMap == null ? Map.of() : couponTargetMap;
+			this.siteInfo = siteInfo;
+			this.availablePointAmt = Math.max(availablePointAmt, 0);
+		}
+
+		// 주문 대상 장바구니 목록을 반환합니다.
+		private List<ShopCartItemVO> getCartItemList() {
+			return cartItemList;
+		}
+
+		// 쿠폰 계산용 행 목록을 반환합니다.
+		private List<ShopCartCouponEstimateRow> getEstimateRowList() {
+			return estimateRowList;
+		}
+
+		// 현재 사용 가능한 전체 보유 쿠폰 목록을 반환합니다.
+		private List<ShopCartCustomerCouponVO> getCustomerCouponList() {
+			return customerCouponList;
+		}
+
+		// 상품쿠폰 목록을 반환합니다.
+		private List<ShopCartCustomerCouponVO> getGoodsCouponList() {
+			return goodsCouponList;
+		}
+
+		// 장바구니 쿠폰 목록을 반환합니다.
+		private List<ShopCartCustomerCouponVO> getCartCouponList() {
+			return cartCouponList;
+		}
+
+		// 배송비 쿠폰 목록을 반환합니다.
+		private List<ShopCartCustomerCouponVO> getDeliveryCouponList() {
+			return deliveryCouponList;
+		}
+
+		// 쿠폰 번호별 적용 대상 목록을 반환합니다.
+		private Map<Long, List<ShopGoodsCouponTargetVO>> getCouponTargetMap() {
+			return couponTargetMap;
+		}
+
+		// 배송비 기준 사이트 정보를 반환합니다.
+		private ShopCartSiteInfoVO getSiteInfo() {
+			return siteInfo;
+		}
+
+		// 현재 사용 가능한 보유 포인트를 반환합니다.
+		private int getAvailablePointAmt() {
+			return availablePointAmt;
+		}
+	}
+
+	// 주문서 상품쿠폰 자동 선택 결과를 전달합니다.
+	private static class ShopOrderGoodsCouponMatchResult {
+		// 상품행별 선택 목록입니다.
+		private final List<ShopOrderGoodsCouponSelectionVO> selectionList;
+		// 상품쿠폰 할인 합계입니다.
+		private final int discountAmt;
+
+		// 주문서 상품쿠폰 자동 선택 결과를 생성합니다.
+		private ShopOrderGoodsCouponMatchResult(List<ShopOrderGoodsCouponSelectionVO> selectionList, int discountAmt) {
+			this.selectionList = selectionList == null ? List.of() : selectionList;
+			this.discountAmt = Math.max(discountAmt, 0);
+		}
+
+		// 상품행별 선택 목록을 반환합니다.
+		private List<ShopOrderGoodsCouponSelectionVO> getSelectionList() {
+			return selectionList;
+		}
+
+		// 상품쿠폰 할인 합계를 반환합니다.
+		private int getDiscountAmt() {
+			return discountAmt;
 		}
 	}
 

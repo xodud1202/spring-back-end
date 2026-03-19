@@ -1161,7 +1161,23 @@
 		   AND CB.CPN_GB_CD IN ('CPN_GB_01', 'CPN_GB_03', 'CPN_GB_04')
 		   AND NOW() &gt;= CC.CPN_USABLE_START_DT
 		   AND NOW() &lt;= CC.CPN_USABLE_END_DT
-		 ORDER BY CC.CUST_CPN_NO DESC
+		 ORDER BY CC.CPN_NO ASC
+		        , CC.CPN_USABLE_END_DT ASC
+		        , CC.CPN_USABLE_START_DT ASC
+		        , CC.CUST_CPN_NO ASC
+	</select>
+
+	<select id="getShopAvailablePointAmt" resultType="int">
+		/* GoodsMapper.getShopAvailablePointAmt: 고객의 현재 사용 가능한 보유 포인트 합계 조회 */
+		SELECT COALESCE(SUM(CPB.RMN_AMT), 0)
+		  FROM CUSTOMER_POINT_BASE CPB
+		 WHERE CPB.CUST_NO = #{custNo}
+		   AND CPB.RMN_AMT &gt; 0
+		   AND (
+		       CPB.EXPIRE_DT IS NULL
+		       OR CPB.EXPIRE_DT = '0000-00-00 00:00:00'
+		       OR CPB.EXPIRE_DT &gt;= NOW()
+		   )
 	</select>
 
 	<insert id="insertCategoryGoods">

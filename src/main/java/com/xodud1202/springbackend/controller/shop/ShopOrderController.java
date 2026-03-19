@@ -2,6 +2,7 @@ package com.xodud1202.springbackend.controller.shop;
 
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressRegisterPO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressUpdatePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountQuotePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPageVO;
 import com.xodud1202.springbackend.service.GoodsService;
 import jakarta.servlet.http.Cookie;
@@ -130,6 +131,31 @@ public class ShopOrderController {
 			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
 			log.error("쇼핑몰 배송지 수정 실패 message={}", exception.getMessage(), exception);
 			return ResponseEntity.internalServerError().body(Map.of("message", "배송지 수정에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 주문서 할인 금액을 재계산합니다.
+	@PostMapping("/api/shop/order/discount/quote")
+	public ResponseEntity<Object> quoteShopOrderDiscount(
+		@RequestBody(required = false) ShopOrderDiscountQuotePO param,
+		HttpServletRequest request
+	) {
+		try {
+			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			// 할인 재계산 결과를 조회해 반환합니다.
+			return ResponseEntity.ok(goodsService.quoteShopOrderDiscount(param, custNo));
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
+			log.error("쇼핑몰 주문서 할인 재계산 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "할인 혜택 계산에 실패했습니다."));
 		}
 	}
 

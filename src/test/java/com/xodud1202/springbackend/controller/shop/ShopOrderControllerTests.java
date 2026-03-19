@@ -6,6 +6,9 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSearchCommo
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSearchItemVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSearchResponseVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountAmountVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountQuoteVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountSelectionVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPageVO;
 import com.xodud1202.springbackend.service.GoodsService;
 import jakarta.servlet.http.Cookie;
@@ -70,6 +73,7 @@ class ShopOrderControllerTests {
 		page.setSiteInfo(siteInfo);
 		page.setAddressList(List.of(defaultAddress));
 		page.setDefaultAddress(defaultAddress);
+		page.setAvailablePointAmt(5000);
 		when(goodsService.getShopOrderPage(List.of(12L, 15L), 1L)).thenReturn(page);
 
 		// 로그인 쿠키와 함께 요청하면 200 응답과 주문서 기본 필드를 검증합니다.
@@ -84,6 +88,7 @@ class ShopOrderControllerTests {
 			.andExpect(jsonPath("$.cartCount").value(0))
 			.andExpect(jsonPath("$.siteInfo.deliveryFee").value(3000))
 			.andExpect(jsonPath("$.siteInfo.deliveryFeeLimit").value(30000))
+			.andExpect(jsonPath("$.availablePointAmt").value(5000))
 			.andExpect(jsonPath("$.addressList[0].addressNm").value("집"))
 			.andExpect(jsonPath("$.defaultAddress.addressNm").value("집"));
 	}
@@ -316,5 +321,81 @@ class ShopOrderControllerTests {
 			)
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.message").value("수정할 배송지를 찾을 수 없습니다."));
+	}
+
+	@Test
+	@DisplayName("주문서 할인 재계산 API는 로그인 사용자가 요청하면 선택 상태와 할인 금액을 반환한다")
+	// 할인 재계산 성공 시 200 응답과 선택 상태/금액 필드 반환 여부를 검증합니다.
+	void quoteShopOrderDiscount_returnsOk() throws Exception {
+		// 할인 재계산 결과 응답 객체를 구성합니다.
+		ShopOrderDiscountSelectionVO discountSelection = new ShopOrderDiscountSelectionVO();
+		discountSelection.setGoodsCouponSelectionList(List.of());
+		discountSelection.setCartCouponCustCpnNo(2001L);
+		discountSelection.setDeliveryCouponCustCpnNo(3001L);
+
+		ShopOrderDiscountAmountVO discountAmount = new ShopOrderDiscountAmountVO();
+		discountAmount.setGoodsCouponDiscountAmt(8000);
+		discountAmount.setCartCouponDiscountAmt(7000);
+		discountAmount.setDeliveryCouponDiscountAmt(3000);
+		discountAmount.setCouponDiscountAmt(18000);
+		discountAmount.setMaxPointUseAmt(9000);
+
+		ShopOrderDiscountQuoteVO result = new ShopOrderDiscountQuoteVO();
+		result.setDiscountSelection(discountSelection);
+		result.setDiscountAmount(discountAmount);
+		when(goodsService.quoteShopOrderDiscount(any(), eq(1L))).thenReturn(result);
+
+		// 로그인 쿠키와 함께 요청하면 200 응답과 할인 재계산 결과 필드를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/order/discount/quote")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"cartIdList":[12,15],"goodsCouponSelectionList":[],"cartCouponCustCpnNo":2001,"deliveryCouponCustCpnNo":3001}
+						""")
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.discountSelection.cartCouponCustCpnNo").value(2001))
+			.andExpect(jsonPath("$.discountSelection.deliveryCouponCustCpnNo").value(3001))
+			.andExpect(jsonPath("$.discountAmount.goodsCouponDiscountAmt").value(8000))
+			.andExpect(jsonPath("$.discountAmount.couponDiscountAmt").value(18000))
+			.andExpect(jsonPath("$.discountAmount.maxPointUseAmt").value(9000));
+	}
+
+	@Test
+	@DisplayName("주문서 할인 재계산 API는 비로그인 요청이면 401을 반환한다")
+	// 비로그인 상태에서 할인 재계산 요청 시 401 응답을 검증합니다.
+	void quoteShopOrderDiscount_returnsUnauthorizedWhenNotLoggedIn() throws Exception {
+		// 로그인 쿠키 없이 요청하면 401 응답과 메시지를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/order/discount/quote")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"cartIdList":[12,15],"goodsCouponSelectionList":[],"cartCouponCustCpnNo":2001,"deliveryCouponCustCpnNo":3001}
+						""")
+			)
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
+	}
+
+	@Test
+	@DisplayName("주문서 할인 재계산 API는 잘못된 쿠폰 선택이면 400을 반환한다")
+	// 서비스에서 할인 선택 검증 예외를 반환하면 400 응답으로 변환되는지 검증합니다.
+	void quoteShopOrderDiscount_returnsBadRequestWhenSelectionInvalid() throws Exception {
+		// 잘못된 할인 선택 예외를 발생하도록 목 동작을 설정합니다.
+		when(goodsService.quoteShopOrderDiscount(any(), eq(1L)))
+			.thenThrow(new IllegalArgumentException("할인 혜택 정보를 확인해주세요."));
+
+		// 로그인 쿠키와 함께 요청하면 400 응답과 메시지를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/order/discount/quote")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"cartIdList":[12,15],"goodsCouponSelectionList":[],"cartCouponCustCpnNo":9999,"deliveryCouponCustCpnNo":null}
+						""")
+			)
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("할인 혜택 정보를 확인해주세요."));
 	}
 }
