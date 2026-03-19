@@ -15,6 +15,7 @@ import com.xodud1202.springbackend.domain.shop.cart.ShopCartDeletePO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartItemVO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartOptionUpdatePO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartPageVO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartSavePO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartSiteInfoVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsBasicVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsCouponTargetVO;
@@ -716,13 +717,19 @@ class GoodsServiceTests {
 		when(goodsMapper.getShopGoodsBasic("GOODS001")).thenReturn(goods);
 		when(goodsMapper.getShopGoodsSizeList("GOODS001")).thenReturn(List.of(sizeItem));
 		when(goodsMapper.countShopCart(7L, "GOODS001", "095")).thenReturn(0);
-		when(goodsMapper.insertShopCart(7L, "GOODS001", "095", 2, 7L, 7L)).thenReturn(1);
+		when(goodsMapper.insertShopCart(any(ShopCartSavePO.class))).thenReturn(1);
 		when(goodsMapper.getShopCartQty(7L, "GOODS001", "095")).thenReturn(2);
 
 		// 장바구니 등록 후 최종 수량과 insert 호출 여부를 검증합니다.
 		int result = goodsService.addShopGoodsCart("GOODS001", "095", 2, 7L);
+		ArgumentCaptor<ShopCartSavePO> captor = ArgumentCaptor.forClass(ShopCartSavePO.class);
 		assertThat(result).isEqualTo(2);
-		verify(goodsMapper).insertShopCart(7L, "GOODS001", "095", 2, 7L, 7L);
+		verify(goodsMapper).insertShopCart(captor.capture());
+		assertThat(captor.getValue().getCartGbCd()).isEqualTo("C");
+		assertThat(captor.getValue().getCustNo()).isEqualTo(7L);
+		assertThat(captor.getValue().getGoodsId()).isEqualTo("GOODS001");
+		assertThat(captor.getValue().getSizeId()).isEqualTo("095");
+		assertThat(captor.getValue().getQty()).isEqualTo(2);
 	}
 
 	@Test
@@ -766,6 +773,39 @@ class GoodsServiceTests {
 		assertThatThrownBy(() -> goodsService.addShopGoodsCart("GOODS003", "110", 1, 9L))
 			.isInstanceOf(IllegalArgumentException.class)
 			.hasMessage("사이즈를 확인해주세요.");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 바로구매 장바구니 등록 시 O 구분으로 신규 행을 만들고 cartId를 반환한다")
+	// 바로구매 요청 시 CART_GB_CD=O 신규 등록과 생성된 장바구니 번호 반환 여부를 검증합니다.
+	void addShopGoodsOrderNowCart_insertsOrderCartAndReturnsCartId() {
+		// 바로구매 등록 대상 상품과 사이즈 목록을 구성합니다.
+		ShopGoodsBasicVO goods = new ShopGoodsBasicVO();
+		goods.setGoodsId("GOODS010");
+		ShopGoodsSizeItemVO sizeItem = new ShopGoodsSizeItemVO();
+		sizeItem.setGoodsId("GOODS010");
+		sizeItem.setSizeId("090");
+		sizeItem.setStockQty(3);
+
+		// 상품/사이즈 조회 결과와 생성 키 반영 목 동작을 설정합니다.
+		when(goodsMapper.getShopGoodsBasic("GOODS010")).thenReturn(goods);
+		when(goodsMapper.getShopGoodsSizeList("GOODS010")).thenReturn(List.of(sizeItem));
+		when(goodsMapper.insertShopCart(any(ShopCartSavePO.class))).thenAnswer(invocation -> {
+			ShopCartSavePO savePO = invocation.getArgument(0);
+			savePO.setCartId(21L);
+			return 1;
+		});
+
+		// 바로구매 등록 후 생성된 cartId와 저장 구분코드를 검증합니다.
+		Long result = goodsService.addShopGoodsOrderNowCart("GOODS010", "090", 1, 11L);
+		ArgumentCaptor<ShopCartSavePO> captor = ArgumentCaptor.forClass(ShopCartSavePO.class);
+		assertThat(result).isEqualTo(21L);
+		verify(goodsMapper).insertShopCart(captor.capture());
+		assertThat(captor.getValue().getCartGbCd()).isEqualTo("O");
+		assertThat(captor.getValue().getCustNo()).isEqualTo(11L);
+		assertThat(captor.getValue().getGoodsId()).isEqualTo("GOODS010");
+		assertThat(captor.getValue().getSizeId()).isEqualTo("090");
+		assertThat(captor.getValue().getQty()).isEqualTo(1);
 	}
 
 	@Test
@@ -818,6 +858,83 @@ class GoodsServiceTests {
 		assertThat(result.getCartList().get(0).getSizeOptions()).hasSize(2);
 		assertThat(result.getCartList().get(0).getSizeOptions().get(0).isSoldOut()).isFalse();
 		assertThat(result.getCartList().get(0).getSizeOptions().get(1).isSoldOut()).isTrue();
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 주문서 페이지 조회 시 요청한 cartId가 모두 현재 고객 장바구니일 때만 데이터를 반환한다")
+	// 주문서 페이지 조회 시 cartId 검증과 이미지 URL/건수 구성 결과를 검증합니다.
+	void getShopOrderPage_returnsOrderCartPageWhenCartIdsValid() {
+		// 주문서 대상 장바구니 목록과 배송비 기준 정보를 구성합니다.
+		ShopCartItemVO firstCartItem = new ShopCartItemVO();
+		firstCartItem.setCartId(12L);
+		firstCartItem.setCustNo(7L);
+		firstCartItem.setGoodsId("GOODS100");
+		firstCartItem.setGoodsNm("주문상품1");
+		firstCartItem.setSizeId("095");
+		firstCartItem.setQty(1);
+		firstCartItem.setSupplyAmt(15000);
+		firstCartItem.setSaleAmt(12000);
+		firstCartItem.setImgPath("order-1.png");
+
+		ShopCartItemVO secondCartItem = new ShopCartItemVO();
+		secondCartItem.setCartId(15L);
+		secondCartItem.setCustNo(7L);
+		secondCartItem.setGoodsId("GOODS200");
+		secondCartItem.setGoodsNm("주문상품2");
+		secondCartItem.setSizeId("100");
+		secondCartItem.setQty(2);
+		secondCartItem.setSupplyAmt(25000);
+		secondCartItem.setSaleAmt(20000);
+		secondCartItem.setImgPath("order-2.png");
+
+		ShopGoodsSizeItemVO goods100Size = new ShopGoodsSizeItemVO();
+		goods100Size.setGoodsId("GOODS100");
+		goods100Size.setSizeId("095");
+		goods100Size.setStockQty(5);
+		ShopGoodsSizeItemVO goods200Size = new ShopGoodsSizeItemVO();
+		goods200Size.setGoodsId("GOODS200");
+		goods200Size.setSizeId("100");
+		goods200Size.setStockQty(7);
+
+		ShopCartSiteInfoVO siteInfo = new ShopCartSiteInfoVO();
+		siteInfo.setSiteId("xodud1202");
+		siteInfo.setDeliveryFee(3000);
+		siteInfo.setDeliveryFeeLimit(30000);
+
+		// 주문서 대상 cartId 조회와 이미지 URL 보정 목 응답을 설정합니다.
+		when(goodsMapper.getShopOrderCartItemList(7L, List.of(12L, 15L))).thenReturn(List.of(firstCartItem, secondCartItem));
+		when(goodsMapper.getShopGoodsSizeList("GOODS100")).thenReturn(List.of(goods100Size));
+		when(goodsMapper.getShopGoodsSizeList("GOODS200")).thenReturn(List.of(goods200Size));
+		when(goodsMapper.getShopCartSiteInfo("xodud1202")).thenReturn(siteInfo);
+		when(ftpFileService.buildGoodsImageUrl("GOODS100", "order-1.png")).thenReturn("https://image.test/goods/GOODS100/order-1.png");
+		when(ftpFileService.buildGoodsImageUrl("GOODS200", "order-2.png")).thenReturn("https://image.test/goods/GOODS200/order-2.png");
+
+		// 유효한 cartId 요청 시 주문서 페이지 데이터가 구성되는지 검증합니다.
+		ShopCartPageVO result = goodsService.getShopOrderPage(List.of(12L, 15L), 7L);
+		assertThat(result.getCartCount()).isEqualTo(2);
+		assertThat(result.getCartList()).hasSize(2);
+		assertThat(result.getCartList().get(0).getCartId()).isEqualTo(12L);
+		assertThat(result.getCartList().get(0).getImgUrl()).isEqualTo("https://image.test/goods/GOODS100/order-1.png");
+		assertThat(result.getCartList().get(1).getCartId()).isEqualTo(15L);
+		assertThat(result.getSiteInfo().getDeliveryFee()).isEqualTo(3000);
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 주문서 페이지 조회 시 요청 cartId 중 하나라도 누락되면 예외를 반환한다")
+	// 주문서 페이지 조회 시 전달된 cartId가 모두 현재 고객 장바구니와 일치하지 않으면 실패하는지 검증합니다.
+	void getShopOrderPage_throwsWhenCartIdMismatchExists() {
+		// 요청한 cartId 중 1건만 조회되는 상태를 목으로 설정합니다.
+		ShopCartItemVO firstCartItem = new ShopCartItemVO();
+		firstCartItem.setCartId(12L);
+		firstCartItem.setCustNo(7L);
+		firstCartItem.setGoodsId("GOODS100");
+		firstCartItem.setSizeId("095");
+		when(goodsMapper.getShopOrderCartItemList(7L, List.of(12L, 19L))).thenReturn(List.of(firstCartItem));
+
+		// cartId 누락 시 주문 정보 검증 예외 메시지를 확인합니다.
+		assertThatThrownBy(() -> goodsService.getShopOrderPage(List.of(12L, 19L), 7L))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessage("주문 정보가 맞지 않습니다.");
 	}
 
 	@Test

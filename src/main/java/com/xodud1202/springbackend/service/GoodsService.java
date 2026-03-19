@@ -21,6 +21,7 @@ import com.xodud1202.springbackend.domain.shop.cart.ShopCartDeletePO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartItemVO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartOptionUpdatePO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartPageVO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartSavePO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartSiteInfoVO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartSizeOptionVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsBasicVO;
@@ -98,6 +99,8 @@ public class GoodsService {
 	private static final int GOODS_IMAGE_MIN_SIZE = 500;
 	private static final int GOODS_IMAGE_MAX_SIZE = 1500;
 	private static final String SHOP_SITE_ID = "xodud1202";
+	private static final String SHOP_CART_GB_CART = "C";
+	private static final String SHOP_CART_GB_ORDER = "O";
 	private static final String DEFAULT_CUST_GRADE_CD = "CUST_GRADE_01";
 	private static final String TARGET_GB_APPLY = "TARGET_GB_01";
 	private static final String TARGET_GB_EXCLUDE = "TARGET_GB_02";
@@ -1054,61 +1057,35 @@ public class GoodsService {
 	// 쇼핑몰 상품 장바구니를 등록(기존 건은 수량 가산)하고 최종 수량을 반환합니다.
 	@Transactional
 	public int addShopGoodsCart(String goodsId, String sizeId, Integer qty, Long custNo) {
-		// 필수 입력값(goodsId/sizeId/qty/custNo) 유효성을 확인합니다.
-		if (isBlank(goodsId)) {
-			throw new IllegalArgumentException("상품코드를 확인해주세요.");
-		}
-		if (isBlank(sizeId)) {
-			throw new IllegalArgumentException("사이즈를 선택해주세요.");
-		}
-		if (qty == null || qty < 1) {
-			throw new IllegalArgumentException("수량을 확인해주세요.");
-		}
-		if (custNo == null || custNo < 1L) {
-			throw new IllegalArgumentException("로그인이 필요합니다.");
-		}
+		// 장바구니 등록 대상 상품/사이즈/수량을 검증하고 정규화합니다.
+		ShopCartValidatedInput validatedInput = validateShopCartInput(goodsId, sizeId, qty, custNo);
 
-		// 현재 조회 가능한 상품인지 확인합니다.
-		String normalizedGoodsId = goodsId.trim();
-		String normalizedSizeId = sizeId.trim();
-		int resolvedQty = qty;
-		ShopGoodsBasicVO goods = goodsMapper.getShopGoodsBasic(normalizedGoodsId);
-		if (goods == null) {
-			throw new IllegalArgumentException("상품 정보를 찾을 수 없습니다.");
-		}
-
-		// 상품 사이즈 목록에서 요청 사이즈의 유효성과 품절 상태를 확인합니다.
-		List<ShopGoodsSizeItemVO> sizeList = goodsMapper.getShopGoodsSizeList(normalizedGoodsId);
-		ShopGoodsSizeItemVO targetSize = null;
-		for (ShopGoodsSizeItemVO sizeItem : sizeList) {
-			if (sizeItem == null) {
-				continue;
-			}
-			if (!normalizedSizeId.equals(sizeItem.getSizeId())) {
-				continue;
-			}
-			targetSize = sizeItem;
-			break;
-		}
-		if (targetSize == null) {
-			throw new IllegalArgumentException("사이즈를 확인해주세요.");
-		}
-		int stockQty = targetSize.getStockQty() == null ? 0 : targetSize.getStockQty();
-		if (stockQty < 1) {
-			throw new IllegalArgumentException("품절된 사이즈입니다.");
-		}
-
-		// 기존 장바구니 존재 여부에 따라 수량 가산 또는 신규 등록을 수행합니다.
-		int existedCount = goodsMapper.countShopCart(custNo, normalizedGoodsId, normalizedSizeId);
+		// 기존 장바구니(C) 존재 여부에 따라 수량 가산 또는 신규 등록을 수행합니다.
+		int existedCount = goodsMapper.countShopCart(custNo, validatedInput.getGoodsId(), validatedInput.getSizeId());
 		if (existedCount > 0) {
-			goodsMapper.addShopCartQty(custNo, normalizedGoodsId, normalizedSizeId, resolvedQty, custNo);
+			goodsMapper.addShopCartQty(custNo, validatedInput.getGoodsId(), validatedInput.getSizeId(), validatedInput.getQty(), custNo);
 		} else {
-			goodsMapper.insertShopCart(custNo, normalizedGoodsId, normalizedSizeId, resolvedQty, custNo, custNo);
+			goodsMapper.insertShopCart(createShopCartSavePO(SHOP_CART_GB_CART, custNo, validatedInput));
 		}
 
 		// 저장 이후 장바구니 최종 수량을 조회해 반환합니다.
-		Integer latestQty = goodsMapper.getShopCartQty(custNo, normalizedGoodsId, normalizedSizeId);
-		return latestQty == null ? resolvedQty : latestQty;
+		Integer latestQty = goodsMapper.getShopCartQty(custNo, validatedInput.getGoodsId(), validatedInput.getSizeId());
+		return latestQty == null ? validatedInput.getQty() : latestQty;
+	}
+
+	// 쇼핑몰 바로구매용 장바구니를 신규 등록하고 생성된 장바구니 번호를 반환합니다.
+	@Transactional
+	public Long addShopGoodsOrderNowCart(String goodsId, String sizeId, Integer qty, Long custNo) {
+		// 바로구매 등록 대상 상품/사이즈/수량을 검증하고 정규화합니다.
+		ShopCartValidatedInput validatedInput = validateShopCartInput(goodsId, sizeId, qty, custNo);
+		ShopCartSavePO savePO = createShopCartSavePO(SHOP_CART_GB_ORDER, custNo, validatedInput);
+
+		// 바로구매(O) 행은 항상 신규 등록합니다.
+		goodsMapper.insertShopCart(savePO);
+		if (savePO.getCartId() == null || savePO.getCartId() < 1L) {
+			throw new IllegalStateException("바로구매 장바구니 등록에 실패했습니다.");
+		}
+		return savePO.getCartId();
 	}
 
 	// 쇼핑몰 장바구니 페이지 데이터를 조회합니다.
@@ -1118,28 +1095,29 @@ public class GoodsService {
 			throw new IllegalArgumentException("로그인이 필요합니다.");
 		}
 
-		// 장바구니 목록과 배송비 기준 정보를 조회합니다.
-		List<ShopCartItemVO> cartItemList = goodsMapper.getShopCartItemList(custNo);
-		applyShopCartItemImageUrls(cartItemList);
-		Map<String, List<ShopCartSizeOptionVO>> sizeOptionMap = buildShopCartSizeOptionMap(cartItemList);
-		ShopCartSiteInfoVO siteInfo = resolveShopCartSiteInfo();
+		// 장바구니(C) 목록을 조회해 페이지 응답으로 구성합니다.
+		return buildShopCartPage(goodsMapper.getShopCartItemList(custNo));
+	}
 
-		// 장바구니 행별 사이즈 옵션 목록을 매핑합니다.
-		for (ShopCartItemVO cartItem : cartItemList == null ? List.<ShopCartItemVO>of() : cartItemList) {
-			if (cartItem == null || isBlank(cartItem.getGoodsId())) {
-				continue;
-			}
-			String normalizedGoodsId = cartItem.getGoodsId().trim();
-			cartItem.setSizeOptions(sizeOptionMap.getOrDefault(normalizedGoodsId, List.of()));
+	// 쇼핑몰 주문서 페이지 데이터를 cartId 기준으로 조회합니다.
+	public ShopCartPageVO getShopOrderPage(List<Long> cartIdList, Long custNo) {
+		// 로그인 고객번호 유효성을 확인합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
 		}
 
-		// 장바구니 페이지 응답 객체를 구성합니다.
-		List<ShopCartItemVO> safeCartItemList = cartItemList == null ? List.of() : cartItemList;
-		ShopCartPageVO result = new ShopCartPageVO();
-		result.setCartList(safeCartItemList);
-		result.setCartCount(safeCartItemList.size());
-		result.setSiteInfo(siteInfo);
-		return result;
+		// 주문서 대상 cartId 목록을 중복 없이 정규화합니다.
+		List<Long> normalizedCartIdList = normalizeShopOrderCartIdList(cartIdList);
+		if (normalizedCartIdList.isEmpty()) {
+			throw new IllegalArgumentException("주문 정보가 맞지 않습니다.");
+		}
+
+		// 현재 로그인 고객의 cartId 목록을 조회해 모두 유효한지 검증합니다.
+		List<ShopCartItemVO> orderCartItemList = goodsMapper.getShopOrderCartItemList(custNo, normalizedCartIdList);
+		if (orderCartItemList == null || orderCartItemList.size() != normalizedCartIdList.size()) {
+			throw new IllegalArgumentException("주문 정보가 맞지 않습니다.");
+		}
+		return buildShopCartPage(orderCartItemList);
 	}
 
 	// 쇼핑몰 장바구니 선택 상품 기준 예상 최대 쿠폰 할인 금액을 계산합니다.
@@ -1562,6 +1540,100 @@ public class GoodsService {
 			return 1;
 		}
 		return value;
+	}
+
+	// 장바구니/바로구매 저장 입력값을 검증하고 정규화합니다.
+	private ShopCartValidatedInput validateShopCartInput(String goodsId, String sizeId, Integer qty, Long custNo) {
+		// 필수 입력값(goodsId/sizeId/qty/custNo) 유효성을 확인합니다.
+		if (isBlank(goodsId)) {
+			throw new IllegalArgumentException("상품코드를 확인해주세요.");
+		}
+		if (isBlank(sizeId)) {
+			throw new IllegalArgumentException("사이즈를 선택해주세요.");
+		}
+		if (qty == null || qty < 1) {
+			throw new IllegalArgumentException("수량을 확인해주세요.");
+		}
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+
+		// 현재 조회 가능한 상품인지 확인합니다.
+		String normalizedGoodsId = goodsId.trim();
+		String normalizedSizeId = sizeId.trim();
+		ShopGoodsBasicVO goods = goodsMapper.getShopGoodsBasic(normalizedGoodsId);
+		if (goods == null) {
+			throw new IllegalArgumentException("상품 정보를 찾을 수 없습니다.");
+		}
+
+		// 상품 사이즈 목록에서 요청 사이즈의 유효성과 품절 상태를 확인합니다.
+		List<ShopGoodsSizeItemVO> sizeList = goodsMapper.getShopGoodsSizeList(normalizedGoodsId);
+		ShopGoodsSizeItemVO targetSize = findShopGoodsSizeBySizeId(sizeList, normalizedSizeId);
+		if (targetSize == null) {
+			throw new IllegalArgumentException("사이즈를 확인해주세요.");
+		}
+		int stockQty = targetSize.getStockQty() == null ? 0 : targetSize.getStockQty();
+		if (stockQty < 1) {
+			throw new IllegalArgumentException("품절된 사이즈입니다.");
+		}
+		return new ShopCartValidatedInput(normalizedGoodsId, normalizedSizeId, qty);
+	}
+
+	// 장바구니 저장 PO를 생성합니다.
+	private ShopCartSavePO createShopCartSavePO(String cartGbCd, Long custNo, ShopCartValidatedInput validatedInput) {
+		// 장바구니 구분/상품/사이즈/수량 정보를 저장 PO에 반영합니다.
+		ShopCartSavePO savePO = new ShopCartSavePO();
+		savePO.setCartGbCd(cartGbCd);
+		savePO.setCustNo(custNo);
+		savePO.setGoodsId(validatedInput.getGoodsId());
+		savePO.setSizeId(validatedInput.getSizeId());
+		savePO.setQty(validatedInput.getQty());
+		savePO.setRegNo(custNo);
+		savePO.setUdtNo(custNo);
+		return savePO;
+	}
+
+	// 주문서 대상 장바구니 번호 목록을 중복 없이 정규화합니다.
+	private List<Long> normalizeShopOrderCartIdList(List<Long> cartIdList) {
+		// 장바구니 번호 목록이 없으면 빈 목록을 반환합니다.
+		if (cartIdList == null || cartIdList.isEmpty()) {
+			return List.of();
+		}
+
+		// 1 이상 번호만 순서 보존 중복 제거합니다.
+		Set<Long> distinctCartIdSet = new LinkedHashSet<>();
+		for (Long cartId : cartIdList) {
+			if (cartId == null || cartId < 1L) {
+				continue;
+			}
+			distinctCartIdSet.add(cartId);
+		}
+		return new ArrayList<>(distinctCartIdSet);
+	}
+
+	// 장바구니 목록을 페이지 응답 형식으로 조합합니다.
+	private ShopCartPageVO buildShopCartPage(List<ShopCartItemVO> cartItemList) {
+		// 장바구니 이미지 URL/사이즈 옵션/배송비 기준 정보를 조합합니다.
+		applyShopCartItemImageUrls(cartItemList);
+		Map<String, List<ShopCartSizeOptionVO>> sizeOptionMap = buildShopCartSizeOptionMap(cartItemList);
+		ShopCartSiteInfoVO siteInfo = resolveShopCartSiteInfo();
+
+		// 장바구니 행별 사이즈 옵션 목록을 매핑합니다.
+		for (ShopCartItemVO cartItem : cartItemList == null ? List.<ShopCartItemVO>of() : cartItemList) {
+			if (cartItem == null || isBlank(cartItem.getGoodsId())) {
+				continue;
+			}
+			String normalizedGoodsId = cartItem.getGoodsId().trim();
+			cartItem.setSizeOptions(sizeOptionMap.getOrDefault(normalizedGoodsId, List.of()));
+		}
+
+		// 장바구니 페이지 응답 객체를 구성합니다.
+		List<ShopCartItemVO> safeCartItemList = cartItemList == null ? List.of() : cartItemList;
+		ShopCartPageVO result = new ShopCartPageVO();
+		result.setCartList(safeCartItemList);
+		result.setCartCount(safeCartItemList.size());
+		result.setSiteInfo(siteInfo);
+		return result;
 	}
 
 	// 쇼핑몰 장바구니 상품별 사이즈 옵션 목록을 구성합니다.
@@ -2608,6 +2680,38 @@ public class GoodsService {
 		}
 		// 파일명만 있는 경우 FTP 규칙으로 URL을 생성합니다.
 		return ftpFileService.buildGoodsImageUrl(goodsId, imgPath);
+	}
+
+	// 장바구니 저장 검증 완료 입력값을 전달합니다.
+	private static class ShopCartValidatedInput {
+		// 상품코드입니다.
+		private final String goodsId;
+		// 사이즈코드입니다.
+		private final String sizeId;
+		// 수량입니다.
+		private final int qty;
+
+		// 검증 완료된 장바구니 입력값을 생성합니다.
+		private ShopCartValidatedInput(String goodsId, String sizeId, int qty) {
+			this.goodsId = goodsId;
+			this.sizeId = sizeId;
+			this.qty = qty;
+		}
+
+		// 상품코드를 반환합니다.
+		private String getGoodsId() {
+			return goodsId;
+		}
+
+		// 사이즈코드를 반환합니다.
+		private String getSizeId() {
+			return sizeId;
+		}
+
+		// 수량을 반환합니다.
+		private int getQty() {
+			return qty;
+		}
 	}
 
 	// 장바구니 쿠폰 예상 할인 계산용 상품 행 컨텍스트를 전달합니다.

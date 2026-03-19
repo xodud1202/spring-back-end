@@ -23,6 +23,7 @@ import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
 import com.xodud1202.springbackend.domain.shop.category.ShopCategoryGoodsItemVO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartCustomerCouponVO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartItemVO;
+import com.xodud1202.springbackend.domain.shop.cart.ShopCartSavePO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartSiteInfoVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsBasicVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsCouponTargetVO;
@@ -183,6 +184,9 @@ public interface GoodsMapper {
 	// 쇼핑몰 장바구니 목록을 조회합니다.
 	List<ShopCartItemVO> getShopCartItemList(@Param("custNo") Long custNo);
 
+	// 쇼핑몰 주문서 대상 장바구니 목록을 조회합니다.
+	List<ShopCartItemVO> getShopOrderCartItemList(@Param("custNo") Long custNo, @Param("cartIdList") List<Long> cartIdList);
+
 	// 쇼핑몰 상품 위시리스트를 등록합니다.
 	int insertShopWishList(@Param("custNo") Long custNo, @Param("goodsId") String goodsId, @Param("regNo") Long regNo);
 
@@ -193,14 +197,7 @@ public interface GoodsMapper {
 	int countShopCart(@Param("custNo") Long custNo, @Param("goodsId") String goodsId, @Param("sizeId") String sizeId);
 
 	// 쇼핑몰 장바구니를 등록합니다.
-	int insertShopCart(
-		@Param("custNo") Long custNo,
-		@Param("goodsId") String goodsId,
-		@Param("sizeId") String sizeId,
-		@Param("qty") Integer qty,
-		@Param("regNo") Long regNo,
-		@Param("udtNo") Long udtNo
-	);
+	int insertShopCart(ShopCartSavePO param);
 
 	// 쇼핑몰 장바구니 수량을 추가합니다.
 	int addShopCartQty(

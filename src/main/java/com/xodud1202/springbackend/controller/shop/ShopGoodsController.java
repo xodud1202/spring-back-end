@@ -323,6 +323,54 @@ public class ShopGoodsController {
 		}
 	}
 
+	// 쇼핑몰 상품 바로구매용 장바구니를 등록합니다.
+	@PostMapping("/api/shop/goods/order-now")
+	public ResponseEntity<Object> addShopGoodsOrderNow(
+		@RequestBody(required = false) Map<String, Object> requestBody,
+		HttpServletRequest request
+	) {
+		try {
+			// 필수 파라미터(goodsId/sizeId/qty) 유효성을 확인합니다.
+			Object goodsIdValue = requestBody == null ? null : requestBody.get("goodsId");
+			String goodsId = goodsIdValue instanceof String ? ((String) goodsIdValue).trim() : "";
+			if (goodsId.isEmpty()) {
+				return ResponseEntity.badRequest().body(Map.of("message", "상품코드를 확인해주세요."));
+			}
+
+			Object sizeIdValue = requestBody == null ? null : requestBody.get("sizeId");
+			String sizeId = sizeIdValue instanceof String ? ((String) sizeIdValue).trim() : "";
+			if (sizeId.isEmpty()) {
+				return ResponseEntity.badRequest().body(Map.of("message", "사이즈를 선택해주세요."));
+			}
+
+			Integer qty = parseIntegerValue(requestBody == null ? null : requestBody.get("qty"));
+			if (qty == null || qty < 1) {
+				return ResponseEntity.badRequest().body(Map.of("message", "수량을 확인해주세요."));
+			}
+
+			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			// 바로구매 장바구니 등록 처리 후 생성된 장바구니 번호를 반환합니다.
+			Long cartId = goodsService.addShopGoodsOrderNowCart(goodsId, sizeId, qty, custNo);
+			return ResponseEntity.ok(Map.of("cartId", cartId, "goodsId", goodsId, "message", "바로구매 정보를 등록했습니다."));
+		} catch (IllegalArgumentException exception) {
+			// 조회 가능한 상품이 없으면 404 응답으로 반환합니다.
+			if ("상품 정보를 찾을 수 없습니다.".equals(exception.getMessage())) {
+				return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", exception.getMessage()));
+			}
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
+			log.error("쇼핑몰 바로구매 장바구니 등록 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "바로구매 처리에 실패했습니다."));
+		}
+	}
+
 	// 쇼핑몰 장바구니 페이지 데이터를 조회합니다.
 	@GetMapping("/api/shop/cart/page")
 	public ResponseEntity<Object> getShopCartPage(HttpServletRequest request) {

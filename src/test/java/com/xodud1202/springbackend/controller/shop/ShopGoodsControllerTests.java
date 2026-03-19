@@ -439,6 +439,44 @@ class ShopGoodsControllerTests {
 	}
 
 	@Test
+	@DisplayName("바로구매 장바구니 등록 API는 로그인 사용자가 요청하면 cartId와 goodsId를 반환한다")
+	// 바로구매 장바구니 등록 성공 시 200 응답과 생성된 장바구니 번호 반환 여부를 검증합니다.
+	void addShopGoodsOrderNow_returnsOk() throws Exception {
+		// 바로구매 장바구니 번호를 21번으로 반환하도록 설정합니다.
+		when(goodsService.addShopGoodsOrderNowCart("CAMEUEP02MG", "095", 1, 1L)).thenReturn(21L);
+
+		// 로그인 쿠키와 함께 요청하면 200 응답과 cartId/goodsId를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/goods/order-now")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"goodsId":"CAMEUEP02MG","sizeId":"095","qty":1}
+						""")
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.cartId").value(21))
+			.andExpect(jsonPath("$.goodsId").value("CAMEUEP02MG"))
+			.andExpect(jsonPath("$.message").value("바로구매 정보를 등록했습니다."));
+	}
+
+	@Test
+	@DisplayName("바로구매 장바구니 등록 API는 비로그인 요청이면 401을 반환한다")
+	// 비로그인 상태에서 바로구매 장바구니 등록 요청 시 401 응답을 검증합니다.
+	void addShopGoodsOrderNow_returnsUnauthorizedWhenNotLoggedIn() throws Exception {
+		// 로그인 쿠키 없이 요청하면 401 응답과 메시지를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/goods/order-now")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"goodsId":"CAMEUEP02MG","sizeId":"095","qty":1}
+						""")
+			)
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
+	}
+
+	@Test
 	@DisplayName("장바구니 등록 API는 비로그인 요청이면 401을 반환한다")
 	// 비로그인 상태에서 장바구니 등록 요청 시 401 응답을 검증합니다.
 	void addShopGoodsCart_returnsUnauthorizedWhenNotLoggedIn() throws Exception {
