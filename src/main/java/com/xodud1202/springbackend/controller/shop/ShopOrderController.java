@@ -250,6 +250,7 @@ public class ShopOrderController {
 	@PostMapping("/api/shop/order/payment/webhook")
 	public ResponseEntity<Object> handleShopOrderPaymentWebhook(@RequestBody(required = false) String rawBody) {
 		try {
+			log.info("toss dept in /api/shop/order/payment/webhook ");
 			// 웹훅 본문을 서비스에 전달해 상태를 반영합니다.
 			goodsService.handleShopOrderPaymentWebhook(rawBody);
 			return ResponseEntity.ok(Map.of("success", true));
