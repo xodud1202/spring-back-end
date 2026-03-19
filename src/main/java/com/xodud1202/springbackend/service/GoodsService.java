@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xodud1202.springbackend.domain.admin.brand.BrandVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsPO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsDetailVO;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeVO;
 import com.xodud1202.springbackend.domain.admin.category.CategorySavePO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsDeletePO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsOrderItem;
@@ -95,7 +96,6 @@ import com.xodud1202.springbackend.domain.admin.goods.GoodsSavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeOrderItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeOrderSavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeSavePO;
-import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsVO;
 import com.xodud1202.springbackend.mapper.GoodsMapper;
 import lombok.RequiredArgsConstructor;
@@ -177,6 +177,7 @@ public class GoodsService {
 	private static final String SHOP_ORDER_PAYMENT_INVALID_MESSAGE = "결제 정보를 확인해주세요.";
 	private static final String SHOP_ORDER_PAYMENT_PREPARE_MESSAGE = "결제 준비에 실패했습니다.";
 	private static final String SHOP_ORDER_PAYMENT_CONFIRM_MESSAGE = "결제 승인 처리에 실패했습니다.";
+	private static final String SHOP_ORDER_PAYMENT_STOCK_SHORTAGE_MESSAGE = "재고가 부족한 상품이 있습니다.";
 	private static final String SHOP_ORDER_PAYMENT_METHOD_CARD = "PAY_METHOD_01";
 	private static final String SHOP_ORDER_PAYMENT_METHOD_VIRTUAL_ACCOUNT = "PAY_METHOD_02";
 	private static final String SHOP_ORDER_PAYMENT_METHOD_TRANSFER = "PAY_METHOD_03";
@@ -1243,6 +1244,7 @@ public class GoodsService {
 
 		// 현재 유효한 주문 대상 장바구니와 고객/배송지 정보를 조회합니다.
 		List<ShopCartItemVO> orderCartItemList = resolveValidatedShopOrderCartItemList(param.getCartIdList(), custNo);
+		validateShopOrderPaymentStock(orderCartItemList);
 		ShopOrderAddressVO selectedAddress = resolveRequiredShopOrderAddress(custNo, param.getAddressNm());
 		ShopOrderCustomerInfoVO customerInfo = resolveShopOrderCustomerInfo(custNo, deviceGbCd);
 		ShopOrderDiscountContext discountContext = buildShopOrderDiscountContext(orderCartItemList, custNo);
@@ -1368,6 +1370,10 @@ public class GoodsService {
 			return buildShopOrderPaymentConfirmResult(payment);
 		}
 
+		// 승인 요청 전 재고 차감과 쿠폰/포인트/장바구니 후처리를 먼저 수행합니다.
+		reserveShopOrderStock(payment.getOrdNo(), custNo);
+		applyShopOrderSuccessSideEffects(payment, custNo);
+
 		// Toss 승인 API를 호출하고 상태/수단별 후속 처리를 수행합니다.
 		String rawResponse;
 		try {
@@ -1418,7 +1424,6 @@ public class GoodsService {
 			);
 			goodsMapper.updateShopOrderBaseStatus(param.getOrdNo().trim(), SHOP_ORDER_STAT_WAITING_DEPOSIT, custNo);
 			goodsMapper.updateShopOrderDetailStatus(param.getOrdNo().trim(), SHOP_ORDER_DTL_STAT_WAITING_DEPOSIT, custNo);
-			applyShopOrderSuccessSideEffects(payment, custNo);
 			ShopOrderPaymentVO updatedPayment = goodsMapper.getShopPaymentByPayNo(payment.getPayNo());
 			ShopOrderPaymentConfirmVO result = buildShopOrderPaymentConfirmResult(updatedPayment);
 			result.setOrderName(orderName);
@@ -1448,7 +1453,6 @@ public class GoodsService {
 		);
 		goodsMapper.updateShopOrderBaseStatus(param.getOrdNo().trim(), SHOP_ORDER_STAT_DONE, custNo);
 		goodsMapper.updateShopOrderDetailStatus(param.getOrdNo().trim(), SHOP_ORDER_DTL_STAT_DONE, custNo);
-		applyShopOrderSuccessSideEffects(payment, custNo);
 		ShopOrderPaymentVO updatedPayment = goodsMapper.getShopPaymentByPayNo(payment.getPayNo());
 		ShopOrderPaymentConfirmVO result = buildShopOrderPaymentConfirmResult(updatedPayment);
 		result.setOrderName(orderName);
@@ -2276,6 +2280,27 @@ public class GoodsService {
 		return orderCartItemList;
 	}
 
+	// 결제 준비 시 현재 주문 대상 상품의 재고가 충분한지 확인합니다.
+	private void validateShopOrderPaymentStock(List<ShopCartItemVO> orderCartItemList) {
+		// 같은 상품/사이즈는 수량을 합산해 현재 재고와 비교합니다.
+		for (ShopOrderRestoreCartItemVO stockItem : aggregateShopOrderStockItemListFromCart(orderCartItemList)) {
+			if (stockItem == null || isBlank(stockItem.getGoodsId()) || isBlank(stockItem.getSizeId())) {
+				continue;
+			}
+			int requiredQty = normalizeNonNegativeNumber(stockItem.getOrdQty());
+			if (requiredQty < 1) {
+				continue;
+			}
+			GoodsSizeVO goodsSize = goodsMapper.getAdminGoodsSizeDetail(stockItem.getGoodsId(), stockItem.getSizeId());
+			int stockQty = goodsSize == null || YES.equalsIgnoreCase(goodsSize.getDelYn())
+				? 0
+				: normalizeNonNegativeNumber(goodsSize.getStockQty());
+			if (stockQty < requiredQty) {
+				throw new IllegalArgumentException(SHOP_ORDER_PAYMENT_STOCK_SHORTAGE_MESSAGE);
+			}
+		}
+	}
+
 	// 주문 대상 장바구니 목록 기준 할인 계산 컨텍스트를 생성합니다.
 	private ShopOrderDiscountContext buildShopOrderDiscountContext(List<ShopCartItemVO> cartItemList, Long custNo) {
 		// 쿠폰 계산용 행 목록과 현재 보유 쿠폰/포인트/배송비 기준 정보를 함께 조회합니다.
@@ -3098,6 +3123,7 @@ public class GoodsService {
 		// 주문번호 기준 사용 쿠폰과 포인트를 원복하고 장바구니를 다시 생성합니다.
 		goodsMapper.restoreShopCustomerCouponUse(custNo, payment.getOrdNo(), custNo);
 		restoreShopOrderPoint(custNo, payment.getOrdNo());
+		restoreShopOrderStock(payment.getOrdNo(), custNo);
 
 		for (ShopOrderRestoreCartItemVO restoreCartItem : goodsMapper.getShopOrderRestoreCartItemList(payment.getOrdNo())) {
 			if (restoreCartItem == null) {
@@ -3114,6 +3140,84 @@ public class GoodsService {
 			savePO.setUdtNo(custNo);
 			goodsMapper.insertShopCart(savePO);
 		}
+	}
+
+	// 주문번호 기준 주문수량만큼 재고를 선차감합니다.
+	private void reserveShopOrderStock(String ordNo, Long auditNo) {
+		// 같은 상품/사이즈는 수량을 합산해 원자적으로 재고를 차감합니다.
+		for (ShopOrderRestoreCartItemVO stockItem : aggregateShopOrderStockItemList(goodsMapper.getShopOrderRestoreCartItemList(ordNo))) {
+			if (stockItem == null || isBlank(stockItem.getGoodsId()) || isBlank(stockItem.getSizeId())) {
+				continue;
+			}
+			int requiredQty = normalizeNonNegativeNumber(stockItem.getOrdQty());
+			if (requiredQty < 1) {
+				continue;
+			}
+			int updatedCount = goodsMapper.deductShopGoodsSizeStock(stockItem.getGoodsId(), stockItem.getSizeId(), requiredQty, auditNo);
+			if (updatedCount < 1) {
+				throw new IllegalArgumentException(SHOP_ORDER_PAYMENT_STOCK_SHORTAGE_MESSAGE);
+			}
+		}
+	}
+
+	// 주문번호 기준 차감했던 재고를 다시 복구합니다.
+	private void restoreShopOrderStock(String ordNo, Long auditNo) {
+		// 같은 상품/사이즈는 수량을 합산해 재고를 복구합니다.
+		for (ShopOrderRestoreCartItemVO stockItem : aggregateShopOrderStockItemList(goodsMapper.getShopOrderRestoreCartItemList(ordNo))) {
+			if (stockItem == null || isBlank(stockItem.getGoodsId()) || isBlank(stockItem.getSizeId())) {
+				continue;
+			}
+			int restoreQty = normalizeNonNegativeNumber(stockItem.getOrdQty());
+			if (restoreQty < 1) {
+				continue;
+			}
+			goodsMapper.restoreShopGoodsSizeStock(stockItem.getGoodsId(), stockItem.getSizeId(), restoreQty, auditNo);
+		}
+	}
+
+	// 장바구니 목록을 상품/사이즈별 재고 처리 수량으로 합산합니다.
+	private List<ShopOrderRestoreCartItemVO> aggregateShopOrderStockItemListFromCart(List<ShopCartItemVO> cartItemList) {
+		// 장바구니 행을 재고 처리 공통 구조로 바꾼 뒤 상품/사이즈별로 묶습니다.
+		List<ShopOrderRestoreCartItemVO> sourceList = new ArrayList<>();
+		if (cartItemList == null) {
+			return sourceList;
+		}
+		for (ShopCartItemVO cartItem : cartItemList) {
+			if (cartItem == null) {
+				continue;
+			}
+			ShopOrderRestoreCartItemVO stockItem = new ShopOrderRestoreCartItemVO();
+			stockItem.setGoodsId(cartItem.getGoodsId());
+			stockItem.setSizeId(cartItem.getSizeId());
+			stockItem.setOrdQty(cartItem.getQty());
+			sourceList.add(stockItem);
+		}
+		return aggregateShopOrderStockItemList(sourceList);
+	}
+
+	// 주문 상세 목록을 상품/사이즈별 재고 처리 수량으로 합산합니다.
+	private List<ShopOrderRestoreCartItemVO> aggregateShopOrderStockItemList(List<ShopOrderRestoreCartItemVO> sourceList) {
+		// 동일 상품/사이즈는 하나의 재고 처리 건으로 묶어 반환합니다.
+		Map<String, ShopOrderRestoreCartItemVO> stockItemMap = new LinkedHashMap<>();
+		if (sourceList == null) {
+			return new ArrayList<>();
+		}
+		for (ShopOrderRestoreCartItemVO sourceItem : sourceList) {
+			if (sourceItem == null || isBlank(sourceItem.getGoodsId()) || isBlank(sourceItem.getSizeId())) {
+				continue;
+			}
+			String stockKey = sourceItem.getGoodsId().trim() + "|" + sourceItem.getSizeId().trim();
+			ShopOrderRestoreCartItemVO aggregateItem = stockItemMap.get(stockKey);
+			if (aggregateItem == null) {
+				aggregateItem = new ShopOrderRestoreCartItemVO();
+				aggregateItem.setGoodsId(sourceItem.getGoodsId().trim());
+				aggregateItem.setSizeId(sourceItem.getSizeId().trim());
+				aggregateItem.setOrdQty(0);
+				stockItemMap.put(stockKey, aggregateItem);
+			}
+			aggregateItem.setOrdQty(normalizeNonNegativeNumber(aggregateItem.getOrdQty()) + normalizeNonNegativeNumber(sourceItem.getOrdQty()));
+		}
+		return new ArrayList<>(stockItemMap.values());
 	}
 
 	// 고객 포인트를 주문 결제 금액만큼 차감합니다.

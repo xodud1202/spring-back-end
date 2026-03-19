@@ -1360,6 +1360,29 @@
 		 ORDER BY ORD_DTL_NO ASC
 	</select>
 
+	<update id="deductShopGoodsSizeStock">
+		/* GoodsMapper.deductShopGoodsSizeStock: 상품 사이즈 재고 차감 */
+		UPDATE GOODS_SIZE
+		   SET STOCK_QTY = STOCK_QTY - #{qty}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE GOODS_ID = #{goodsId}
+		   AND SIZE_ID = #{sizeId}
+		   AND DEL_YN = 'N'
+		   AND STOCK_QTY >= #{qty}
+	</update>
+
+	<update id="restoreShopGoodsSizeStock">
+		/* GoodsMapper.restoreShopGoodsSizeStock: 상품 사이즈 재고 복구 */
+		UPDATE GOODS_SIZE
+		   SET STOCK_QTY = STOCK_QTY + #{qty}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE GOODS_ID = #{goodsId}
+		   AND SIZE_ID = #{sizeId}
+		   AND DEL_YN = 'N'
+	</update>
+
 	<update id="updateShopOrderAddressDefaultYn">
 		/* GoodsMapper.updateShopOrderAddressDefaultYn: 쇼핑몰 주문서 기본 배송지 여부 일괄 변경 */
 		UPDATE CUSTOMER_ADDRESS

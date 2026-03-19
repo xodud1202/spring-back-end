@@ -5,6 +5,7 @@ import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsSavePO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySavePO;
+import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSavePO;
 import com.xodud1202.springbackend.domain.shop.category.ShopCategoryGoodsItemVO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartCouponEstimateItemPO;
@@ -42,17 +43,22 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSearchRespo
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressUpdatePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderCustomerInfoVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountSelectionVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountQuotePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountQuoteVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderGoodsCouponSelectionVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPageVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentConfirmPO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentPreparePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderRestoreCartItemVO;
 import com.xodud1202.springbackend.mapper.GoodsMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -63,6 +69,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -1194,6 +1202,161 @@ class GoodsServiceTests {
 		);
 		verify(goodsMapper).updateShopOrderBaseStatus("O220260319170925876", "ORD_STAT_02", 7L);
 		verify(goodsMapper).updateShopOrderDetailStatus("O220260319170925876", "ORD_DTL_STAT_02", 7L);
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 주문 결제 준비 시 재고가 부족하면 결제창 요청을 생성하지 않는다")
+	// 결제 준비 단계에서 현재 주문 수량보다 재고가 부족하면 주문/결제 준비 데이터를 만들지 않는지 검증합니다.
+	void prepareShopOrderPayment_throwsWhenStockIsInsufficient() {
+		// 최소 결제 준비 요청과 주문 대상 장바구니를 구성합니다.
+		ShopOrderPaymentPreparePO param = new ShopOrderPaymentPreparePO();
+		param.setFrom("cart");
+		param.setCartIdList(List.of(11L));
+		param.setAddressNm("집");
+		param.setDiscountSelection(new ShopOrderDiscountSelectionVO());
+		param.setPointUseAmt(0);
+		param.setPaymentMethodCd("PAY_METHOD_01");
+
+		ShopCartItemVO cartItem = new ShopCartItemVO();
+		cartItem.setCartId(11L);
+		cartItem.setGoodsId("GOODS001");
+		cartItem.setSizeId("095");
+		cartItem.setQty(2);
+
+		GoodsSizeVO goodsSize = new GoodsSizeVO();
+		goodsSize.setGoodsId("GOODS001");
+		goodsSize.setSizeId("095");
+		goodsSize.setStockQty(1);
+		goodsSize.setDelYn("N");
+
+		// 고객 장바구니 조회와 현재 재고 조회를 목으로 설정합니다.
+		when(goodsMapper.getShopOrderCartItemList(7L, List.of(11L))).thenReturn(List.of(cartItem));
+		when(goodsMapper.getAdminGoodsSizeDetail("GOODS001", "095")).thenReturn(goodsSize);
+
+		// 재고 부족이면 주문/결제 준비 생성 없이 예외가 발생하는지 검증합니다.
+		assertThatThrownBy(() -> goodsService.prepareShopOrderPayment(param, 7L, "PC", "http://127.0.0.1:3014"))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessage("재고가 부족한 상품이 있습니다.");
+		verify(goodsMapper, never()).insertShopOrderBase(any());
+		verify(goodsMapper, never()).insertShopPayment(any());
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 주문 결제 승인은 재고 차감과 후처리를 끝낸 뒤 Toss 승인 API를 호출한다")
+	// 카드 결제 승인 요청 시 재고 차감과 장바구니 삭제가 Toss 승인 호출보다 먼저 수행되는지 검증합니다.
+	void confirmShopOrderPayment_reservesStockAndAppliesSideEffectsBeforeTossConfirm() {
+		// 승인 요청과 결제 준비 상태의 PAYMENT 데이터를 구성합니다.
+		ShopOrderPaymentConfirmPO param = new ShopOrderPaymentConfirmPO();
+		param.setPayNo(501L);
+		param.setOrdNo("O720260319180000111");
+		param.setPaymentKey("pay_test_001");
+		param.setAmount(10000L);
+
+		ShopOrderPaymentVO payment = new ShopOrderPaymentVO();
+		payment.setPayNo(501L);
+		payment.setOrdNo("O720260319180000111");
+		payment.setCustNo(7L);
+		payment.setPayAmt(10000L);
+		payment.setPayStatCd("PAY_STAT_01");
+		payment.setPayMethodCd("PAY_METHOD_01");
+		payment.setReqRawJson("""
+			{
+			  "cartIdList": [11],
+			  "pointUseAmt": 0,
+			  "orderName": "테스트 주문",
+			  "discountSelection": {
+			    "goodsCouponSelectionList": [],
+			    "cartCouponCustCpnNo": null,
+			    "deliveryCouponCustCpnNo": null
+			  }
+			}
+			""");
+
+		ShopOrderPaymentVO updatedPayment = new ShopOrderPaymentVO();
+		updatedPayment.setPayNo(501L);
+		updatedPayment.setOrdNo("O720260319180000111");
+		updatedPayment.setCustNo(7L);
+		updatedPayment.setPayAmt(10000L);
+		updatedPayment.setPayStatCd("PAY_STAT_02");
+		updatedPayment.setPayMethodCd("PAY_METHOD_01");
+		updatedPayment.setReqRawJson(payment.getReqRawJson());
+
+		ShopOrderRestoreCartItemVO stockItem = new ShopOrderRestoreCartItemVO();
+		stockItem.setGoodsId("GOODS001");
+		stockItem.setSizeId("095");
+		stockItem.setOrdQty(2);
+
+		// 재고 차감, Toss 승인 응답, 최종 PAYMENT 재조회 결과를 목으로 설정합니다.
+		when(goodsMapper.getShopPaymentByPayNo(501L)).thenReturn(payment, updatedPayment);
+		when(goodsMapper.getShopOrderRestoreCartItemList("O720260319180000111")).thenReturn(List.of(stockItem));
+		when(goodsMapper.deductShopGoodsSizeStock("GOODS001", "095", 2, 7L)).thenReturn(1);
+		when(tossPaymentsClient.confirmPayment("pay_test_001", "O720260319180000111", 10000L)).thenReturn("""
+			{
+			  "status": "DONE",
+			  "paymentKey": "pay_test_001",
+			  "lastTransactionKey": "tx_test_001",
+			  "approvedAt": "2026-03-19T18:00:11+09:00",
+			  "orderName": "테스트 주문",
+			  "card": {
+			    "approveNo": "APPROVE001",
+			    "issuerCode": "88",
+			    "number": "1234********5678"
+			  }
+			}
+			""");
+
+		// 승인 요청을 수행하고 재고 차감/장바구니 삭제가 Toss 승인 호출보다 먼저 수행되는지 검증합니다.
+		goodsService.confirmShopOrderPayment(param, 7L);
+		InOrder inOrder = inOrder(goodsMapper, tossPaymentsClient);
+		inOrder.verify(goodsMapper).getShopPaymentByPayNo(501L);
+		inOrder.verify(goodsMapper).getShopOrderRestoreCartItemList("O720260319180000111");
+		inOrder.verify(goodsMapper).deductShopGoodsSizeStock("GOODS001", "095", 2, 7L);
+		inOrder.verify(goodsMapper).deleteShopCartByCartIdList(7L, List.of(11L));
+		inOrder.verify(tossPaymentsClient).confirmPayment("pay_test_001", "O720260319180000111", 10000L);
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 주문 결제 웹훅은 무통장입금 만료 시 재고를 복구한다")
+	// 무통장입금 만료 웹훅이 들어오면 차감했던 재고와 후처리 자원을 함께 복구하는지 검증합니다.
+	void handleShopOrderPaymentWebhook_restoresStockWhenDepositExpired() {
+		// 무통장입금 대기 상태의 결제 정보와 주문 상세 재고 복구 대상을 구성합니다.
+		ShopOrderPaymentVO payment = new ShopOrderPaymentVO();
+		payment.setPayNo(777L);
+		payment.setOrdNo("O720260319181500222");
+		payment.setCustNo(7L);
+		payment.setPayMethodCd("PAY_METHOD_02");
+		payment.setPayStatCd("PAY_STAT_05");
+		payment.setRspRawJson("""
+			{"secret":"ps_LkKEypNArWdRengm2gYL8lmeaxYG"}
+			""");
+
+		ShopOrderRestoreCartItemVO stockItem = new ShopOrderRestoreCartItemVO();
+		stockItem.setCustNo(7L);
+		stockItem.setGoodsId("GOODS001");
+		stockItem.setSizeId("095");
+		stockItem.setOrdQty(2);
+		stockItem.setExhibitionNo(10);
+
+		String rawBody = """
+			{
+			  "createdAt": "2026-03-19T18:16:08.000000",
+			  "secret": "ps_LkKEypNArWdRengm2gYL8lmeaxYG",
+			  "orderId": "O720260319181500222",
+			  "status": "EXPIRED",
+			  "transactionKey": "txrd_a01km2kb38p1zca4bh97qgvaseb"
+			}
+			""";
+
+		// 주문번호 기준 결제 조회와 포인트/장바구니 복구 조회를 목으로 설정합니다.
+		when(goodsMapper.getShopPaymentByOrdNo("O720260319181500222")).thenReturn(payment);
+		when(goodsMapper.getShopOrderPointDetailList("O720260319181500222")).thenReturn(List.of());
+		when(goodsMapper.getShopOrderRestoreCartItemList("O720260319181500222")).thenReturn(List.of(stockItem));
+
+		// 만료 웹훅 반영 시 재고 복구와 주문 취소 상태 갱신이 함께 수행되는지 검증합니다.
+		goodsService.handleShopOrderPaymentWebhook(rawBody);
+		verify(goodsMapper).restoreShopGoodsSizeStock("GOODS001", "095", 2, 7L);
+		verify(goodsMapper).updateShopOrderBaseStatus("O720260319181500222", "ORD_STAT_99", 7L);
+		verify(goodsMapper).updateShopOrderDetailStatus("O720260319181500222", "ORD_DTL_STAT_99", 7L);
 	}
 
 	@Test

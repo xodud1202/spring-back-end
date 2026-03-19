@@ -325,6 +325,22 @@ public interface GoodsMapper {
 	// 주문번호 기준 장바구니 복구 대상 목록을 조회합니다.
 	List<ShopOrderRestoreCartItemVO> getShopOrderRestoreCartItemList(@Param("ordNo") String ordNo);
 
+	// 상품 사이즈 재고를 주문수량만큼 차감합니다.
+	int deductShopGoodsSizeStock(
+		@Param("goodsId") String goodsId,
+		@Param("sizeId") String sizeId,
+		@Param("qty") Integer qty,
+		@Param("udtNo") Long udtNo
+	);
+
+	// 상품 사이즈 재고를 주문수량만큼 복구합니다.
+	int restoreShopGoodsSizeStock(
+		@Param("goodsId") String goodsId,
+		@Param("sizeId") String sizeId,
+		@Param("qty") Integer qty,
+		@Param("udtNo") Long udtNo
+	);
+
 	// 쇼핑몰 주문서 기본 배송지 여부를 일괄 변경합니다.
 	int updateShopOrderAddressDefaultYn(@Param("custNo") Long custNo, @Param("defaultYn") String defaultYn, @Param("udtNo") Long udtNo);
 
