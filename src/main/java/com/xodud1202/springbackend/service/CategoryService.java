@@ -26,6 +26,7 @@ import java.util.Objects;
 @RequiredArgsConstructor
 public class CategoryService {
 	private static final int SHOP_CATEGORY_PAGE_SIZE = 20;
+	private static final String SHOP_CATEGORY_ROOT_PARENT_KEY = "__ROOT__";
 	private final GoodsService goodsService;
 
 	// 프로젝트 공통 카테고리 목록을 조회합니다.
@@ -150,35 +151,15 @@ public class CategoryService {
 
 	// 쇼핑몰 헤더 카테고리 트리를 조회합니다.
 	public List<ShopHeaderCategoryTreeVO> getShopHeaderCategoryTree() {
-		// 1차 카테고리를 조회하고 빈 데이터일 경우 즉시 반환합니다.
-		List<CategoryVO> level1CategoryList = resolveVisibleSortedCategoryList(1, null);
-		if (level1CategoryList.isEmpty()) {
+		// 노출 가능한 전체 카테고리를 한 번에 조회하고 빈 데이터일 경우 즉시 반환합니다.
+		List<CategoryVO> visibleCategoryList = getShopVisibleCategoryList();
+		if (visibleCategoryList.isEmpty()) {
 			return List.of();
 		}
 
-		// 1차 카테고리부터 3차 카테고리까지 트리 구조로 조합합니다.
-		List<ShopHeaderCategoryTreeVO> resultList = new ArrayList<>();
-		for (CategoryVO level1Category : level1CategoryList) {
-			ShopHeaderCategoryTreeVO level1Node = toShopHeaderCategoryTree(level1Category);
-
-			List<CategoryVO> level2CategoryList = resolveVisibleSortedCategoryList(2, level1Category.getCategoryId());
-			List<ShopHeaderCategoryTreeVO> level2NodeList = new ArrayList<>();
-			for (CategoryVO level2Category : level2CategoryList) {
-				ShopHeaderCategoryTreeVO level2Node = toShopHeaderCategoryTree(level2Category);
-
-				List<CategoryVO> level3CategoryList = resolveVisibleSortedCategoryList(3, level2Category.getCategoryId());
-				List<ShopHeaderCategoryTreeVO> level3NodeList = level3CategoryList.stream()
-					.map(this::toShopHeaderCategoryTree)
-					.toList();
-
-				level2Node.setChildren(level3NodeList);
-				level2NodeList.add(level2Node);
-			}
-
-			level1Node.setChildren(level2NodeList);
-			resultList.add(level1Node);
-		}
-		return resultList;
+		// 부모 카테고리 기준으로 하위 목록을 그룹화한 뒤 1/2/3차 트리로 조합합니다.
+		Map<String, List<CategoryVO>> categoryListByParentIdMap = groupShopCategoryListByParentId(visibleCategoryList);
+		return buildShopHeaderCategoryTreeList(categoryListByParentIdMap, SHOP_CATEGORY_ROOT_PARENT_KEY);
 	}
 
 	// 쇼핑몰 카테고리 페이지 데이터를 조회합니다.
@@ -273,10 +254,11 @@ public class CategoryService {
 	private boolean isBlank(String value) {
 		return value == null || value.trim().isEmpty();
 	}
-	// 레벨/부모 조건으로 노출 가능한 카테고리를 정렬 후 반환합니다.
-	private List<CategoryVO> resolveVisibleSortedCategoryList(Integer categoryLevel, String parentCategoryId) {
-		// 공통 카테고리 목록을 조회하고 빈 데이터일 경우 즉시 반환합니다.
-		List<CategoryVO> sourceList = getCategoryList(categoryLevel, parentCategoryId);
+	
+	// 쇼핑몰 헤더 노출용 전체 카테고리를 한 번에 조회해 정렬 후 반환합니다.
+	private List<CategoryVO> getShopVisibleCategoryList() {
+		// 전체 카테고리 목록을 한 번에 조회하고 빈 데이터일 경우 즉시 반환합니다.
+		List<CategoryVO> sourceList = this.getCategoryList(null, null);
 		if (sourceList == null || sourceList.isEmpty()) {
 			return List.of();
 		}
@@ -292,6 +274,61 @@ public class CategoryService {
 				).thenComparing(CategoryVO::getCategoryId, Comparator.nullsLast(String::compareTo))
 			)
 			.toList();
+	}
+
+	// 부모 카테고리 기준으로 카테고리 목록을 그룹화합니다.
+	private Map<String, List<CategoryVO>> groupShopCategoryListByParentId(List<CategoryVO> categoryList) {
+		Map<String, List<CategoryVO>> result = new LinkedHashMap<>();
+		if (categoryList == null || categoryList.isEmpty()) {
+			return result;
+		}
+
+		// 상위 카테고리 아이디별로 정렬된 카테고리 목록을 유지하며 묶습니다.
+		for (CategoryVO category : categoryList) {
+			if (category == null || isBlank(category.getCategoryId())) {
+				continue;
+			}
+			String parentKey = resolveShopCategoryParentKey(category.getParentCategoryId());
+			result.computeIfAbsent(parentKey, key -> new ArrayList<>()).add(category);
+		}
+		return result;
+	}
+
+	// 부모 카테고리 그룹 맵을 재귀 순회해 쇼핑몰 헤더 트리를 생성합니다.
+	private List<ShopHeaderCategoryTreeVO> buildShopHeaderCategoryTreeList(
+		Map<String, List<CategoryVO>> categoryListByParentIdMap,
+		String parentKey
+	) {
+		List<CategoryVO> childCategoryList = categoryListByParentIdMap.getOrDefault(parentKey, List.of());
+		if (childCategoryList.isEmpty()) {
+			return List.of();
+		}
+
+		// 현재 부모의 하위 카테고리를 순회하며 최대 3차까지 자식 트리를 연결합니다.
+		List<ShopHeaderCategoryTreeVO> result = new ArrayList<>();
+		for (CategoryVO category : childCategoryList) {
+			if (category == null || category.getCategoryLevel() == null || category.getCategoryLevel() < 1 || category.getCategoryLevel() > 3) {
+				continue;
+			}
+
+			ShopHeaderCategoryTreeVO node = toShopHeaderCategoryTree(category);
+			if (category.getCategoryLevel() < 3) {
+				node.setChildren(buildShopHeaderCategoryTreeList(categoryListByParentIdMap, category.getCategoryId()));
+			}
+			result.add(node);
+		}
+		return result;
+	}
+
+	// 상위 카테고리 아이디를 헤더 트리 조합용 그룹 키로 변환합니다.
+	private String resolveShopCategoryParentKey(String parentCategoryId) {
+		if (isBlank(parentCategoryId)) {
+			return SHOP_CATEGORY_ROOT_PARENT_KEY;
+		}
+
+		// 실제 DB에서 1차 카테고리 상위값은 "0"으로 관리되므로 루트 키로 취급합니다.
+		String trimmedParentCategoryId = parentCategoryId.trim();
+		return "0".equals(trimmedParentCategoryId) ? SHOP_CATEGORY_ROOT_PARENT_KEY : trimmedParentCategoryId;
 	}
 
 	// 카테고리 도메인 객체를 쇼핑몰 헤더 트리 응답 객체로 변환합니다.

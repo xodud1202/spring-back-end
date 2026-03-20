@@ -33,6 +33,7 @@ class CategoryServiceTests {
 		// 레벨별 카테고리 테스트 데이터를 구성합니다.
 		CategoryVO level1 = new CategoryVO();
 		level1.setCategoryId("10");
+		level1.setParentCategoryId("0");
 		level1.setCategoryLevel(1);
 		level1.setCategoryNm("남성");
 		level1.setDispOrd(1);
@@ -54,10 +55,8 @@ class CategoryServiceTests {
 		level3.setDispOrd(1);
 		level3.setShowYn("Y");
 
-		// 레벨별 카테고리 조회 결과를 목으로 설정합니다.
-		when(goodsService.getCategoryList(1, null)).thenReturn(List.of(level1));
-		when(goodsService.getCategoryList(2, "10")).thenReturn(List.of(level2));
-		when(goodsService.getCategoryList(3, "100001")).thenReturn(List.of(level3));
+		// 전체 카테고리 1회 조회 결과를 목으로 설정합니다.
+		when(goodsService.getCategoryList(null, null)).thenReturn(List.of(level3, level2, level1));
 
 		// 카테고리 트리 조회 결과의 계층 구조를 검증합니다.
 		List<ShopHeaderCategoryTreeVO> result = categoryService.getShopHeaderCategoryTree();
@@ -67,6 +66,7 @@ class CategoryServiceTests {
 		assertThat(result.get(0).getChildren().get(0).getCategoryNm()).isEqualTo("아우터");
 		assertThat(result.get(0).getChildren().get(0).getChildren()).hasSize(1);
 		assertThat(result.get(0).getChildren().get(0).getChildren().get(0).getCategoryNm()).isEqualTo("롱패딩");
+		verify(goodsService).getCategoryList(null, null);
 	}
 
 	@Test
@@ -76,26 +76,30 @@ class CategoryServiceTests {
 		// 정렬/노출 테스트용 1차 카테고리 데이터를 구성합니다.
 		CategoryVO categoryA = new CategoryVO();
 		categoryA.setCategoryId("20");
+		categoryA.setParentCategoryId("0");
+		categoryA.setCategoryLevel(1);
 		categoryA.setCategoryNm("여성");
 		categoryA.setDispOrd(2);
 		categoryA.setShowYn("Y");
 
 		CategoryVO categoryB = new CategoryVO();
 		categoryB.setCategoryId("10");
+		categoryB.setParentCategoryId("0");
+		categoryB.setCategoryLevel(1);
 		categoryB.setCategoryNm("남성");
 		categoryB.setDispOrd(1);
 		categoryB.setShowYn("Y");
 
 		CategoryVO hiddenCategory = new CategoryVO();
 		hiddenCategory.setCategoryId("99");
+		hiddenCategory.setParentCategoryId("0");
+		hiddenCategory.setCategoryLevel(1);
 		hiddenCategory.setCategoryNm("숨김");
 		hiddenCategory.setDispOrd(99);
 		hiddenCategory.setShowYn("N");
 
-		// 1차 카테고리만 반환하도록 목 데이터를 설정합니다.
-		when(goodsService.getCategoryList(1, null)).thenReturn(List.of(categoryA, hiddenCategory, categoryB));
-		when(goodsService.getCategoryList(2, "10")).thenReturn(List.of());
-		when(goodsService.getCategoryList(2, "20")).thenReturn(List.of());
+		// 전체 카테고리 1회 조회 결과를 목 데이터로 설정합니다.
+		when(goodsService.getCategoryList(null, null)).thenReturn(List.of(categoryA, hiddenCategory, categoryB));
 
 		// 숨김 카테고리 제외 및 정렬 결과를 검증합니다.
 		List<ShopHeaderCategoryTreeVO> result = categoryService.getShopHeaderCategoryTree();
@@ -111,6 +115,7 @@ class CategoryServiceTests {
 		// 카테고리 트리 테스트 데이터를 구성합니다.
 		CategoryVO level1 = new CategoryVO();
 		level1.setCategoryId("10");
+		level1.setParentCategoryId("0");
 		level1.setCategoryLevel(1);
 		level1.setCategoryNm("남성");
 		level1.setDispOrd(1);
@@ -124,9 +129,7 @@ class CategoryServiceTests {
 		level2.setDispOrd(1);
 		level2.setShowYn("Y");
 
-		when(goodsService.getCategoryList(1, null)).thenReturn(List.of(level1));
-		when(goodsService.getCategoryList(2, "10")).thenReturn(List.of(level2));
-		when(goodsService.getCategoryList(3, "100001")).thenReturn(List.of());
+		when(goodsService.getCategoryList(null, null)).thenReturn(List.of(level1, level2));
 
 		// 선택 카테고리 상품 페이징 목 데이터를 설정합니다.
 		ShopCategoryGoodsItemVO goodsItem = new ShopCategoryGoodsItemVO();
@@ -158,6 +161,7 @@ class CategoryServiceTests {
 		// 정렬 검증용 1차 카테고리 데이터를 구성합니다.
 		CategoryVO first = new CategoryVO();
 		first.setCategoryId("10");
+		first.setParentCategoryId("0");
 		first.setCategoryLevel(1);
 		first.setCategoryNm("남성");
 		first.setDispOrd(1);
@@ -165,14 +169,13 @@ class CategoryServiceTests {
 
 		CategoryVO second = new CategoryVO();
 		second.setCategoryId("20");
+		second.setParentCategoryId("0");
 		second.setCategoryLevel(1);
 		second.setCategoryNm("여성");
 		second.setDispOrd(2);
 		second.setShowYn("Y");
 
-		when(goodsService.getCategoryList(1, null)).thenReturn(List.of(second, first));
-		when(goodsService.getCategoryList(2, "10")).thenReturn(List.of());
-		when(goodsService.getCategoryList(2, "20")).thenReturn(List.of());
+		when(goodsService.getCategoryList(null, null)).thenReturn(List.of(second, first));
 		when(goodsService.countShopCategoryGoods("10")).thenReturn(0);
 		when(goodsService.getShopCategoryGoodsList("10", 0, 20)).thenReturn(List.of());
 
@@ -193,6 +196,7 @@ class CategoryServiceTests {
 		// 카테고리 트리 테스트 데이터를 구성합니다.
 		CategoryVO level1 = new CategoryVO();
 		level1.setCategoryId("10");
+		level1.setParentCategoryId("0");
 		level1.setCategoryLevel(1);
 		level1.setCategoryNm("남성");
 		level1.setDispOrd(1);
@@ -206,9 +210,7 @@ class CategoryServiceTests {
 		level2.setDispOrd(1);
 		level2.setShowYn("Y");
 
-		when(goodsService.getCategoryList(1, null)).thenReturn(List.of(level1));
-		when(goodsService.getCategoryList(2, "10")).thenReturn(List.of(level2));
-		when(goodsService.getCategoryList(3, "100001")).thenReturn(List.of());
+		when(goodsService.getCategoryList(null, null)).thenReturn(List.of(level1, level2));
 		when(goodsService.countShopCategoryGoods("100001")).thenReturn(45);
 		when(goodsService.getShopCategoryGoodsList("100001", 40, 20)).thenReturn(List.of());
 
