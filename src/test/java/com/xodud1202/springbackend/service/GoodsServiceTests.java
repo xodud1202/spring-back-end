@@ -57,6 +57,7 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentConfirmPO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentPreparePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderRestoreCartItemVO;
+import com.xodud1202.springbackend.mapper.ExhibitionMapper;
 import com.xodud1202.springbackend.mapper.GoodsMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -87,6 +88,9 @@ import static org.mockito.Mockito.when;
 class GoodsServiceTests {
 	@Mock
 	private GoodsMapper goodsMapper;
+
+	@Mock
+	private ExhibitionMapper exhibitionMapper;
 
 	@Mock
 	private FtpFileService ftpFileService;
@@ -913,11 +917,12 @@ class GoodsServiceTests {
 		when(goodsMapper.getShopGoodsBasic("GOODS001")).thenReturn(goods);
 		when(goodsMapper.getShopGoodsSizeList("GOODS001")).thenReturn(List.of(sizeItem));
 		when(goodsMapper.countShopCart(7L, "GOODS001", "095")).thenReturn(0);
+		when(exhibitionMapper.countShopVisibleExhibitionGoodsByGoodsId(99, "GOODS001")).thenReturn(0);
 		when(goodsMapper.insertShopCart(any(ShopCartSavePO.class))).thenReturn(1);
 		when(goodsMapper.getShopCartQty(7L, "GOODS001", "095")).thenReturn(2);
 
-		// 장바구니 등록 후 최종 수량과 insert 호출 여부를 검증합니다.
-		int result = goodsService.addShopGoodsCart("GOODS001", "095", 2, 7L);
+		// 장바구니 등록 후 최종 수량과 무효 기획전 번호 제거 여부를 검증합니다.
+		int result = goodsService.addShopGoodsCart("GOODS001", "095", 2, 7L, 99);
 		ArgumentCaptor<ShopCartSavePO> captor = ArgumentCaptor.forClass(ShopCartSavePO.class);
 		assertThat(result).isEqualTo(2);
 		verify(goodsMapper).insertShopCart(captor.capture());
@@ -926,11 +931,40 @@ class GoodsServiceTests {
 		assertThat(captor.getValue().getGoodsId()).isEqualTo("GOODS001");
 		assertThat(captor.getValue().getSizeId()).isEqualTo("095");
 		assertThat(captor.getValue().getQty()).isEqualTo(2);
+		assertThat(captor.getValue().getExhibitionNo()).isNull();
 	}
 
 	@Test
-	@DisplayName("쇼핑몰 장바구니 등록 시 기존 상품은 수량을 가산하고 최종 수량을 반환한다")
-	// 장바구니 등록 상태에서 동일 상품/사이즈를 등록하면 수량 가산 여부를 검증합니다.
+	@DisplayName("쇼핑몰 장바구니 등록 시 유효한 기획전 상품이면 기획전 번호를 함께 저장한다")
+	// 기획전 상세 유입 상품을 신규 장바구니 등록하면 검증된 기획전 번호가 저장되는지 확인합니다.
+	void addShopGoodsCart_insertsValidatedExhibitionNoWhenExhibitionGoods() {
+		// 장바구니 등록 대상 상품과 사이즈 목록을 구성합니다.
+		ShopGoodsBasicVO goods = new ShopGoodsBasicVO();
+		goods.setGoodsId("GOODS011");
+		ShopGoodsSizeItemVO sizeItem = new ShopGoodsSizeItemVO();
+		sizeItem.setGoodsId("GOODS011");
+		sizeItem.setSizeId("090");
+		sizeItem.setStockQty(5);
+
+		// 기획전 노출 상품인 신규 장바구니 상태를 목으로 설정합니다.
+		when(goodsMapper.getShopGoodsBasic("GOODS011")).thenReturn(goods);
+		when(goodsMapper.getShopGoodsSizeList("GOODS011")).thenReturn(List.of(sizeItem));
+		when(goodsMapper.countShopCart(17L, "GOODS011", "090")).thenReturn(0);
+		when(exhibitionMapper.countShopVisibleExhibitionGoodsByGoodsId(2, "GOODS011")).thenReturn(1);
+		when(goodsMapper.insertShopCart(any(ShopCartSavePO.class))).thenReturn(1);
+		when(goodsMapper.getShopCartQty(17L, "GOODS011", "090")).thenReturn(1);
+
+		// 유효한 기획전 번호가 저장되는지 검증합니다.
+		int result = goodsService.addShopGoodsCart("GOODS011", "090", 1, 17L, 2);
+		ArgumentCaptor<ShopCartSavePO> captor = ArgumentCaptor.forClass(ShopCartSavePO.class);
+		assertThat(result).isEqualTo(1);
+		verify(goodsMapper).insertShopCart(captor.capture());
+		assertThat(captor.getValue().getExhibitionNo()).isEqualTo(2);
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 장바구니 등록 시 기존 상품은 수량을 가산하고 마지막 기획전 번호로 덮어쓴다")
+	// 장바구니 등록 상태에서 동일 상품/사이즈를 기획전 경로로 다시 담으면 수량 가산과 기획전 번호 갱신이 함께 되는지 검증합니다.
 	void addShopGoodsCart_updatesWhenExists() {
 		// 장바구니 등록 대상 상품과 사이즈 목록을 구성합니다.
 		ShopGoodsBasicVO goods = new ShopGoodsBasicVO();
@@ -944,13 +978,39 @@ class GoodsServiceTests {
 		when(goodsMapper.getShopGoodsBasic("GOODS002")).thenReturn(goods);
 		when(goodsMapper.getShopGoodsSizeList("GOODS002")).thenReturn(List.of(sizeItem));
 		when(goodsMapper.countShopCart(8L, "GOODS002", "100")).thenReturn(1);
-		when(goodsMapper.addShopCartQty(8L, "GOODS002", "100", 3, 8L)).thenReturn(1);
+		when(exhibitionMapper.countShopVisibleExhibitionGoodsByGoodsId(2, "GOODS002")).thenReturn(1);
+		when(goodsMapper.addShopCartQty(8L, "GOODS002", "100", 3, 2, 8L)).thenReturn(1);
 		when(goodsMapper.getShopCartQty(8L, "GOODS002", "100")).thenReturn(5);
 
-		// 장바구니 등록 후 최종 수량과 update 호출 여부를 검증합니다.
-		int result = goodsService.addShopGoodsCart("GOODS002", "100", 3, 8L);
+		// 장바구니 등록 후 최종 수량과 기획전 번호 갱신 여부를 검증합니다.
+		int result = goodsService.addShopGoodsCart("GOODS002", "100", 3, 8L, 2);
 		assertThat(result).isEqualTo(5);
-		verify(goodsMapper).addShopCartQty(8L, "GOODS002", "100", 3, 8L);
+		verify(goodsMapper).addShopCartQty(8L, "GOODS002", "100", 3, 2, 8L);
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 장바구니 등록 시 마지막 일반 경로 요청이면 기존 기획전 번호를 제거한다")
+	// 동일 상품/사이즈를 일반 상품상세 경로로 다시 담으면 EXHIBITION_NO가 null로 덮이는지 검증합니다.
+	void addShopGoodsCart_clearsExhibitionNoWhenLastPathIsNormal() {
+		// 장바구니 등록 대상 상품과 사이즈 목록을 구성합니다.
+		ShopGoodsBasicVO goods = new ShopGoodsBasicVO();
+		goods.setGoodsId("GOODS012");
+		ShopGoodsSizeItemVO sizeItem = new ShopGoodsSizeItemVO();
+		sizeItem.setGoodsId("GOODS012");
+		sizeItem.setSizeId("095");
+		sizeItem.setStockQty(20);
+
+		// 기존 장바구니가 있는 상태를 목으로 설정합니다.
+		when(goodsMapper.getShopGoodsBasic("GOODS012")).thenReturn(goods);
+		when(goodsMapper.getShopGoodsSizeList("GOODS012")).thenReturn(List.of(sizeItem));
+		when(goodsMapper.countShopCart(18L, "GOODS012", "095")).thenReturn(1);
+		when(goodsMapper.addShopCartQty(18L, "GOODS012", "095", 2, null, 18L)).thenReturn(1);
+		when(goodsMapper.getShopCartQty(18L, "GOODS012", "095")).thenReturn(4);
+
+		// 일반 경로 재등록 시 EXHIBITION_NO 제거와 수량 누적을 검증합니다.
+		int result = goodsService.addShopGoodsCart("GOODS012", "095", 2, 18L, null);
+		assertThat(result).isEqualTo(4);
+		verify(goodsMapper).addShopCartQty(18L, "GOODS012", "095", 2, null, 18L);
 	}
 
 	@Test
@@ -966,7 +1026,7 @@ class GoodsServiceTests {
 		when(goodsMapper.getShopGoodsSizeList("GOODS003")).thenReturn(List.of());
 
 		// 사이즈 검증 예외 메시지를 확인합니다.
-		assertThatThrownBy(() -> goodsService.addShopGoodsCart("GOODS003", "110", 1, 9L))
+		assertThatThrownBy(() -> goodsService.addShopGoodsCart("GOODS003", "110", 1, 9L, null))
 			.isInstanceOf(IllegalArgumentException.class)
 			.hasMessage("사이즈를 확인해주세요.");
 	}
@@ -986,14 +1046,15 @@ class GoodsServiceTests {
 		// 상품/사이즈 조회 결과와 생성 키 반영 목 동작을 설정합니다.
 		when(goodsMapper.getShopGoodsBasic("GOODS010")).thenReturn(goods);
 		when(goodsMapper.getShopGoodsSizeList("GOODS010")).thenReturn(List.of(sizeItem));
+		when(exhibitionMapper.countShopVisibleExhibitionGoodsByGoodsId(2, "GOODS010")).thenReturn(1);
 		when(goodsMapper.insertShopCart(any(ShopCartSavePO.class))).thenAnswer(invocation -> {
 			ShopCartSavePO savePO = invocation.getArgument(0);
 			savePO.setCartId(21L);
 			return 1;
 		});
 
-		// 바로구매 등록 후 생성된 cartId와 저장 구분코드를 검증합니다.
-		Long result = goodsService.addShopGoodsOrderNowCart("GOODS010", "090", 1, 11L);
+		// 바로구매 등록 후 생성된 cartId와 저장 기획전 번호를 검증합니다.
+		Long result = goodsService.addShopGoodsOrderNowCart("GOODS010", "090", 1, 11L, 2);
 		ArgumentCaptor<ShopCartSavePO> captor = ArgumentCaptor.forClass(ShopCartSavePO.class);
 		assertThat(result).isEqualTo(21L);
 		verify(goodsMapper).insertShopCart(captor.capture());
@@ -1002,6 +1063,7 @@ class GoodsServiceTests {
 		assertThat(captor.getValue().getGoodsId()).isEqualTo("GOODS010");
 		assertThat(captor.getValue().getSizeId()).isEqualTo("090");
 		assertThat(captor.getValue().getQty()).isEqualTo(1);
+		assertThat(captor.getValue().getExhibitionNo()).isEqualTo(2);
 	}
 
 	@Test

@@ -417,6 +417,7 @@ public interface GoodsMapper {
 		@Param("goodsId") String goodsId,
 		@Param("sizeId") String sizeId,
 		@Param("qty") Integer qty,
+		@Param("exhibitionNo") Integer exhibitionNo,
 		@Param("udtNo") Long udtNo
 	);
 

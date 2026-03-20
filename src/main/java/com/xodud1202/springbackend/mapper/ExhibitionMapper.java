@@ -98,4 +98,7 @@ public interface ExhibitionMapper {
 		@Param("offset") int offset,
 		@Param("pageSize") int pageSize
 	);
+
+	// 쇼핑몰 노출 가능한 기획전 상품 매핑 존재 여부를 조회합니다.
+	int countShopVisibleExhibitionGoodsByGoodsId(@Param("exhibitionNo") Integer exhibitionNo, @Param("goodsId") String goodsId);
 }

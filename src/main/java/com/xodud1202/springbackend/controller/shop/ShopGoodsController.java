@@ -328,6 +328,7 @@ public class ShopGoodsController {
 			if (qty == null || qty < 1) {
 				return ResponseEntity.badRequest().body(Map.of("message", "수량을 확인해주세요."));
 			}
+			Integer exhibitionNo = normalizeOptionalExhibitionNo(requestBody == null ? null : requestBody.get("exhibitionNo"));
 
 			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
 			Long custNo = parseCustNoCookie(request);
@@ -336,7 +337,7 @@ public class ShopGoodsController {
 			}
 
 			// 장바구니 등록 처리 후 최종 수량을 반환합니다.
-			int cartQty = goodsService.addShopGoodsCart(goodsId, sizeId, qty, custNo);
+			int cartQty = goodsService.addShopGoodsCart(goodsId, sizeId, qty, custNo, exhibitionNo);
 			return ResponseEntity.ok(Map.of("qty", cartQty, "message", "장바구니에 담았습니다."));
 		} catch (IllegalArgumentException exception) {
 			// 조회 가능한 상품이 없으면 404 응답을 반환합니다.
@@ -376,6 +377,7 @@ public class ShopGoodsController {
 			if (qty == null || qty < 1) {
 				return ResponseEntity.badRequest().body(Map.of("message", "수량을 확인해주세요."));
 			}
+			Integer exhibitionNo = normalizeOptionalExhibitionNo(requestBody == null ? null : requestBody.get("exhibitionNo"));
 
 			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
 			Long custNo = parseCustNoCookie(request);
@@ -384,7 +386,7 @@ public class ShopGoodsController {
 			}
 
 			// 바로구매 장바구니 등록 처리 후 생성된 장바구니 번호를 반환합니다.
-			Long cartId = goodsService.addShopGoodsOrderNowCart(goodsId, sizeId, qty, custNo);
+			Long cartId = goodsService.addShopGoodsOrderNowCart(goodsId, sizeId, qty, custNo, exhibitionNo);
 			return ResponseEntity.ok(Map.of("cartId", cartId, "goodsId", goodsId, "message", "바로구매 정보를 등록했습니다."));
 		} catch (IllegalArgumentException exception) {
 			// 조회 가능한 상품이 없으면 404 응답으로 반환합니다.
@@ -586,6 +588,13 @@ public class ShopGoodsController {
 		}
 		// 변환 불가능한 타입이면 null을 반환합니다.
 		return null;
+	}
+
+	// 선택 기획전 번호를 양수 정수 또는 null로 정규화합니다.
+	private Integer normalizeOptionalExhibitionNo(Object rawValue) {
+		// 숫자/문자열 값을 정수로 바꾼 뒤 1 이상만 허용합니다.
+		Integer parsedValue = parseIntegerValue(rawValue);
+		return parsedValue == null || parsedValue < 1 ? null : parsedValue;
 	}
 
 	// URL 인코딩된 쿠키 값을 원문 문자열로 디코딩합니다.

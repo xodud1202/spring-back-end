@@ -101,6 +101,7 @@ import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeOrderItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeOrderSavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeSavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsVO;
+import com.xodud1202.springbackend.mapper.ExhibitionMapper;
 import com.xodud1202.springbackend.mapper.GoodsMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -144,6 +145,7 @@ import java.util.Set;
 // 관리자 상품 관련 비즈니스 로직을 처리합니다.
 public class GoodsService {
 	private final GoodsMapper goodsMapper;
+	private final ExhibitionMapper exhibitionMapper;
 	private final FtpFileService ftpFileService;
 	private final ShopAuthService shopAuthService;
 	private final JusoAddressApiClient jusoAddressApiClient;
@@ -1321,16 +1323,17 @@ public class GoodsService {
 
 	// 쇼핑몰 상품 장바구니를 등록(기존 건은 수량 가산)하고 최종 수량을 반환합니다.
 	@Transactional
-	public int addShopGoodsCart(String goodsId, String sizeId, Integer qty, Long custNo) {
+	public int addShopGoodsCart(String goodsId, String sizeId, Integer qty, Long custNo, Integer exhibitionNo) {
 		// 장바구니 등록 대상 상품/사이즈/수량을 검증하고 정규화합니다.
 		ShopCartValidatedInput validatedInput = validateShopCartInput(goodsId, sizeId, qty, custNo);
+		Integer validatedExhibitionNo = resolveValidatedShopCartExhibitionNo(validatedInput.getGoodsId(), exhibitionNo);
 
 		// 기존 장바구니(C) 존재 여부에 따라 수량 가산 또는 신규 등록을 수행합니다.
 		int existedCount = goodsMapper.countShopCart(custNo, validatedInput.getGoodsId(), validatedInput.getSizeId());
 		if (existedCount > 0) {
-			goodsMapper.addShopCartQty(custNo, validatedInput.getGoodsId(), validatedInput.getSizeId(), validatedInput.getQty(), custNo);
+			goodsMapper.addShopCartQty(custNo, validatedInput.getGoodsId(), validatedInput.getSizeId(), validatedInput.getQty(), validatedExhibitionNo, custNo);
 		} else {
-			goodsMapper.insertShopCart(createShopCartSavePO(SHOP_CART_GB_CART, custNo, validatedInput));
+			goodsMapper.insertShopCart(createShopCartSavePO(SHOP_CART_GB_CART, custNo, validatedInput, validatedExhibitionNo));
 		}
 
 		// 저장 이후 장바구니 최종 수량을 조회해 반환합니다.
@@ -1340,10 +1343,11 @@ public class GoodsService {
 
 	// 쇼핑몰 바로구매용 장바구니를 신규 등록하고 생성된 장바구니 번호를 반환합니다.
 	@Transactional
-	public Long addShopGoodsOrderNowCart(String goodsId, String sizeId, Integer qty, Long custNo) {
+	public Long addShopGoodsOrderNowCart(String goodsId, String sizeId, Integer qty, Long custNo, Integer exhibitionNo) {
 		// 바로구매 등록 대상 상품/사이즈/수량을 검증하고 정규화합니다.
 		ShopCartValidatedInput validatedInput = validateShopCartInput(goodsId, sizeId, qty, custNo);
-		ShopCartSavePO savePO = createShopCartSavePO(SHOP_CART_GB_ORDER, custNo, validatedInput);
+		Integer validatedExhibitionNo = resolveValidatedShopCartExhibitionNo(validatedInput.getGoodsId(), exhibitionNo);
+		ShopCartSavePO savePO = createShopCartSavePO(SHOP_CART_GB_ORDER, custNo, validatedInput, validatedExhibitionNo);
 
 		// 바로구매(O) 행은 항상 신규 등록합니다.
 		goodsMapper.insertShopCart(savePO);
@@ -2418,7 +2422,7 @@ public class GoodsService {
 	}
 
 	// 장바구니 저장 PO를 생성합니다.
-	private ShopCartSavePO createShopCartSavePO(String cartGbCd, Long custNo, ShopCartValidatedInput validatedInput) {
+	private ShopCartSavePO createShopCartSavePO(String cartGbCd, Long custNo, ShopCartValidatedInput validatedInput, Integer exhibitionNo) {
 		// 장바구니 구분/상품/사이즈/수량 정보를 저장 PO에 반영합니다.
 		ShopCartSavePO savePO = new ShopCartSavePO();
 		savePO.setCartGbCd(cartGbCd);
@@ -2426,9 +2430,22 @@ public class GoodsService {
 		savePO.setGoodsId(validatedInput.getGoodsId());
 		savePO.setSizeId(validatedInput.getSizeId());
 		savePO.setQty(validatedInput.getQty());
+		savePO.setExhibitionNo(exhibitionNo);
 		savePO.setRegNo(custNo);
 		savePO.setUdtNo(custNo);
 		return savePO;
+	}
+
+	// 장바구니 저장 대상 기획전 번호를 현재 노출 가능한 기획전 상품 기준으로 재검증합니다.
+	private Integer resolveValidatedShopCartExhibitionNo(String goodsId, Integer exhibitionNo) {
+		// 기획전 번호가 없거나 1 미만이면 일반 경로로 판단해 null을 반환합니다.
+		if (exhibitionNo == null || exhibitionNo < 1) {
+			return null;
+		}
+
+		// 현재 노출 가능한 기획전 상품이면 해당 번호를 유지하고 아니면 제거합니다.
+		int visibleGoodsCount = exhibitionMapper.countShopVisibleExhibitionGoodsByGoodsId(exhibitionNo, goodsId);
+		return visibleGoodsCount > 0 ? exhibitionNo : null;
 	}
 
 	// 주문서 대상 장바구니 번호 목록을 중복 없이 정규화합니다.

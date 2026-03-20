@@ -1599,6 +1599,7 @@
 		/* GoodsMapper.addShopCartQty: 쇼핑몰 장바구니 수량 추가 */
 		UPDATE CART
 		   SET QTY = QTY + #{qty}
+		     , EXHIBITION_NO = #{exhibitionNo}
 		     , UDT_NO = #{udtNo}
 		     , UDT_DT = NOW()
 		 WHERE CUST_NO = #{custNo}

@@ -193,6 +193,30 @@
 		 LIMIT #{pageSize} OFFSET #{offset}
 	</select>
 
+	<select id="countShopVisibleExhibitionGoodsByGoodsId" resultType="int">
+		/* ExhibitionMapper.countShopVisibleExhibitionGoodsByGoodsId: 쇼핑몰 노출 가능한 기획전 상품 매핑 존재 여부 조회 */
+		SELECT COUNT(1)
+		  FROM EXHIBITION_TAB_GOODS ETG
+		  JOIN EXHIBITION_TAB ET
+		    ON ET.EXHIBITION_TAB_NO = ETG.EXHIBITION_TAB_NO
+		   AND ET.EXHIBITION_NO = #{exhibitionNo}
+		   AND ET.DEL_YN = 'N'
+		   AND ET.VIEW_YN = 'Y'
+		   AND NOW() BETWEEN ET.DISP_START_DT AND ET.DISP_END_DT
+		  JOIN EXHIBITION_BASE EB
+		    ON EB.EXHIBITION_NO = ET.EXHIBITION_NO
+		   AND EB.DEL_YN = 'N'
+		   AND EB.VIEW_YN = 'Y'
+		   AND EB.EXHIBITION_STAT_CD = 'EXHIBITION_STAT_02'
+		   AND NOW() BETWEEN EB.DISP_START_DT AND EB.DISP_END_DT
+		  JOIN GOODS_BASE GB
+		    ON GB.GOODS_ID = ETG.GOODS_ID
+		   AND GB.SHOW_YN = 'Y'
+		   AND GB.GOODS_STAT_CD = 'GOODS_STAT_02'
+		 WHERE ETG.GOODS_ID = #{goodsId}
+		   AND ETG.VIEW_YN = 'Y'
+	</select>
+
 	<select id="getAdminExhibitionDetail" resultType="com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionDetailVO">
 		/* ExhibitionMapper.getAdminExhibitionDetail: 기획전 상세 조회 */
 		SELECT EB.EXHIBITION_NO

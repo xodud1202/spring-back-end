@@ -508,7 +508,7 @@ class ShopGoodsControllerTests {
 	// 장바구니 등록 성공 시 200 응답과 최종 수량 반환 여부를 검증합니다.
 	void addShopGoodsCart_returnsOk() throws Exception {
 		// 장바구니 최종 수량을 5로 반환하도록 설정합니다.
-		when(goodsService.addShopGoodsCart("CAMEUEP02MG", "095", 2, 1L)).thenReturn(5);
+		when(goodsService.addShopGoodsCart("CAMEUEP02MG", "095", 2, 1L, 2)).thenReturn(5);
 
 		// 로그인 쿠키와 함께 요청하면 200 응답과 수량/메시지를 검증합니다.
 		mockMvc.perform(
@@ -516,7 +516,7 @@ class ShopGoodsControllerTests {
 					.cookie(new Cookie("cust_no", "1"))
 					.contentType(MediaType.APPLICATION_JSON)
 					.content("""
-						{"goodsId":"CAMEUEP02MG","sizeId":"095","qty":2}
+						{"goodsId":"CAMEUEP02MG","sizeId":"095","qty":2,"exhibitionNo":2}
 						""")
 			)
 			.andExpect(status().isOk())
@@ -529,7 +529,7 @@ class ShopGoodsControllerTests {
 	// 바로구매 장바구니 등록 성공 시 200 응답과 생성된 장바구니 번호 반환 여부를 검증합니다.
 	void addShopGoodsOrderNow_returnsOk() throws Exception {
 		// 바로구매 장바구니 번호를 21번으로 반환하도록 설정합니다.
-		when(goodsService.addShopGoodsOrderNowCart("CAMEUEP02MG", "095", 1, 1L)).thenReturn(21L);
+		when(goodsService.addShopGoodsOrderNowCart("CAMEUEP02MG", "095", 1, 1L, 2)).thenReturn(21L);
 
 		// 로그인 쿠키와 함께 요청하면 200 응답과 cartId/goodsId를 검증합니다.
 		mockMvc.perform(
@@ -537,13 +537,34 @@ class ShopGoodsControllerTests {
 					.cookie(new Cookie("cust_no", "1"))
 					.contentType(MediaType.APPLICATION_JSON)
 					.content("""
-						{"goodsId":"CAMEUEP02MG","sizeId":"095","qty":1}
+						{"goodsId":"CAMEUEP02MG","sizeId":"095","qty":1,"exhibitionNo":2}
 						""")
 			)
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.cartId").value(21))
 			.andExpect(jsonPath("$.goodsId").value("CAMEUEP02MG"))
 			.andExpect(jsonPath("$.message").value("바로구매 정보를 등록했습니다."));
+	}
+
+	@Test
+	@DisplayName("장바구니 등록 API는 잘못된 기획전 번호 형식이면 null로 정규화해 처리한다")
+	// exhibitionNo 형식이 잘못되어도 요청 실패 없이 일반 경로(null)로 서비스에 전달되는지 검증합니다.
+	void addShopGoodsCart_normalizesInvalidExhibitionNoToNull() throws Exception {
+		// 잘못된 기획전 번호는 null로 전달되도록 장바구니 수량을 반환하도록 설정합니다.
+		when(goodsService.addShopGoodsCart("CAMEUEP02MG", "095", 2, 1L, null)).thenReturn(5);
+
+		// 문자열 기획전 번호로 요청해도 200 응답과 수량/메시지를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/goods/cart/add")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"goodsId":"CAMEUEP02MG","sizeId":"095","qty":2,"exhibitionNo":"abc"}
+						""")
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.qty").value(5))
+			.andExpect(jsonPath("$.message").value("장바구니에 담았습니다."));
 	}
 
 	@Test
@@ -600,7 +621,7 @@ class ShopGoodsControllerTests {
 	// 서비스에서 상품 미존재 예외를 반환하면 404 응답으로 변환되는지 검증합니다.
 	void addShopGoodsCart_returnsNotFoundWhenGoodsMissing() throws Exception {
 		// 상품 미존재 예외를 발생하도록 목 동작을 설정합니다.
-		when(goodsService.addShopGoodsCart("UNKNOWN", "095", 1, 1L))
+		when(goodsService.addShopGoodsCart("UNKNOWN", "095", 1, 1L, null))
 			.thenThrow(new IllegalArgumentException("상품 정보를 찾을 수 없습니다."));
 
 		// 장바구니 등록 요청 후 404 응답과 메시지를 검증합니다.
