@@ -47,6 +47,10 @@ import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponPageVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponUnavailableGoodsVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageDownloadableCouponVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOwnedCouponVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderDetailItemVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderGroupVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderPageVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderStatusSummaryVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsWishlistVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishGoodsItemVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishPageVO;
@@ -123,6 +127,7 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -170,6 +175,9 @@ public class GoodsService {
 	private static final int SHOP_MYPAGE_WISH_PAGE_SIZE = 10;
 	private static final int SHOP_MYPAGE_COUPON_PAGE_SIZE = 10;
 	private static final int SHOP_MYPAGE_COUPON_TOOLTIP_LIMIT = 10;
+	private static final int SHOP_MYPAGE_ORDER_PAGE_SIZE = 5;
+	private static final String SHOP_MYPAGE_ORDER_DATE_INVALID_MESSAGE = "조회 기간을 확인해주세요.";
+	private static final DateTimeFormatter SHOP_MYPAGE_ORDER_DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 	private static final int SHOP_ORDER_ADDRESS_SEARCH_DEFAULT_PAGE = 1;
 	private static final int SHOP_ORDER_ADDRESS_SEARCH_DEFAULT_COUNT = 10;
 	private static final int SHOP_ORDER_ADDRESS_SEARCH_MAX_COUNT = 100;
@@ -807,6 +815,63 @@ public class GoodsService {
 		return result;
 	}
 
+	// 쇼핑몰 마이페이지 주문내역 페이지 데이터를 조회합니다.
+	public ShopMypageOrderPageVO getShopMypageOrderPage(
+		Long custNo,
+		Integer requestedPageNo,
+		String requestedStartDate,
+		String requestedEndDate
+	) {
+		// 고객번호가 없으면 로그인 예외를 반환합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+
+		// 요청 페이지 번호와 조회 기간을 각각 보정합니다.
+		int resolvedRequestedPageNo = resolveRequestedPageNo(requestedPageNo);
+		ShopMypageOrderDateRange orderDateRange = resolveShopMypageOrderDateRange(requestedStartDate, requestedEndDate);
+
+		// 주문번호 기준 전체 건수와 전체 페이지 수를 계산합니다.
+		int orderCount = goodsMapper.countShopMypageOrderGroup(
+			custNo,
+			orderDateRange.getStartDateTime(),
+			orderDateRange.getEndExclusiveDateTime()
+		);
+		int totalPageCount = calculateTotalPageCount(orderCount, SHOP_MYPAGE_ORDER_PAGE_SIZE);
+		int resolvedPageNo = resolvePageNoWithinRange(resolvedRequestedPageNo, totalPageCount);
+		int offset = calculateOffset(resolvedPageNo, SHOP_MYPAGE_ORDER_PAGE_SIZE);
+
+		// 현재 페이지의 주문번호 목록과 상태 요약을 조회합니다.
+		List<ShopMypageOrderGroupVO> orderList = goodsMapper.getShopMypageOrderGroupList(
+			custNo,
+			orderDateRange.getStartDateTime(),
+			orderDateRange.getEndExclusiveDateTime(),
+			offset,
+			SHOP_MYPAGE_ORDER_PAGE_SIZE
+		);
+		ShopMypageOrderStatusSummaryVO statusSummary = goodsMapper.getShopMypageOrderStatusSummary(
+			custNo,
+			orderDateRange.getStartDateTime(),
+			orderDateRange.getEndExclusiveDateTime()
+		);
+		statusSummary = normalizeShopMypageOrderStatusSummary(statusSummary);
+
+		// 주문번호별 주문상세 목록을 묶고 상품 이미지 URL을 세팅합니다.
+		List<ShopMypageOrderGroupVO> resolvedOrderList = attachShopMypageOrderDetailList(orderList);
+
+		// 주문내역 페이지 응답 객체를 구성합니다.
+		ShopMypageOrderPageVO result = new ShopMypageOrderPageVO();
+		result.setOrderList(resolvedOrderList);
+		result.setOrderCount(orderCount);
+		result.setPageNo(resolvedPageNo);
+		result.setPageSize(SHOP_MYPAGE_ORDER_PAGE_SIZE);
+		result.setTotalPageCount(totalPageCount);
+		result.setStartDate(orderDateRange.getStartDate());
+		result.setEndDate(orderDateRange.getEndDate());
+		result.setStatusSummary(statusSummary);
+		return result;
+	}
+
 	// 쇼핑몰 마이페이지에서 쿠폰 1건을 다운로드합니다.
 	@Transactional
 	public void downloadShopMypageCoupon(ShopMypageCouponDownloadRequestPO param, Long custNo) {
@@ -1020,6 +1085,105 @@ public class GoodsService {
 			return 0;
 		}
 		return (pageNo - 1) * pageSize;
+	}
+
+	// 마이페이지 주문내역 조회 기간을 기본값 포함 유효한 기간으로 보정합니다.
+	private ShopMypageOrderDateRange resolveShopMypageOrderDateRange(String requestedStartDate, String requestedEndDate) {
+		// 요청값이 없으면 기본 3개월 기간을 계산합니다.
+		LocalDate today = LocalDate.now();
+		LocalDate defaultStartDate = today.minusMonths(3L);
+		LocalDate startDate = parseShopMypageOrderDate(firstNonBlank(trimToNull(requestedStartDate), defaultStartDate.toString()));
+		LocalDate endDate = parseShopMypageOrderDate(firstNonBlank(trimToNull(requestedEndDate), today.toString()));
+
+		// 시작일이 종료일보다 늦으면 조회 기간 예외를 반환합니다.
+		if (startDate.isAfter(endDate)) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_DATE_INVALID_MESSAGE);
+		}
+
+		// 일자 문자열과 SQL 비교용 시작/종료 일시 문자열을 함께 구성합니다.
+		ShopMypageOrderDateRange result = new ShopMypageOrderDateRange();
+		result.setStartDate(startDate.toString());
+		result.setEndDate(endDate.toString());
+		result.setStartDateTime(startDate.atStartOfDay().format(SHOP_MYPAGE_ORDER_DATE_TIME_FORMATTER));
+		result.setEndExclusiveDateTime(endDate.plusDays(1L).atStartOfDay().format(SHOP_MYPAGE_ORDER_DATE_TIME_FORMATTER));
+		return result;
+	}
+
+	// 마이페이지 주문내역 조회일 문자열을 LocalDate로 파싱합니다.
+	private LocalDate parseShopMypageOrderDate(String value) {
+		// 날짜 문자열이 비어 있으면 조회 기간 예외를 반환합니다.
+		if (isBlank(value)) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_DATE_INVALID_MESSAGE);
+		}
+		try {
+			return LocalDate.parse(value.trim());
+		} catch (DateTimeParseException exception) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_DATE_INVALID_MESSAGE);
+		}
+	}
+
+	// 주문번호 목록에 주문상세 목록을 묶어 주문내역 응답 구조를 완성합니다.
+	private List<ShopMypageOrderGroupVO> attachShopMypageOrderDetailList(List<ShopMypageOrderGroupVO> orderList) {
+		// 주문번호 목록이 없으면 빈 목록을 반환합니다.
+		if (orderList == null || orderList.isEmpty()) {
+			return List.of();
+		}
+
+		// 주문번호 순서를 유지하는 그룹 맵을 먼저 구성합니다.
+		Map<String, ShopMypageOrderGroupVO> orderGroupMap = new LinkedHashMap<>();
+		for (ShopMypageOrderGroupVO orderGroup : orderList) {
+			if (orderGroup == null || isBlank(orderGroup.getOrdNo())) {
+				continue;
+			}
+			orderGroup.setDetailList(new ArrayList<>());
+			orderGroupMap.put(orderGroup.getOrdNo(), orderGroup);
+		}
+		if (orderGroupMap.isEmpty()) {
+			return List.of();
+		}
+
+		// 주문번호 목록으로 주문상세를 조회한 뒤 이미지 URL을 보정합니다.
+		List<ShopMypageOrderDetailItemVO> detailList = goodsMapper.getShopMypageOrderDetailList(new ArrayList<>(orderGroupMap.keySet()));
+		applyShopMypageOrderDetailImageUrls(detailList);
+
+		// 주문번호별 detailList에 주문상세 행을 순서대로 연결합니다.
+		for (ShopMypageOrderDetailItemVO detailItem : detailList == null ? List.<ShopMypageOrderDetailItemVO>of() : detailList) {
+			if (detailItem == null || isBlank(detailItem.getOrdNo())) {
+				continue;
+			}
+			if ("ORD_DTL_STAT_00".equals(detailItem.getOrdDtlStatCd())) {
+				continue;
+			}
+			ShopMypageOrderGroupVO orderGroup = orderGroupMap.get(detailItem.getOrdNo());
+			if (orderGroup == null) {
+				continue;
+			}
+			orderGroup.getDetailList().add(detailItem);
+		}
+
+		// 조회 결과에 노출할 주문상세가 1건 이상 있는 주문번호만 반환합니다.
+		List<ShopMypageOrderGroupVO> result = new ArrayList<>();
+		for (ShopMypageOrderGroupVO orderGroup : orderGroupMap.values()) {
+			if (orderGroup == null || orderGroup.getDetailList() == null || orderGroup.getDetailList().isEmpty()) {
+				continue;
+			}
+			result.add(orderGroup);
+		}
+		return result;
+	}
+
+	// 마이페이지 주문내역 상태 요약 응답의 null 값을 0으로 보정합니다.
+	private ShopMypageOrderStatusSummaryVO normalizeShopMypageOrderStatusSummary(ShopMypageOrderStatusSummaryVO statusSummary) {
+		// 상태 요약 응답이 없으면 0 기본값 객체를 생성합니다.
+		ShopMypageOrderStatusSummaryVO result = statusSummary == null ? new ShopMypageOrderStatusSummaryVO() : statusSummary;
+		result.setWaitingForDepositCount(result.getWaitingForDepositCount() == null ? 0 : result.getWaitingForDepositCount());
+		result.setPaymentCompletedCount(result.getPaymentCompletedCount() == null ? 0 : result.getPaymentCompletedCount());
+		result.setProductPreparingCount(result.getProductPreparingCount() == null ? 0 : result.getProductPreparingCount());
+		result.setDeliveryPreparingCount(result.getDeliveryPreparingCount() == null ? 0 : result.getDeliveryPreparingCount());
+		result.setShippingCount(result.getShippingCount() == null ? 0 : result.getShippingCount());
+		result.setDeliveryCompletedCount(result.getDeliveryCompletedCount() == null ? 0 : result.getDeliveryCompletedCount());
+		result.setPurchaseConfirmedCount(result.getPurchaseConfirmedCount() == null ? 0 : result.getPurchaseConfirmedCount());
+		return result;
 	}
 
 	// 현재 다운로드 가능한 쿠폰 목록에서 지정 쿠폰번호 1건을 조회합니다.
@@ -4692,6 +4856,19 @@ public class GoodsService {
 		}
 	}
 
+	// 쇼핑몰 마이페이지 주문내역 주문상세 목록에 이미지 URL을 세팅합니다.
+	private void applyShopMypageOrderDetailImageUrls(List<ShopMypageOrderDetailItemVO> list) {
+		if (list == null || list.isEmpty()) {
+			return;
+		}
+		for (ShopMypageOrderDetailItemVO item : list) {
+			if (item == null) {
+				continue;
+			}
+			item.setImgUrl(resolveShopGoodsImageUrl(item.getGoodsId(), item.getImgPath()));
+		}
+	}
+
 	// 쇼핑몰 장바구니 상품 목록에 이미지 URL을 세팅합니다.
 	private void applyShopCartItemImageUrls(List<ShopCartItemVO> list) {
 		if (list == null || list.isEmpty()) {
@@ -5483,5 +5660,57 @@ public class GoodsService {
 			return imgPath;
 		}
 		return imgPath.substring(index + 1);
+	}
+
+	// 마이페이지 주문내역 조회 기간 보정 결과를 내부적으로 전달합니다.
+	private static class ShopMypageOrderDateRange {
+		// 조회 시작일입니다.
+		private String startDate;
+		// 조회 종료일입니다.
+		private String endDate;
+		// 조회 시작일시입니다.
+		private String startDateTime;
+		// 조회 종료일 다음날 00시 기준 비교 일시입니다.
+		private String endExclusiveDateTime;
+
+		// 조회 시작일을 반환합니다.
+		private String getStartDate() {
+			return startDate;
+		}
+
+		// 조회 시작일을 저장합니다.
+		private void setStartDate(String startDate) {
+			this.startDate = startDate;
+		}
+
+		// 조회 종료일을 반환합니다.
+		private String getEndDate() {
+			return endDate;
+		}
+
+		// 조회 종료일을 저장합니다.
+		private void setEndDate(String endDate) {
+			this.endDate = endDate;
+		}
+
+		// 조회 시작일시를 반환합니다.
+		private String getStartDateTime() {
+			return startDateTime;
+		}
+
+		// 조회 시작일시를 저장합니다.
+		private void setStartDateTime(String startDateTime) {
+			this.startDateTime = startDateTime;
+		}
+
+		// 조회 종료일 다음날 00시 비교 일시를 반환합니다.
+		private String getEndExclusiveDateTime() {
+			return endExclusiveDateTime;
+		}
+
+		// 조회 종료일 다음날 00시 비교 일시를 저장합니다.
+		private void setEndExclusiveDateTime(String endExclusiveDateTime) {
+			this.endExclusiveDateTime = endExclusiveDateTime;
+		}
 	}
 }

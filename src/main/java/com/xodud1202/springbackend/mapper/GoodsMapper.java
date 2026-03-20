@@ -36,6 +36,9 @@ import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSizeItemVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponUnavailableGoodsVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageDownloadableCouponVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOwnedCouponVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderDetailItemVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderGroupVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderStatusSummaryVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishGoodsItemVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressVO;
@@ -178,6 +181,32 @@ public interface GoodsMapper {
 
 	// 쇼핑몰 마이페이지 쿠폰 다운로드 탭의 현재 다운로드 가능 쿠폰 목록을 조회합니다.
 	List<ShopMypageDownloadableCouponVO> getShopMypageDownloadableCouponList();
+
+	// 쇼핑몰 마이페이지 주문내역의 주문번호 기준 전체 건수를 조회합니다.
+	int countShopMypageOrderGroup(
+		@Param("custNo") Long custNo,
+		@Param("startDateTime") String startDateTime,
+		@Param("endExclusiveDateTime") String endExclusiveDateTime
+	);
+
+	// 쇼핑몰 마이페이지 주문내역의 주문번호 기준 페이지 목록을 조회합니다.
+	List<ShopMypageOrderGroupVO> getShopMypageOrderGroupList(
+		@Param("custNo") Long custNo,
+		@Param("startDateTime") String startDateTime,
+		@Param("endExclusiveDateTime") String endExclusiveDateTime,
+		@Param("offset") int offset,
+		@Param("pageSize") int pageSize
+	);
+
+	// 쇼핑몰 마이페이지 주문내역의 주문상세 목록을 주문번호 기준으로 조회합니다.
+	List<ShopMypageOrderDetailItemVO> getShopMypageOrderDetailList(@Param("ordNoList") List<String> ordNoList);
+
+	// 쇼핑몰 마이페이지 주문내역의 상태별 주문상세 건수 요약을 조회합니다.
+	ShopMypageOrderStatusSummaryVO getShopMypageOrderStatusSummary(
+		@Param("custNo") Long custNo,
+		@Param("startDateTime") String startDateTime,
+		@Param("endExclusiveDateTime") String endExclusiveDateTime
+	);
 
 	// 쿠폰 사용 불가 상품 전체 건수를 대상 유형과 값 기준으로 조회합니다.
 	int countShopMypageCouponUnavailableGoods(

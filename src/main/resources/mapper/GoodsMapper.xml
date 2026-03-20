@@ -683,6 +683,97 @@
 		 ORDER BY CB.CPN_NO DESC
 	</select>
 
+	<select id="countShopMypageOrderGroup" resultType="int">
+		/* GoodsMapper.countShopMypageOrderGroup: 쇼핑몰 마이페이지 주문내역 주문번호 건수 조회 */
+		SELECT COUNT(*)
+		  FROM ORDER_BASE OB
+		 WHERE OB.CUST_NO = #{custNo}
+		   AND OB.ORD_STAT_CD != 'ORD_STAT_00'
+		   AND COALESCE(OB.ORDER_DT, OB.REG_DT) &gt;= #{startDateTime}
+		   AND COALESCE(OB.ORDER_DT, OB.REG_DT) &lt; #{endExclusiveDateTime}
+		   AND EXISTS (
+		       SELECT 1
+		         FROM ORDER_DETAIL OD
+		        WHERE OD.ORD_NO = OB.ORD_NO
+		          AND OD.ORD_DTL_STAT_CD NOT IN ('ORD_DTL_STAT_00', 'ORD_DTL_STAT_99')
+		   )
+	</select>
+
+	<select id="getShopMypageOrderGroupList" resultType="com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderGroupVO">
+		/* GoodsMapper.getShopMypageOrderGroupList: 쇼핑몰 마이페이지 주문내역 주문번호 목록 페이징 조회 */
+		SELECT OB.ORD_NO
+		     , DATE_FORMAT(COALESCE(OB.ORDER_DT, OB.REG_DT), '%Y-%m-%d %H:%i:%s') AS ORDER_DT
+		  FROM ORDER_BASE OB
+		 WHERE OB.CUST_NO = #{custNo}
+		   AND OB.ORD_STAT_CD != 'ORD_STAT_00'
+		   AND COALESCE(OB.ORDER_DT, OB.REG_DT) &gt;= #{startDateTime}
+		   AND COALESCE(OB.ORDER_DT, OB.REG_DT) &lt; #{endExclusiveDateTime}
+		   AND EXISTS (
+		       SELECT 1
+		         FROM ORDER_DETAIL OD
+		        WHERE OD.ORD_NO = OB.ORD_NO
+		          AND OD.ORD_DTL_STAT_CD NOT IN ('ORD_DTL_STAT_00', 'ORD_DTL_STAT_99')
+		   )
+		 ORDER BY COALESCE(OB.ORDER_DT, OB.REG_DT) DESC, OB.ORD_NO DESC
+		 LIMIT #{pageSize} OFFSET #{offset}
+	</select>
+
+	<select id="getShopMypageOrderDetailList" resultType="com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderDetailItemVO">
+		/* GoodsMapper.getShopMypageOrderDetailList: 쇼핑몰 마이페이지 주문내역 주문상세 목록 조회 */
+		SELECT OD.ORD_NO
+		     , OD.ORD_DTL_NO
+		     , OD.ORD_DTL_STAT_CD
+		     , FN_GET_CODE_NM('ORD_DTL_STAT', OD.ORD_DTL_STAT_CD) AS ORD_DTL_STAT_NM
+		     , OD.GOODS_ID
+		     , GB.GOODS_NM
+		     , OD.SIZE_ID
+		     , OD.ORD_QTY
+		     , OD.SALE_AMT
+		     , OD.ADD_AMT
+		     , (
+		         SELECT GI.IMG_PATH
+		           FROM GOODS_IMG GI
+		          WHERE GI.GOODS_ID = OD.GOODS_ID
+		          ORDER BY GI.DISP_ORD ASC, GI.IMG_NO ASC
+		          LIMIT 1
+		       ) AS IMG_PATH
+		  FROM ORDER_DETAIL OD
+		  JOIN ORDER_BASE OB
+		    ON OB.ORD_NO = OD.ORD_NO
+		  LEFT JOIN GOODS_BASE GB
+		    ON GB.GOODS_ID = OD.GOODS_ID
+		 WHERE OD.ORD_NO IN
+		<foreach collection="ordNoList" item="ordNo" open="(" separator="," close=")">
+			#{ordNo}
+		</foreach>
+		   AND OD.ORD_DTL_STAT_CD != 'ORD_DTL_STAT_00'
+		 ORDER BY COALESCE(OB.ORDER_DT, OB.REG_DT) DESC, OD.ORD_NO DESC, OD.ORD_DTL_NO ASC
+	</select>
+
+	<select id="getShopMypageOrderStatusSummary" resultType="com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderStatusSummaryVO">
+		/* GoodsMapper.getShopMypageOrderStatusSummary: 쇼핑몰 마이페이지 주문내역 상태 요약 건수 조회 */
+		SELECT COALESCE(SUM(CASE WHEN OD.ORD_DTL_STAT_CD = 'ORD_DTL_STAT_01' THEN 1 ELSE 0 END), 0) AS WAITING_FOR_DEPOSIT_COUNT
+		     , COALESCE(SUM(CASE WHEN OD.ORD_DTL_STAT_CD = 'ORD_DTL_STAT_02' THEN 1 ELSE 0 END), 0) AS PAYMENT_COMPLETED_COUNT
+		     , COALESCE(SUM(CASE WHEN OD.ORD_DTL_STAT_CD = 'ORD_DTL_STAT_03' THEN 1 ELSE 0 END), 0) AS PRODUCT_PREPARING_COUNT
+		     , COALESCE(SUM(CASE WHEN OD.ORD_DTL_STAT_CD = 'ORD_DTL_STAT_04' THEN 1 ELSE 0 END), 0) AS DELIVERY_PREPARING_COUNT
+		     , COALESCE(SUM(CASE WHEN OD.ORD_DTL_STAT_CD = 'ORD_DTL_STAT_05' THEN 1 ELSE 0 END), 0) AS SHIPPING_COUNT
+		     , COALESCE(SUM(CASE WHEN OD.ORD_DTL_STAT_CD = 'ORD_DTL_STAT_06' THEN 1 ELSE 0 END), 0) AS DELIVERY_COMPLETED_COUNT
+		     , COALESCE(SUM(CASE WHEN OD.ORD_DTL_STAT_CD = 'ORD_DTL_STAT_07' THEN 1 ELSE 0 END), 0) AS PURCHASE_CONFIRMED_COUNT
+		  FROM ORDER_DETAIL OD
+		  JOIN ORDER_BASE OB
+		    ON OB.ORD_NO = OD.ORD_NO
+		 WHERE OB.CUST_NO = #{custNo}
+		   AND OB.ORD_STAT_CD != 'ORD_STAT_00'
+		   AND COALESCE(OB.ORDER_DT, OB.REG_DT) &gt;= #{startDateTime}
+		   AND COALESCE(OB.ORDER_DT, OB.REG_DT) &lt; #{endExclusiveDateTime}
+		   AND EXISTS (
+		       SELECT 1
+		         FROM ORDER_DETAIL ACTIVE_OD
+		        WHERE ACTIVE_OD.ORD_NO = OB.ORD_NO
+		          AND ACTIVE_OD.ORD_DTL_STAT_CD NOT IN ('ORD_DTL_STAT_00', 'ORD_DTL_STAT_99')
+		   )
+	</select>
+
 	<select id="countShopMypageCouponUnavailableGoods" resultType="int">
 		/* GoodsMapper.countShopMypageCouponUnavailableGoods: 쇼핑몰 마이페이지 쿠폰 사용 불가 상품 전체 건수 조회 */
 		SELECT COUNT(*)

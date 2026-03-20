@@ -7,6 +7,10 @@ import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsBasicVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsDetailVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponPageVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageDownloadableCouponVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderDetailItemVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderGroupVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderPageVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderStatusSummaryVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOwnedCouponVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishGoodsItemVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishPageVO;
@@ -364,6 +368,88 @@ class ShopGoodsControllerTests {
 		mockMvc.perform(get("/api/shop/mypage/coupon/page").contentType(MediaType.APPLICATION_JSON))
 			.andExpect(status().isUnauthorized())
 			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
+	}
+
+	@Test
+	@DisplayName("마이페이지 주문내역 조회 API는 로그인 사용자가 요청하면 주문목록과 상태 요약을 반환한다")
+	// 주문내역 조회 성공 시 200 응답과 주문번호/상태 요약 필드가 함께 반환되는지 검증합니다.
+	void getShopMypageOrderPage_returnsOk() throws Exception {
+		// 서비스 반환용 주문내역 페이지 응답 객체를 구성합니다.
+		ShopMypageOrderDetailItemVO detailItem = new ShopMypageOrderDetailItemVO();
+		detailItem.setOrdNo("ORD-0001");
+		detailItem.setOrdDtlNo(1);
+		detailItem.setOrdDtlStatCd("ORD_DTL_STAT_02");
+		detailItem.setOrdDtlStatNm("결제 완료");
+		detailItem.setGoodsId("GOODS001");
+		detailItem.setGoodsNm("테스트 상품");
+
+		ShopMypageOrderGroupVO orderGroup = new ShopMypageOrderGroupVO();
+		orderGroup.setOrdNo("ORD-0001");
+		orderGroup.setOrderDt("2026-03-20 11:40:31");
+		orderGroup.setDetailList(List.of(detailItem));
+
+		ShopMypageOrderStatusSummaryVO statusSummary = new ShopMypageOrderStatusSummaryVO();
+		statusSummary.setWaitingForDepositCount(2);
+		statusSummary.setPaymentCompletedCount(1);
+
+		ShopMypageOrderPageVO page = new ShopMypageOrderPageVO();
+		page.setOrderList(List.of(orderGroup));
+		page.setOrderCount(1);
+		page.setPageNo(1);
+		page.setPageSize(5);
+		page.setTotalPageCount(1);
+		page.setStartDate("2026-03-01");
+		page.setEndDate("2026-03-20");
+		page.setStatusSummary(statusSummary);
+		when(goodsService.getShopMypageOrderPage(1L, 1, "2026-03-01", "2026-03-20")).thenReturn(page);
+
+		// 로그인 쿠키와 함께 요청하면 200 응답과 주문내역 필드를 검증합니다.
+		mockMvc.perform(
+				get("/api/shop/mypage/order/page")
+					.param("pageNo", "1")
+					.param("startDate", "2026-03-01")
+					.param("endDate", "2026-03-20")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.orderCount").value(1))
+			.andExpect(jsonPath("$.pageSize").value(5))
+			.andExpect(jsonPath("$.orderList[0].ordNo").value("ORD-0001"))
+			.andExpect(jsonPath("$.orderList[0].detailList[0].goodsNm").value("테스트 상품"))
+			.andExpect(jsonPath("$.statusSummary.waitingForDepositCount").value(2))
+			.andExpect(jsonPath("$.statusSummary.paymentCompletedCount").value(1));
+	}
+
+	@Test
+	@DisplayName("마이페이지 주문내역 조회 API는 비로그인 요청이면 401을 반환한다")
+	// 비로그인 상태에서 주문내역 조회 요청 시 401 응답을 검증합니다.
+	void getShopMypageOrderPage_returnsUnauthorizedWhenNotLoggedIn() throws Exception {
+		// 로그인 쿠키 없이 요청하면 401 응답과 메시지를 검증합니다.
+		mockMvc.perform(get("/api/shop/mypage/order/page").contentType(MediaType.APPLICATION_JSON))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
+	}
+
+	@Test
+	@DisplayName("마이페이지 주문내역 조회 API는 조회 기간 예외가 발생하면 400을 반환한다")
+	// 기간 검증 예외 발생 시 400 응답과 에러 메시지를 반환하는지 검증합니다.
+	void getShopMypageOrderPage_returnsBadRequestWhenDateRangeInvalid() throws Exception {
+		// 서비스에서 기간 검증 예외를 반환하도록 설정합니다.
+		when(goodsService.getShopMypageOrderPage(1L, 1, "2026-03-21", "2026-03-20"))
+			.thenThrow(new IllegalArgumentException("조회 기간을 확인해주세요."));
+
+		// 로그인 쿠키와 함께 잘못된 기간으로 요청하면 400 응답과 메시지를 검증합니다.
+		mockMvc.perform(
+				get("/api/shop/mypage/order/page")
+					.param("pageNo", "1")
+					.param("startDate", "2026-03-21")
+					.param("endDate", "2026-03-20")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+			)
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("조회 기간을 확인해주세요."));
 	}
 
 	@Test

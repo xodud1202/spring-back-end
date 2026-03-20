@@ -33,6 +33,10 @@ import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponPageVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponUnavailableGoodsVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageDownloadableCouponVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOwnedCouponVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderDetailItemVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderGroupVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderPageVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderStatusSummaryVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishGoodsItemVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishPageVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressRegisterPO;
@@ -64,6 +68,8 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -337,6 +343,163 @@ class GoodsServiceTests {
 		assertThat(result.getDownloadableCouponList().get(0).getUnavailableGoodsCount()).isEqualTo(12);
 		assertThat(result.getDownloadableCouponList().get(0).getUnavailableGoodsList()).hasSize(1);
 		assertThat(result.getDownloadableCouponList().get(0).getUnavailableGoodsList().get(0).getGoodsId()).isEqualTo("GOODS002");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 마이페이지 주문내역 조회 시 주문번호 5건 단위 페이징과 주문상세 묶음 데이터를 반환한다")
+	// 주문내역 조회 시 주문번호 기준 페이징, 혼합 주문의 취소상세 포함, 상태 요약과 이미지 URL 보정이 함께 적용되는지 검증합니다.
+	void getShopMypageOrderPage_returnsPagedOrderGroupsWithSummary() {
+		// 주문번호 목록과 주문상세 목록 테스트 데이터를 구성합니다.
+		ShopMypageOrderGroupVO secondPageFirstOrder = new ShopMypageOrderGroupVO();
+		secondPageFirstOrder.setOrdNo("ORD-0007");
+		secondPageFirstOrder.setOrderDt("2026-03-20 11:40:31");
+
+		ShopMypageOrderGroupVO secondPageSecondOrder = new ShopMypageOrderGroupVO();
+		secondPageSecondOrder.setOrdNo("ORD-0006");
+		secondPageSecondOrder.setOrderDt("2026-03-19 17:09:15");
+
+		ShopMypageOrderDetailItemVO firstDetail = new ShopMypageOrderDetailItemVO();
+		firstDetail.setOrdNo("ORD-0007");
+		firstDetail.setOrdDtlNo(1);
+		firstDetail.setOrdDtlStatCd("ORD_DTL_STAT_02");
+		firstDetail.setOrdDtlStatNm("결제 완료");
+		firstDetail.setGoodsId("GOODS001");
+		firstDetail.setGoodsNm("주문상품1");
+		firstDetail.setSizeId("095");
+		firstDetail.setOrdQty(2);
+		firstDetail.setSaleAmt(12000);
+		firstDetail.setAddAmt(500);
+		firstDetail.setImgPath("goods-1.png");
+
+		ShopMypageOrderDetailItemVO pendingDetail = new ShopMypageOrderDetailItemVO();
+		pendingDetail.setOrdNo("ORD-0007");
+		pendingDetail.setOrdDtlNo(0);
+		pendingDetail.setOrdDtlStatCd("ORD_DTL_STAT_00");
+		pendingDetail.setOrdDtlStatNm("주문 접수");
+		pendingDetail.setGoodsId("GOODS009");
+		pendingDetail.setGoodsNm("주문상품0");
+		pendingDetail.setSizeId("090");
+		pendingDetail.setOrdQty(1);
+		pendingDetail.setSaleAmt(10000);
+		pendingDetail.setAddAmt(0);
+		pendingDetail.setImgPath("goods-0.png");
+
+		ShopMypageOrderDetailItemVO cancelledDetail = new ShopMypageOrderDetailItemVO();
+		cancelledDetail.setOrdNo("ORD-0007");
+		cancelledDetail.setOrdDtlNo(2);
+		cancelledDetail.setOrdDtlStatCd("ORD_DTL_STAT_99");
+		cancelledDetail.setOrdDtlStatNm("주문 취소");
+		cancelledDetail.setGoodsId("GOODS002");
+		cancelledDetail.setGoodsNm("주문상품2");
+		cancelledDetail.setSizeId("100");
+		cancelledDetail.setOrdQty(1);
+		cancelledDetail.setSaleAmt(18000);
+		cancelledDetail.setAddAmt(0);
+		cancelledDetail.setImgPath("goods-2.png");
+
+		ShopMypageOrderDetailItemVO deliveredDetail = new ShopMypageOrderDetailItemVO();
+		deliveredDetail.setOrdNo("ORD-0006");
+		deliveredDetail.setOrdDtlNo(1);
+		deliveredDetail.setOrdDtlStatCd("ORD_DTL_STAT_06");
+		deliveredDetail.setOrdDtlStatNm("배송완료");
+		deliveredDetail.setGoodsId("GOODS003");
+		deliveredDetail.setGoodsNm("주문상품3");
+		deliveredDetail.setSizeId("M");
+		deliveredDetail.setOrdQty(3);
+		deliveredDetail.setSaleAmt(21000);
+		deliveredDetail.setAddAmt(1000);
+		deliveredDetail.setImgPath("goods-3.png");
+
+		ShopMypageOrderStatusSummaryVO summary = new ShopMypageOrderStatusSummaryVO();
+		summary.setWaitingForDepositCount(2);
+		summary.setPaymentCompletedCount(1);
+		summary.setDeliveryCompletedCount(1);
+
+		// 매퍼/FTP 목 응답을 주문내역 페이지 기준으로 설정합니다.
+		when(goodsMapper.countShopMypageOrderGroup(7L, "2026-03-01 00:00:00", "2026-03-21 00:00:00")).thenReturn(7);
+		when(goodsMapper.getShopMypageOrderGroupList(7L, "2026-03-01 00:00:00", "2026-03-21 00:00:00", 5, 5))
+			.thenReturn(List.of(secondPageFirstOrder, secondPageSecondOrder));
+		when(goodsMapper.getShopMypageOrderDetailList(List.of("ORD-0007", "ORD-0006")))
+			.thenReturn(List.of(firstDetail, pendingDetail, cancelledDetail, deliveredDetail));
+		when(goodsMapper.getShopMypageOrderStatusSummary(7L, "2026-03-01 00:00:00", "2026-03-21 00:00:00"))
+			.thenReturn(summary);
+		when(ftpFileService.buildGoodsImageUrl("GOODS001", "goods-1.png"))
+			.thenReturn("https://image.test/goods/GOODS001/goods-1.png");
+		when(ftpFileService.buildGoodsImageUrl("GOODS009", "goods-0.png"))
+			.thenReturn("https://image.test/goods/GOODS009/goods-0.png");
+		when(ftpFileService.buildGoodsImageUrl("GOODS002", "goods-2.png"))
+			.thenReturn("https://image.test/goods/GOODS002/goods-2.png");
+		when(ftpFileService.buildGoodsImageUrl("GOODS003", "goods-3.png"))
+			.thenReturn("https://image.test/goods/GOODS003/goods-3.png");
+
+		// 주문내역 페이지 데이터를 조회합니다.
+		ShopMypageOrderPageVO result = goodsService.getShopMypageOrderPage(7L, 2, "2026-03-01", "2026-03-20");
+
+		// 페이지 정보, 상태 요약, 주문번호별 주문상세 묶음 결과를 검증합니다.
+		assertThat(result).isNotNull();
+		assertThat(result.getOrderCount()).isEqualTo(7);
+		assertThat(result.getPageNo()).isEqualTo(2);
+		assertThat(result.getPageSize()).isEqualTo(5);
+		assertThat(result.getTotalPageCount()).isEqualTo(2);
+		assertThat(result.getStartDate()).isEqualTo("2026-03-01");
+		assertThat(result.getEndDate()).isEqualTo("2026-03-20");
+		assertThat(result.getStatusSummary()).isNotNull();
+		assertThat(result.getStatusSummary().getWaitingForDepositCount()).isEqualTo(2);
+		assertThat(result.getStatusSummary().getPaymentCompletedCount()).isEqualTo(1);
+		assertThat(result.getStatusSummary().getDeliveryCompletedCount()).isEqualTo(1);
+		assertThat(result.getStatusSummary().getProductPreparingCount()).isEqualTo(0);
+		assertThat(result.getOrderList()).hasSize(2);
+		assertThat(result.getOrderList().get(0).getOrdNo()).isEqualTo("ORD-0007");
+		assertThat(result.getOrderList().get(0).getDetailList()).hasSize(2);
+		assertThat(result.getOrderList().get(0).getDetailList())
+			.noneMatch(detailItem -> "ORD_DTL_STAT_00".equals(detailItem.getOrdDtlStatCd()));
+		assertThat(result.getOrderList().get(0).getDetailList().get(0).getImgUrl())
+			.isEqualTo("https://image.test/goods/GOODS001/goods-1.png");
+		assertThat(result.getOrderList().get(0).getDetailList().get(1).getOrdDtlStatCd()).isEqualTo("ORD_DTL_STAT_99");
+		assertThat(result.getOrderList().get(1).getOrdNo()).isEqualTo("ORD-0006");
+		assertThat(result.getOrderList().get(1).getDetailList()).hasSize(1);
+		assertThat(result.getOrderList().get(1).getDetailList().get(0).getImgUrl())
+			.isEqualTo("https://image.test/goods/GOODS003/goods-3.png");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 마이페이지 주문내역 조회 시 기간이 없으면 최근 3개월 기본값과 5건 페이지 크기를 사용한다")
+	// 기본 조회 시 최근 3개월 기간을 계산하고 주문번호 5건 단위로 조회하는지 검증합니다.
+	void getShopMypageOrderPage_usesDefaultThreeMonthRange() {
+		// 최근 3개월 기본 조회 시 전체 건수 0건과 빈 목록을 반환하도록 설정합니다.
+		LocalDate today = LocalDate.now();
+		String expectedStartDate = today.minusMonths(3L).toString();
+		String expectedEndDate = today.toString();
+		String expectedStartDateTime = today.minusMonths(3L).atStartOfDay().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+		String expectedEndExclusiveDateTime = today.plusDays(1L).atStartOfDay().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+		when(goodsMapper.countShopMypageOrderGroup(7L, expectedStartDateTime, expectedEndExclusiveDateTime)).thenReturn(0);
+		when(goodsMapper.getShopMypageOrderGroupList(7L, expectedStartDateTime, expectedEndExclusiveDateTime, 0, 5)).thenReturn(List.of());
+		when(goodsMapper.getShopMypageOrderStatusSummary(7L, expectedStartDateTime, expectedEndExclusiveDateTime)).thenReturn(null);
+
+		// 기간 없이 주문내역 페이지를 조회합니다.
+		ShopMypageOrderPageVO result = goodsService.getShopMypageOrderPage(7L, null, null, null);
+
+		// 기본 조회 기간과 페이지 기본값이 적용되는지 검증합니다.
+		assertThat(result.getStartDate()).isEqualTo(expectedStartDate);
+		assertThat(result.getEndDate()).isEqualTo(expectedEndDate);
+		assertThat(result.getPageNo()).isEqualTo(1);
+		assertThat(result.getPageSize()).isEqualTo(5);
+		assertThat(result.getTotalPageCount()).isEqualTo(0);
+		assertThat(result.getOrderList()).isEmpty();
+		assertThat(result.getStatusSummary()).isNotNull();
+		assertThat(result.getStatusSummary().getWaitingForDepositCount()).isEqualTo(0);
+		assertThat(result.getStatusSummary().getPaymentCompletedCount()).isEqualTo(0);
+		verify(goodsMapper).getShopMypageOrderGroupList(7L, expectedStartDateTime, expectedEndExclusiveDateTime, 0, 5);
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 마이페이지 주문내역 조회 시 시작일이 종료일보다 늦으면 예외를 반환한다")
+	// 잘못된 조회 기간 요청 시 기간 검증 예외를 반환하는지 확인합니다.
+	void getShopMypageOrderPage_throwsWhenStartDateAfterEndDate() {
+		// 역전된 조회 기간으로 주문내역 조회를 요청합니다.
+		assertThatThrownBy(() -> goodsService.getShopMypageOrderPage(7L, 1, "2026-03-21", "2026-03-20"))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessage("조회 기간을 확인해주세요.");
 	}
 
 	@Test

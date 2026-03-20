@@ -9,6 +9,7 @@ import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsCouponDownloadRequ
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsDetailVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponDownloadRequestPO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponPageVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderPageVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishPageVO;
 import com.xodud1202.springbackend.service.GoodsService;
 import jakarta.servlet.http.Cookie;
@@ -222,6 +223,34 @@ public class ShopGoodsController {
 			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
 			log.error("쇼핑몰 마이페이지 쿠폰함 조회 실패 message={}", exception.getMessage(), exception);
 			return ResponseEntity.internalServerError().body(Map.of("message", "쿠폰함 조회에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 마이페이지 주문내역 페이지 데이터를 조회합니다.
+	@GetMapping("/api/shop/mypage/order/page")
+	public ResponseEntity<Object> getShopMypageOrderPage(
+		@RequestParam(required = false) Integer pageNo,
+		@RequestParam(required = false) String startDate,
+		@RequestParam(required = false) String endDate,
+		HttpServletRequest request
+	) {
+		try {
+			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			// 주문내역 페이지 데이터를 조회해 반환합니다.
+			ShopMypageOrderPageVO result = goodsService.getShopMypageOrderPage(custNo, pageNo, startDate, endDate);
+			return ResponseEntity.ok(result);
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
+			log.error("쇼핑몰 마이페이지 주문내역 조회 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "주문내역 조회에 실패했습니다."));
 		}
 	}
 
