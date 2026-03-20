@@ -80,6 +80,119 @@
 		 LIMIT #{pageSize} OFFSET #{offset}
 	</select>
 
+	<select id="getShopVisibleExhibitionDetail" resultType="com.xodud1202.springbackend.domain.shop.exhibition.ShopExhibitionDetailVO">
+		/* ExhibitionMapper.getShopVisibleExhibitionDetail: 쇼핑몰 노출 가능한 기획전 상세 조회 */
+		SELECT EB.EXHIBITION_NO
+		     , EB.EXHIBITION_NM
+		     , DATE_FORMAT(EB.DISP_START_DT, '%Y-%m-%d %H:%i:%s') AS DISP_START_DT
+		     , DATE_FORMAT(EB.DISP_END_DT, '%Y-%m-%d %H:%i:%s') AS DISP_END_DT
+		     , EB.EXHIBITION_PC_DESC AS PC_HTML
+		     , EB.EXHIBITION_MO_DESC AS MOBILE_HTML
+		  FROM EXHIBITION_BASE EB
+		 WHERE EB.EXHIBITION_NO = #{exhibitionNo}
+		   AND EB.DEL_YN = 'N'
+		   AND EB.VIEW_YN = 'Y'
+		   AND EB.EXHIBITION_STAT_CD = 'EXHIBITION_STAT_02'
+		   AND NOW() BETWEEN EB.DISP_START_DT AND EB.DISP_END_DT
+	</select>
+
+	<select id="getShopVisibleExhibitionTabList" resultType="com.xodud1202.springbackend.domain.shop.exhibition.ShopExhibitionTabVO">
+		/* ExhibitionMapper.getShopVisibleExhibitionTabList: 쇼핑몰 노출 가능한 기획전 탭 목록 조회 */
+		SELECT ET.EXHIBITION_TAB_NO
+		     , ET.EXHIBITION_TAB_NM
+		     , DATE_FORMAT(ET.DISP_START_DT, '%Y-%m-%d %H:%i:%s') AS DISP_START_DT
+		     , DATE_FORMAT(ET.DISP_END_DT, '%Y-%m-%d %H:%i:%s') AS DISP_END_DT
+		  FROM EXHIBITION_TAB ET
+		 WHERE ET.EXHIBITION_NO = #{exhibitionNo}
+		   AND ET.DEL_YN = 'N'
+		   AND ET.VIEW_YN = 'Y'
+		   AND NOW() BETWEEN ET.DISP_START_DT AND ET.DISP_END_DT
+		   AND EXISTS (
+		       SELECT 1
+		         FROM EXHIBITION_TAB_GOODS ETG
+		         JOIN GOODS_BASE GB
+		           ON GB.GOODS_ID = ETG.GOODS_ID
+		          AND GB.SHOW_YN = 'Y'
+		          AND GB.GOODS_STAT_CD = 'GOODS_STAT_02'
+		        WHERE ETG.EXHIBITION_TAB_NO = ET.EXHIBITION_TAB_NO
+		          AND ETG.VIEW_YN = 'Y'
+		   )
+		 ORDER BY ET.EXHIBITION_TAB_NO ASC
+	</select>
+
+	<select id="countShopVisibleExhibitionGoods" resultType="int">
+		/* ExhibitionMapper.countShopVisibleExhibitionGoods: 쇼핑몰 노출 가능한 기획전 탭 상품 건수 조회 */
+		SELECT COUNT(1)
+		  FROM EXHIBITION_TAB_GOODS ETG
+		  JOIN EXHIBITION_TAB ET
+		    ON ET.EXHIBITION_TAB_NO = ETG.EXHIBITION_TAB_NO
+		   AND ET.EXHIBITION_NO = #{exhibitionNo}
+		   AND ET.DEL_YN = 'N'
+		   AND ET.VIEW_YN = 'Y'
+		   AND NOW() BETWEEN ET.DISP_START_DT AND ET.DISP_END_DT
+		  JOIN EXHIBITION_BASE EB
+		    ON EB.EXHIBITION_NO = ET.EXHIBITION_NO
+		   AND EB.DEL_YN = 'N'
+		   AND EB.VIEW_YN = 'Y'
+		   AND EB.EXHIBITION_STAT_CD = 'EXHIBITION_STAT_02'
+		   AND NOW() BETWEEN EB.DISP_START_DT AND EB.DISP_END_DT
+		  JOIN GOODS_BASE GB
+		    ON GB.GOODS_ID = ETG.GOODS_ID
+		   AND GB.SHOW_YN = 'Y'
+		   AND GB.GOODS_STAT_CD = 'GOODS_STAT_02'
+		 WHERE ETG.EXHIBITION_TAB_NO = #{exhibitionTabNo}
+		   AND ETG.VIEW_YN = 'Y'
+	</select>
+
+	<select id="getShopVisibleExhibitionGoodsList" resultType="com.xodud1202.springbackend.domain.shop.exhibition.ShopExhibitionGoodsItemVO">
+		/* ExhibitionMapper.getShopVisibleExhibitionGoodsList: 쇼핑몰 노출 가능한 기획전 탭 상품 목록 페이징 조회 */
+		SELECT ET.EXHIBITION_NO
+		     , ETG.EXHIBITION_TAB_NO
+		     , ETG.GOODS_ID
+		     , GB.GOODS_NM
+		     , BB.BRAND_NM
+		     , GB.SUPPLY_AMT
+		     , GB.SALE_AMT
+		     , (
+		         SELECT GI.IMG_PATH
+		           FROM GOODS_IMG GI
+		          WHERE GI.GOODS_ID = ETG.GOODS_ID
+		          ORDER BY GI.DISP_ORD ASC, GI.IMG_NO ASC
+		          LIMIT 1
+		       ) AS IMG_PATH
+		     , (
+		         SELECT GI.IMG_PATH
+		           FROM GOODS_IMG GI
+		          WHERE GI.GOODS_ID = ETG.GOODS_ID
+		          ORDER BY GI.DISP_ORD ASC, GI.IMG_NO ASC
+		          LIMIT 1 OFFSET 1
+		       ) AS SECONDARY_IMG_PATH
+		     , ETG.SORT_SEQ
+		  FROM EXHIBITION_TAB_GOODS ETG
+		  JOIN EXHIBITION_TAB ET
+		    ON ET.EXHIBITION_TAB_NO = ETG.EXHIBITION_TAB_NO
+		   AND ET.EXHIBITION_NO = #{exhibitionNo}
+		   AND ET.DEL_YN = 'N'
+		   AND ET.VIEW_YN = 'Y'
+		   AND NOW() BETWEEN ET.DISP_START_DT AND ET.DISP_END_DT
+		  JOIN EXHIBITION_BASE EB
+		    ON EB.EXHIBITION_NO = ET.EXHIBITION_NO
+		   AND EB.DEL_YN = 'N'
+		   AND EB.VIEW_YN = 'Y'
+		   AND EB.EXHIBITION_STAT_CD = 'EXHIBITION_STAT_02'
+		   AND NOW() BETWEEN EB.DISP_START_DT AND EB.DISP_END_DT
+		  JOIN GOODS_BASE GB
+		    ON GB.GOODS_ID = ETG.GOODS_ID
+		   AND GB.SHOW_YN = 'Y'
+		   AND GB.GOODS_STAT_CD = 'GOODS_STAT_02'
+		  LEFT JOIN BRAND_BASE BB
+		    ON BB.BRAND_NO = GB.BRAND_NO
+		 WHERE ETG.EXHIBITION_TAB_NO = #{exhibitionTabNo}
+		   AND ETG.VIEW_YN = 'Y'
+		 ORDER BY ETG.SORT_SEQ ASC, ETG.GOODS_ID ASC
+		 LIMIT #{pageSize} OFFSET #{offset}
+	</select>
+
 	<select id="getAdminExhibitionDetail" resultType="com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionDetailVO">
 		/* ExhibitionMapper.getAdminExhibitionDetail: 기획전 상세 조회 */
 		SELECT EB.EXHIBITION_NO

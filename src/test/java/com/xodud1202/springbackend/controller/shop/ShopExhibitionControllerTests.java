@@ -1,7 +1,11 @@
 package com.xodud1202.springbackend.controller.shop;
 
+import com.xodud1202.springbackend.domain.shop.exhibition.ShopExhibitionDetailVO;
+import com.xodud1202.springbackend.domain.shop.exhibition.ShopExhibitionGoodsItemVO;
+import com.xodud1202.springbackend.domain.shop.exhibition.ShopExhibitionGoodsPageVO;
 import com.xodud1202.springbackend.domain.shop.exhibition.ShopExhibitionItemVO;
 import com.xodud1202.springbackend.domain.shop.exhibition.ShopExhibitionPageVO;
+import com.xodud1202.springbackend.domain.shop.exhibition.ShopExhibitionTabVO;
 import com.xodud1202.springbackend.service.ExhibitionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -16,8 +20,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.List;
 
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -90,6 +94,99 @@ class ShopExhibitionControllerTests {
 	}
 
 	@Test
+	@DisplayName("기획전 상세 API는 정상 조회 시 200과 상세 데이터를 반환한다")
+	// 기획전 상세 API 정상 응답 구조를 검증합니다.
+	void getShopExhibitionDetail_returnsOk() throws Exception {
+		// 서비스 반환용 상세 응답 객체를 구성합니다.
+		ShopExhibitionTabVO tab = new ShopExhibitionTabVO();
+		tab.setExhibitionTabNo(1);
+		tab.setExhibitionTabNm("Spring");
+
+		ShopExhibitionDetailVO detailVO = new ShopExhibitionDetailVO();
+		detailVO.setExhibitionNo(2);
+		detailVO.setExhibitionNm("2026 S/S 신상품 기획전");
+		detailVO.setVisibleHtml("<div>PC</div>");
+		detailVO.setDefaultTabNo(1);
+		detailVO.setTabList(List.of(tab));
+		when(exhibitionService.getShopExhibitionDetail(2)).thenReturn(detailVO);
+
+		// 기획전 상세 API 요청 후 200 응답과 데이터 필드를 검증합니다.
+		mockMvc.perform(get("/api/shop/exhibition/detail").param("exhibitionNo", "2").contentType(MediaType.APPLICATION_JSON))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.exhibitionNo").value(2))
+			.andExpect(jsonPath("$.defaultTabNo").value(1))
+			.andExpect(jsonPath("$.tabList[0].exhibitionTabNm").value("Spring"));
+	}
+
+	@Test
+	@DisplayName("기획전 상세 API는 미노출 기획전이면 404를 반환한다")
+	// 기획전 상세 미존재/미노출 예외가 404 응답으로 변환되는지 검증합니다.
+	void getShopExhibitionDetail_returnsNotFoundWhenExhibitionDoesNotExist() throws Exception {
+		// 404 성격의 서비스 예외를 목으로 설정합니다.
+		when(exhibitionService.getShopExhibitionDetail(eq(999))).thenThrow(new IllegalArgumentException("기획전 정보를 찾을 수 없습니다."));
+
+		// 기획전 상세 API 요청 후 404 응답과 메시지를 검증합니다.
+		mockMvc.perform(get("/api/shop/exhibition/detail").param("exhibitionNo", "999").contentType(MediaType.APPLICATION_JSON))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.message").value("기획전 정보를 찾을 수 없습니다."));
+	}
+
+	@Test
+	@DisplayName("기획전 상품 API는 정상 조회 시 200과 페이징 데이터를 반환한다")
+	// 기획전 탭 상품 API 정상 응답 구조를 검증합니다.
+	void getShopExhibitionGoods_returnsOk() throws Exception {
+		// 서비스 반환용 상품 페이지 응답 객체를 구성합니다.
+		ShopExhibitionGoodsItemVO goodsItem = new ShopExhibitionGoodsItemVO();
+		goodsItem.setExhibitionNo(2);
+		goodsItem.setExhibitionTabNo(1);
+		goodsItem.setGoodsId("KPFESBP05PK");
+		goodsItem.setGoodsNm("테스트 상품");
+
+		ShopExhibitionGoodsPageVO pageVO = new ShopExhibitionGoodsPageVO();
+		pageVO.setGoodsList(List.of(goodsItem));
+		pageVO.setTotalCount(1);
+		pageVO.setPageNo(1);
+		pageVO.setPageSize(20);
+		pageVO.setHasMore(false);
+		pageVO.setNextPageNo(null);
+		when(exhibitionService.getShopExhibitionGoodsPage(2, 1, 1)).thenReturn(pageVO);
+
+		// 기획전 상품 API 요청 후 200 응답과 데이터 필드를 검증합니다.
+		mockMvc.perform(
+			get("/api/shop/exhibition/goods")
+				.param("exhibitionNo", "2")
+				.param("exhibitionTabNo", "1")
+				.param("pageNo", "1")
+				.contentType(MediaType.APPLICATION_JSON)
+		)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.goodsList[0].goodsId").value("KPFESBP05PK"))
+			.andExpect(jsonPath("$.pageNo").value(1))
+			.andExpect(jsonPath("$.pageSize").value(20))
+			.andExpect(jsonPath("$.hasMore").value(false));
+	}
+
+	@Test
+	@DisplayName("기획전 상품 API는 미노출 탭이면 404를 반환한다")
+	// 기획전 탭 미존재/미노출 예외가 404 응답으로 변환되는지 검증합니다.
+	void getShopExhibitionGoods_returnsNotFoundWhenTabDoesNotExist() throws Exception {
+		// 404 성격의 서비스 예외를 목으로 설정합니다.
+		when(exhibitionService.getShopExhibitionGoodsPage(eq(2), eq(99), eq(1)))
+			.thenThrow(new IllegalArgumentException("기획전 탭 정보를 찾을 수 없습니다."));
+
+		// 기획전 상품 API 요청 후 404 응답과 메시지를 검증합니다.
+		mockMvc.perform(
+			get("/api/shop/exhibition/goods")
+				.param("exhibitionNo", "2")
+				.param("exhibitionTabNo", "99")
+				.param("pageNo", "1")
+				.contentType(MediaType.APPLICATION_JSON)
+		)
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.message").value("기획전 탭 정보를 찾을 수 없습니다."));
+	}
+
+	@Test
 	@DisplayName("기획전 목록 API는 예외 발생 시 500과 에러 메시지를 반환한다")
 	// 서비스 예외 발생 시 500 응답으로 변환되는지 검증합니다.
 	void getShopExhibitionList_returnsInternalServerErrorWhenExceptionOccurs() throws Exception {
@@ -102,4 +199,3 @@ class ShopExhibitionControllerTests {
 			.andExpect(jsonPath("$.message").value("기획전 목록 조회에 실패했습니다."));
 	}
 }
-

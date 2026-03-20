@@ -9,8 +9,12 @@ import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionSavePO;
 import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionTabPO;
 import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionVO;
 import com.xodud1202.springbackend.domain.common.FtpProperties;
+import com.xodud1202.springbackend.domain.shop.exhibition.ShopExhibitionDetailVO;
+import com.xodud1202.springbackend.domain.shop.exhibition.ShopExhibitionGoodsItemVO;
+import com.xodud1202.springbackend.domain.shop.exhibition.ShopExhibitionGoodsPageVO;
 import com.xodud1202.springbackend.domain.shop.exhibition.ShopExhibitionItemVO;
 import com.xodud1202.springbackend.domain.shop.exhibition.ShopExhibitionPageVO;
+import com.xodud1202.springbackend.domain.shop.exhibition.ShopExhibitionTabVO;
 import com.xodud1202.springbackend.mapper.ExhibitionMapper;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.Cell;
@@ -53,10 +57,13 @@ public class ExhibitionService {
 	private static final int DEFAULT_PAGE_SIZE = 20;
 	private static final int MAX_PAGE_SIZE = 200;
 	private static final int SHOP_EXHIBITION_PAGE_SIZE = 20;
+	private static final int SHOP_EXHIBITION_GOODS_PAGE_SIZE = 20;
 	private static final int DEFAULT_MAX_ORDER = 99999;
 	private static final DateTimeFormatter SEARCH_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 	private static final DateTimeFormatter BASIC_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd");
 	private static final DateTimeFormatter DISPLAY_PERIOD_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+	private static final String SHOP_EXHIBITION_NOT_FOUND_MESSAGE = "기획전 정보를 찾을 수 없습니다.";
+	private static final String SHOP_EXHIBITION_TAB_NOT_FOUND_MESSAGE = "기획전 탭 정보를 찾을 수 없습니다.";
 	private static final String HEADER_GOODS_ID = "상품코드";
 	private static final String HEADER_DISPLAY_ORDER = "노출순서";
 	private static final int EXHIBITION_THUMBNAIL_WIDTH = 750;
@@ -131,6 +138,74 @@ public class ExhibitionService {
 		return result;
 	}
 
+	// 쇼핑몰 기획전 상세 화면 데이터를 조회합니다.
+	public ShopExhibitionDetailVO getShopExhibitionDetail(Integer exhibitionNo) {
+		// 유효하지 않은 기획전 번호는 바로 예외 처리합니다.
+		if (exhibitionNo == null || exhibitionNo < 1) {
+			throw new IllegalArgumentException("기획전 번호를 확인해주세요.");
+		}
+
+		// 노출 가능한 기획전 마스터 정보를 조회합니다.
+		ShopExhibitionDetailVO detail = exhibitionMapper.getShopVisibleExhibitionDetail(exhibitionNo);
+		if (detail == null) {
+			throw new IllegalArgumentException(SHOP_EXHIBITION_NOT_FOUND_MESSAGE);
+		}
+
+		// 노출 가능한 탭 목록을 조회하고 기본 선택 탭을 확정합니다.
+		List<ShopExhibitionTabVO> tabList = exhibitionMapper.getShopVisibleExhibitionTabList(exhibitionNo);
+		List<ShopExhibitionTabVO> safeTabList = tabList == null ? List.of() : tabList;
+		if (safeTabList.isEmpty()) {
+			throw new IllegalArgumentException(SHOP_EXHIBITION_NOT_FOUND_MESSAGE);
+		}
+
+		// PC/모바일 HTML과 기본 선택 탭을 응답 객체에 반영합니다.
+		detail.setTabList(safeTabList);
+		detail.setDefaultTabNo(safeTabList.get(0).getExhibitionTabNo());
+		detail.setVisibleHtml(resolveVisibleExhibitionHtml(detail.getPcHtml(), detail.getMobileHtml()));
+		return detail;
+	}
+
+	// 쇼핑몰 기획전 탭 상품 더보기 데이터를 조회합니다.
+	public ShopExhibitionGoodsPageVO getShopExhibitionGoodsPage(Integer exhibitionNo, Integer exhibitionTabNo, Integer requestedPageNo) {
+		// 필수 식별자 유효성을 먼저 확인합니다.
+		if (exhibitionNo == null || exhibitionNo < 1) {
+			throw new IllegalArgumentException("기획전 번호를 확인해주세요.");
+		}
+		if (exhibitionTabNo == null || exhibitionTabNo < 1) {
+			throw new IllegalArgumentException("기획전 탭 번호를 확인해주세요.");
+		}
+
+		// 기획전/탭 노출 가능 여부를 먼저 확인합니다.
+		assertShopExhibitionVisible(exhibitionNo);
+		assertShopExhibitionTabVisible(exhibitionNo, exhibitionTabNo);
+
+		// 페이지 번호와 전체 상품 건수를 기준으로 조회 범위를 계산합니다.
+		int resolvedRequestedPageNo = resolveRequestedPageNo(requestedPageNo);
+		int totalCount = exhibitionMapper.countShopVisibleExhibitionGoods(exhibitionNo, exhibitionTabNo);
+		if (totalCount < 1) {
+			throw new IllegalArgumentException(SHOP_EXHIBITION_TAB_NOT_FOUND_MESSAGE);
+		}
+		int totalPageCount = calculateTotalPageCount(totalCount, SHOP_EXHIBITION_GOODS_PAGE_SIZE);
+		int resolvedPageNo = Math.min(resolvedRequestedPageNo, totalPageCount);
+		int offset = calculateOffset(resolvedPageNo, SHOP_EXHIBITION_GOODS_PAGE_SIZE);
+
+		// 탭 상품 목록을 조회하고 이미지 URL을 채웁니다.
+		List<ShopExhibitionGoodsItemVO> goodsList =
+			exhibitionMapper.getShopVisibleExhibitionGoodsList(exhibitionNo, exhibitionTabNo, offset, SHOP_EXHIBITION_GOODS_PAGE_SIZE);
+		List<ShopExhibitionGoodsItemVO> safeGoodsList = goodsList == null ? List.of() : goodsList;
+		applyShopExhibitionGoodsImageUrls(safeGoodsList);
+
+		// 더보기 응답 객체를 구성합니다.
+		ShopExhibitionGoodsPageVO result = new ShopExhibitionGoodsPageVO();
+		result.setGoodsList(safeGoodsList);
+		result.setTotalCount(totalCount);
+		result.setPageNo(resolvedPageNo);
+		result.setPageSize(SHOP_EXHIBITION_GOODS_PAGE_SIZE);
+		result.setHasMore(resolvedPageNo < totalPageCount);
+		result.setNextPageNo(resolvedPageNo < totalPageCount ? resolvedPageNo + 1 : null);
+		return result;
+	}
+
 	// 기획전 상세를 조회합니다.
 	public ExhibitionDetailVO getAdminExhibitionDetail(Integer exhibitionNo) {
 		// 유효하지 않은 식별자는 조회하지 않습니다.
@@ -168,6 +243,22 @@ public class ExhibitionService {
 				continue;
 			}
 			item.setImgUrl(ftpFileService.buildGoodsImageUrl(item.getGoodsId(), imgPath));
+		}
+	}
+
+	// 쇼핑몰 기획전 탭 상품 이미지 URL을 적용합니다.
+	private void applyShopExhibitionGoodsImageUrls(List<ShopExhibitionGoodsItemVO> goodsList) {
+		if (goodsList == null || goodsList.isEmpty()) {
+			return;
+		}
+		for (ShopExhibitionGoodsItemVO item : goodsList) {
+			if (item == null) {
+				continue;
+			}
+
+			// 기본/보조 이미지 경로를 웹 접근 URL로 변환합니다.
+			item.setImgUrl(resolveGoodsImageUrl(item.getGoodsId(), item.getImgPath()));
+			item.setSecondaryImgUrl(resolveGoodsImageUrl(item.getGoodsId(), item.getSecondaryImgPath()));
 		}
 	}
 
@@ -785,6 +876,40 @@ public class ExhibitionService {
 			return 0;
 		}
 		return (pageNo - 1) * pageSize;
+	}
+
+	// 쇼핑몰 기획전 마스터 노출 가능 여부를 확인합니다.
+	private void assertShopExhibitionVisible(Integer exhibitionNo) {
+		ShopExhibitionDetailVO detail = exhibitionMapper.getShopVisibleExhibitionDetail(exhibitionNo);
+		if (detail == null) {
+			throw new IllegalArgumentException(SHOP_EXHIBITION_NOT_FOUND_MESSAGE);
+		}
+	}
+
+	// 쇼핑몰 기획전 탭 노출 가능 여부를 확인합니다.
+	private void assertShopExhibitionTabVisible(Integer exhibitionNo, Integer exhibitionTabNo) {
+		List<ShopExhibitionTabVO> tabList = exhibitionMapper.getShopVisibleExhibitionTabList(exhibitionNo);
+		if (tabList == null || tabList.stream().noneMatch(item -> item != null && Objects.equals(item.getExhibitionTabNo(), exhibitionTabNo))) {
+			throw new IllegalArgumentException(SHOP_EXHIBITION_TAB_NOT_FOUND_MESSAGE);
+		}
+	}
+
+	// 쇼핑몰 기획전 본문에 노출할 기본 HTML을 계산합니다.
+	private String resolveVisibleExhibitionHtml(String pcHtml, String mobileHtml) {
+		String normalizedPcHtml = trimToNull(pcHtml);
+		String normalizedMobileHtml = trimToNull(mobileHtml);
+		return normalizedPcHtml != null ? normalizedPcHtml : normalizedMobileHtml;
+	}
+
+	// 상품 이미지 경로를 웹 접근 가능한 URL로 변환합니다.
+	private String resolveGoodsImageUrl(String goodsId, String filePath) {
+		if (isBlank(goodsId) || isBlank(filePath)) {
+			return null;
+		}
+		if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
+			return filePath;
+		}
+		return ftpFileService.buildGoodsImageUrl(goodsId, filePath);
 	}
 
 	// 기획전 조회 공백 문자열을 판별합니다.

@@ -7,7 +7,10 @@ import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionPO;
 import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionSavePO;
 import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionTabPO;
 import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionVO;
+import com.xodud1202.springbackend.domain.shop.exhibition.ShopExhibitionDetailVO;
+import com.xodud1202.springbackend.domain.shop.exhibition.ShopExhibitionGoodsItemVO;
 import com.xodud1202.springbackend.domain.shop.exhibition.ShopExhibitionItemVO;
+import com.xodud1202.springbackend.domain.shop.exhibition.ShopExhibitionTabVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -78,4 +81,21 @@ public interface ExhibitionMapper {
 
 	// 쇼핑몰 기획전 목록을 페이징 조회합니다.
 	List<ShopExhibitionItemVO> getShopVisibleExhibitionList(@Param("offset") int offset, @Param("pageSize") int pageSize);
+
+	// 쇼핑몰 노출 가능한 기획전 상세를 조회합니다.
+	ShopExhibitionDetailVO getShopVisibleExhibitionDetail(@Param("exhibitionNo") Integer exhibitionNo);
+
+	// 쇼핑몰 노출 가능한 기획전 탭 목록을 조회합니다.
+	List<ShopExhibitionTabVO> getShopVisibleExhibitionTabList(@Param("exhibitionNo") Integer exhibitionNo);
+
+	// 쇼핑몰 노출 가능한 기획전 탭 상품 건수를 조회합니다.
+	int countShopVisibleExhibitionGoods(@Param("exhibitionNo") Integer exhibitionNo, @Param("exhibitionTabNo") Integer exhibitionTabNo);
+
+	// 쇼핑몰 노출 가능한 기획전 탭 상품 목록을 페이지 단위로 조회합니다.
+	List<ShopExhibitionGoodsItemVO> getShopVisibleExhibitionGoodsList(
+		@Param("exhibitionNo") Integer exhibitionNo,
+		@Param("exhibitionTabNo") Integer exhibitionTabNo,
+		@Param("offset") int offset,
+		@Param("pageSize") int pageSize
+	);
 }
