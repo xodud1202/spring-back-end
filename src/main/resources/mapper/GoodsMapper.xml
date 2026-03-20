@@ -1158,6 +1158,21 @@
 		 WHERE ORD_NO = #{ordNo}
 	</update>
 
+	<update id="updateShopOrderBaseStatusAndDates">
+		/* GoodsMapper.updateShopOrderBaseStatusAndDates: 쇼핑몰 주문 마스터 상태와 결제 시각 변경 */
+		UPDATE ORDER_BASE
+		   SET ORD_STAT_CD = #{ordStatCd}
+		<if test="orderDt != null and orderDt != ''">
+		     , ORDER_DT = #{orderDt}
+		</if>
+		<if test="orderConfirmDt != null and orderConfirmDt != ''">
+		     , ORDER_CONFIRM_DT = #{orderConfirmDt}
+		</if>
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE ORD_NO = #{ordNo}
+	</update>
+
 	<update id="updateShopOrderDetailStatus">
 		/* GoodsMapper.updateShopOrderDetailStatus: 쇼핑몰 주문 상세 상태 일괄 변경 */
 		UPDATE ORDER_DETAIL

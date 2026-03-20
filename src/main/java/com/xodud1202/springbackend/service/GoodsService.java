@@ -178,6 +178,7 @@ public class GoodsService {
 	private static final String SHOP_ORDER_PAYMENT_PREPARE_MESSAGE = "결제 준비에 실패했습니다.";
 	private static final String SHOP_ORDER_PAYMENT_CONFIRM_MESSAGE = "결제 승인 처리에 실패했습니다.";
 	private static final String SHOP_ORDER_PAYMENT_STOCK_SHORTAGE_MESSAGE = "재고가 부족한 상품이 있습니다.";
+	private static final String SHOP_ORDER_BANK_GRP_CD = "BANK";
 	private static final String SHOP_ORDER_PAYMENT_METHOD_CARD = "PAY_METHOD_01";
 	private static final String SHOP_ORDER_PAYMENT_METHOD_VIRTUAL_ACCOUNT = "PAY_METHOD_02";
 	private static final String SHOP_ORDER_PAYMENT_METHOD_TRANSFER = "PAY_METHOD_03";
@@ -1207,7 +1208,9 @@ public class GoodsService {
 		}
 
 		// 현재 로그인 고객의 유효한 주문 대상 장바구니 목록을 조회합니다.
-		return buildShopOrderPage(resolveValidatedShopOrderCartItemList(cartIdList, custNo), custNo, deviceGbCd, shopOrigin);
+		List<ShopCartItemVO> orderCartItemList = resolveValidatedShopOrderCartItemList(cartIdList, custNo);
+		validateShopOrderStock(orderCartItemList);
+		return buildShopOrderPage(orderCartItemList, custNo, deviceGbCd, shopOrigin);
 	}
 
 	// 쇼핑몰 주문서 할인 금액을 재계산합니다.
@@ -1244,7 +1247,7 @@ public class GoodsService {
 
 		// 현재 유효한 주문 대상 장바구니와 고객/배송지 정보를 조회합니다.
 		List<ShopCartItemVO> orderCartItemList = resolveValidatedShopOrderCartItemList(param.getCartIdList(), custNo);
-		validateShopOrderPaymentStock(orderCartItemList);
+		validateShopOrderStock(orderCartItemList);
 		ShopOrderAddressVO selectedAddress = resolveRequiredShopOrderAddress(custNo, param.getAddressNm());
 		ShopOrderCustomerInfoVO customerInfo = resolveShopOrderCustomerInfo(custNo, deviceGbCd);
 		ShopOrderDiscountContext discountContext = buildShopOrderDiscountContext(orderCartItemList, custNo);
@@ -1422,7 +1425,13 @@ public class GoodsService {
 				approvedAt,
 				custNo
 			);
-			goodsMapper.updateShopOrderBaseStatus(param.getOrdNo().trim(), SHOP_ORDER_STAT_WAITING_DEPOSIT, custNo);
+			goodsMapper.updateShopOrderBaseStatusAndDates(
+				param.getOrdNo().trim(),
+				SHOP_ORDER_STAT_WAITING_DEPOSIT,
+				approvedAt,
+				null,
+				custNo
+			);
 			goodsMapper.updateShopOrderDetailStatus(param.getOrdNo().trim(), SHOP_ORDER_DTL_STAT_WAITING_DEPOSIT, custNo);
 			ShopOrderPaymentVO updatedPayment = goodsMapper.getShopPaymentByPayNo(payment.getPayNo());
 			ShopOrderPaymentConfirmVO result = buildShopOrderPaymentConfirmResult(updatedPayment);
@@ -1451,7 +1460,13 @@ public class GoodsService {
 			approvedAt,
 			custNo
 		);
-		goodsMapper.updateShopOrderBaseStatus(param.getOrdNo().trim(), SHOP_ORDER_STAT_DONE, custNo);
+		goodsMapper.updateShopOrderBaseStatusAndDates(
+			param.getOrdNo().trim(),
+			SHOP_ORDER_STAT_DONE,
+			approvedAt,
+			approvedAt,
+			custNo
+		);
 		goodsMapper.updateShopOrderDetailStatus(param.getOrdNo().trim(), SHOP_ORDER_DTL_STAT_DONE, custNo);
 		ShopOrderPaymentVO updatedPayment = goodsMapper.getShopPaymentByPayNo(payment.getPayNo());
 		ShopOrderPaymentConfirmVO result = buildShopOrderPaymentConfirmResult(updatedPayment);
@@ -1553,7 +1568,13 @@ public class GoodsService {
 				normalizedWebhookDt,
 				payment.getCustNo()
 			);
-			goodsMapper.updateShopOrderBaseStatus(payment.getOrdNo(), SHOP_ORDER_STAT_DONE, payment.getCustNo());
+			goodsMapper.updateShopOrderBaseStatusAndDates(
+				payment.getOrdNo(),
+				SHOP_ORDER_STAT_DONE,
+				null,
+				normalizedWebhookDt,
+				payment.getCustNo()
+			);
 			goodsMapper.updateShopOrderDetailStatus(payment.getOrdNo(), SHOP_ORDER_DTL_STAT_DONE, payment.getCustNo());
 			return;
 		}
@@ -2280,8 +2301,8 @@ public class GoodsService {
 		return orderCartItemList;
 	}
 
-	// 결제 준비 시 현재 주문 대상 상품의 재고가 충분한지 확인합니다.
-	private void validateShopOrderPaymentStock(List<ShopCartItemVO> orderCartItemList) {
+	// 주문 대상 상품의 현재 재고가 충분한지 확인합니다.
+	private void validateShopOrderStock(List<ShopCartItemVO> orderCartItemList) {
 		// 같은 상품/사이즈는 수량을 합산해 현재 재고와 비교합니다.
 		for (ShopOrderRestoreCartItemVO stockItem : aggregateShopOrderStockItemListFromCart(orderCartItemList)) {
 			if (stockItem == null || isBlank(stockItem.getGoodsId()) || isBlank(stockItem.getSizeId())) {
@@ -3281,10 +3302,22 @@ public class GoodsService {
 		result.setOrderName(payment == null ? null : readShopOrderSnapshotValue(payment.getReqRawJson(), "orderName"));
 		result.setAmount(payment == null ? null : payment.getPayAmt());
 		result.setBankCd(payment == null ? null : payment.getBankCd());
+		result.setBankNm(resolveShopOrderBankName(payment == null ? null : payment.getBankCd()));
 		result.setBankNo(payment == null ? null : payment.getBankNo());
 		result.setVactHolderNm(payment == null ? null : payment.getVactHolderNm());
 		result.setVactDueDt(payment == null ? null : payment.getVactDueDt());
 		return result;
+	}
+
+	// 가상계좌 은행코드를 공통코드 기준 은행명으로 변환합니다.
+	private String resolveShopOrderBankName(String bankCd) {
+		// 은행코드가 비어 있으면 빈 문자열을 반환합니다.
+		if (isBlank(bankCd)) {
+			return "";
+		}
+
+		// 공통코드 BANK 그룹에서 은행명을 조회합니다.
+		return shopAuthService.getCommonCodeName(SHOP_ORDER_BANK_GRP_CD, bankCd);
 	}
 
 	// PAYMENT 상태 기준 주문상태 코드를 계산합니다.

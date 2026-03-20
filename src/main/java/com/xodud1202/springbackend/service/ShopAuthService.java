@@ -52,6 +52,23 @@ public class ShopAuthService {
 
 	private final ShopAuthMapper shopAuthMapper;
 
+	// 공통코드 코드값으로 코드명을 조회합니다.
+	public String getCommonCodeName(String grpCd, String cd) {
+		// 그룹코드 또는 코드값이 비어 있으면 빈 문자열을 반환합니다.
+		if (isBlank(grpCd) || isBlank(cd)) {
+			return "";
+		}
+
+		// 공통코드명을 조회하고 미조회 시 코드값을 대체 반환합니다.
+		String normalizedGrpCd = grpCd.trim();
+		String normalizedCd = cd.trim();
+		String codeName = shopAuthMapper.getCommonCodeName(normalizedGrpCd, normalizedCd);
+		if (isBlank(codeName)) {
+			return normalizedCd;
+		}
+		return codeName.trim();
+	}
+
 	// 고객 등급코드에 해당하는 등급명을 조회합니다.
 	public String getCustomerGradeName(String custGradeCd) {
 		// 등급코드가 비어 있으면 빈 문자열을 반환합니다.
@@ -59,13 +76,8 @@ public class ShopAuthService {
 			return "";
 		}
 
-		// 공통코드에서 고객 등급명을 조회하고 미조회 시 코드값을 대체 반환합니다.
-		String normalizedCustGradeCd = custGradeCd.trim();
-		String custGradeNm = shopAuthMapper.getCommonCodeName(CUST_GRADE_GRP_CD, normalizedCustGradeCd);
-		if (isBlank(custGradeNm)) {
-			return normalizedCustGradeCd;
-		}
-		return custGradeNm.trim();
+		// 고객 등급 공통코드명을 조회합니다.
+		return getCommonCodeName(CUST_GRADE_GRP_CD, custGradeCd);
 	}
 
 	// 구글 로그인 식별값으로 기존 회원 여부를 판정합니다.

@@ -231,6 +231,15 @@ public interface GoodsMapper {
 	// 쇼핑몰 주문 마스터 상태를 변경합니다.
 	int updateShopOrderBaseStatus(@Param("ordNo") String ordNo, @Param("ordStatCd") String ordStatCd, @Param("udtNo") Long udtNo);
 
+	// 쇼핑몰 주문 마스터 상태와 결제 시각을 변경합니다.
+	int updateShopOrderBaseStatusAndDates(
+		@Param("ordNo") String ordNo,
+		@Param("ordStatCd") String ordStatCd,
+		@Param("orderDt") String orderDt,
+		@Param("orderConfirmDt") String orderConfirmDt,
+		@Param("udtNo") Long udtNo
+	);
+
 	// 쇼핑몰 주문 상세 상태를 일괄 변경합니다.
 	int updateShopOrderDetailStatus(@Param("ordNo") String ordNo, @Param("ordDtlStatCd") String ordDtlStatCd, @Param("udtNo") Long udtNo);
 

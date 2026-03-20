@@ -21,6 +21,8 @@ public class ShopOrderPaymentConfirmVO {
 	private Long amount;
 	// 가상계좌 은행코드입니다.
 	private String bankCd;
+	// 가상계좌 은행명입니다.
+	private String bankNm;
 	// 가상계좌 번호입니다.
 	private String bankNo;
 	// 가상계좌 예금주명입니다.

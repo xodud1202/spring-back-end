@@ -48,6 +48,7 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountQuotePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountQuoteVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderGoodsCouponSelectionVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPageVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentConfirmVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentConfirmPO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentPreparePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentVO;
@@ -930,6 +931,17 @@ class GoodsServiceTests {
 		goods200Size.setSizeId("100");
 		goods200Size.setStockQty(7);
 
+		GoodsSizeVO goods100SizeDetail = new GoodsSizeVO();
+		goods100SizeDetail.setGoodsId("GOODS100");
+		goods100SizeDetail.setSizeId("095");
+		goods100SizeDetail.setStockQty(5);
+		goods100SizeDetail.setDelYn("N");
+		GoodsSizeVO goods200SizeDetail = new GoodsSizeVO();
+		goods200SizeDetail.setGoodsId("GOODS200");
+		goods200SizeDetail.setSizeId("100");
+		goods200SizeDetail.setStockQty(7);
+		goods200SizeDetail.setDelYn("N");
+
 		ShopCartSiteInfoVO siteInfo = new ShopCartSiteInfoVO();
 		siteInfo.setSiteId("xodud1202");
 		siteInfo.setDeliveryFee(3000);
@@ -963,6 +975,8 @@ class GoodsServiceTests {
 		when(goodsMapper.getShopPointSaveRateByCustGradeCd("WELCOME")).thenReturn(1);
 		when(goodsMapper.getShopGoodsSizeList("GOODS100")).thenReturn(List.of(goods100Size));
 		when(goodsMapper.getShopGoodsSizeList("GOODS200")).thenReturn(List.of(goods200Size));
+		when(goodsMapper.getAdminGoodsSizeDetail("GOODS100", "095")).thenReturn(goods100SizeDetail);
+		when(goodsMapper.getAdminGoodsSizeDetail("GOODS200", "100")).thenReturn(goods200SizeDetail);
 		when(goodsMapper.getShopCartSiteInfo("xodud1202")).thenReturn(siteInfo);
 		when(goodsMapper.getShopCustomerCouponList(7L)).thenReturn(List.of(allGoodsCoupon, goodsTargetCoupon, cartCoupon, deliveryCoupon));
 		when(goodsMapper.getShopCouponTargetList(101L)).thenReturn(List.of());
@@ -1029,6 +1043,34 @@ class GoodsServiceTests {
 		assertThatThrownBy(() -> goodsService.getShopOrderPage(List.of(12L, 19L), 7L, "PC", "http://127.0.0.1:3014"))
 			.isInstanceOf(IllegalArgumentException.class)
 			.hasMessage("주문 정보가 맞지 않습니다.");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 주문서 페이지 조회 시 현재 재고보다 주문수량이 많으면 재고 부족 예외를 반환한다")
+	// 주문서 진입 단계에서 상품/사이즈별 주문수량 합계가 현재 재고를 초과하면 재고 부족 메시지로 차단하는지 검증합니다.
+	void getShopOrderPage_throwsWhenStockIsInsufficient() {
+		// 주문 대상 장바구니와 현재 재고 부족 상태를 구성합니다.
+		ShopCartItemVO cartItem = new ShopCartItemVO();
+		cartItem.setCartId(21L);
+		cartItem.setCustNo(7L);
+		cartItem.setGoodsId("GOODS300");
+		cartItem.setSizeId("090");
+		cartItem.setQty(4);
+
+		GoodsSizeVO goodsSize = new GoodsSizeVO();
+		goodsSize.setGoodsId("GOODS300");
+		goodsSize.setSizeId("090");
+		goodsSize.setStockQty(3);
+		goodsSize.setDelYn("N");
+
+		// 주문 대상 cartId 조회 결과와 현재 재고 조회 결과를 목으로 설정합니다.
+		when(goodsMapper.getShopOrderCartItemList(7L, List.of(21L))).thenReturn(List.of(cartItem));
+		when(goodsMapper.getAdminGoodsSizeDetail("GOODS300", "090")).thenReturn(goodsSize);
+
+		// 재고 부족이면 주문서 응답 구성 전에 예외가 발생하는지 검증합니다.
+		assertThatThrownBy(() -> goodsService.getShopOrderPage(List.of(21L), 7L, "PC", "http://127.0.0.1:3014"))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessage("재고가 부족한 상품이 있습니다.");
 	}
 
 	@Test
@@ -1200,7 +1242,13 @@ class GoodsServiceTests {
 			"2026-03-19 17:28:08",
 			7L
 		);
-		verify(goodsMapper).updateShopOrderBaseStatus("O220260319170925876", "ORD_STAT_02", 7L);
+		verify(goodsMapper).updateShopOrderBaseStatusAndDates(
+			"O220260319170925876",
+			"ORD_STAT_02",
+			null,
+			"2026-03-19 17:28:08",
+			7L
+		);
 		verify(goodsMapper).updateShopOrderDetailStatus("O220260319170925876", "ORD_DTL_STAT_02", 7L);
 	}
 
@@ -1313,6 +1361,98 @@ class GoodsServiceTests {
 		inOrder.verify(goodsMapper).deductShopGoodsSizeStock("GOODS001", "095", 2, 7L);
 		inOrder.verify(goodsMapper).deleteShopCartByCartIdList(7L, List.of(11L));
 		inOrder.verify(tossPaymentsClient).confirmPayment("pay_test_001", "O720260319180000111", 10000L);
+		verify(goodsMapper).updateShopOrderBaseStatusAndDates(
+			"O720260319180000111",
+			"ORD_STAT_02",
+			"2026-03-19 18:00:11",
+			"2026-03-19 18:00:11",
+			7L
+		);
+		verify(goodsMapper).updateShopOrderDetailStatus("O720260319180000111", "ORD_DTL_STAT_02", 7L);
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 주문 결제 승인 시 가상계좌 발급이면 ORDER_DT만 저장한다")
+	// 무통장입금 발급 승인 시 ORDER_DT에는 PG 승인 시간을 저장하고 ORDER_CONFIRM_DT는 비워두는지 검증합니다.
+	void confirmShopOrderPayment_setsOrderDtOnlyWhenVirtualAccountIssued() {
+		// 승인 요청과 무통장입금 결제 준비 상태의 PAYMENT 데이터를 구성합니다.
+		ShopOrderPaymentConfirmPO param = new ShopOrderPaymentConfirmPO();
+		param.setPayNo(601L);
+		param.setOrdNo("O720260319180500333");
+		param.setPaymentKey("pay_test_002");
+		param.setAmount(12000L);
+
+		ShopOrderPaymentVO payment = new ShopOrderPaymentVO();
+		payment.setPayNo(601L);
+		payment.setOrdNo("O720260319180500333");
+		payment.setCustNo(7L);
+		payment.setPayAmt(12000L);
+		payment.setPayStatCd("PAY_STAT_01");
+		payment.setPayMethodCd("PAY_METHOD_02");
+		payment.setReqRawJson("""
+			{
+			  "cartIdList": [21],
+			  "pointUseAmt": 0,
+			  "orderName": "무통장 주문",
+			  "discountSelection": {
+			    "goodsCouponSelectionList": [],
+			    "cartCouponCustCpnNo": null,
+			    "deliveryCouponCustCpnNo": null
+			  }
+			}
+			""");
+
+		ShopOrderPaymentVO updatedPayment = new ShopOrderPaymentVO();
+		updatedPayment.setPayNo(601L);
+		updatedPayment.setOrdNo("O720260319180500333");
+		updatedPayment.setCustNo(7L);
+		updatedPayment.setPayAmt(12000L);
+		updatedPayment.setPayStatCd("PAY_STAT_05");
+		updatedPayment.setPayMethodCd("PAY_METHOD_02");
+		updatedPayment.setReqRawJson(payment.getReqRawJson());
+		updatedPayment.setBankCd("88");
+		updatedPayment.setBankNo("12345678901234");
+		updatedPayment.setVactHolderNm("홍길동");
+		updatedPayment.setVactDueDt("2026-03-26 23:59:59");
+
+		ShopOrderRestoreCartItemVO stockItem = new ShopOrderRestoreCartItemVO();
+		stockItem.setGoodsId("GOODS001");
+		stockItem.setSizeId("095");
+		stockItem.setOrdQty(1);
+
+		// 재고 차감, 무통장입금 발급 응답, 최종 PAYMENT 재조회 결과를 목으로 설정합니다.
+		when(goodsMapper.getShopPaymentByPayNo(601L)).thenReturn(payment, updatedPayment);
+		when(goodsMapper.getShopOrderRestoreCartItemList("O720260319180500333")).thenReturn(List.of(stockItem));
+		when(goodsMapper.deductShopGoodsSizeStock("GOODS001", "095", 1, 7L)).thenReturn(1);
+		when(shopAuthService.getCommonCodeName("BANK", "88")).thenReturn("신한은행");
+		when(tossPaymentsClient.confirmPayment("pay_test_002", "O720260319180500333", 12000L)).thenReturn("""
+			{
+			  "status": "WAITING_FOR_DEPOSIT",
+			  "paymentKey": "pay_test_002",
+			  "lastTransactionKey": "tx_test_002",
+			  "approvedAt": "2026-03-19T18:05:12+09:00",
+			  "orderName": "무통장 주문",
+			  "secret": "ps_test_002",
+			  "virtualAccount": {
+			    "dueDate": "2026-03-26T23:59:59+09:00",
+			    "bankCode": "88",
+			    "accountNumber": "12345678901234",
+			    "customerName": "홍길동"
+			  }
+			}
+			""");
+
+		// 무통장입금 발급 승인 시 ORDER_DT만 저장하고 주문상태를 입금대기로 변경하는지 검증합니다.
+		ShopOrderPaymentConfirmVO result = goodsService.confirmShopOrderPayment(param, 7L);
+		verify(goodsMapper).updateShopOrderBaseStatusAndDates(
+			"O720260319180500333",
+			"ORD_STAT_01",
+			"2026-03-19 18:05:12",
+			null,
+			7L
+		);
+		verify(goodsMapper).updateShopOrderDetailStatus("O720260319180500333", "ORD_DTL_STAT_01", 7L);
+		assertThat(result.getBankNm()).isEqualTo("신한은행");
 	}
 
 	@Test
