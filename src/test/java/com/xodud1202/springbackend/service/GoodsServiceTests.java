@@ -50,6 +50,11 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSearchCommo
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSearchResponseVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressUpdatePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderBaseSavePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderCancelItemPO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderCancelOrderBaseVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderCancelPO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderCancelPreviewAmountPO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderCancelResultVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderCustomerInfoVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderDetailSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressVO;
@@ -76,6 +81,8 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -111,6 +118,9 @@ class GoodsServiceTests {
 
 	@Mock
 	private TossPaymentsClient tossPaymentsClient;
+
+	@Mock
+	private PlatformTransactionManager transactionManager;
 
 	@Spy
 	private ObjectMapper objectMapper = new ObjectMapper();
@@ -518,7 +528,7 @@ class GoodsServiceTests {
 	@DisplayName("쇼핑몰 마이페이지 주문상세 조회 시 주문상품과 금액 요약을 함께 반환한다")
 	// 주문상세 조회 시 주문상세 목록 묶음, 이미지 URL 보정, 상품할인/최종결제금액 계산이 적용되는지 검증합니다.
 	void getShopMypageOrderDetailPage_returnsOrderAndAmountSummary() {
-		// 주문번호 1건과 주문상세, 금액 요약, 결제정보 테스트 데이터를 구성합니다.
+		// 주문번호 1건과 주문상세, 주문 마스터, 배송 기준 테스트 데이터를 구성합니다.
 		ShopMypageOrderGroupVO orderGroup = new ShopMypageOrderGroupVO();
 		orderGroup.setOrdNo("ORD-DETAIL-01");
 		orderGroup.setOrderDt("2026-03-20 11:40:31");
@@ -532,30 +542,31 @@ class GoodsServiceTests {
 		detailItem.setGoodsNm("주문상세 상품");
 		detailItem.setSizeId("095");
 		detailItem.setOrdQty(2);
+		detailItem.setCancelableQty(2);
 		detailItem.setSupplyAmt(18000);
 		detailItem.setSaleAmt(15000);
 		detailItem.setAddAmt(500);
+		detailItem.setGoodsCouponDiscountAmt(1000);
+		detailItem.setCartCouponDiscountAmt(2000);
+		detailItem.setPointUseAmt(2000);
 		detailItem.setImgPath("goods-1.png");
 
-		ShopMypageOrderAmountSummaryVO amountSummary = new ShopMypageOrderAmountSummaryVO();
-		amountSummary.setTotalSupplyAmt(36000L);
-		amountSummary.setTotalOrderAmt(31000L);
-		amountSummary.setTotalGoodsCouponDiscountAmt(1000L);
-		amountSummary.setTotalCartCouponDiscountAmt(2000L);
-		amountSummary.setTotalCouponDiscountAmt(3000L);
-		amountSummary.setTotalPointUseAmt(2000L);
-		amountSummary.setDeliveryFeeAmt(3000L);
-		amountSummary.setDeliveryCouponDiscountAmt(1500L);
+		ShopOrderCancelOrderBaseVO orderBase = new ShopOrderCancelOrderBaseVO();
+		orderBase.setOrdNo("ORD-DETAIL-01");
+		orderBase.setCustNo(7L);
+		orderBase.setOrdDelvAmt(3000);
+		orderBase.setDelvCpnDcAmt(1500);
 
-		ShopOrderPaymentVO payment = new ShopOrderPaymentVO();
-		payment.setOrdNo("ORD-DETAIL-01");
-		payment.setAprvAmt(29000L);
+		ShopCartSiteInfoVO siteInfo = new ShopCartSiteInfoVO();
+		siteInfo.setSiteId("xodud1202");
+		siteInfo.setDeliveryFee(3000);
+		siteInfo.setDeliveryFeeLimit(50000);
 
 		// 매퍼/FTP 목 응답을 주문상세 페이지 기준으로 설정합니다.
 		when(goodsMapper.getShopMypageOrderGroup(7L, "ORD-DETAIL-01")).thenReturn(orderGroup);
 		when(goodsMapper.getShopMypageOrderDetailList(List.of("ORD-DETAIL-01"))).thenReturn(List.of(detailItem));
-		when(goodsMapper.getShopMypageOrderAmountSummary(7L, "ORD-DETAIL-01")).thenReturn(amountSummary);
-		when(goodsMapper.getShopPaymentByOrdNo("ORD-DETAIL-01")).thenReturn(payment);
+		when(goodsMapper.getShopOrderCancelOrderBase(7L, "ORD-DETAIL-01")).thenReturn(orderBase);
+		when(goodsMapper.getShopCartSiteInfo("xodud1202")).thenReturn(siteInfo);
 		when(ftpFileService.buildGoodsImageUrl("GOODS001", "goods-1.png"))
 			.thenReturn("https://image.test/goods/GOODS001/goods-1.png");
 
@@ -579,14 +590,14 @@ class GoodsServiceTests {
 		assertThat(result.getAmountSummary().getTotalPointUseAmt()).isEqualTo(2000L);
 		assertThat(result.getAmountSummary().getDeliveryFeeAmt()).isEqualTo(3000L);
 		assertThat(result.getAmountSummary().getDeliveryCouponDiscountAmt()).isEqualTo(1500L);
-		assertThat(result.getAmountSummary().getFinalPayAmt()).isEqualTo(29000L);
+		assertThat(result.getAmountSummary().getFinalPayAmt()).isEqualTo(27500L);
 	}
 
 	@Test
-	@DisplayName("쇼핑몰 마이페이지 주문상세 조회 시 승인금액이 없으면 결제금액을 최종 결제 금액으로 사용한다")
-	// 승인금액이 없는 결제정보이면 결제금액 fallback 규칙이 적용되는지 검증합니다.
-	void getShopMypageOrderDetailPage_usesPayAmtWhenAprvAmtMissing() {
-		// 주문번호 1건과 금액 요약, 결제금액 fallback 데이터를 구성합니다.
+	@DisplayName("쇼핑몰 마이페이지 주문상세 조회 시 부분취소 이력이 있으면 현재 남은 수량 기준 금액을 계산한다")
+	// 부분취소가 누적된 주문상세는 현재 남은 수량과 남은 배분 금액 기준으로 계산하는지 검증합니다.
+	void getShopMypageOrderDetailPage_calculatesRemainingAmountSummaryAfterPartialCancel() {
+		// 주문번호 1건과 부분취소 후 남은 수량 기준 주문상세 데이터를 구성합니다.
 		ShopMypageOrderGroupVO orderGroup = new ShopMypageOrderGroupVO();
 		orderGroup.setOrdNo("ORD-DETAIL-02");
 		orderGroup.setOrderDt("2026-03-21 09:12:05");
@@ -598,43 +609,54 @@ class GoodsServiceTests {
 		detailItem.setOrdDtlStatNm("결제 완료");
 		detailItem.setGoodsId("GOODS002");
 		detailItem.setGoodsNm("결제완료 상품");
+		detailItem.setOrdQty(2);
+		detailItem.setCancelableQty(1);
+		detailItem.setSupplyAmt(22000);
+		detailItem.setSaleAmt(20000);
+		detailItem.setAddAmt(0);
+		detailItem.setGoodsCouponDiscountAmt(1001);
+		detailItem.setCartCouponDiscountAmt(1000);
+		detailItem.setPointUseAmt(500);
 		detailItem.setImgPath("goods-2.png");
 
-		ShopMypageOrderAmountSummaryVO amountSummary = new ShopMypageOrderAmountSummaryVO();
-		amountSummary.setTotalSupplyAmt(50000L);
-		amountSummary.setTotalOrderAmt(42000L);
-		amountSummary.setTotalGoodsCouponDiscountAmt(2500L);
-		amountSummary.setTotalCartCouponDiscountAmt(1500L);
-		amountSummary.setTotalCouponDiscountAmt(4000L);
-		amountSummary.setTotalPointUseAmt(1000L);
-		amountSummary.setDeliveryFeeAmt(3000L);
-		amountSummary.setDeliveryCouponDiscountAmt(0L);
+		ShopOrderCancelOrderBaseVO orderBase = new ShopOrderCancelOrderBaseVO();
+		orderBase.setOrdNo("ORD-DETAIL-02");
+		orderBase.setCustNo(7L);
+		orderBase.setOrdDelvAmt(0);
+		orderBase.setDelvCpnDcAmt(0);
 
-		ShopOrderPaymentVO payment = new ShopOrderPaymentVO();
-		payment.setOrdNo("ORD-DETAIL-02");
-		payment.setPayAmt(40000L);
+		ShopCartSiteInfoVO siteInfo = new ShopCartSiteInfoVO();
+		siteInfo.setSiteId("xodud1202");
+		siteInfo.setDeliveryFee(3000);
+		siteInfo.setDeliveryFeeLimit(30000);
 
-		// 승인금액 없이 결제금액만 존재하는 응답을 설정합니다.
+		// 부분취소 이후 현재 남은 주문 금액을 계산하도록 목 응답을 설정합니다.
 		when(goodsMapper.getShopMypageOrderGroup(7L, "ORD-DETAIL-02")).thenReturn(orderGroup);
 		when(goodsMapper.getShopMypageOrderDetailList(List.of("ORD-DETAIL-02"))).thenReturn(List.of(detailItem));
-		when(goodsMapper.getShopMypageOrderAmountSummary(7L, "ORD-DETAIL-02")).thenReturn(amountSummary);
-		when(goodsMapper.getShopPaymentByOrdNo("ORD-DETAIL-02")).thenReturn(payment);
+		when(goodsMapper.getShopOrderCancelOrderBase(7L, "ORD-DETAIL-02")).thenReturn(orderBase);
+		when(goodsMapper.getShopCartSiteInfo("xodud1202")).thenReturn(siteInfo);
 		when(ftpFileService.buildGoodsImageUrl("GOODS002", "goods-2.png"))
 			.thenReturn("https://image.test/goods/GOODS002/goods-2.png");
 
 		// 주문상세 페이지 데이터를 조회합니다.
 		ShopMypageOrderDetailPageVO result = goodsService.getShopMypageOrderDetailPage(7L, "ORD-DETAIL-02");
 
-		// 승인금액 대신 결제금액이 최종 결제 금액으로 사용되는지 검증합니다.
+		// 현재 남은 수량 기준 상품/쿠폰/포인트/배송비 계산이 반영되는지 검증합니다.
 		assertThat(result.getAmountSummary()).isNotNull();
-		assertThat(result.getAmountSummary().getFinalPayAmt()).isEqualTo(40000L);
+		assertThat(result.getAmountSummary().getTotalSupplyAmt()).isEqualTo(22000L);
+		assertThat(result.getAmountSummary().getTotalOrderAmt()).isEqualTo(20000L);
+		assertThat(result.getAmountSummary().getTotalGoodsCouponDiscountAmt()).isEqualTo(501L);
+		assertThat(result.getAmountSummary().getTotalCartCouponDiscountAmt()).isEqualTo(500L);
+		assertThat(result.getAmountSummary().getTotalPointUseAmt()).isEqualTo(250L);
+		assertThat(result.getAmountSummary().getDeliveryFeeAmt()).isEqualTo(3000L);
+		assertThat(result.getAmountSummary().getFinalPayAmt()).isEqualTo(21749L);
 	}
 
 	@Test
-	@DisplayName("쇼핑몰 마이페이지 주문상세 조회 시 결제정보가 없으면 배송비 쿠폰 할인까지 차감해 최종 결제금액을 계산한다")
-	// 결제 승인/결제요청 금액이 없을 때 배송비 쿠폰 할인 금액까지 포함한 fallback 계산이 적용되는지 검증합니다.
-	void getShopMypageOrderDetailPage_usesDeliveryCouponDiscountInFallbackFinalPayAmt() {
-		// 주문번호 1건과 배송비 쿠폰 할인 fallback 계산용 금액 요약 데이터를 구성합니다.
+	@DisplayName("쇼핑몰 마이페이지 주문상세 조회 시 무료배송 주문은 남은 주문금액이 기준 미만이면 배송비를 다시 반영한다")
+	// 무료배송 주문이 부분취소 후 배송비 기준 미만이 되면 현재 남은 주문 금액에 배송비가 다시 붙는지 검증합니다.
+	void getShopMypageOrderDetailPage_addsDeliveryFeeWhenFreeShippingOrderFallsBelowLimit() {
+		// 무료배송 주문이 부분취소된 이후의 현재 남은 주문상세 데이터를 구성합니다.
 		ShopMypageOrderGroupVO orderGroup = new ShopMypageOrderGroupVO();
 		orderGroup.setOrdNo("ORD-DETAIL-03");
 		orderGroup.setOrderDt("2026-03-21 18:20:30");
@@ -646,29 +668,40 @@ class GoodsServiceTests {
 		detailItem.setOrdDtlStatNm("결제 완료");
 		detailItem.setGoodsId("GOODS003");
 		detailItem.setGoodsNm("배송비 쿠폰 상품");
+		detailItem.setOrdQty(2);
+		detailItem.setCancelableQty(1);
+		detailItem.setSupplyAmt(16000);
+		detailItem.setSaleAmt(15000);
+		detailItem.setAddAmt(0);
+		detailItem.setGoodsCouponDiscountAmt(0);
+		detailItem.setCartCouponDiscountAmt(0);
+		detailItem.setPointUseAmt(0);
 
-		ShopMypageOrderAmountSummaryVO amountSummary = new ShopMypageOrderAmountSummaryVO();
-		amountSummary.setTotalSupplyAmt(50000L);
-		amountSummary.setTotalOrderAmt(42000L);
-		amountSummary.setTotalGoodsCouponDiscountAmt(2500L);
-		amountSummary.setTotalCartCouponDiscountAmt(1500L);
-		amountSummary.setTotalCouponDiscountAmt(4000L);
-		amountSummary.setTotalPointUseAmt(1000L);
-		amountSummary.setDeliveryFeeAmt(3000L);
-		amountSummary.setDeliveryCouponDiscountAmt(2000L);
+		ShopOrderCancelOrderBaseVO orderBase = new ShopOrderCancelOrderBaseVO();
+		orderBase.setOrdNo("ORD-DETAIL-03");
+		orderBase.setCustNo(7L);
+		orderBase.setOrdDelvAmt(0);
+		orderBase.setDelvCpnDcAmt(0);
 
-		// 결제정보가 없는 주문상세 응답을 목으로 설정합니다.
+		ShopCartSiteInfoVO siteInfo = new ShopCartSiteInfoVO();
+		siteInfo.setSiteId("xodud1202");
+		siteInfo.setDeliveryFee(3000);
+		siteInfo.setDeliveryFeeLimit(30000);
+
+		// 무료배송 조건이 깨진 현재 주문 금액을 계산하도록 목 응답을 설정합니다.
 		when(goodsMapper.getShopMypageOrderGroup(7L, "ORD-DETAIL-03")).thenReturn(orderGroup);
 		when(goodsMapper.getShopMypageOrderDetailList(List.of("ORD-DETAIL-03"))).thenReturn(List.of(detailItem));
-		when(goodsMapper.getShopMypageOrderAmountSummary(7L, "ORD-DETAIL-03")).thenReturn(amountSummary);
-		when(goodsMapper.getShopPaymentByOrdNo("ORD-DETAIL-03")).thenReturn(null);
+		when(goodsMapper.getShopOrderCancelOrderBase(7L, "ORD-DETAIL-03")).thenReturn(orderBase);
+		when(goodsMapper.getShopCartSiteInfo("xodud1202")).thenReturn(siteInfo);
 
 		// 주문상세 페이지 데이터를 조회합니다.
 		ShopMypageOrderDetailPageVO result = goodsService.getShopMypageOrderDetailPage(7L, "ORD-DETAIL-03");
 
-		// 상품금액 + 배송비 - 상품/장바구니쿠폰 - 배송비쿠폰 - 포인트 계산식이 적용되는지 검증합니다.
+		// 현재 남은 상품 판매가가 기준 미만이면 배송비가 다시 붙는지 검증합니다.
 		assertThat(result.getAmountSummary()).isNotNull();
-		assertThat(result.getAmountSummary().getFinalPayAmt()).isEqualTo(38000L);
+		assertThat(result.getAmountSummary().getTotalOrderAmt()).isEqualTo(15000L);
+		assertThat(result.getAmountSummary().getDeliveryFeeAmt()).isEqualTo(3000L);
+		assertThat(result.getAmountSummary().getFinalPayAmt()).isEqualTo(18000L);
 	}
 
 	@Test
@@ -711,14 +744,11 @@ class GoodsServiceTests {
 		detailItem.setPointUseAmt(500);
 		detailItem.setImgPath("cancel-item.png");
 
-		ShopMypageOrderAmountSummaryVO amountSummary = new ShopMypageOrderAmountSummaryVO();
-		amountSummary.setTotalSupplyAmt(36000L);
-		amountSummary.setTotalOrderAmt(31000L);
-		amountSummary.setTotalGoodsCouponDiscountAmt(1000L);
-		amountSummary.setTotalCartCouponDiscountAmt(2000L);
-		amountSummary.setTotalPointUseAmt(500L);
-		amountSummary.setDeliveryFeeAmt(3000L);
-		amountSummary.setDeliveryCouponDiscountAmt(0L);
+		ShopOrderCancelOrderBaseVO orderBase = new ShopOrderCancelOrderBaseVO();
+		orderBase.setOrdNo("ORD-CANCEL-01");
+		orderBase.setCustNo(7L);
+		orderBase.setOrdDelvAmt(3000);
+		orderBase.setDelvCpnDcAmt(0);
 
 		ShopMypageOrderCancelReasonVO firstReason = new ShopMypageOrderCancelReasonVO();
 		firstReason.setCd("C_01");
@@ -735,8 +765,7 @@ class GoodsServiceTests {
 		// 매퍼/FTP 목 응답을 주문취소 신청 화면 기준으로 설정합니다.
 		when(goodsMapper.getShopMypageOrderGroup(7L, "ORD-CANCEL-01")).thenReturn(orderGroup);
 		when(goodsMapper.getShopMypageOrderDetailList(List.of("ORD-CANCEL-01"))).thenReturn(List.of(detailItem));
-		when(goodsMapper.getShopMypageOrderAmountSummary(7L, "ORD-CANCEL-01")).thenReturn(amountSummary);
-		when(goodsMapper.getShopPaymentByOrdNo("ORD-CANCEL-01")).thenReturn(null);
+		when(goodsMapper.getShopOrderCancelOrderBase(7L, "ORD-CANCEL-01")).thenReturn(orderBase);
 		when(goodsMapper.getShopMypageOrderCancelReasonList()).thenReturn(List.of(firstReason, secondReason));
 		when(goodsMapper.getShopCartSiteInfo("xodud1202")).thenReturn(siteInfo);
 		when(ftpFileService.buildGoodsImageUrl("GOODS900", "cancel-item.png"))
@@ -2062,8 +2091,314 @@ class GoodsServiceTests {
 		// 만료 웹훅 반영 시 재고 복구와 주문 취소 상태 갱신이 함께 수행되는지 검증합니다.
 		goodsService.handleShopOrderPaymentWebhook(rawBody);
 		verify(goodsMapper).restoreShopGoodsSizeStock("GOODS001", "095", 2, 7L);
-		verify(goodsMapper).updateShopOrderBaseStatus("O720260319181500222", "ORD_STAT_99", 7L);
+		verify(goodsMapper).updateShopOrderBaseStatus("O720260319181500222", "ORD_STAT_03", 7L);
 		verify(goodsMapper).updateShopOrderDetailStatus("O720260319181500222", "ORD_DTL_STAT_99", 7L);
+	}
+
+	@Test
+	@DisplayName("마이페이지 주문취소는 화면 미리보기 금액과 서버 재계산 금액이 다르면 중단한다")
+	// 화면 금액과 서버 금액이 다를 때 환불 결제 선등록과 PG 호출 없이 오류를 반환하는지 검증합니다.
+	void cancelShopMypageOrder_blocksWhenPreviewAmountMismatch() {
+		// 결제완료 주문 1건과 취소 요청값을 구성합니다.
+		ShopMypageOrderGroupVO orderGroup = new ShopMypageOrderGroupVO();
+		orderGroup.setOrdNo("ORD-20260323-001");
+		ShopMypageOrderDetailItemVO detailItem = new ShopMypageOrderDetailItemVO();
+		detailItem.setOrdNo("ORD-20260323-001");
+		detailItem.setOrdDtlNo(1);
+		detailItem.setOrdDtlStatCd("ORD_DTL_STAT_02");
+		detailItem.setGoodsId("GOODS-001");
+		detailItem.setSizeId("095");
+		detailItem.setOrdQty(2);
+		detailItem.setCancelableQty(2);
+		detailItem.setSupplyAmt(12000);
+		detailItem.setSaleAmt(10000);
+		detailItem.setAddAmt(0);
+		detailItem.setGoodsCouponDiscountAmt(1000);
+		detailItem.setCartCouponDiscountAmt(500);
+		detailItem.setPointUseAmt(200);
+
+		ShopOrderCancelOrderBaseVO orderBase = new ShopOrderCancelOrderBaseVO();
+		orderBase.setOrdNo("ORD-20260323-001");
+		orderBase.setCustNo(7L);
+		orderBase.setOrdDelvAmt(0);
+		orderBase.setDelvCpnDcAmt(0);
+		orderBase.setDeviceGbCd("PC");
+
+		ShopCartSiteInfoVO siteInfo = new ShopCartSiteInfoVO();
+		siteInfo.setDeliveryFee(3000);
+		siteInfo.setDeliveryFeeLimit(50000);
+
+		ShopMypageOrderCancelReasonVO reason = new ShopMypageOrderCancelReasonVO();
+		reason.setCd("C_01");
+		reason.setCdNm("단순 변심");
+
+		ShopOrderCancelItemPO cancelItem = new ShopOrderCancelItemPO();
+		cancelItem.setOrdDtlNo(1);
+		cancelItem.setCancelQty(1);
+
+		ShopOrderCancelPreviewAmountPO previewAmount = new ShopOrderCancelPreviewAmountPO();
+		previewAmount.setExpectedRefundAmt(9251L);
+		previewAmount.setPaidGoodsAmt(9150L);
+		previewAmount.setBenefitAmt(100L);
+		previewAmount.setShippingAdjustmentAmt(0L);
+		previewAmount.setTotalPointRefundAmt(100L);
+		previewAmount.setDeliveryCouponRefundAmt(0L);
+
+		ShopOrderCancelPO param = new ShopOrderCancelPO();
+		param.setOrdNo("ORD-20260323-001");
+		param.setReasonCd("C_01");
+		param.setCancelItemList(List.of(cancelItem));
+		param.setPreviewAmount(previewAmount);
+
+		// 주문/사유/배송 기준 조회 목 데이터를 구성합니다.
+		when(goodsMapper.getShopMypageOrderGroup(7L, "ORD-20260323-001")).thenReturn(orderGroup);
+		when(goodsMapper.getShopMypageOrderDetailList(List.of("ORD-20260323-001"))).thenReturn(List.of(detailItem));
+		when(goodsMapper.getShopOrderCancelOrderBase(7L, "ORD-20260323-001")).thenReturn(orderBase);
+		when(goodsMapper.getShopCartSiteInfo("xodud1202")).thenReturn(siteInfo);
+		when(goodsMapper.getShopMypageOrderCancelReasonList()).thenReturn(List.of(reason));
+
+		// 서버 재계산 금액과 다르면 선등록/PG 호출 없이 예외가 반환되는지 검증합니다.
+		assertThatThrownBy(() -> goodsService.cancelShopMypageOrder(param, 7L))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessage("환불 금액이 상이합니다.");
+		verify(goodsMapper, never()).insertShopPayment(any(ShopOrderPaymentSavePO.class));
+		verify(tossPaymentsClient, never()).cancelPayment(any(), any(), any());
+	}
+
+	@Test
+	@DisplayName("마이페이지 주문취소는 무통장입금 대기 주문을 즉시 전체 취소 완료 처리한다")
+	// 무통장입금 대기 주문 전체취소 시 환불 결제, 주문변경, 배송비쿠폰 원복, 주문상태 완료 처리가 함께 수행되는지 검증합니다.
+	void cancelShopMypageOrder_completesWaitingDepositFullCancel() {
+		// 무통장입금 전체취소 대상 주문과 요청값을 구성합니다.
+		ShopMypageOrderGroupVO orderGroup = new ShopMypageOrderGroupVO();
+		orderGroup.setOrdNo("ORD-20260323-002");
+		ShopMypageOrderDetailItemVO detailItem = new ShopMypageOrderDetailItemVO();
+		detailItem.setOrdNo("ORD-20260323-002");
+		detailItem.setOrdDtlNo(1);
+		detailItem.setOrdDtlStatCd("ORD_DTL_STAT_01");
+		detailItem.setGoodsId("GOODS-002");
+		detailItem.setSizeId("100");
+		detailItem.setOrdQty(2);
+		detailItem.setCancelableQty(2);
+		detailItem.setSupplyAmt(11000);
+		detailItem.setSaleAmt(9000);
+		detailItem.setAddAmt(0);
+		detailItem.setGoodsCouponDiscountAmt(0);
+		detailItem.setCartCouponDiscountAmt(0);
+		detailItem.setPointUseAmt(0);
+
+		ShopOrderCancelOrderBaseVO orderBase = new ShopOrderCancelOrderBaseVO();
+		orderBase.setOrdNo("ORD-20260323-002");
+		orderBase.setCustNo(7L);
+		orderBase.setOrdDelvAmt(2500);
+		orderBase.setDelvCpnNo(501L);
+		orderBase.setDelvCpnDcAmt(1000);
+		orderBase.setDeviceGbCd("MOBILE");
+
+		ShopCartSiteInfoVO siteInfo = new ShopCartSiteInfoVO();
+		siteInfo.setDeliveryFee(3000);
+		siteInfo.setDeliveryFeeLimit(50000);
+
+		ShopMypageOrderCancelReasonVO reason = new ShopMypageOrderCancelReasonVO();
+		reason.setCd("C_01");
+		reason.setCdNm("단순 변심");
+
+		ShopOrderCancelItemPO cancelItem = new ShopOrderCancelItemPO();
+		cancelItem.setOrdDtlNo(1);
+		cancelItem.setCancelQty(2);
+
+		ShopOrderCancelPreviewAmountPO previewAmount = new ShopOrderCancelPreviewAmountPO();
+		previewAmount.setExpectedRefundAmt(20500L);
+		previewAmount.setPaidGoodsAmt(18000L);
+		previewAmount.setBenefitAmt(1000L);
+		previewAmount.setShippingAdjustmentAmt(1500L);
+		previewAmount.setTotalPointRefundAmt(0L);
+		previewAmount.setDeliveryCouponRefundAmt(1000L);
+
+		ShopOrderCancelPO param = new ShopOrderCancelPO();
+		param.setOrdNo("ORD-20260323-002");
+		param.setReasonCd("C_01");
+		param.setCancelItemList(List.of(cancelItem));
+		param.setPreviewAmount(previewAmount);
+
+		ShopOrderPaymentVO originalPayment = new ShopOrderPaymentVO();
+		originalPayment.setPayNo(101L);
+		originalPayment.setOrdNo("ORD-20260323-002");
+		originalPayment.setCustNo(7L);
+		originalPayment.setPayStatCd("PAY_STAT_05");
+		originalPayment.setPayMethodCd("PAY_METHOD_02");
+		originalPayment.setPgGbCd("PG_GB_01");
+		originalPayment.setTradeNo("trade-origin");
+		originalPayment.setTossPaymentKey("toss-waiting-key");
+
+		ArgumentCaptor<ShopOrderPaymentSavePO> refundPaymentCaptor = ArgumentCaptor.forClass(ShopOrderPaymentSavePO.class);
+
+		// 주문/사유/결제/트랜잭션 목 데이터를 구성합니다.
+		mockShopOrderTransactionManager();
+		when(goodsMapper.getShopMypageOrderGroup(7L, "ORD-20260323-002")).thenReturn(orderGroup);
+		when(goodsMapper.getShopMypageOrderDetailList(List.of("ORD-20260323-002"))).thenReturn(List.of(detailItem));
+		when(goodsMapper.getShopOrderCancelOrderBase(7L, "ORD-20260323-002")).thenReturn(orderBase);
+		when(goodsMapper.getShopCartSiteInfo("xodud1202")).thenReturn(siteInfo);
+		when(goodsMapper.getShopMypageOrderCancelReasonList()).thenReturn(List.of(reason));
+		when(goodsMapper.getShopOrderPaymentForCancel("ORD-20260323-002")).thenReturn(originalPayment);
+		when(goodsMapper.updateShopOrderDetailCancelQuantity("ORD-20260323-002", 1, 2, "ORD_DTL_STAT_99", 7L)).thenReturn(1);
+		when(goodsMapper.insertShopPayment(refundPaymentCaptor.capture())).thenAnswer(invocation -> {
+			refundPaymentCaptor.getValue().setPayNo(301L);
+			return 1;
+		});
+		when(tossPaymentsClient.cancelPayment("toss-waiting-key", "C_01", null)).thenReturn("""
+			{
+			  "status": "CANCELED",
+			  "cancels": [
+			    {
+			      "cancelAmount": 19500,
+			      "canceledAt": "2026-03-23T10:11:12+09:00",
+			      "transactionKey": "tx-cancel-waiting"
+			    }
+			  ]
+			}
+			""");
+
+		// 전체취소 완료 시 환불 결제, 주문상태, 배송비쿠폰 원복이 모두 반영되는지 검증합니다.
+		ShopOrderCancelResultVO result = goodsService.cancelShopMypageOrder(param, 7L);
+		assertThat(result.getOrdNo()).isEqualTo("ORD-20260323-002");
+		assertThat(result.getRefundPayNo()).isEqualTo(301L);
+		assertThat(result.getPayStatCd()).isEqualTo("PAY_STAT_04");
+		assertThat(result.getRefundedCashAmt()).isEqualTo(19500L);
+		assertThat(result.getRestoredPointAmt()).isZero();
+		assertThat(refundPaymentCaptor.getValue().getPayGbCd()).isEqualTo("PAY_GB_02");
+		assertThat(refundPaymentCaptor.getValue().getPayAmt()).isEqualTo(19500L);
+		assertThat(refundPaymentCaptor.getValue().getOrgPayNo()).isEqualTo(101L);
+		assertThat(refundPaymentCaptor.getValue().getClmNo()).isNotBlank();
+		verify(goodsMapper).restoreShopGoodsSizeStock("GOODS-002", "100", 2, 7L);
+		verify(goodsMapper).restoreShopCustomerCouponUseByCustCpnNo(7L, 501L, 7L);
+		verify(goodsMapper).updateShopOrderDetailCancelQuantity("ORD-20260323-002", 1, 2, "ORD_DTL_STAT_99", 7L);
+		verify(goodsMapper).updateShopOrderBaseStatus("ORD-20260323-002", "ORD_STAT_03", 7L);
+		verify(goodsMapper).updateShopPaymentCancelSuccess(
+			eq(301L),
+			eq("PAY_STAT_04"),
+			eq(19500L),
+			eq("tx-cancel-waiting"),
+			eq("CANCELED"),
+			eq("취소 완료"),
+			any(),
+			eq("2026-03-23 10:11:12"),
+			eq(7L)
+		);
+	}
+
+	@Test
+	@DisplayName("마이페이지 주문취소는 PG 취소 실패 시 환불 PAYMENT만 실패 상태로 남긴다")
+	// PG 취소가 실패하면 사용자 메시지를 반환하고 환불 PAYMENT row만 실패 상태로 갱신하는지 검증합니다.
+	void cancelShopMypageOrder_marksRefundPaymentFailedWhenPgCancelFails() {
+		// 결제완료 주문 1건과 취소 요청값을 구성합니다.
+		ShopMypageOrderGroupVO orderGroup = new ShopMypageOrderGroupVO();
+		orderGroup.setOrdNo("ORD-20260323-003");
+		ShopMypageOrderDetailItemVO detailItem = new ShopMypageOrderDetailItemVO();
+		detailItem.setOrdNo("ORD-20260323-003");
+		detailItem.setOrdDtlNo(1);
+		detailItem.setOrdDtlStatCd("ORD_DTL_STAT_02");
+		detailItem.setGoodsId("GOODS-003");
+		detailItem.setSizeId("090");
+		detailItem.setOrdQty(1);
+		detailItem.setCancelableQty(1);
+		detailItem.setSupplyAmt(12000);
+		detailItem.setSaleAmt(10000);
+		detailItem.setAddAmt(0);
+		detailItem.setGoodsCouponDiscountAmt(0);
+		detailItem.setCartCouponDiscountAmt(0);
+		detailItem.setPointUseAmt(0);
+
+		ShopOrderCancelOrderBaseVO orderBase = new ShopOrderCancelOrderBaseVO();
+		orderBase.setOrdNo("ORD-20260323-003");
+		orderBase.setCustNo(7L);
+		orderBase.setOrdDelvAmt(0);
+		orderBase.setDelvCpnDcAmt(0);
+		orderBase.setDeviceGbCd("PC");
+
+		ShopCartSiteInfoVO siteInfo = new ShopCartSiteInfoVO();
+		siteInfo.setDeliveryFee(3000);
+		siteInfo.setDeliveryFeeLimit(50000);
+
+		ShopMypageOrderCancelReasonVO reason = new ShopMypageOrderCancelReasonVO();
+		reason.setCd("C_01");
+		reason.setCdNm("단순 변심");
+
+		ShopOrderCancelItemPO cancelItem = new ShopOrderCancelItemPO();
+		cancelItem.setOrdDtlNo(1);
+		cancelItem.setCancelQty(1);
+
+		ShopOrderCancelPreviewAmountPO previewAmount = new ShopOrderCancelPreviewAmountPO();
+		previewAmount.setExpectedRefundAmt(10000L);
+		previewAmount.setPaidGoodsAmt(10000L);
+		previewAmount.setBenefitAmt(0L);
+		previewAmount.setShippingAdjustmentAmt(0L);
+		previewAmount.setTotalPointRefundAmt(0L);
+		previewAmount.setDeliveryCouponRefundAmt(0L);
+
+		ShopOrderCancelPO param = new ShopOrderCancelPO();
+		param.setOrdNo("ORD-20260323-003");
+		param.setReasonCd("C_01");
+		param.setCancelItemList(List.of(cancelItem));
+		param.setPreviewAmount(previewAmount);
+
+		ShopOrderPaymentVO originalPayment = new ShopOrderPaymentVO();
+		originalPayment.setPayNo(201L);
+		originalPayment.setOrdNo("ORD-20260323-003");
+		originalPayment.setCustNo(7L);
+		originalPayment.setPayStatCd("PAY_STAT_02");
+		originalPayment.setPayMethodCd("PAY_METHOD_01");
+		originalPayment.setPgGbCd("PG_GB_01");
+		originalPayment.setTradeNo("trade-origin-2");
+		originalPayment.setTossPaymentKey("toss-done-key");
+
+		ArgumentCaptor<ShopOrderPaymentSavePO> refundPaymentCaptor = ArgumentCaptor.forClass(ShopOrderPaymentSavePO.class);
+
+		// 주문/사유/결제/트랜잭션 목 데이터를 구성하고 PG 실패를 발생시킵니다.
+		mockShopOrderTransactionManager();
+		when(goodsMapper.getShopMypageOrderGroup(7L, "ORD-20260323-003")).thenReturn(orderGroup);
+		when(goodsMapper.getShopMypageOrderDetailList(List.of("ORD-20260323-003"))).thenReturn(List.of(detailItem));
+		when(goodsMapper.getShopOrderCancelOrderBase(7L, "ORD-20260323-003")).thenReturn(orderBase);
+		when(goodsMapper.getShopCartSiteInfo("xodud1202")).thenReturn(siteInfo);
+		when(goodsMapper.getShopMypageOrderCancelReasonList()).thenReturn(List.of(reason));
+		when(goodsMapper.getShopOrderPaymentForCancel("ORD-20260323-003")).thenReturn(originalPayment);
+		when(goodsMapper.updateShopOrderDetailCancelQuantity("ORD-20260323-003", 1, 1, "ORD_DTL_STAT_99", 7L)).thenReturn(1);
+		when(goodsMapper.insertShopPayment(refundPaymentCaptor.capture())).thenAnswer(invocation -> {
+			refundPaymentCaptor.getValue().setPayNo(401L);
+			return 1;
+		});
+		when(tossPaymentsClient.cancelPayment("toss-done-key", "C_01", 10000L))
+			.thenThrow(new TossPaymentClientException(
+				400,
+				"{\"code\":\"ALREADY_CANCELED_PAYMENT\",\"message\":\"이미 취소된 결제입니다.\"}",
+				new RuntimeException("PG cancel failed")
+			));
+
+		// PG 취소 실패 시 실패 PAYMENT 반영과 사용자 메시지 반환을 검증합니다.
+		assertThatThrownBy(() -> goodsService.cancelShopMypageOrder(param, 7L))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessage("이미 취소된 결제입니다.");
+		assertThat(refundPaymentCaptor.getValue().getPayNo()).isEqualTo(401L);
+		verify(goodsMapper).updateShopPaymentCancelFailure(
+			401L,
+			"PAY_STAT_03",
+			"ALREADY_CANCELED_PAYMENT",
+			"이미 취소된 결제입니다.",
+			"{\"code\":\"ALREADY_CANCELED_PAYMENT\",\"message\":\"이미 취소된 결제입니다.\"}",
+			7L
+		);
+		verify(goodsMapper, never()).updateShopPaymentCancelSuccess(
+			eq(401L),
+			any(),
+			any(Long.class),
+			any(),
+			any(),
+			any(),
+			any(),
+			any(),
+			eq(7L)
+		);
+		verify(goodsMapper, never()).updateShopOrderBaseStatus("ORD-20260323-003", "ORD_STAT_03", 7L);
 	}
 
 	@Test
@@ -2646,6 +2981,12 @@ class GoodsServiceTests {
 		target.setTargetGbCd(targetGbCd);
 		target.setTargetValue(targetValue);
 		return target;
+	}
+
+	// 주문취소 테스트에서 사용할 기본 트랜잭션 동작을 구성합니다.
+	private void mockShopOrderTransactionManager() {
+		// REQUIRES_NEW와 기본 전파 트랜잭션이 모두 정상 실행되도록 단순 상태 객체를 반환합니다.
+		when(transactionManager.getTransaction(any())).thenAnswer(invocation -> new SimpleTransactionStatus());
 	}
 
 	// 테스트용 카테고리 계층 목 데이터를 구성합니다.

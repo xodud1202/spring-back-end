@@ -6,6 +6,7 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSearchCommo
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSearchItemVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSearchResponseVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderCancelResultVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountAmountVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountQuoteVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountSelectionVO;
@@ -230,6 +231,85 @@ class ShopOrderControllerTests {
 			)
 			.andExpect(status().isUnauthorized())
 			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
+	}
+
+	@Test
+	@DisplayName("주문취소 API는 로그인 사용자가 유효한 요청을 보내면 즉시완료 결과를 반환한다")
+	// 주문취소 즉시완료 성공 시 200 응답과 클레임/환불 결제 정보를 반환하는지 검증합니다.
+	void cancelShopMypageOrder_returnsOk() throws Exception {
+		// 주문취소 완료 결과 응답 객체를 구성합니다.
+		ShopOrderCancelResultVO result = new ShopOrderCancelResultVO();
+		result.setClmNo("C120260323123456789");
+		result.setOrdNo("ORD-CANCEL-API-01");
+		result.setRefundPayNo(9001L);
+		result.setPayStatCd("PAY_STAT_04");
+		result.setRefundedCashAmt(12000L);
+		result.setRestoredPointAmt(500L);
+		when(goodsService.cancelShopMypageOrder(any(), eq(1L))).thenReturn(result);
+
+		// 로그인 쿠키와 함께 주문취소를 요청하면 200 응답과 결과 필드를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/mypage/order/cancel")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{
+						  "ordNo":"ORD-CANCEL-API-01",
+						  "reasonCd":"C_01",
+						  "reasonDetail":"",
+						  "cancelItemList":[{"ordDtlNo":11,"cancelQty":1}],
+						  "previewAmount":{
+						    "expectedRefundAmt":12500,
+						    "paidGoodsAmt":12000,
+						    "benefitAmt":500,
+						    "shippingAdjustmentAmt":0,
+						    "totalPointRefundAmt":500,
+						    "deliveryCouponRefundAmt":0
+						  }
+						}
+						""")
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.clmNo").value("C120260323123456789"))
+			.andExpect(jsonPath("$.ordNo").value("ORD-CANCEL-API-01"))
+			.andExpect(jsonPath("$.refundPayNo").value(9001))
+			.andExpect(jsonPath("$.payStatCd").value("PAY_STAT_04"))
+			.andExpect(jsonPath("$.refundedCashAmt").value(12000))
+			.andExpect(jsonPath("$.restoredPointAmt").value(500));
+	}
+
+	@Test
+	@DisplayName("주문취소 API는 환불 금액 불일치면 409를 반환한다")
+	// 서버 재계산 환불 금액과 화면 금액이 다르면 409 응답으로 차단하는지 검증합니다.
+	void cancelShopMypageOrder_returnsConflictWhenPreviewAmountMismatch() throws Exception {
+		// 서비스에서 환불 금액 불일치 예외를 반환하도록 목 동작을 설정합니다.
+		when(goodsService.cancelShopMypageOrder(any(), eq(1L)))
+			.thenThrow(new IllegalArgumentException("환불 금액이 상이합니다."));
+
+		// 로그인 쿠키와 함께 불일치 요청을 보내면 409 응답과 메시지를 검증합니다.
+		mockMvc.perform(
+				post("/api/shop/mypage/order/cancel")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{
+						  "ordNo":"ORD-CANCEL-API-02",
+						  "reasonCd":"C_03",
+						  "reasonDetail":"사유 입력",
+						  "cancelItemList":[{"ordDtlNo":21,"cancelQty":1}],
+						  "previewAmount":{
+						    "expectedRefundAmt":10000,
+						    "paidGoodsAmt":9000,
+						    "benefitAmt":1000,
+						    "shippingAdjustmentAmt":0,
+						    "totalPointRefundAmt":1000,
+						    "deliveryCouponRefundAmt":0
+						  }
+						}
+						""")
+			)
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.message").value("환불 금액이 상이합니다."));
 	}
 
 	@Test

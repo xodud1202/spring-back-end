@@ -21,6 +21,10 @@ public class ShopOrderPaymentSavePO {
 	private String ordGbCd;
 	// PG 구분 코드입니다.
 	private String pgGbCd;
+	// 원결제번호입니다.
+	private Long orgPayNo;
+	// 클레임번호입니다.
+	private String clmNo;
 	// 결제금액입니다.
 	private Long payAmt;
 	// 결제 디바이스 코드입니다.

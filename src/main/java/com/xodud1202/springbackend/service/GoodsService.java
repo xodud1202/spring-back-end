@@ -1,147 +1,47 @@
 package com.xodud1202.springbackend.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xodud1202.springbackend.domain.admin.brand.BrandVO;
-import com.xodud1202.springbackend.domain.admin.goods.GoodsPO;
-import com.xodud1202.springbackend.domain.admin.goods.GoodsDetailVO;
-import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeVO;
-import com.xodud1202.springbackend.domain.admin.category.CategorySavePO;
-import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsDeletePO;
-import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsOrderItem;
-import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsOrderSavePO;
-import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsRegisterPO;
-import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsSavePO;
-import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsVO;
-import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
+import com.xodud1202.springbackend.domain.admin.category.*;
+import com.xodud1202.springbackend.domain.admin.goods.*;
+import com.xodud1202.springbackend.domain.shop.cart.*;
 import com.xodud1202.springbackend.domain.shop.category.ShopCategoryGoodsItemVO;
-import com.xodud1202.springbackend.domain.shop.cart.ShopCartCouponEstimateItemPO;
-import com.xodud1202.springbackend.domain.shop.cart.ShopCartCouponEstimateRequestPO;
-import com.xodud1202.springbackend.domain.shop.cart.ShopCartCouponEstimateVO;
-import com.xodud1202.springbackend.domain.shop.cart.ShopCartCustomerCouponVO;
-import com.xodud1202.springbackend.domain.shop.cart.ShopCartDeleteItemPO;
-import com.xodud1202.springbackend.domain.shop.cart.ShopCartDeletePO;
-import com.xodud1202.springbackend.domain.shop.cart.ShopCartItemVO;
-import com.xodud1202.springbackend.domain.shop.cart.ShopCartOptionUpdatePO;
-import com.xodud1202.springbackend.domain.shop.cart.ShopCartPageVO;
-import com.xodud1202.springbackend.domain.shop.cart.ShopCartSavePO;
-import com.xodud1202.springbackend.domain.shop.cart.ShopCartSiteInfoVO;
-import com.xodud1202.springbackend.domain.shop.cart.ShopCartSizeOptionVO;
-import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsBasicVO;
-import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsCouponTargetVO;
-import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsCouponVO;
-import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsDescItemVO;
-import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsDescVO;
-import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsDetailVO;
-import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsGroupItemVO;
-import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsImageVO;
-import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsPointSummaryVO;
-import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsPriceSummaryVO;
-import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsShippingSummaryVO;
-import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSiteInfoVO;
-import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSizeItemVO;
-import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponDownloadRequestPO;
-import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponPageVO;
-import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponUnavailableGoodsVO;
-import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageDownloadableCouponVO;
-import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderCancelPageVO;
-import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderCancelReasonVO;
-import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOwnedCouponVO;
-import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderAmountSummaryVO;
-import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderDetailItemVO;
-import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderDetailPageVO;
-import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderGroupVO;
-import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderPageVO;
-import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderStatusSummaryVO;
-import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsWishlistVO;
-import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishGoodsItemVO;
-import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishPageVO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressRegisterPO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSavePO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSaveResultVO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSearchResponseVO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressUpdatePO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressVO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderBaseSavePO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderCouponItemVO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderCouponOptionVO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderCustomerInfoVO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderDetailSavePO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountAmountVO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountQuotePO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountQuoteVO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountSelectionVO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderGoodsCouponGroupVO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderGoodsCouponSelectionVO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderPageVO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentConfirmPO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentConfirmVO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentConfigVO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentFailPO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentPreparePO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentPrepareVO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentSavePO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentVO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderPointBaseVO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderPointDetailSavePO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderPointDetailVO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderPointSaveSummaryVO;
-import com.xodud1202.springbackend.domain.shop.order.ShopOrderRestoreCartItemVO;
-import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryItem;
-import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySavePO;
-import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryVO;
-import com.xodud1202.springbackend.domain.admin.goods.GoodsDescSaveItem;
-import com.xodud1202.springbackend.domain.admin.goods.GoodsDescSavePO;
-import com.xodud1202.springbackend.domain.admin.goods.GoodsDescVO;
-import com.xodud1202.springbackend.domain.admin.goods.GoodsImageSavePO;
-import com.xodud1202.springbackend.domain.admin.goods.GoodsImageVO;
-import com.xodud1202.springbackend.domain.admin.goods.GoodsImageOrderItem;
-import com.xodud1202.springbackend.domain.admin.goods.GoodsImageOrderSavePO;
-import com.xodud1202.springbackend.domain.admin.goods.GoodsMerchVO;
-import com.xodud1202.springbackend.domain.admin.goods.GoodsSavePO;
-import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeOrderItem;
-import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeOrderSavePO;
-import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeSavePO;
-import com.xodud1202.springbackend.domain.admin.goods.GoodsVO;
+import com.xodud1202.springbackend.domain.shop.goods.*;
+import com.xodud1202.springbackend.domain.shop.mypage.*;
+import com.xodud1202.springbackend.domain.shop.order.*;
 import com.xodud1202.springbackend.mapper.ExhibitionMapper;
 import com.xodud1202.springbackend.mapper.GoodsMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
-import java.io.IOException;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
-import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+import java.util.function.Supplier;
+
+import static com.xodud1202.springbackend.common.Constants.Common.*;
+import static com.xodud1202.springbackend.common.Constants.Shop.*;
 
 @Service
 @Slf4j
@@ -155,73 +55,12 @@ public class GoodsService {
 	private final JusoAddressApiClient jusoAddressApiClient;
 	private final TossPaymentsClient tossPaymentsClient;
 	private final ObjectMapper objectMapper;
+	private final PlatformTransactionManager transactionManager;
 
 	@Value("${toss.client-key}")
 	private String tossClientKey;
 	private static final int GOODS_IMAGE_MIN_SIZE = 500;
 	private static final int GOODS_IMAGE_MAX_SIZE = 1500;
-	private static final String SHOP_SITE_ID = "xodud1202";
-	private static final String SHOP_CART_GB_CART = "C";
-	private static final String SHOP_CART_GB_ORDER = "O";
-	private static final String YES = "Y";
-	private static final String NO = "N";
-	private static final String DEFAULT_CUST_GRADE_CD = "CUST_GRADE_01";
-	private static final String TARGET_GB_APPLY = "TARGET_GB_01";
-	private static final String TARGET_GB_EXCLUDE = "TARGET_GB_02";
-	private static final String CPN_TARGET_ALL = "CPN_TARGET_99";
-	private static final String CPN_TARGET_GOODS = "CPN_TARGET_01";
-	private static final String CPN_TARGET_BRAND = "CPN_TARGET_04";
-	private static final String CPN_TARGET_CATEGORY = "CPN_TARGET_03";
-	private static final String CPN_TARGET_EXHIBITION = "CPN_TARGET_02";
-	private static final String CPN_GB_GOODS = "CPN_GB_01";
-	private static final String CPN_GB_CART = "CPN_GB_03";
-	private static final String CPN_GB_DELIVERY = "CPN_GB_04";
-	private static final String CPN_DC_GB_AMOUNT = "CPN_DC_GB_01";
-	private static final String CPN_DC_GB_RATE = "CPN_DC_GB_02";
-	private static final int SHOP_MYPAGE_WISH_PAGE_SIZE = 10;
-	private static final int SHOP_MYPAGE_COUPON_PAGE_SIZE = 10;
-	private static final int SHOP_MYPAGE_COUPON_TOOLTIP_LIMIT = 10;
-	private static final int SHOP_MYPAGE_ORDER_PAGE_SIZE = 5;
-	private static final String SHOP_MYPAGE_ORDER_DATE_INVALID_MESSAGE = "조회 기간을 확인해주세요.";
-	private static final String SHOP_MYPAGE_ORDER_NO_INVALID_MESSAGE = "주문번호를 확인해주세요.";
-	private static final String SHOP_MYPAGE_ORDER_NOT_FOUND_MESSAGE = "주문 정보를 찾을 수 없습니다.";
-	private static final String SHOP_MYPAGE_ORDER_DETAIL_ITEM_INVALID_MESSAGE = "주문상품 정보를 확인해주세요.";
-	private static final String SHOP_MYPAGE_ORDER_CANCEL_UNAVAILABLE_MESSAGE = "취소 가능한 주문상품 정보를 찾을 수 없습니다.";
-	private static final DateTimeFormatter SHOP_MYPAGE_ORDER_DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-	private static final int SHOP_ORDER_ADDRESS_SEARCH_DEFAULT_PAGE = 1;
-	private static final int SHOP_ORDER_ADDRESS_SEARCH_DEFAULT_COUNT = 10;
-	private static final int SHOP_ORDER_ADDRESS_SEARCH_MAX_COUNT = 100;
-	private static final String SHOP_ORDER_DISCOUNT_INVALID_MESSAGE = "할인 혜택 정보를 확인해주세요.";
-	private static final String SHOP_ORDER_PAYMENT_INVALID_MESSAGE = "결제 정보를 확인해주세요.";
-	private static final String SHOP_ORDER_PAYMENT_PREPARE_MESSAGE = "결제 준비에 실패했습니다.";
-	private static final String SHOP_ORDER_PAYMENT_CONFIRM_MESSAGE = "결제 승인 처리에 실패했습니다.";
-	private static final String SHOP_ORDER_PAYMENT_STOCK_SHORTAGE_MESSAGE = "재고가 부족한 상품이 있습니다.";
-	private static final String SHOP_ORDER_BANK_GRP_CD = "BANK";
-	private static final String SHOP_ORDER_PAYMENT_METHOD_CARD = "PAY_METHOD_01";
-	private static final String SHOP_ORDER_PAYMENT_METHOD_VIRTUAL_ACCOUNT = "PAY_METHOD_02";
-	private static final String SHOP_ORDER_PAYMENT_METHOD_TRANSFER = "PAY_METHOD_03";
-	private static final String SHOP_ORDER_TOSS_METHOD_CARD = "CARD";
-	private static final String SHOP_ORDER_TOSS_METHOD_VIRTUAL_ACCOUNT = "VIRTUAL_ACCOUNT";
-	private static final String SHOP_ORDER_TOSS_METHOD_TRANSFER = "TRANSFER";
-	private static final String SHOP_ORDER_PAY_GB_PAYMENT = "PAY_GB_01";
-	private static final String SHOP_ORDER_PG_GB_TOSS = "TOSS";
-	private static final String SHOP_ORDER_ORD_GB_ORDER = "O";
-	private static final String SHOP_ORDER_STAT_READY = "ORD_STAT_00";
-	private static final String SHOP_ORDER_STAT_WAITING_DEPOSIT = "ORD_STAT_01";
-	private static final String SHOP_ORDER_STAT_DONE = "ORD_STAT_02";
-	private static final String SHOP_ORDER_STAT_CANCEL = "ORD_STAT_99";
-	private static final String SHOP_ORDER_DTL_STAT_READY = "ORD_DTL_STAT_00";
-	private static final String SHOP_ORDER_DTL_STAT_WAITING_DEPOSIT = "ORD_DTL_STAT_01";
-	private static final String SHOP_ORDER_DTL_STAT_DONE = "ORD_DTL_STAT_02";
-	private static final String SHOP_ORDER_DTL_STAT_CANCEL = "ORD_DTL_STAT_99";
-	private static final String SHOP_ORDER_PAY_STAT_READY = "PAY_STAT_01";
-	private static final String SHOP_ORDER_PAY_STAT_DONE = "PAY_STAT_02";
-	private static final String SHOP_ORDER_PAY_STAT_FAIL = "PAY_STAT_03";
-	private static final String SHOP_ORDER_PAY_STAT_CANCEL = "PAY_STAT_04";
-	private static final String SHOP_ORDER_PAY_STAT_WAITING_DEPOSIT = "PAY_STAT_05";
-	private static final String SHOP_ORDER_PAYMENT_API_VERSION = "2022-11-16";
-	private static final String SHOP_ORDER_POINT_USE_MEMO = "주문 결제 포인트 사용";
-	private static final String SHOP_ORDER_POINT_RESTORE_MEMO = "주문 결제 포인트 복구";
 
 	// 관리자 상품 목록을 페이징 조건으로 조회합니다.
 	public Map<String, Object> getAdminGoodsList(GoodsPO param) {
@@ -583,8 +422,7 @@ public class GoodsService {
 			} catch (NumberFormatException e) {
 				nextNumber = 1;
 			}
-			String nextSuffix = String.format("%02d", nextNumber);
-			return nextSuffix;
+			return String.format("%02d", nextNumber);
 		}
 		// 하위 카테고리는 4자리 단위로 증가합니다.
 		String prefix = maxCategoryId.length() > 4 ? maxCategoryId.substring(0, maxCategoryId.length() - 4) : "";
@@ -895,7 +733,7 @@ public class GoodsService {
 
 		// 현재 로그인 고객의 주문번호 1건과 금액 요약을 조회합니다.
 		ShopMypageOrderGroupVO orderGroup = getShopMypageOrderGroupWithDetail(custNo, resolvedOrdNo);
-		ShopMypageOrderAmountSummaryVO amountSummary = buildShopMypageOrderAmountSummary(custNo, resolvedOrdNo);
+		ShopMypageOrderAmountSummaryVO amountSummary = buildShopMypageOrderAmountSummary(custNo, orderGroup);
 
 		// 주문상세 페이지 응답 객체를 구성합니다.
 		ShopMypageOrderDetailPageVO result = new ShopMypageOrderDetailPageVO();
@@ -918,7 +756,7 @@ public class GoodsService {
 		// 현재 로그인 고객의 주문번호 1건과 금액/사유/배송 기준 정보를 조회합니다.
 		ShopMypageOrderGroupVO orderGroup = getShopMypageOrderGroupWithDetail(custNo, resolvedOrdNo);
 		validateShopMypageOrderCancelAccess(orderGroup, ordDtlNo);
-		ShopMypageOrderAmountSummaryVO amountSummary = buildShopMypageOrderAmountSummary(custNo, resolvedOrdNo);
+		ShopMypageOrderAmountSummaryVO amountSummary = buildShopMypageOrderAmountSummary(custNo, orderGroup);
 		List<ShopMypageOrderCancelReasonVO> reasonList = normalizeShopMypageOrderCancelReasonList(
 			goodsMapper.getShopMypageOrderCancelReasonList()
 		);
@@ -931,6 +769,66 @@ public class GoodsService {
 		result.setReasonList(reasonList);
 		result.setSiteInfo(siteInfo);
 		return result;
+	}
+
+	// 쇼핑몰 마이페이지 주문취소를 즉시 완료 처리합니다.
+	public ShopOrderCancelResultVO cancelShopMypageOrder(ShopOrderCancelPO param, Long custNo) {
+		// 로그인 고객번호와 주문취소 요청값을 검증합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+		if (param == null) {
+			throw new IllegalArgumentException("취소 정보를 확인해주세요.");
+		}
+		String ordNo = trimToNull(param.getOrdNo());
+		if (ordNo == null) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_NO_INVALID_MESSAGE);
+		}
+
+		// 현재 주문/주문마스터/배송 기준과 취소사유 코드를 조회합니다.
+		ShopMypageOrderGroupVO orderGroup = getShopMypageOrderGroupWithDetail(custNo, ordNo);
+		ShopOrderCancelOrderBaseVO orderBase = resolveShopOrderCancelOrderBase(custNo, ordNo);
+		ShopCartSiteInfoVO siteInfo = resolveShopCartSiteInfo();
+		List<ShopMypageOrderCancelReasonVO> reasonList = normalizeShopMypageOrderCancelReasonList(
+			goodsMapper.getShopMypageOrderCancelReasonList()
+		);
+
+		// 주문취소 요청을 현재 주문 기준으로 정규화하고 서버 금액을 다시 계산합니다.
+		validateShopOrderCancelReason(param, reasonList);
+		Map<Integer, Integer> cancelQtyMap = resolveShopOrderCancelQtyMap(param.getCancelItemList());
+		ShopOrderCancelComputation cancelComputation = buildShopOrderCancelComputation(orderGroup, orderBase, siteInfo, cancelQtyMap);
+		validateShopOrderCancelPreviewAmount(param.getPreviewAmount(), cancelComputation.getPreviewAmount());
+
+		// 취소 대상 원결제와 환불 결제 row를 먼저 준비합니다.
+		ShopOrderPaymentVO originalPayment = resolveShopOrderPaymentForCancel(ordNo);
+		String clmNo = generateShopOrderClaimNo(custNo);
+		ShopOrderPaymentSavePO refundPaymentSavePO = createShopOrderCancelRefundPayment(
+			orderBase,
+			originalPayment,
+			clmNo,
+			param,
+			cancelComputation,
+			custNo
+		);
+
+		// PG 취소 성공 시 주문/클레임/재고/포인트를 한 트랜잭션으로 반영합니다.
+		try {
+			return executeInShopOrderTransaction(() -> applyShopOrderCancelSuccess(
+				param,
+				custNo,
+				orderGroup,
+				orderBase,
+				originalPayment,
+				refundPaymentSavePO,
+				clmNo,
+				cancelQtyMap,
+				cancelComputation
+			));
+		} catch (TossPaymentClientException exception) {
+			// PG 취소 실패 시 환불 결제 row만 실패 상태로 남기고 주문 변경은 롤백합니다.
+			handleShopOrderCancelPaymentFailure(refundPaymentSavePO.getPayNo(), exception, custNo);
+			throw new IllegalArgumentException(resolveShopOrderCancelPgErrorMessage(exception));
+		}
 	}
 
 	// 쇼핑몰 마이페이지에서 쿠폰 1건을 다운로드합니다.
@@ -1296,25 +1194,12 @@ public class GoodsService {
 		return result;
 	}
 
-	// 마이페이지 주문상세 금액 요약을 조회하고 계산값을 보정합니다.
-	private ShopMypageOrderAmountSummaryVO buildShopMypageOrderAmountSummary(Long custNo, String ordNo) {
-		// 기본 금액 요약과 결제 정보를 함께 조회합니다.
-		ShopMypageOrderAmountSummaryVO amountSummary = normalizeShopMypageOrderAmountSummary(
-			goodsMapper.getShopMypageOrderAmountSummary(custNo, ordNo)
-		);
-		ShopOrderPaymentVO payment = goodsMapper.getShopPaymentByOrdNo(ordNo);
-
-		// 상품할인 금액과 쿠폰합계 금액을 규칙에 맞게 계산합니다.
-		long totalGoodsDiscountAmt = Math.max(amountSummary.getTotalSupplyAmt() - amountSummary.getTotalOrderAmt(), 0L);
-		long totalCouponDiscountAmt =
-			amountSummary.getTotalGoodsCouponDiscountAmt()
-				+ amountSummary.getTotalCartCouponDiscountAmt();
-		amountSummary.setTotalGoodsDiscountAmt(totalGoodsDiscountAmt);
-		amountSummary.setTotalCouponDiscountAmt(totalCouponDiscountAmt);
-
-		// 결제정보 우선 규칙으로 최종 결제 금액을 계산합니다.
-		amountSummary.setFinalPayAmt(resolveShopMypageOrderFinalPayAmt(amountSummary, payment));
-		return amountSummary;
+	// 마이페이지 주문상세 금액 요약을 현재 남은 주문 기준으로 계산합니다.
+	private ShopMypageOrderAmountSummaryVO buildShopMypageOrderAmountSummary(Long custNo, ShopMypageOrderGroupVO orderGroup) {
+		// 주문 마스터/배송 기준과 현재 남은 주문상세 목록으로 금액 요약을 계산합니다.
+		ShopOrderCancelOrderBaseVO orderBase = resolveShopOrderCancelOrderBase(custNo, orderGroup == null ? null : orderGroup.getOrdNo());
+		ShopCartSiteInfoVO siteInfo = resolveShopCartSiteInfo();
+		return buildShopOrderRemainingAmountSummary(orderGroup, orderBase, siteInfo);
 	}
 
 	// 마이페이지 주문상세 금액 요약 응답의 null 값을 0 이상으로 보정합니다.
@@ -1332,6 +1217,741 @@ public class GoodsService {
 		result.setDeliveryCouponDiscountAmt(resolveNonNegativeLong(result.getDeliveryCouponDiscountAmt()));
 		result.setFinalPayAmt(resolveNonNegativeLong(result.getFinalPayAmt()));
 		return result;
+	}
+
+	// 주문취소 처리용 주문 마스터 정보를 조회합니다.
+	private ShopOrderCancelOrderBaseVO resolveShopOrderCancelOrderBase(Long custNo, String ordNo) {
+		// 고객 주문번호 기준 주문 마스터가 없으면 주문 미존재 예외를 반환합니다.
+		ShopOrderCancelOrderBaseVO orderBase = goodsMapper.getShopOrderCancelOrderBase(custNo, ordNo);
+		if (orderBase == null) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_NOT_FOUND_MESSAGE);
+		}
+		return orderBase;
+	}
+
+	// 현재 남아 있는 주문수량 기준으로 주문 금액 요약을 계산합니다.
+	private ShopMypageOrderAmountSummaryVO buildShopOrderRemainingAmountSummary(
+		ShopMypageOrderGroupVO orderGroup,
+		ShopOrderCancelOrderBaseVO orderBase,
+		ShopCartSiteInfoVO siteInfo
+	) {
+		// 주문상세별 남은 수량과 남은 쿠폰/포인트 배분 금액을 누적합니다.
+		ShopMypageOrderAmountSummaryVO amountSummary = normalizeShopMypageOrderAmountSummary(new ShopMypageOrderAmountSummaryVO());
+		long currentOrderAmt = 0L;
+		for (ShopMypageOrderDetailItemVO detailItem : orderGroup == null ? List.<ShopMypageOrderDetailItemVO>of() : orderGroup.getDetailList()) {
+			int originalQty = resolveShopOrderOriginalQty(detailItem);
+			int remainingQty = resolveShopOrderRemainingQty(detailItem);
+			if (originalQty < 1 || remainingQty < 1) {
+				continue;
+			}
+
+			// 현재 남은 주문상품 금액과 남은 할인 배분 금액을 더합니다.
+			long rowSupplyAmt = (long) normalizeNonNegativeNumber(detailItem.getSupplyAmt()) * remainingQty;
+			long rowOrderAmt = (long) resolveShopOrderUnitOrderAmt(detailItem) * remainingQty;
+			currentOrderAmt += rowOrderAmt;
+			amountSummary.setTotalSupplyAmt(amountSummary.getTotalSupplyAmt() + rowSupplyAmt);
+			amountSummary.setTotalOrderAmt(amountSummary.getTotalOrderAmt() + rowOrderAmt);
+			amountSummary.setTotalGoodsCouponDiscountAmt(
+				amountSummary.getTotalGoodsCouponDiscountAmt() + resolveShopOrderRemainingAllocatedAmt(detailItem.getGoodsCouponDiscountAmt(), originalQty, remainingQty)
+			);
+			amountSummary.setTotalCartCouponDiscountAmt(
+				amountSummary.getTotalCartCouponDiscountAmt() + resolveShopOrderRemainingAllocatedAmt(detailItem.getCartCouponDiscountAmt(), originalQty, remainingQty)
+			);
+			amountSummary.setTotalPointUseAmt(
+				amountSummary.getTotalPointUseAmt() + resolveShopOrderRemainingAllocatedAmt(detailItem.getPointUseAmt(), originalQty, remainingQty)
+			);
+		}
+
+		// 주문 마스터 배송비와 무료배송 해제 규칙을 반영해 현재 남은 주문 금액을 계산합니다.
+		long totalGoodsDiscountAmt = Math.max(amountSummary.getTotalSupplyAmt() - amountSummary.getTotalOrderAmt(), 0L);
+		long totalCouponDiscountAmt = amountSummary.getTotalGoodsCouponDiscountAmt() + amountSummary.getTotalCartCouponDiscountAmt();
+		long originalBaseDeliveryFee = resolveNonNegativeLong(orderBase == null ? null : (long) normalizeNonNegativeNumber(orderBase.getOrdDelvAmt()));
+		long originalDeliveryCouponDiscountAmt = resolveNonNegativeLong(orderBase == null ? null : (long) normalizeNonNegativeNumber(orderBase.getDelvCpnDcAmt()));
+		long remainingBaseDeliveryFee =
+			currentOrderAmt < 1L
+				? 0L
+				: originalBaseDeliveryFee > 0L
+					? originalBaseDeliveryFee
+					: currentOrderAmt < resolveNonNegativeLong(siteInfo == null ? null : (long) normalizeNonNegativeNumber(siteInfo.getDeliveryFeeLimit()))
+						? resolveNonNegativeLong(siteInfo == null ? null : (long) normalizeNonNegativeNumber(siteInfo.getDeliveryFee()))
+						: 0L;
+		long remainingDeliveryCouponDiscountAmt =
+			currentOrderAmt < 1L || remainingBaseDeliveryFee < 1L
+				? 0L
+				: Math.min(originalDeliveryCouponDiscountAmt, remainingBaseDeliveryFee);
+
+		// 화면에 표시할 현재 남은 주문 금액 요약 필드를 완성합니다.
+		amountSummary.setTotalGoodsDiscountAmt(totalGoodsDiscountAmt);
+		amountSummary.setTotalCouponDiscountAmt(totalCouponDiscountAmt);
+		amountSummary.setDeliveryFeeAmt(remainingBaseDeliveryFee);
+		amountSummary.setDeliveryCouponDiscountAmt(remainingDeliveryCouponDiscountAmt);
+		amountSummary.setFinalPayAmt(
+			Math.max(
+				amountSummary.getTotalOrderAmt()
+					+ remainingBaseDeliveryFee
+					- totalCouponDiscountAmt
+					- remainingDeliveryCouponDiscountAmt
+					- amountSummary.getTotalPointUseAmt(),
+				0L
+			)
+		);
+		return normalizeShopMypageOrderAmountSummary(amountSummary);
+	}
+
+	// 주문취소 사유 코드와 직접입력값을 검증합니다.
+	private void validateShopOrderCancelReason(ShopOrderCancelPO param, List<ShopMypageOrderCancelReasonVO> reasonList) {
+		// 선택한 취소 사유 코드가 비어 있거나 현재 사용 가능한 사유가 아니면 예외를 반환합니다.
+		String reasonCd = trimToNull(param == null ? null : param.getReasonCd());
+		if (reasonCd == null) {
+			throw new IllegalArgumentException("주문 취소 사유를 선택해주세요.");
+		}
+		ShopMypageOrderCancelReasonVO matchedReason = null;
+		for (ShopMypageOrderCancelReasonVO reasonItem : reasonList == null ? List.<ShopMypageOrderCancelReasonVO>of() : reasonList) {
+			if (reasonCd.equals(trimToNull(reasonItem.getCd()))) {
+				matchedReason = reasonItem;
+				break;
+			}
+		}
+		if (matchedReason == null) {
+			throw new IllegalArgumentException("주문 취소 사유를 선택해주세요.");
+		}
+
+		// 기타 사유는 직접입력값을 필수로 확인합니다.
+		if ("C_03".equals(matchedReason.getCd()) && trimToNull(param.getReasonDetail()) == null) {
+			throw new IllegalArgumentException("기타 사유를 입력해주세요.");
+		}
+	}
+
+	// 주문취소 요청 상품 목록을 주문상세번호별 취소수량 맵으로 정규화합니다.
+	private Map<Integer, Integer> resolveShopOrderCancelQtyMap(List<ShopOrderCancelItemPO> cancelItemList) {
+		// 선택된 주문상품이 없으면 요청 오류를 반환합니다.
+		if (cancelItemList == null || cancelItemList.isEmpty()) {
+			throw new IllegalArgumentException("취소할 상품을 선택해주세요.");
+		}
+
+		// 주문상세번호별 중복 여부와 취소수량 1 이상 여부를 함께 검증합니다.
+		Map<Integer, Integer> result = new LinkedHashMap<>();
+		for (ShopOrderCancelItemPO cancelItem : cancelItemList) {
+			if (cancelItem == null || cancelItem.getOrdDtlNo() == null || cancelItem.getOrdDtlNo() < 1 || cancelItem.getCancelQty() == null || cancelItem.getCancelQty() < 1) {
+				throw new IllegalArgumentException("주문상품 정보를 확인해주세요.");
+			}
+			if (result.putIfAbsent(cancelItem.getOrdDtlNo(), cancelItem.getCancelQty()) != null) {
+				throw new IllegalArgumentException("주문상품 정보를 확인해주세요.");
+			}
+		}
+		return result;
+	}
+
+	// 주문취소 요청 기준 서버 재계산 결과를 구성합니다.
+	private ShopOrderCancelComputation buildShopOrderCancelComputation(
+		ShopMypageOrderGroupVO orderGroup,
+		ShopOrderCancelOrderBaseVO orderBase,
+		ShopCartSiteInfoVO siteInfo,
+		Map<Integer, Integer> cancelQtyMap
+	) {
+		// 주문상세 목록이 없으면 취소 불가 예외를 반환합니다.
+		if (orderGroup == null || orderGroup.getDetailList() == null || orderGroup.getDetailList().isEmpty()) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_CANCEL_UNAVAILABLE_MESSAGE);
+		}
+
+		// 현재 남아 있는 주문행 기준으로 취소 모드와 환급 금액을 계산합니다.
+		ShopOrderCancelPreviewSummary previewSummary = new ShopOrderCancelPreviewSummary();
+		List<ShopOrderCancelSelectedItem> selectedItemList = new ArrayList<>();
+		boolean hasWaitingDepositSelection = false;
+		boolean hasPaymentDoneSelection = false;
+		long currentOrderAmt = 0L;
+		long remainingOrderAmtAfterCancel = 0L;
+		int selectedQtyCount = 0;
+		int activeRemainingRowCount = 0;
+		int fullyCanceledRowCount = 0;
+		for (ShopMypageOrderDetailItemVO detailItem : orderGroup.getDetailList()) {
+			if (detailItem == null || detailItem.getOrdDtlNo() == null) {
+				continue;
+			}
+			int originalQty = resolveShopOrderOriginalQty(detailItem);
+			int remainingQty = resolveShopOrderRemainingQty(detailItem);
+			if (originalQty < 1 || remainingQty < 1) {
+				continue;
+			}
+			activeRemainingRowCount += 1;
+			currentOrderAmt += (long) resolveShopOrderUnitOrderAmt(detailItem) * remainingQty;
+
+			// 요청에 포함되지 않은 행은 남은 주문 금액 계산에만 반영합니다.
+			Integer requestedCancelQty = cancelQtyMap.get(detailItem.getOrdDtlNo());
+			if (requestedCancelQty == null) {
+				remainingOrderAmtAfterCancel += (long) resolveShopOrderUnitOrderAmt(detailItem) * remainingQty;
+				continue;
+			}
+
+			// 현재 상태와 남은 수량 기준으로 취소 가능 여부와 수량 범위를 검증합니다.
+			boolean waitingDepositCancelable = SHOP_ORDER_DTL_STAT_WAITING_DEPOSIT.equals(detailItem.getOrdDtlStatCd());
+			boolean paymentDoneCancelable = SHOP_ORDER_DTL_STAT_DONE.equals(detailItem.getOrdDtlStatCd());
+			if (!waitingDepositCancelable && !paymentDoneCancelable) {
+				throw new IllegalArgumentException("주문상품 정보를 확인해주세요.");
+			}
+			if (requestedCancelQty < 1 || requestedCancelQty > remainingQty) {
+				throw new IllegalArgumentException("주문상품 정보를 확인해주세요.");
+			}
+			if (waitingDepositCancelable) {
+				hasWaitingDepositSelection = true;
+			}
+			if (paymentDoneCancelable) {
+				hasPaymentDoneSelection = true;
+			}
+
+			// 선택 행의 취소 수량 기준 상품/쿠폰/포인트 환급 금액을 누적합니다.
+			selectedQtyCount += requestedCancelQty;
+			if (remainingQty - requestedCancelQty < 1) {
+				fullyCanceledRowCount += 1;
+			}
+			remainingOrderAmtAfterCancel += (long) resolveShopOrderUnitOrderAmt(detailItem) * (remainingQty - requestedCancelQty);
+			accumulateShopOrderCancelPreviewAmount(previewSummary, detailItem, requestedCancelQty);
+			selectedItemList.add(buildShopOrderCancelSelectedItem(detailItem, requestedCancelQty));
+		}
+
+		// 무통장입금은 전체취소만, 결제완료는 부분취소/전체취소를 허용합니다.
+		if (selectedItemList.isEmpty() || selectedQtyCount < 1) {
+			throw new IllegalArgumentException("취소할 상품을 선택해주세요.");
+		}
+		if (hasWaitingDepositSelection && hasPaymentDoneSelection) {
+			throw new IllegalArgumentException("주문상품 정보를 확인해주세요.");
+		}
+		if (hasWaitingDepositSelection) {
+			validateShopOrderCancelFullOnly(orderGroup, cancelQtyMap);
+		}
+
+		// 배송비 환급/차감과 취소 예정 총액, PG 현금 환불액을 계산합니다.
+		boolean isFullCancel = activeRemainingRowCount > 0 && fullyCanceledRowCount == activeRemainingRowCount;
+		long paidDeliveryFeeRefundAmt =
+			isFullCancel
+				? Math.max(
+					resolveNonNegativeLong(orderBase == null ? null : Long.valueOf(normalizeNonNegativeNumber(orderBase.getOrdDelvAmt())))
+						- resolveNonNegativeLong(orderBase == null ? null : Long.valueOf(normalizeNonNegativeNumber(orderBase.getDelvCpnDcAmt()))),
+					0L
+				)
+				: 0L;
+		long deliveryCouponRefundAmt =
+			isFullCancel
+				? resolveNonNegativeLong(orderBase == null ? null : Long.valueOf(normalizeNonNegativeNumber(orderBase.getDelvCpnDcAmt())))
+				: 0L;
+		long shippingDeductionAmt =
+			!isFullCancel
+				&& resolveNonNegativeLong(orderBase == null ? null : Long.valueOf(normalizeNonNegativeNumber(orderBase.getOrdDelvAmt()))) < 1L
+				&& currentOrderAmt > 0L
+				&& remainingOrderAmtAfterCancel > 0L
+				&& remainingOrderAmtAfterCancel < resolveNonNegativeLong(siteInfo == null ? null : Long.valueOf(normalizeNonNegativeNumber(siteInfo.getDeliveryFeeLimit())))
+					? resolveNonNegativeLong(siteInfo == null ? null : Long.valueOf(normalizeNonNegativeNumber(siteInfo.getDeliveryFee())))
+					: 0L;
+		long paidGoodsAmt =
+			Math.max(
+				previewSummary.getTotalOrderAmt()
+					- previewSummary.getTotalGoodsCouponDiscountAmt()
+					- previewSummary.getTotalCartCouponDiscountAmt()
+					- previewSummary.getTotalPointRefundAmt(),
+				0L
+			);
+		long benefitAmt = previewSummary.getTotalPointRefundAmt() + deliveryCouponRefundAmt;
+		long shippingAdjustmentAmt = paidDeliveryFeeRefundAmt - shippingDeductionAmt;
+		long expectedRefundAmt = paidGoodsAmt + benefitAmt + shippingAdjustmentAmt;
+		long refundedCashAmt = paidGoodsAmt + shippingAdjustmentAmt;
+		if (refundedCashAmt < 0L) {
+			throw new IllegalArgumentException("배송비 차감 후 취소 예정 금액이 0원 미만이라 신청할 수 없습니다.");
+		}
+
+		// 프론트와 비교할 취소 예정 금액 요약과 후속 처리 정보를 구성합니다.
+		ShopOrderCancelPreviewAmountPO previewAmount = new ShopOrderCancelPreviewAmountPO();
+		previewAmount.setExpectedRefundAmt(expectedRefundAmt);
+		previewAmount.setPaidGoodsAmt(paidGoodsAmt);
+		previewAmount.setBenefitAmt(benefitAmt);
+		previewAmount.setShippingAdjustmentAmt(shippingAdjustmentAmt);
+		previewAmount.setTotalPointRefundAmt(previewSummary.getTotalPointRefundAmt());
+		previewAmount.setDeliveryCouponRefundAmt(deliveryCouponRefundAmt);
+		return new ShopOrderCancelComputation(
+			selectedItemList,
+			previewAmount,
+			isFullCancel,
+			refundedCashAmt,
+			previewSummary.getTotalPointRefundAmt(),
+			shippingAdjustmentAmt
+		);
+	}
+
+	// 무통장입금 주문은 현재 남은 주문 전체를 전량 선택했는지 확인합니다.
+	private void validateShopOrderCancelFullOnly(ShopMypageOrderGroupVO orderGroup, Map<Integer, Integer> cancelQtyMap) {
+		// 남은 주문행 중 하나라도 빠졌거나 전량 선택이 아니면 전체취소 전용 예외를 반환합니다.
+		for (ShopMypageOrderDetailItemVO detailItem : orderGroup == null ? List.<ShopMypageOrderDetailItemVO>of() : orderGroup.getDetailList()) {
+			if (detailItem == null) {
+				continue;
+			}
+			int remainingQty = resolveShopOrderRemainingQty(detailItem);
+			if (remainingQty < 1) {
+				continue;
+			}
+			if (!SHOP_ORDER_DTL_STAT_WAITING_DEPOSIT.equals(detailItem.getOrdDtlStatCd())) {
+				throw new IllegalArgumentException("무통장입금 주문은 전체취소만 가능합니다.");
+			}
+			Integer selectedCancelQty = cancelQtyMap.get(detailItem.getOrdDtlNo());
+			if (selectedCancelQty == null || selectedCancelQty != remainingQty) {
+				throw new IllegalArgumentException("무통장입금 주문은 전체취소만 가능합니다.");
+			}
+		}
+	}
+
+	// 취소 예정 금액 비교용 서버 계산 결과를 행 단위로 누적합니다.
+	private void accumulateShopOrderCancelPreviewAmount(
+		ShopOrderCancelPreviewSummary previewAmount,
+		ShopMypageOrderDetailItemVO detailItem,
+		int cancelQty
+	) {
+		// 주문상세 원수량과 이미 취소된 수량 기준으로 이번 취소분의 배분 금액을 계산합니다.
+		int originalQty = resolveShopOrderOriginalQty(detailItem);
+		int canceledBeforeQty = resolveShopOrderCanceledQty(detailItem);
+		long supplyAmt = (long) normalizeNonNegativeNumber(detailItem.getSupplyAmt()) * cancelQty;
+		long orderAmt = (long) resolveShopOrderUnitOrderAmt(detailItem) * cancelQty;
+		long goodsCouponDiscountAmt = resolveShopOrderIncrementAllocatedAmt(detailItem.getGoodsCouponDiscountAmt(), originalQty, canceledBeforeQty, cancelQty);
+		long cartCouponDiscountAmt = resolveShopOrderIncrementAllocatedAmt(detailItem.getCartCouponDiscountAmt(), originalQty, canceledBeforeQty, cancelQty);
+		long pointRefundAmt = resolveShopOrderIncrementAllocatedAmt(detailItem.getPointUseAmt(), originalQty, canceledBeforeQty, cancelQty);
+
+		// 공급가/상품가/상품할인과 상품쿠폰/장바구니쿠폰/포인트 환급 누계를 반영합니다.
+		previewAmount.setTotalSupplyAmt(previewAmount.getTotalSupplyAmt() + supplyAmt);
+		previewAmount.setTotalOrderAmt(previewAmount.getTotalOrderAmt() + orderAmt);
+		previewAmount.setTotalGoodsCouponDiscountAmt(previewAmount.getTotalGoodsCouponDiscountAmt() + goodsCouponDiscountAmt);
+		previewAmount.setTotalCartCouponDiscountAmt(previewAmount.getTotalCartCouponDiscountAmt() + cartCouponDiscountAmt);
+		previewAmount.setTotalPointRefundAmt(previewAmount.getTotalPointRefundAmt() + pointRefundAmt);
+	}
+
+	// 서버 재계산 취소 예정 금액과 클라이언트 전송 금액이 정확히 같은지 확인합니다.
+	private void validateShopOrderCancelPreviewAmount(
+		ShopOrderCancelPreviewAmountPO clientPreviewAmount,
+		ShopOrderCancelPreviewAmountPO serverPreviewAmount
+	) {
+		// 화면과 서버 계산 결과가 하나라도 다르면 진행하지 않습니다.
+		if (resolveNonNegativeLong(clientPreviewAmount == null ? null : clientPreviewAmount.getExpectedRefundAmt()) != resolveNonNegativeLong(serverPreviewAmount.getExpectedRefundAmt())
+			|| resolveNonNegativeLong(clientPreviewAmount == null ? null : clientPreviewAmount.getPaidGoodsAmt()) != resolveNonNegativeLong(serverPreviewAmount.getPaidGoodsAmt())
+			|| resolveNonNegativeLong(clientPreviewAmount == null ? null : clientPreviewAmount.getBenefitAmt()) != resolveNonNegativeLong(serverPreviewAmount.getBenefitAmt())
+			|| resolveNonNegativeLong(clientPreviewAmount == null ? null : clientPreviewAmount.getShippingAdjustmentAmt()) != resolveNonNegativeLong(serverPreviewAmount.getShippingAdjustmentAmt())
+			|| resolveNonNegativeLong(clientPreviewAmount == null ? null : clientPreviewAmount.getTotalPointRefundAmt()) != resolveNonNegativeLong(serverPreviewAmount.getTotalPointRefundAmt())
+			|| resolveNonNegativeLong(clientPreviewAmount == null ? null : clientPreviewAmount.getDeliveryCouponRefundAmt()) != resolveNonNegativeLong(serverPreviewAmount.getDeliveryCouponRefundAmt())) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_CANCEL_AMOUNT_MISMATCH_MESSAGE);
+		}
+	}
+
+	// 주문취소 대상 원결제 정보를 조회합니다.
+	private ShopOrderPaymentVO resolveShopOrderPaymentForCancel(String ordNo) {
+		// 현재 주문의 승인/입금대기 원결제가 없으면 취소를 진행할 수 없습니다.
+		ShopOrderPaymentVO payment = goodsMapper.getShopOrderPaymentForCancel(ordNo);
+		if (payment == null || payment.getPayNo() == null || isBlank(payment.getPayMethodCd())) {
+			throw new IllegalArgumentException("취소 가능한 결제 정보를 찾을 수 없습니다.");
+		}
+		return payment;
+	}
+
+	// 환불 결제 row를 선등록하고 생성된 결제번호를 반환합니다.
+	private ShopOrderPaymentSavePO createShopOrderCancelRefundPayment(
+		ShopOrderCancelOrderBaseVO orderBase,
+		ShopOrderPaymentVO originalPayment,
+		String clmNo,
+		ShopOrderCancelPO param,
+		ShopOrderCancelComputation cancelComputation,
+		Long custNo
+	) {
+		// 요청 스냅샷을 함께 저장해 PG 실패 시에도 환불 결제 이력을 추적할 수 있게 합니다.
+		Map<String, Object> refundSnapshot = new LinkedHashMap<>();
+		refundSnapshot.put("ordNo", orderBase == null ? null : orderBase.getOrdNo());
+		refundSnapshot.put("clmNo", clmNo);
+		refundSnapshot.put("reasonCd", trimToNull(param == null ? null : param.getReasonCd()));
+		refundSnapshot.put("reasonDetail", trimToNull(param == null ? null : param.getReasonDetail()));
+		refundSnapshot.put("cancelItemList", param == null ? List.of() : param.getCancelItemList());
+		refundSnapshot.put("previewAmount", cancelComputation == null ? null : cancelComputation.getPreviewAmount());
+		refundSnapshot.put("refundedCashAmt", cancelComputation == null ? 0L : cancelComputation.getRefundedCashAmt());
+
+		// 환불 PAYMENT row는 메인 트랜잭션과 분리해 먼저 커밋합니다.
+		return executeInNewShopOrderTransaction(() -> {
+			ShopOrderPaymentSavePO refundPaymentSavePO = new ShopOrderPaymentSavePO();
+			refundPaymentSavePO.setOrdNo(orderBase == null ? null : orderBase.getOrdNo());
+			refundPaymentSavePO.setCustNo(orderBase == null ? custNo : orderBase.getCustNo());
+			refundPaymentSavePO.setPayStatCd(SHOP_ORDER_PAY_STAT_READY);
+			refundPaymentSavePO.setPayGbCd(SHOP_ORDER_PAY_GB_REFUND);
+			refundPaymentSavePO.setPayMethodCd(originalPayment == null ? null : originalPayment.getPayMethodCd());
+			refundPaymentSavePO.setOrdGbCd(SHOP_ORDER_ORD_GB_ORDER);
+			refundPaymentSavePO.setPgGbCd(originalPayment == null ? SHOP_ORDER_PG_GB_TOSS : originalPayment.getPgGbCd());
+			refundPaymentSavePO.setOrgPayNo(originalPayment == null ? null : originalPayment.getPayNo());
+			refundPaymentSavePO.setClmNo(clmNo);
+			refundPaymentSavePO.setPayAmt(cancelComputation == null ? 0L : cancelComputation.getRefundedCashAmt());
+			refundPaymentSavePO.setDeviceGbCd(orderBase == null ? "PC" : firstNonBlank(trimToNull(orderBase.getDeviceGbCd()), "PC"));
+			refundPaymentSavePO.setReqRawJson(writeShopOrderJson(refundSnapshot));
+			refundPaymentSavePO.setRegNo(custNo);
+			refundPaymentSavePO.setUdtNo(custNo);
+			goodsMapper.insertShopPayment(refundPaymentSavePO);
+			if (refundPaymentSavePO.getPayNo() == null || refundPaymentSavePO.getPayNo() < 1L) {
+				throw new IllegalStateException("환불 결제 준비에 실패했습니다.");
+			}
+			return refundPaymentSavePO;
+		});
+	}
+
+	// 메인 주문취소 트랜잭션을 실행합니다.
+	private <T> T executeInShopOrderTransaction(Supplier<T> action) {
+		// 기본 전파속성의 트랜잭션 템플릿으로 주문취소 반영을 실행합니다.
+		TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+		return transactionTemplate.execute(status -> action.get());
+	}
+
+	// 별도 커밋이 필요한 주문취소 보조 트랜잭션을 실행합니다.
+	private <T> T executeInNewShopOrderTransaction(Supplier<T> action) {
+		// 환불 PAYMENT 선등록/실패 반영처럼 독립 커밋이 필요한 작업을 REQUIRES_NEW로 실행합니다.
+		TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+		transactionTemplate.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+		return transactionTemplate.execute(status -> action.get());
+	}
+
+	// 주문취소 성공 시 주문/클레임/포인트/재고/PAYMENT를 함께 반영합니다.
+	private ShopOrderCancelResultVO applyShopOrderCancelSuccess(
+		ShopOrderCancelPO param,
+		Long custNo,
+		ShopMypageOrderGroupVO orderGroup,
+		ShopOrderCancelOrderBaseVO orderBase,
+		ShopOrderPaymentVO originalPayment,
+		ShopOrderPaymentSavePO refundPaymentSavePO,
+		String clmNo,
+		Map<Integer, Integer> cancelQtyMap,
+		ShopOrderCancelComputation cancelComputation
+	) {
+		// 주문변경 마스터/상세와 주문상세 취소 수량을 먼저 반영합니다.
+		String cancelDt = LocalDateTime.now().format(SHOP_MYPAGE_ORDER_DATE_TIME_FORMATTER);
+		goodsMapper.insertShopOrderChangeBase(buildShopOrderChangeBaseSavePO(clmNo, orderBase, cancelComputation, cancelDt, custNo));
+		for (ShopOrderCancelSelectedItem selectedItem : cancelComputation.getSelectedItemList()) {
+			goodsMapper.insertShopOrderChangeDetail(buildShopOrderChangeDetailSavePO(clmNo, selectedItem, param, custNo));
+			int updatedCount = goodsMapper.updateShopOrderDetailCancelQuantity(
+				orderBase.getOrdNo(),
+				selectedItem.getDetailItem().getOrdDtlNo(),
+				selectedItem.getCancelQty(),
+				selectedItem.getNextOrdDtlStatCd(),
+				custNo
+			);
+			if (updatedCount < 1) {
+				throw new IllegalArgumentException("주문상품 정보를 확인해주세요.");
+			}
+		}
+
+		// 취소 수량만큼 재고와 포인트를 복구하고, 전체취소일 때 배송비쿠폰 사용도 원복합니다.
+		restoreShopOrderCancelSelectedStock(cancelComputation.getSelectedItemList(), custNo);
+		restoreShopOrderPointByAmount(custNo, orderBase.getOrdNo(), cancelComputation.getRestoredPointAmt());
+		if (cancelComputation.isFullCancel() && orderBase.getDelvCpnNo() != null && orderBase.getDelvCpnNo() > 0L) {
+			goodsMapper.restoreShopCustomerCouponUseByCustCpnNo(custNo, orderBase.getDelvCpnNo(), custNo);
+		}
+
+		// PG 취소 성공 응답을 저장하고, 전체취소면 주문 마스터도 완료 상태로 변경합니다.
+		ShopOrderCancelPgResult cancelPgResult = cancelShopOrderPaymentWithPg(originalPayment, param, cancelComputation);
+		goodsMapper.updateShopPaymentCancelSuccess(
+			refundPaymentSavePO.getPayNo(),
+			SHOP_ORDER_PAY_STAT_CANCEL,
+			cancelPgResult.getCanceledAmount(),
+			cancelPgResult.getTradeNo(),
+			cancelPgResult.getRspCode(),
+			cancelPgResult.getRspMsg(),
+			cancelPgResult.getRawResponse(),
+			cancelPgResult.getApprovedDt(),
+			custNo
+		);
+		if (cancelComputation.isFullCancel()) {
+			goodsMapper.updateShopOrderBaseStatus(orderBase.getOrdNo(), SHOP_ORDER_STAT_CANCEL, custNo);
+		}
+
+		// 주문취소 완료 응답 객체를 구성합니다.
+		ShopOrderCancelResultVO result = new ShopOrderCancelResultVO();
+		result.setClmNo(clmNo);
+		result.setOrdNo(orderBase.getOrdNo());
+		result.setRefundPayNo(refundPaymentSavePO.getPayNo());
+		result.setPayStatCd(SHOP_ORDER_PAY_STAT_CANCEL);
+		result.setRefundedCashAmt(cancelComputation.getRefundedCashAmt());
+		result.setRestoredPointAmt(cancelComputation.getRestoredPointAmt());
+		return result;
+	}
+
+	// 주문취소 대상 상품 수량만큼 재고를 복구합니다.
+	private void restoreShopOrderCancelSelectedStock(List<ShopOrderCancelSelectedItem> selectedItemList, Long auditNo) {
+		// 동일 상품/사이즈는 취소 수량을 합산해 재고를 복구합니다.
+		Map<String, ShopOrderRestoreCartItemVO> stockItemMap = new LinkedHashMap<>();
+		for (ShopOrderCancelSelectedItem selectedItem : selectedItemList == null ? List.<ShopOrderCancelSelectedItem>of() : selectedItemList) {
+			if (selectedItem == null || selectedItem.getDetailItem() == null || isBlank(selectedItem.getDetailItem().getGoodsId()) || isBlank(selectedItem.getDetailItem().getSizeId())) {
+				continue;
+			}
+			String stockKey = selectedItem.getDetailItem().getGoodsId().trim() + "|" + selectedItem.getDetailItem().getSizeId().trim();
+			ShopOrderRestoreCartItemVO aggregateItem = stockItemMap.get(stockKey);
+			if (aggregateItem == null) {
+				aggregateItem = new ShopOrderRestoreCartItemVO();
+				aggregateItem.setGoodsId(selectedItem.getDetailItem().getGoodsId().trim());
+				aggregateItem.setSizeId(selectedItem.getDetailItem().getSizeId().trim());
+				aggregateItem.setOrdQty(0);
+				stockItemMap.put(stockKey, aggregateItem);
+			}
+			aggregateItem.setOrdQty(normalizeNonNegativeNumber(aggregateItem.getOrdQty()) + selectedItem.getCancelQty());
+		}
+		for (ShopOrderRestoreCartItemVO stockItem : stockItemMap.values()) {
+			if (stockItem == null || normalizeNonNegativeNumber(stockItem.getOrdQty()) < 1) {
+				continue;
+			}
+			goodsMapper.restoreShopGoodsSizeStock(stockItem.getGoodsId(), stockItem.getSizeId(), stockItem.getOrdQty(), auditNo);
+		}
+	}
+
+	// 주문취소 대상 금액만큼 사용 포인트를 복구합니다.
+	private void restoreShopOrderPointByAmount(Long custNo, String ordNo, long restoreAmt) {
+		// 복구할 포인트가 없으면 처리하지 않습니다.
+		int remainingRestoreAmt = (int) Math.max(restoreAmt, 0L);
+		if (remainingRestoreAmt < 1) {
+			return;
+		}
+
+		// 아직 복구되지 않은 사용 포인트 이력 순서대로 포인트를 되돌립니다.
+		for (ShopOrderPointDetailVO pointDetail : goodsMapper.getShopOrderPointDetailBalanceList(ordNo)) {
+			if (pointDetail == null || pointDetail.getPntNo() == null || remainingRestoreAmt < 1) {
+				continue;
+			}
+			int restorableAmt = normalizeNonNegativeNumber(pointDetail.getPntAmt());
+			if (restorableAmt < 1) {
+				continue;
+			}
+			int appliedRestoreAmt = Math.min(restorableAmt, remainingRestoreAmt);
+			goodsMapper.restoreShopCustomerPointUseAmt(pointDetail.getPntNo(), appliedRestoreAmt, custNo);
+			ShopOrderPointDetailSavePO restoreDetail = new ShopOrderPointDetailSavePO();
+			restoreDetail.setPntNo(pointDetail.getPntNo());
+			restoreDetail.setPntAmt(appliedRestoreAmt);
+			restoreDetail.setOrdNo(ordNo);
+			restoreDetail.setBigo(SHOP_ORDER_POINT_RESTORE_MEMO);
+			restoreDetail.setRegNo(custNo);
+			goodsMapper.insertShopOrderPointDetail(restoreDetail);
+			remainingRestoreAmt -= appliedRestoreAmt;
+		}
+		if (remainingRestoreAmt > 0) {
+			throw new IllegalStateException("포인트 복구 처리에 실패했습니다.");
+		}
+	}
+
+	// 주문취소용 PG 취소 API를 호출하고 성공 응답을 해석합니다.
+	private ShopOrderCancelPgResult cancelShopOrderPaymentWithPg(
+		ShopOrderPaymentVO originalPayment,
+		ShopOrderCancelPO param,
+		ShopOrderCancelComputation cancelComputation
+	) {
+		// Toss 결제키가 없으면 PG 취소를 진행할 수 없습니다.
+		if (originalPayment == null || isBlank(originalPayment.getTossPaymentKey())) {
+			throw new IllegalArgumentException("취소 가능한 결제 정보를 찾을 수 없습니다.");
+		}
+
+		// 무통장입금 취소는 금액 없이, 일반 결제취소는 현금 환불액 기준으로 PG를 호출합니다.
+		Long cancelAmount =
+			SHOP_ORDER_PAY_STAT_WAITING_DEPOSIT.equals(originalPayment.getPayStatCd())
+				? null
+				: cancelComputation.getRefundedCashAmt() > 0L
+					? cancelComputation.getRefundedCashAmt()
+					: null;
+		String rawResponse = tossPaymentsClient.cancelPayment(
+			originalPayment.getTossPaymentKey().trim(),
+			resolveShopOrderCancelPgReason(param),
+			cancelAmount
+		);
+		JsonNode responseNode = readShopOrderJsonNode(rawResponse);
+		String paymentStatus = firstNonBlank(resolveJsonText(responseNode, "status"), "");
+		if (!"CANCELED".equals(paymentStatus) && !"PARTIAL_CANCELED".equals(paymentStatus)) {
+			throw new IllegalArgumentException("주문취소 처리에 실패했습니다.");
+		}
+
+		// Toss 취소 응답에서 거래키, 취소일시, 실제 취소금액을 추출합니다.
+		JsonNode cancelNode = responseNode.path("cancels").isArray() && !responseNode.path("cancels").isEmpty()
+			? responseNode.path("cancels").get(responseNode.path("cancels").size() - 1)
+			: responseNode;
+		long canceledAmount = resolveJsonLong(cancelNode, "cancelAmount");
+		if (canceledAmount < 1L && cancelAmount != null) {
+			canceledAmount = cancelAmount;
+		}
+		String approvedDt = normalizeShopOrderDateTime(
+			firstNonBlank(
+				resolveJsonText(cancelNode, "canceledAt"),
+				resolveJsonText(responseNode, "approvedAt")
+			)
+		);
+		String tradeNo = firstNonBlank(
+			resolveJsonText(cancelNode, "transactionKey"),
+			firstNonBlank(resolveJsonText(responseNode, "lastTransactionKey"), originalPayment.getTradeNo())
+		);
+		return new ShopOrderCancelPgResult(
+			rawResponse,
+			paymentStatus,
+			"취소 완료",
+			tradeNo,
+			approvedDt,
+			canceledAmount
+		);
+	}
+
+	// 주문취소 PG 실패 시 환불 PAYMENT row만 실패 상태로 남깁니다.
+	private void handleShopOrderCancelPaymentFailure(Long refundPayNo, TossPaymentClientException exception, Long custNo) {
+		// 환불 결제번호가 없으면 별도 실패 반영을 진행하지 않습니다.
+		if (refundPayNo == null || refundPayNo < 1L) {
+			return;
+		}
+
+		// Toss 오류 응답을 저장해 실패 원인을 확인할 수 있게 합니다.
+		executeInNewShopOrderTransaction(() -> {
+			JsonNode errorNode = readShopOrderJsonNode(exception.getResponseBody());
+			goodsMapper.updateShopPaymentCancelFailure(
+				refundPayNo,
+				SHOP_ORDER_PAY_STAT_FAIL,
+				firstNonBlank(resolveJsonText(errorNode, "code"), "TOSS_CANCEL_ERROR"),
+				firstNonBlank(resolveJsonText(errorNode, "message"), "주문취소 처리에 실패했습니다."),
+				exception.getResponseBody(),
+				custNo
+			);
+			return null;
+		});
+	}
+
+	// 주문취소 PG 오류 응답에서 사용자 표시 메시지를 추출합니다.
+	private String resolveShopOrderCancelPgErrorMessage(TossPaymentClientException exception) {
+		// Toss 오류 메시지가 있으면 우선 사용하고, 없으면 기본 문구를 반환합니다.
+		JsonNode errorNode = readShopOrderJsonNode(exception == null ? null : exception.getResponseBody());
+		return firstNonBlank(resolveJsonText(errorNode, "message"), "주문취소 처리에 실패했습니다.");
+	}
+
+	// PG 취소 사유 문자열을 Toss 전송용 텍스트로 구성합니다.
+	private String resolveShopOrderCancelPgReason(ShopOrderCancelPO param) {
+		// 사유 코드와 상세 입력을 조합해 최대한 읽기 쉬운 문구로 정리합니다.
+		String reasonCd = trimToNull(param == null ? null : param.getReasonCd());
+		String reasonDetail = trimToNull(param == null ? null : param.getReasonDetail());
+		if (reasonCd == null) {
+			return "주문 취소";
+		}
+		return reasonDetail == null ? reasonCd : reasonCd + " - " + reasonDetail;
+	}
+
+	// 주문변경 마스터 저장 파라미터를 생성합니다.
+	private ShopOrderChangeBaseSavePO buildShopOrderChangeBaseSavePO(
+		String clmNo,
+		ShopOrderCancelOrderBaseVO orderBase,
+		ShopOrderCancelComputation cancelComputation,
+		String cancelDt,
+		Long auditNo
+	) {
+		// 취소 즉시완료 기준 변경구분/상태/배송비 조정 금액을 채웁니다.
+		ShopOrderChangeBaseSavePO result = new ShopOrderChangeBaseSavePO();
+		result.setClmNo(clmNo);
+		result.setOrdNo(orderBase == null ? null : orderBase.getOrdNo());
+		result.setChgGbCd(SHOP_ORDER_CHANGE_GB_CANCEL);
+		result.setChgDt(cancelDt);
+		result.setChgCompleteDt(cancelDt);
+		result.setChgStatCd(SHOP_ORDER_CHANGE_STAT_PROGRESS);
+		result.setPayDelvAmt((int) Math.max(Math.min(cancelComputation == null ? 0L : cancelComputation.getShippingAdjustmentAmt(), Integer.MAX_VALUE), Integer.MIN_VALUE));
+		result.setRegNo(auditNo);
+		result.setUdtNo(auditNo);
+		return result;
+	}
+
+	// 주문변경 상세 저장 파라미터를 생성합니다.
+	private ShopOrderChangeDetailSavePO buildShopOrderChangeDetailSavePO(
+		String clmNo,
+		ShopOrderCancelSelectedItem selectedItem,
+		ShopOrderCancelPO param,
+		Long auditNo
+	) {
+		// 선택한 주문상품 기준 취소완료 이력 한 건을 구성합니다.
+		ShopOrderChangeDetailSavePO result = new ShopOrderChangeDetailSavePO();
+		result.setClmNo(clmNo);
+		result.setOrdNo(selectedItem == null || selectedItem.getDetailItem() == null ? null : selectedItem.getDetailItem().getOrdNo());
+		result.setOrdDtlNo(selectedItem == null || selectedItem.getDetailItem() == null ? null : selectedItem.getDetailItem().getOrdDtlNo());
+		result.setChgDtlGbCd(SHOP_ORDER_CHANGE_DTL_GB_CANCEL);
+		result.setChgDtlStatCd(SHOP_ORDER_CHANGE_DTL_STAT_DONE);
+		result.setChgReasonCd(trimToNull(param == null ? null : param.getReasonCd()));
+		result.setChgReasonDtl(trimToNull(param == null ? null : param.getReasonDetail()));
+		result.setGoodsId(selectedItem == null || selectedItem.getDetailItem() == null ? null : selectedItem.getDetailItem().getGoodsId());
+		result.setSizeId(selectedItem == null || selectedItem.getDetailItem() == null ? null : selectedItem.getDetailItem().getSizeId());
+		result.setQty(selectedItem == null ? null : selectedItem.getCancelQty());
+		result.setAddAmt(selectedItem == null || selectedItem.getDetailItem() == null ? null : normalizeNonNegativeNumber(selectedItem.getDetailItem().getAddAmt()));
+		result.setChangeOrdDtlNo(null);
+		result.setRegNo(auditNo);
+		result.setUdtNo(auditNo);
+		return result;
+	}
+
+	// 주문상세 1건과 취소수량으로 취소 반영 대상 행 정보를 생성합니다.
+	private ShopOrderCancelSelectedItem buildShopOrderCancelSelectedItem(ShopMypageOrderDetailItemVO detailItem, int cancelQty) {
+		// 취소 후 남은 수량에 따라 다음 주문상세 상태를 계산합니다.
+		int remainingAfterCancelQty = Math.max(resolveShopOrderRemainingQty(detailItem) - Math.max(cancelQty, 0), 0);
+		String nextOrdDtlStatCd = remainingAfterCancelQty < 1 ? SHOP_ORDER_DTL_STAT_CANCEL : detailItem.getOrdDtlStatCd();
+		return new ShopOrderCancelSelectedItem(detailItem, cancelQty, remainingAfterCancelQty, nextOrdDtlStatCd);
+	}
+
+	// 주문상세의 원주문 수량을 안전한 정수로 반환합니다.
+	private int resolveShopOrderOriginalQty(ShopMypageOrderDetailItemVO detailItem) {
+		// 원주문 수량이 없거나 음수면 0으로 보정합니다.
+		return normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getOrdQty());
+	}
+
+	// 주문상세의 현재 남은 수량을 원주문 수량 범위 안에서 반환합니다.
+	private int resolveShopOrderRemainingQty(ShopMypageOrderDetailItemVO detailItem) {
+		// 현재 남은 수량은 원주문 수량을 넘지 않도록 보정합니다.
+		int originalQty = resolveShopOrderOriginalQty(detailItem);
+		int remainingQty = normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getCancelableQty());
+		return Math.min(originalQty, remainingQty);
+	}
+
+	// 주문상세의 이미 취소된 누적 수량을 반환합니다.
+	private int resolveShopOrderCanceledQty(ShopMypageOrderDetailItemVO detailItem) {
+		// 원주문 수량에서 현재 남은 수량을 빼 누적 취소 수량을 계산합니다.
+		return Math.max(resolveShopOrderOriginalQty(detailItem) - resolveShopOrderRemainingQty(detailItem), 0);
+	}
+
+	// 주문상세의 상품 판매가 단가를 반환합니다.
+	private int resolveShopOrderUnitOrderAmt(ShopMypageOrderDetailItemVO detailItem) {
+		// 판매가와 추가금액을 더해 주문상세 1개당 주문금액을 계산합니다.
+		return normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getSaleAmt())
+			+ normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getAddAmt());
+	}
+
+	// 주문상세의 누적 배분 금액을 누적 수량 기준으로 계산합니다.
+	private long resolveShopOrderCumulativeAllocatedAmt(Integer allocatedAmt, int originalQty, int cumulativeQty) {
+		// 마지막 수량까지 모두 취소되면 남은 절삭 금액을 전부 배분합니다.
+		long safeAllocatedAmt = normalizeNonNegativeNumber(allocatedAmt);
+		int safeOriginalQty = Math.max(originalQty, 0);
+		int safeCumulativeQty = Math.max(Math.min(cumulativeQty, safeOriginalQty), 0);
+		if (safeAllocatedAmt < 1L || safeOriginalQty < 1 || safeCumulativeQty < 1) {
+			return 0L;
+		}
+		if (safeCumulativeQty >= safeOriginalQty) {
+			return safeAllocatedAmt;
+		}
+		return (safeAllocatedAmt * safeCumulativeQty) / safeOriginalQty;
+	}
+
+	// 주문상세의 이번 취소분 배분 금액을 계산합니다.
+	private long resolveShopOrderIncrementAllocatedAmt(Integer allocatedAmt, int originalQty, int canceledBeforeQty, int cancelQty) {
+		// 누적 취소 전/후 배분 차이만큼 이번 취소분 환급 금액을 계산합니다.
+		long beforeAmt = resolveShopOrderCumulativeAllocatedAmt(allocatedAmt, originalQty, canceledBeforeQty);
+		long afterAmt = resolveShopOrderCumulativeAllocatedAmt(allocatedAmt, originalQty, canceledBeforeQty + cancelQty);
+		return Math.max(afterAmt - beforeAmt, 0L);
+	}
+
+	// 주문상세의 현재 남은 수량 기준 배분 금액을 계산합니다.
+	private long resolveShopOrderRemainingAllocatedAmt(Integer allocatedAmt, int originalQty, int remainingQty) {
+		// 전체 배분 금액에서 이미 취소된 누적 배분 금액을 제외해 현재 남은 금액을 계산합니다.
+		long safeAllocatedAmt = normalizeNonNegativeNumber(allocatedAmt);
+		long canceledAllocatedAmt = resolveShopOrderCumulativeAllocatedAmt(allocatedAmt, originalQty, Math.max(originalQty - remainingQty, 0));
+		return Math.max(safeAllocatedAmt - canceledAllocatedAmt, 0L);
+	}
+
+	// JSON 노드의 숫자 필드를 long으로 안전하게 읽습니다.
+	private long resolveJsonLong(JsonNode node, String fieldName) {
+		// 숫자 필드가 없거나 숫자로 해석되지 않으면 0을 반환합니다.
+		String rawValue = resolveJsonText(node, fieldName);
+		if (isBlank(rawValue)) {
+			return 0L;
+		}
+		try {
+			return Math.max(Long.parseLong(rawValue.trim()), 0L);
+		} catch (NumberFormatException exception) {
+			return 0L;
+		}
 	}
 
 	// 주문취소 사유 코드 목록의 공백/null 값을 기본값으로 보정합니다.
@@ -1414,7 +2034,7 @@ public class GoodsService {
 		// 현재 다운로드 가능 목록에서 동일 쿠폰번호를 찾습니다.
 		List<ShopMypageDownloadableCouponVO> downloadableCouponList = goodsMapper.getShopMypageDownloadableCouponList();
 		for (ShopMypageDownloadableCouponVO downloadableCoupon : downloadableCouponList == null ? List.<ShopMypageDownloadableCouponVO>of() : downloadableCouponList) {
-			if (downloadableCoupon == null || downloadableCoupon.getCpnNo() == null) {
+			if (downloadableCoupon.getCpnNo() == null) {
 				continue;
 			}
 			if (cpnNo.equals(downloadableCoupon.getCpnNo())) {
@@ -3021,7 +3641,7 @@ public class GoodsService {
 		// 요청 상품쿠폰 선택값을 cartId 기준으로 정리합니다.
 		Map<Long, Long> requestedGoodsSelectionMap = new HashMap<>();
 		for (ShopOrderGoodsCouponSelectionVO selection : goodsCouponSelectionList == null ? List.<ShopOrderGoodsCouponSelectionVO>of() : goodsCouponSelectionList) {
-			if (selection == null || selection.getCartId() == null) {
+			if (selection.getCartId() == null) {
 				continue;
 			}
 			if (!goodsCouponCandidateMap.containsKey(selection.getCartId())) {
@@ -5897,6 +6517,249 @@ public class GoodsService {
 			return imgPath;
 		}
 		return imgPath.substring(index + 1);
+	}
+
+	// 접두사/고객번호/년월일시분초밀리초를 조합해 클레임번호를 생성합니다.
+	private String generateShopOrderClaimNo(Long custNo) {
+		// 클레임번호는 주문번호와 구분되도록 C 접두사를 사용합니다.
+		String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS"));
+		long safeCustNo = custNo == null ? 0L : Math.max(custNo, 0L);
+		return "C" + safeCustNo + timestamp;
+	}
+
+	// 주문취소 계산 결과를 내부적으로 전달합니다.
+	private static class ShopOrderCancelComputation {
+		// 선택된 주문취소 대상 행 목록입니다.
+		private final List<ShopOrderCancelSelectedItem> selectedItemList;
+		// 프론트와 비교할 취소 예정 금액 요약입니다.
+		private final ShopOrderCancelPreviewAmountPO previewAmount;
+		// 전체취소 여부입니다.
+		private final boolean fullCancel;
+		// PG 현금 환불 금액입니다.
+		private final long refundedCashAmt;
+		// 복구할 포인트 금액입니다.
+		private final long restoredPointAmt;
+		// 배송비 조정 금액입니다.
+		private final long shippingAdjustmentAmt;
+
+		// 계산 결과 객체를 생성합니다.
+		private ShopOrderCancelComputation(
+			List<ShopOrderCancelSelectedItem> selectedItemList,
+			ShopOrderCancelPreviewAmountPO previewAmount,
+			boolean fullCancel,
+			long refundedCashAmt,
+			long restoredPointAmt,
+			long shippingAdjustmentAmt
+		) {
+			this.selectedItemList = selectedItemList;
+			this.previewAmount = previewAmount;
+			this.fullCancel = fullCancel;
+			this.refundedCashAmt = refundedCashAmt;
+			this.restoredPointAmt = restoredPointAmt;
+			this.shippingAdjustmentAmt = shippingAdjustmentAmt;
+		}
+
+		// 선택된 주문취소 대상 행 목록을 반환합니다.
+		private List<ShopOrderCancelSelectedItem> getSelectedItemList() {
+			return selectedItemList;
+		}
+
+		// 프론트 비교용 취소 예정 금액 요약을 반환합니다.
+		private ShopOrderCancelPreviewAmountPO getPreviewAmount() {
+			return previewAmount;
+		}
+
+		// 전체취소 여부를 반환합니다.
+		private boolean isFullCancel() {
+			return fullCancel;
+		}
+
+		// PG 현금 환불 금액을 반환합니다.
+		private long getRefundedCashAmt() {
+			return refundedCashAmt;
+		}
+
+		// 복구 포인트 금액을 반환합니다.
+		private long getRestoredPointAmt() {
+			return restoredPointAmt;
+		}
+
+		// 배송비 조정 금액을 반환합니다.
+		private long getShippingAdjustmentAmt() {
+			return shippingAdjustmentAmt;
+		}
+	}
+
+	// 주문취소 화면 내부 계산용 금액 요약을 전달합니다.
+	private static class ShopOrderCancelPreviewSummary {
+		// 공급가 합계입니다.
+		private long totalSupplyAmt;
+		// 상품 판매가 합계입니다.
+		private long totalOrderAmt;
+		// 상품쿠폰 환급 합계입니다.
+		private long totalGoodsCouponDiscountAmt;
+		// 장바구니쿠폰 환급 합계입니다.
+		private long totalCartCouponDiscountAmt;
+		// 포인트 환급 합계입니다.
+		private long totalPointRefundAmt;
+
+		// 공급가 합계를 반환합니다.
+		private long getTotalSupplyAmt() {
+			return totalSupplyAmt;
+		}
+
+		// 공급가 합계를 저장합니다.
+		private void setTotalSupplyAmt(long totalSupplyAmt) {
+			this.totalSupplyAmt = totalSupplyAmt;
+		}
+
+		// 상품 판매가 합계를 반환합니다.
+		private long getTotalOrderAmt() {
+			return totalOrderAmt;
+		}
+
+		// 상품 판매가 합계를 저장합니다.
+		private void setTotalOrderAmt(long totalOrderAmt) {
+			this.totalOrderAmt = totalOrderAmt;
+		}
+
+		// 상품쿠폰 환급 합계를 반환합니다.
+		private long getTotalGoodsCouponDiscountAmt() {
+			return totalGoodsCouponDiscountAmt;
+		}
+
+		// 상품쿠폰 환급 합계를 저장합니다.
+		private void setTotalGoodsCouponDiscountAmt(long totalGoodsCouponDiscountAmt) {
+			this.totalGoodsCouponDiscountAmt = totalGoodsCouponDiscountAmt;
+		}
+
+		// 장바구니쿠폰 환급 합계를 반환합니다.
+		private long getTotalCartCouponDiscountAmt() {
+			return totalCartCouponDiscountAmt;
+		}
+
+		// 장바구니쿠폰 환급 합계를 저장합니다.
+		private void setTotalCartCouponDiscountAmt(long totalCartCouponDiscountAmt) {
+			this.totalCartCouponDiscountAmt = totalCartCouponDiscountAmt;
+		}
+
+		// 포인트 환급 합계를 반환합니다.
+		private long getTotalPointRefundAmt() {
+			return totalPointRefundAmt;
+		}
+
+		// 포인트 환급 합계를 저장합니다.
+		private void setTotalPointRefundAmt(long totalPointRefundAmt) {
+			this.totalPointRefundAmt = totalPointRefundAmt;
+		}
+	}
+
+	// 주문취소 대상 주문상세 1건과 취소수량 정보를 전달합니다.
+	private static class ShopOrderCancelSelectedItem {
+		// 취소 대상 주문상세 행입니다.
+		private final ShopMypageOrderDetailItemVO detailItem;
+		// 취소 수량입니다.
+		private final int cancelQty;
+		// 취소 후 남는 수량입니다.
+		private final int remainingAfterCancelQty;
+		// 취소 반영 후 주문상세 상태코드입니다.
+		private final String nextOrdDtlStatCd;
+
+		// 선택 행 정보를 생성합니다.
+		private ShopOrderCancelSelectedItem(
+			ShopMypageOrderDetailItemVO detailItem,
+			int cancelQty,
+			int remainingAfterCancelQty,
+			String nextOrdDtlStatCd
+		) {
+			this.detailItem = detailItem;
+			this.cancelQty = cancelQty;
+			this.remainingAfterCancelQty = remainingAfterCancelQty;
+			this.nextOrdDtlStatCd = nextOrdDtlStatCd;
+		}
+
+		// 취소 대상 주문상세 행을 반환합니다.
+		private ShopMypageOrderDetailItemVO getDetailItem() {
+			return detailItem;
+		}
+
+		// 취소 수량을 반환합니다.
+		private int getCancelQty() {
+			return cancelQty;
+		}
+
+		// 취소 후 남는 수량을 반환합니다.
+		private int getRemainingAfterCancelQty() {
+			return remainingAfterCancelQty;
+		}
+
+		// 취소 반영 후 주문상세 상태코드를 반환합니다.
+		private String getNextOrdDtlStatCd() {
+			return nextOrdDtlStatCd;
+		}
+	}
+
+	// PG 취소 성공 응답에서 필요한 요약값을 전달합니다.
+	private static class ShopOrderCancelPgResult {
+		// PG 원본 응답 문자열입니다.
+		private final String rawResponse;
+		// PG 응답 코드입니다.
+		private final String rspCode;
+		// PG 응답 메시지입니다.
+		private final String rspMsg;
+		// PG 거래키입니다.
+		private final String tradeNo;
+		// 취소 완료 일시입니다.
+		private final String approvedDt;
+		// 실제 취소 금액입니다.
+		private final long canceledAmount;
+
+		// PG 취소 요약 결과를 생성합니다.
+		private ShopOrderCancelPgResult(
+			String rawResponse,
+			String rspCode,
+			String rspMsg,
+			String tradeNo,
+			String approvedDt,
+			long canceledAmount
+		) {
+			this.rawResponse = rawResponse;
+			this.rspCode = rspCode;
+			this.rspMsg = rspMsg;
+			this.tradeNo = tradeNo;
+			this.approvedDt = approvedDt;
+			this.canceledAmount = canceledAmount;
+		}
+
+		// PG 원본 응답 문자열을 반환합니다.
+		private String getRawResponse() {
+			return rawResponse;
+		}
+
+		// PG 응답 코드를 반환합니다.
+		private String getRspCode() {
+			return rspCode;
+		}
+
+		// PG 응답 메시지를 반환합니다.
+		private String getRspMsg() {
+			return rspMsg;
+		}
+
+		// PG 거래키를 반환합니다.
+		private String getTradeNo() {
+			return tradeNo;
+		}
+
+		// 취소 완료 일시를 반환합니다.
+		private String getApprovedDt() {
+			return approvedDt;
+		}
+
+		// 실제 취소 금액을 반환합니다.
+		private long getCanceledAmount() {
+			return canceledAmount;
+		}
 	}
 
 	// 마이페이지 주문내역 조회 기간 보정 결과를 내부적으로 전달합니다.

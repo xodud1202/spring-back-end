@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.Constants.Shop.*;
+
 import com.xodud1202.springbackend.domain.admin.coupon.CouponDetailVO;
 import com.xodud1202.springbackend.domain.admin.coupon.CouponPO;
 import com.xodud1202.springbackend.domain.admin.coupon.CouponSavePO;
@@ -40,17 +42,6 @@ public class CouponService {
 	private static final String DATE_GB_REG_DT = "REG_DT";
 	private static final String DATE_GB_DOWN_DT = "DOWN_DT";
 	private static final String CPN_STAT_WAIT = "CPN_STAT_01";
-	private static final String CPN_TARGET_ALL = "CPN_TARGET_99";
-	private static final String CPN_TARGET_GOODS = "CPN_TARGET_01";
-	private static final String CPN_TARGET_BRAND = "CPN_TARGET_04";
-	private static final String CPN_TARGET_EXHIBITION = "CPN_TARGET_02";
-	private static final String CPN_TARGET_CATEGORY = "CPN_TARGET_03";
-	private static final String CPN_DC_GB_AMOUNT = "CPN_DC_GB_01";
-	private static final String CPN_DC_GB_RATE = "CPN_DC_GB_02";
-	private static final String CPN_USE_DT_PERIOD = "CPN_USE_DT_01";
-	private static final String CPN_USE_DT_DATETIME = "CPN_USE_DT_02";
-	private static final String TARGET_GB_APPLY = "TARGET_GB_01";
-	private static final String TARGET_GB_EXCLUDE = "TARGET_GB_02";
 	private static final int DEFAULT_PAGE = 1;
 	private static final int DEFAULT_PAGE_SIZE = 20;
 	private static final int MAX_PAGE_SIZE = 200;

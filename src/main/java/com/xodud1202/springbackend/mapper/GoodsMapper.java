@@ -45,6 +45,9 @@ import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishGoodsItemVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderBaseSavePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderCancelOrderBaseVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderChangeBaseSavePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderChangeDetailSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderCustomerInfoVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderDetailSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentSavePO;
@@ -268,6 +271,27 @@ public interface GoodsMapper {
 	// 주문번호 기준 결제 정보를 조회합니다.
 	ShopOrderPaymentVO getShopPaymentByOrdNo(@Param("ordNo") String ordNo);
 
+	// 주문취소 대상 원결제 정보를 조회합니다.
+	ShopOrderPaymentVO getShopOrderPaymentForCancel(@Param("ordNo") String ordNo);
+
+	// 주문취소 처리용 주문 마스터 정보를 조회합니다.
+	ShopOrderCancelOrderBaseVO getShopOrderCancelOrderBase(@Param("custNo") Long custNo, @Param("ordNo") String ordNo);
+
+	// 주문변경 마스터를 등록합니다.
+	int insertShopOrderChangeBase(ShopOrderChangeBaseSavePO param);
+
+	// 주문변경 상세를 등록합니다.
+	int insertShopOrderChangeDetail(ShopOrderChangeDetailSavePO param);
+
+	// 주문상세 취소 수량과 상태를 반영합니다.
+	int updateShopOrderDetailCancelQuantity(
+		@Param("ordNo") String ordNo,
+		@Param("ordDtlNo") Integer ordDtlNo,
+		@Param("cancelQty") Integer cancelQty,
+		@Param("nextOrdDtlStatCd") String nextOrdDtlStatCd,
+		@Param("udtNo") Long udtNo
+	);
+
 	// 쇼핑몰 주문 마스터 상태를 변경합니다.
 	int updateShopOrderBaseStatus(@Param("ordNo") String ordNo, @Param("ordStatCd") String ordStatCd, @Param("udtNo") Long udtNo);
 
@@ -330,6 +354,29 @@ public interface GoodsMapper {
 		@Param("udtNo") Long udtNo
 	);
 
+	// 환불 결제 성공 결과를 갱신합니다.
+	int updateShopPaymentCancelSuccess(
+		@Param("payNo") Long payNo,
+		@Param("payStatCd") String payStatCd,
+		@Param("cnlAmt") Long cnlAmt,
+		@Param("tradeNo") String tradeNo,
+		@Param("rspCode") String rspCode,
+		@Param("rspMsg") String rspMsg,
+		@Param("rspRawJson") String rspRawJson,
+		@Param("apprDt") String apprDt,
+		@Param("udtNo") Long udtNo
+	);
+
+	// 환불 결제 실패 결과를 갱신합니다.
+	int updateShopPaymentCancelFailure(
+		@Param("payNo") Long payNo,
+		@Param("payStatCd") String payStatCd,
+		@Param("rspCode") String rspCode,
+		@Param("rspMsg") String rspMsg,
+		@Param("rspRawJson") String rspRawJson,
+		@Param("udtNo") Long udtNo
+	);
+
 	// 웹훅 반영 결과로 결제 상태와 원본 전문을 갱신합니다.
 	int updateShopPaymentWebhook(
 		@Param("payNo") Long payNo,
@@ -353,6 +400,13 @@ public interface GoodsMapper {
 	// 주문번호 기준 사용 처리된 고객쿠폰을 원복합니다.
 	int restoreShopCustomerCouponUse(@Param("custNo") Long custNo, @Param("ordNo") String ordNo, @Param("udtNo") Long udtNo);
 
+	// 배송비 고객쿠폰 1건의 사용 상태를 원복합니다.
+	int restoreShopCustomerCouponUseByCustCpnNo(
+		@Param("custNo") Long custNo,
+		@Param("custCpnNo") Long custCpnNo,
+		@Param("udtNo") Long udtNo
+	);
+
 	// 고객의 현재 사용 가능한 포인트 마스터 목록을 조회합니다.
 	List<ShopOrderPointBaseVO> getShopAvailablePointBaseList(@Param("custNo") Long custNo);
 
@@ -367,6 +421,9 @@ public interface GoodsMapper {
 
 	// 주문번호 기준 포인트 사용 상세 이력을 조회합니다.
 	List<ShopOrderPointDetailVO> getShopOrderPointDetailList(@Param("ordNo") String ordNo);
+
+	// 주문번호 기준 포인트 사용/복구 누적 요약을 조회합니다.
+	List<ShopOrderPointDetailVO> getShopOrderPointDetailBalanceList(@Param("ordNo") String ordNo);
 
 	// 선택 장바구니 번호 목록을 삭제합니다.
 	int deleteShopCartByCartIdList(@Param("custNo") Long custNo, @Param("cartIdList") List<Long> cartIdList);

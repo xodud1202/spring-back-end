@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_SITE_ID;
+
 import com.xodud1202.springbackend.domain.shop.site.ShopSiteInfoVO;
 import com.xodud1202.springbackend.mapper.SiteInfoMapper;
 import lombok.RequiredArgsConstructor;
@@ -9,8 +11,6 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class SiteInfoService {
-	private static final String SHOP_SITE_ID = "xodud1202";
-
 	private final SiteInfoMapper siteInfoMapper;
 
 	// 로그인/상품상세 등 쇼핑몰 공통 화면에 필요한 사이트 기본 정보를 조회합니다.

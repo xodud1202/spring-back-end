@@ -1,5 +1,8 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.Constants.Common.*;
+import static com.xodud1202.springbackend.common.Constants.Shop.*;
+
 import com.xodud1202.springbackend.domain.shop.auth.ShopCouponIssueRuleVO;
 import com.xodud1202.springbackend.domain.shop.auth.ShopCustomerCouponSavePO;
 import com.xodud1202.springbackend.domain.shop.auth.ShopCustomerGradeBenefitVO;
@@ -26,26 +29,6 @@ import java.util.regex.Pattern;
 @Service
 @RequiredArgsConstructor
 public class ShopAuthService {
-	private static final String SHOP_SITE_ID = "xodud1202";
-	private static final String CUST_GRADE_GRP_CD = "CUST_GRADE";
-	private static final String DEFAULT_CUST_GRADE_CD = "CUST_GRADE_01";
-	private static final String DEFAULT_CUST_STAT_CD = "CUST_STAT_01";
-	private static final String GOOGLE_JOIN_GB = "GOOGLE";
-	private static final String CPN_USE_DT_PERIOD = "CPN_USE_DT_01";
-	private static final String CPN_USE_DT_DATETIME = "CPN_USE_DT_02";
-	private static final String JOIN_POINT_GIVE_GB_CD = "JOIN_POINT";
-	private static final String JOIN_POINT_GIVE_MEMO = "회원가입 포인트 지급";
-	private static final String SEX_UNSELECTED = "X";
-	private static final String SEX_MALE = "M";
-	private static final String SEX_FEMALE = "F";
-	private static final String AGREEMENT_Y = "Y";
-	private static final String AGREEMENT_N = "N";
-	private static final String DEVICE_TYPE_WEB = "WEB";
-	private static final String DEVICE_TYPE_MOBILE = "MOBILE";
-	private static final String DEVICE_TYPE_APP = "APP";
-	private static final String DEVICE_GB_PC = "PC";
-	private static final String DEVICE_GB_MO = "MO";
-	private static final String DEVICE_GB_APP = "APP";
 	private static final int CUSTOMER_NAME_MAX_LENGTH = 20;
 	private static final Pattern BIRTH_PATTERN = Pattern.compile("^(\\d{4})-(\\d{2})-(\\d{2})$");
 	private static final Pattern PHONE_NUMBER_PATTERN = Pattern.compile("^\\d{3}-\\d{4}-\\d{4}$");
