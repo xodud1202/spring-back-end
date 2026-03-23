@@ -46,6 +46,8 @@ import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponDownloadRe
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponPageVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponUnavailableGoodsVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageDownloadableCouponVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderCancelPageVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderCancelReasonVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOwnedCouponVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderAmountSummaryVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderDetailItemVO;
@@ -183,6 +185,8 @@ public class GoodsService {
 	private static final String SHOP_MYPAGE_ORDER_DATE_INVALID_MESSAGE = "조회 기간을 확인해주세요.";
 	private static final String SHOP_MYPAGE_ORDER_NO_INVALID_MESSAGE = "주문번호를 확인해주세요.";
 	private static final String SHOP_MYPAGE_ORDER_NOT_FOUND_MESSAGE = "주문 정보를 찾을 수 없습니다.";
+	private static final String SHOP_MYPAGE_ORDER_DETAIL_ITEM_INVALID_MESSAGE = "주문상품 정보를 확인해주세요.";
+	private static final String SHOP_MYPAGE_ORDER_CANCEL_UNAVAILABLE_MESSAGE = "취소 가능한 주문상품 정보를 찾을 수 없습니다.";
 	private static final DateTimeFormatter SHOP_MYPAGE_ORDER_DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 	private static final int SHOP_ORDER_ADDRESS_SEARCH_DEFAULT_PAGE = 1;
 	private static final int SHOP_ORDER_ADDRESS_SEARCH_DEFAULT_COUNT = 10;
@@ -900,6 +904,35 @@ public class GoodsService {
 		return result;
 	}
 
+	// 쇼핑몰 마이페이지 주문취소 신청 화면 데이터를 조회합니다.
+	public ShopMypageOrderCancelPageVO getShopMypageOrderCancelPage(Long custNo, String ordNo, Integer ordDtlNo) {
+		// 고객번호와 주문번호를 검증합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+		String resolvedOrdNo = trimToNull(ordNo);
+		if (resolvedOrdNo == null) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_NO_INVALID_MESSAGE);
+		}
+
+		// 현재 로그인 고객의 주문번호 1건과 금액/사유/배송 기준 정보를 조회합니다.
+		ShopMypageOrderGroupVO orderGroup = getShopMypageOrderGroupWithDetail(custNo, resolvedOrdNo);
+		validateShopMypageOrderCancelAccess(orderGroup, ordDtlNo);
+		ShopMypageOrderAmountSummaryVO amountSummary = buildShopMypageOrderAmountSummary(custNo, resolvedOrdNo);
+		List<ShopMypageOrderCancelReasonVO> reasonList = normalizeShopMypageOrderCancelReasonList(
+			goodsMapper.getShopMypageOrderCancelReasonList()
+		);
+		ShopCartSiteInfoVO siteInfo = resolveShopCartSiteInfo();
+
+		// 주문취소 신청 화면 응답 객체를 구성합니다.
+		ShopMypageOrderCancelPageVO result = new ShopMypageOrderCancelPageVO();
+		result.setOrder(orderGroup);
+		result.setAmountSummary(amountSummary);
+		result.setReasonList(reasonList);
+		result.setSiteInfo(siteInfo);
+		return result;
+	}
+
 	// 쇼핑몰 마이페이지에서 쿠폰 1건을 다운로드합니다.
 	@Transactional
 	public void downloadShopMypageCoupon(ShopMypageCouponDownloadRequestPO param, Long custNo) {
@@ -1166,6 +1199,53 @@ public class GoodsService {
 		return resolvedOrderList.get(0);
 	}
 
+	// 주문취소 신청 화면 진입 시 주문상세번호와 취소 가능 상태를 검증합니다.
+	private void validateShopMypageOrderCancelAccess(ShopMypageOrderGroupVO orderGroup, Integer ordDtlNo) {
+		// 주문상세 목록이 없으면 취소 불가 예외를 반환합니다.
+		if (orderGroup == null || orderGroup.getDetailList() == null || orderGroup.getDetailList().isEmpty()) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_CANCEL_UNAVAILABLE_MESSAGE);
+		}
+
+		// 취소 가능 상품 존재 여부와 요청 주문상세번호 유효성을 함께 확인합니다.
+		boolean hasCancelableDetail = false;
+		boolean matchedRequestedDetail = ordDtlNo == null;
+		for (ShopMypageOrderDetailItemVO detailItem : orderGroup.getDetailList()) {
+			if (detailItem == null) {
+				continue;
+			}
+
+			// 취소 가능 상태와 잔여 수량이 있는 행만 취소 대상 후보로 인정합니다.
+			int cancelableQty = normalizeNonNegativeNumber(detailItem.getCancelableQty());
+			boolean cancelable =
+				cancelableQty > 0
+					&& (
+						SHOP_ORDER_DTL_STAT_WAITING_DEPOSIT.equals(detailItem.getOrdDtlStatCd())
+							|| SHOP_ORDER_DTL_STAT_DONE.equals(detailItem.getOrdDtlStatCd())
+					);
+			if (cancelable) {
+				hasCancelableDetail = true;
+			}
+
+			// 요청 주문상세번호가 있으면 현재 주문의 취소 가능 상품과 일치하는지 확인합니다.
+			if (ordDtlNo != null && ordDtlNo.equals(detailItem.getOrdDtlNo())) {
+				if (!cancelable) {
+					throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_DETAIL_ITEM_INVALID_MESSAGE);
+				}
+				matchedRequestedDetail = true;
+			}
+		}
+
+		// 취소 가능한 상품이 없으면 취소 신청 화면 진입을 막습니다.
+		if (!hasCancelableDetail) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_CANCEL_UNAVAILABLE_MESSAGE);
+		}
+
+		// 요청 주문상세번호가 현재 주문에 없으면 잘못된 접근으로 처리합니다.
+		if (!matchedRequestedDetail) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_DETAIL_ITEM_INVALID_MESSAGE);
+		}
+	}
+
 	// 주문번호 목록에 주문상세 목록을 묶어 주문내역 응답 구조를 완성합니다.
 	private List<ShopMypageOrderGroupVO> attachShopMypageOrderDetailList(List<ShopMypageOrderGroupVO> orderList) {
 		// 주문번호 목록이 없으면 빈 목록을 반환합니다.
@@ -1251,6 +1331,29 @@ public class GoodsService {
 		result.setDeliveryFeeAmt(resolveNonNegativeLong(result.getDeliveryFeeAmt()));
 		result.setDeliveryCouponDiscountAmt(resolveNonNegativeLong(result.getDeliveryCouponDiscountAmt()));
 		result.setFinalPayAmt(resolveNonNegativeLong(result.getFinalPayAmt()));
+		return result;
+	}
+
+	// 주문취소 사유 코드 목록의 공백/null 값을 기본값으로 보정합니다.
+	private List<ShopMypageOrderCancelReasonVO> normalizeShopMypageOrderCancelReasonList(
+		List<ShopMypageOrderCancelReasonVO> reasonList
+	) {
+		// 조회 결과가 없으면 빈 목록을 반환합니다.
+		if (reasonList == null || reasonList.isEmpty()) {
+			return List.of();
+		}
+
+		// 공백 코드와 코드명은 제외하고 안전한 목록만 반환합니다.
+		List<ShopMypageOrderCancelReasonVO> result = new ArrayList<>();
+		for (ShopMypageOrderCancelReasonVO reason : reasonList) {
+			if (reason == null || isBlank(reason.getCd()) || isBlank(reason.getCdNm())) {
+				continue;
+			}
+			ShopMypageOrderCancelReasonVO normalizedReason = new ShopMypageOrderCancelReasonVO();
+			normalizedReason.setCd(reason.getCd().trim());
+			normalizedReason.setCdNm(reason.getCdNm().trim());
+			result.add(normalizedReason);
+		}
 		return result;
 	}
 

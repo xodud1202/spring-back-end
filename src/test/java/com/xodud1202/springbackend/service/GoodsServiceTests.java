@@ -32,6 +32,8 @@ import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponDownloadRe
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponPageVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponUnavailableGoodsVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageDownloadableCouponVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderCancelPageVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderCancelReasonVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOwnedCouponVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderAmountSummaryVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderDetailItemVO;
@@ -680,6 +682,115 @@ class GoodsServiceTests {
 		assertThatThrownBy(() -> goodsService.getShopMypageOrderDetailPage(7L, "ORD-NOT-FOUND"))
 			.isInstanceOf(IllegalArgumentException.class)
 			.hasMessage("주문 정보를 찾을 수 없습니다.");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 마이페이지 주문취소 신청 화면 조회 시 주문상품, 사유 코드, 배송비 기준 정보를 함께 반환한다")
+	// 주문취소 신청 화면 조회 시 취소 가능한 주문상세, 금액 요약, 취소 사유 목록, 배송비 기준 정보가 함께 반환되는지 검증합니다.
+	void getShopMypageOrderCancelPage_returnsOrderReasonListAndSiteInfo() {
+		// 주문번호 1건과 취소 화면 구성용 주문상세/금액/사유/배송 기준 데이터를 구성합니다.
+		ShopMypageOrderGroupVO orderGroup = new ShopMypageOrderGroupVO();
+		orderGroup.setOrdNo("ORD-CANCEL-01");
+		orderGroup.setOrderDt("2026-03-22 15:14:11");
+
+		ShopMypageOrderDetailItemVO detailItem = new ShopMypageOrderDetailItemVO();
+		detailItem.setOrdNo("ORD-CANCEL-01");
+		detailItem.setOrdDtlNo(11);
+		detailItem.setOrdDtlStatCd("ORD_DTL_STAT_02");
+		detailItem.setOrdDtlStatNm("결제 완료");
+		detailItem.setGoodsId("GOODS900");
+		detailItem.setGoodsNm("취소 화면 상품");
+		detailItem.setSizeId("100");
+		detailItem.setOrdQty(2);
+		detailItem.setCancelableQty(2);
+		detailItem.setSupplyAmt(18000);
+		detailItem.setSaleAmt(15000);
+		detailItem.setAddAmt(500);
+		detailItem.setGoodsCouponDiscountAmt(1000);
+		detailItem.setCartCouponDiscountAmt(2000);
+		detailItem.setPointUseAmt(500);
+		detailItem.setImgPath("cancel-item.png");
+
+		ShopMypageOrderAmountSummaryVO amountSummary = new ShopMypageOrderAmountSummaryVO();
+		amountSummary.setTotalSupplyAmt(36000L);
+		amountSummary.setTotalOrderAmt(31000L);
+		amountSummary.setTotalGoodsCouponDiscountAmt(1000L);
+		amountSummary.setTotalCartCouponDiscountAmt(2000L);
+		amountSummary.setTotalPointUseAmt(500L);
+		amountSummary.setDeliveryFeeAmt(3000L);
+		amountSummary.setDeliveryCouponDiscountAmt(0L);
+
+		ShopMypageOrderCancelReasonVO firstReason = new ShopMypageOrderCancelReasonVO();
+		firstReason.setCd("C_01");
+		firstReason.setCdNm("단순 변심");
+		ShopMypageOrderCancelReasonVO secondReason = new ShopMypageOrderCancelReasonVO();
+		secondReason.setCd("C_03");
+		secondReason.setCdNm("기타");
+
+		ShopCartSiteInfoVO siteInfo = new ShopCartSiteInfoVO();
+		siteInfo.setSiteId("xodud1202");
+		siteInfo.setDeliveryFee(3000);
+		siteInfo.setDeliveryFeeLimit(50000);
+
+		// 매퍼/FTP 목 응답을 주문취소 신청 화면 기준으로 설정합니다.
+		when(goodsMapper.getShopMypageOrderGroup(7L, "ORD-CANCEL-01")).thenReturn(orderGroup);
+		when(goodsMapper.getShopMypageOrderDetailList(List.of("ORD-CANCEL-01"))).thenReturn(List.of(detailItem));
+		when(goodsMapper.getShopMypageOrderAmountSummary(7L, "ORD-CANCEL-01")).thenReturn(amountSummary);
+		when(goodsMapper.getShopPaymentByOrdNo("ORD-CANCEL-01")).thenReturn(null);
+		when(goodsMapper.getShopMypageOrderCancelReasonList()).thenReturn(List.of(firstReason, secondReason));
+		when(goodsMapper.getShopCartSiteInfo("xodud1202")).thenReturn(siteInfo);
+		when(ftpFileService.buildGoodsImageUrl("GOODS900", "cancel-item.png"))
+			.thenReturn("https://image.test/goods/GOODS900/cancel-item.png");
+
+		// 주문취소 신청 화면 데이터를 조회합니다.
+		ShopMypageOrderCancelPageVO result = goodsService.getShopMypageOrderCancelPage(7L, "ORD-CANCEL-01", 11);
+
+		// 주문상세, 사유 목록, 배송비 기준, 이미지 URL 보정 결과를 검증합니다.
+		assertThat(result).isNotNull();
+		assertThat(result.getOrder()).isNotNull();
+		assertThat(result.getOrder().getOrdNo()).isEqualTo("ORD-CANCEL-01");
+		assertThat(result.getOrder().getDetailList()).hasSize(1);
+		assertThat(result.getOrder().getDetailList().get(0).getCancelableQty()).isEqualTo(2);
+		assertThat(result.getOrder().getDetailList().get(0).getGoodsCouponDiscountAmt()).isEqualTo(1000);
+		assertThat(result.getOrder().getDetailList().get(0).getCartCouponDiscountAmt()).isEqualTo(2000);
+		assertThat(result.getOrder().getDetailList().get(0).getPointUseAmt()).isEqualTo(500);
+		assertThat(result.getOrder().getDetailList().get(0).getImgUrl()).isEqualTo("https://image.test/goods/GOODS900/cancel-item.png");
+		assertThat(result.getReasonList()).hasSize(2);
+		assertThat(result.getReasonList()).extracting(ShopMypageOrderCancelReasonVO::getCd).containsExactly("C_01", "C_03");
+		assertThat(result.getSiteInfo()).isNotNull();
+		assertThat(result.getSiteInfo().getDeliveryFee()).isEqualTo(3000);
+		assertThat(result.getSiteInfo().getDeliveryFeeLimit()).isEqualTo(50000);
+		assertThat(result.getAmountSummary()).isNotNull();
+		assertThat(result.getAmountSummary().getTotalGoodsDiscountAmt()).isEqualTo(5000L);
+		assertThat(result.getAmountSummary().getFinalPayAmt()).isEqualTo(30500L);
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 마이페이지 주문취소 신청 화면 조회 시 요청 주문상세번호가 현재 주문의 취소 대상이 아니면 예외를 반환한다")
+	// 주문취소 화면 진입에 사용한 주문상세번호가 현재 주문의 취소 가능 상품이 아니면 잘못된 요청 예외를 반환하는지 검증합니다.
+	void getShopMypageOrderCancelPage_throwsWhenOrdDtlNoInvalid() {
+		// 주문번호 1건과 다른 주문상세번호 1건만 포함된 주문상세 데이터를 구성합니다.
+		ShopMypageOrderGroupVO orderGroup = new ShopMypageOrderGroupVO();
+		orderGroup.setOrdNo("ORD-CANCEL-02");
+		orderGroup.setOrderDt("2026-03-22 17:00:00");
+
+		ShopMypageOrderDetailItemVO detailItem = new ShopMypageOrderDetailItemVO();
+		detailItem.setOrdNo("ORD-CANCEL-02");
+		detailItem.setOrdDtlNo(21);
+		detailItem.setOrdDtlStatCd("ORD_DTL_STAT_02");
+		detailItem.setOrdDtlStatNm("결제 완료");
+		detailItem.setGoodsId("GOODS901");
+		detailItem.setGoodsNm("주문상세번호 검증 상품");
+		detailItem.setCancelableQty(1);
+
+		// 현재 주문에 속하지 않는 주문상세번호로 진입하도록 목 응답을 설정합니다.
+		when(goodsMapper.getShopMypageOrderGroup(7L, "ORD-CANCEL-02")).thenReturn(orderGroup);
+		when(goodsMapper.getShopMypageOrderDetailList(List.of("ORD-CANCEL-02"))).thenReturn(List.of(detailItem));
+
+		// 요청 주문상세번호가 현재 주문의 취소 가능 행이 아니면 예외 메시지를 검증합니다.
+		assertThatThrownBy(() -> goodsService.getShopMypageOrderCancelPage(7L, "ORD-CANCEL-02", 99))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessage("주문상품 정보를 확인해주세요.");
 	}
 
 	@Test

@@ -21,12 +21,20 @@ public class ShopMypageOrderDetailItemVO {
 	private String sizeId;
 	// 주문 수량입니다.
 	private Integer ordQty;
+	// 현재 취소 가능한 잔여 수량입니다.
+	private Integer cancelableQty;
 	// 공급가입니다.
 	private Integer supplyAmt;
 	// 판매가입니다.
 	private Integer saleAmt;
 	// 추가금액입니다.
 	private Integer addAmt;
+	// 상품쿠폰 할인 금액입니다.
+	private Integer goodsCouponDiscountAmt;
+	// 장바구니쿠폰 할인 금액입니다.
+	private Integer cartCouponDiscountAmt;
+	// 포인트 사용 금액입니다.
+	private Integer pointUseAmt;
 	// 상품 이미지 경로입니다.
 	private String imgPath;
 	// 상품 이미지 전체 URL입니다.

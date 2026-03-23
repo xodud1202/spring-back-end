@@ -35,6 +35,7 @@ import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSiteInfoVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSizeItemVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponUnavailableGoodsVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageDownloadableCouponVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderCancelReasonVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOwnedCouponVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderAmountSummaryVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderDetailItemVO;
@@ -207,6 +208,9 @@ public interface GoodsMapper {
 
 	// 쇼핑몰 마이페이지 주문상세의 금액 요약 정보를 조회합니다.
 	ShopMypageOrderAmountSummaryVO getShopMypageOrderAmountSummary(@Param("custNo") Long custNo, @Param("ordNo") String ordNo);
+
+	// 쇼핑몰 마이페이지 주문취소 사유 코드 목록을 조회합니다.
+	List<ShopMypageOrderCancelReasonVO> getShopMypageOrderCancelReasonList();
 
 	// 쇼핑몰 마이페이지 주문내역의 상태별 주문상세 건수 요약을 조회합니다.
 	ShopMypageOrderStatusSummaryVO getShopMypageOrderStatusSummary(

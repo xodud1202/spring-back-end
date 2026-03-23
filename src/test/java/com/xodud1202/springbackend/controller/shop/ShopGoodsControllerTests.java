@@ -7,6 +7,8 @@ import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsBasicVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsDetailVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponPageVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageDownloadableCouponVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderCancelPageVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderCancelReasonVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderAmountSummaryVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderDetailItemVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderDetailPageVO;
@@ -543,6 +545,135 @@ class ShopGoodsControllerTests {
 		// 로그인 쿠키와 함께 없는 주문번호로 요청하면 404 응답과 메시지를 검증합니다.
 		mockMvc.perform(
 				get("/api/shop/mypage/order/detail")
+					.param("ordNo", "ORD-NOT-FOUND")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+			)
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.message").value("주문 정보를 찾을 수 없습니다."));
+	}
+
+	@Test
+	@DisplayName("마이페이지 주문취소 신청 화면 조회 API는 로그인 사용자가 요청하면 주문상품, 사유 코드, 배송비 기준 정보를 반환한다")
+	// 주문취소 신청 화면 조회 성공 시 200 응답과 주문상품/취소사유/배송비 기준 필드가 함께 반환되는지 검증합니다.
+	void getShopMypageOrderCancelPage_returnsOk() throws Exception {
+		// 서비스 반환용 주문취소 신청 화면 응답 객체를 구성합니다.
+		ShopMypageOrderDetailItemVO detailItem = new ShopMypageOrderDetailItemVO();
+		detailItem.setOrdNo("ORD-0001");
+		detailItem.setOrdDtlNo(1);
+		detailItem.setOrdDtlStatCd("ORD_DTL_STAT_02");
+		detailItem.setOrdDtlStatNm("결제 완료");
+		detailItem.setGoodsId("GOODS001");
+		detailItem.setGoodsNm("테스트 상품");
+		detailItem.setCancelableQty(2);
+		detailItem.setGoodsCouponDiscountAmt(1000);
+		detailItem.setCartCouponDiscountAmt(2000);
+		detailItem.setPointUseAmt(500);
+
+		ShopMypageOrderGroupVO orderGroup = new ShopMypageOrderGroupVO();
+		orderGroup.setOrdNo("ORD-0001");
+		orderGroup.setOrderDt("2026-03-20 11:40:31");
+		orderGroup.setDetailList(List.of(detailItem));
+
+		ShopMypageOrderAmountSummaryVO amountSummary = new ShopMypageOrderAmountSummaryVO();
+		amountSummary.setTotalSupplyAmt(50000L);
+		amountSummary.setTotalOrderAmt(42000L);
+		amountSummary.setDeliveryFeeAmt(3000L);
+		amountSummary.setFinalPayAmt(40000L);
+
+		ShopMypageOrderCancelReasonVO reason = new ShopMypageOrderCancelReasonVO();
+		reason.setCd("C_01");
+		reason.setCdNm("단순 변심");
+
+		ShopCartSiteInfoVO siteInfo = new ShopCartSiteInfoVO();
+		siteInfo.setSiteId("xodud1202");
+		siteInfo.setDeliveryFee(3000);
+		siteInfo.setDeliveryFeeLimit(50000);
+
+		ShopMypageOrderCancelPageVO page = new ShopMypageOrderCancelPageVO();
+		page.setOrder(orderGroup);
+		page.setAmountSummary(amountSummary);
+		page.setReasonList(List.of(reason));
+		page.setSiteInfo(siteInfo);
+		when(goodsService.getShopMypageOrderCancelPage(1L, "ORD-0001", 1)).thenReturn(page);
+
+		// 로그인 쿠키와 함께 요청하면 200 응답과 주문취소 신청 화면 필드를 검증합니다.
+		mockMvc.perform(
+				get("/api/shop/mypage/order/cancel/page")
+					.param("ordNo", "ORD-0001")
+					.param("ordDtlNo", "1")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.order.ordNo").value("ORD-0001"))
+			.andExpect(jsonPath("$.order.detailList[0].cancelableQty").value(2))
+			.andExpect(jsonPath("$.order.detailList[0].goodsCouponDiscountAmt").value(1000))
+			.andExpect(jsonPath("$.reasonList[0].cd").value("C_01"))
+			.andExpect(jsonPath("$.siteInfo.deliveryFee").value(3000))
+			.andExpect(jsonPath("$.siteInfo.deliveryFeeLimit").value(50000));
+	}
+
+	@Test
+	@DisplayName("마이페이지 주문취소 신청 화면 조회 API는 비로그인 요청이면 401을 반환한다")
+	// 비로그인 상태에서 주문취소 신청 화면 조회 요청 시 401 응답을 검증합니다.
+	void getShopMypageOrderCancelPage_returnsUnauthorizedWhenNotLoggedIn() throws Exception {
+		// 로그인 쿠키 없이 요청하면 401 응답과 메시지를 검증합니다.
+		mockMvc.perform(
+				get("/api/shop/mypage/order/cancel/page")
+					.param("ordNo", "ORD-0001")
+					.contentType(MediaType.APPLICATION_JSON)
+			)
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
+	}
+
+	@Test
+	@DisplayName("마이페이지 주문취소 신청 화면 조회 API는 주문번호가 비어 있으면 400을 반환한다")
+	// 필수 주문번호 누락 시 400 응답과 에러 메시지를 반환하는지 검증합니다.
+	void getShopMypageOrderCancelPage_returnsBadRequestWhenOrdNoMissing() throws Exception {
+		// 공백 주문번호로 요청하면 400 응답과 메시지를 검증합니다.
+		mockMvc.perform(
+				get("/api/shop/mypage/order/cancel/page")
+					.param("ordNo", " ")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+			)
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("주문번호를 확인해주세요."));
+	}
+
+	@Test
+	@DisplayName("마이페이지 주문취소 신청 화면 조회 API는 주문상세번호가 잘못되면 400을 반환한다")
+	// 주문취소 화면 진입용 주문상세번호가 유효하지 않을 때 400 응답과 메시지를 반환하는지 검증합니다.
+	void getShopMypageOrderCancelPage_returnsBadRequestWhenOrdDtlNoInvalid() throws Exception {
+		// 서비스에서 주문상세번호 검증 예외를 반환하도록 설정합니다.
+		when(goodsService.getShopMypageOrderCancelPage(1L, "ORD-0001", 999))
+			.thenThrow(new IllegalArgumentException("주문상품 정보를 확인해주세요."));
+
+		// 로그인 쿠키와 함께 잘못된 주문상세번호로 요청하면 400 응답과 메시지를 검증합니다.
+		mockMvc.perform(
+				get("/api/shop/mypage/order/cancel/page")
+					.param("ordNo", "ORD-0001")
+					.param("ordDtlNo", "999")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+			)
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("주문상품 정보를 확인해주세요."));
+	}
+
+	@Test
+	@DisplayName("마이페이지 주문취소 신청 화면 조회 API는 주문이 없으면 404를 반환한다")
+	// 주문 미존재 예외 발생 시 404 응답과 에러 메시지를 반환하는지 검증합니다.
+	void getShopMypageOrderCancelPage_returnsNotFoundWhenOrderMissing() throws Exception {
+		// 서비스에서 주문 미존재 예외를 반환하도록 설정합니다.
+		when(goodsService.getShopMypageOrderCancelPage(1L, "ORD-NOT-FOUND", null))
+			.thenThrow(new IllegalArgumentException("주문 정보를 찾을 수 없습니다."));
+
+		// 로그인 쿠키와 함께 없는 주문번호로 요청하면 404 응답과 메시지를 검증합니다.
+		mockMvc.perform(
+				get("/api/shop/mypage/order/cancel/page")
 					.param("ordNo", "ORD-NOT-FOUND")
 					.cookie(new Cookie("cust_no", "1"))
 					.contentType(MediaType.APPLICATION_JSON)
