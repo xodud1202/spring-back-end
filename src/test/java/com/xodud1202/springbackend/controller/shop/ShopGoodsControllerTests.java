@@ -7,7 +7,9 @@ import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsBasicVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsDetailVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponPageVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageDownloadableCouponVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderAmountSummaryVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderDetailItemVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderDetailPageVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderGroupVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderPageVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderStatusSummaryVO;
@@ -450,6 +452,103 @@ class ShopGoodsControllerTests {
 			)
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.message").value("조회 기간을 확인해주세요."));
+	}
+
+	@Test
+	@DisplayName("마이페이지 주문상세 조회 API는 로그인 사용자가 요청하면 주문상품과 금액 요약을 반환한다")
+	// 주문상세 조회 성공 시 200 응답과 주문번호/금액 요약 필드가 함께 반환되는지 검증합니다.
+	void getShopMypageOrderDetailPage_returnsOk() throws Exception {
+		// 서비스 반환용 주문상세 페이지 응답 객체를 구성합니다.
+		ShopMypageOrderDetailItemVO detailItem = new ShopMypageOrderDetailItemVO();
+		detailItem.setOrdNo("ORD-0001");
+		detailItem.setOrdDtlNo(1);
+		detailItem.setOrdDtlStatCd("ORD_DTL_STAT_06");
+		detailItem.setOrdDtlStatNm("배송완료");
+		detailItem.setGoodsId("GOODS001");
+		detailItem.setGoodsNm("테스트 상품");
+
+		ShopMypageOrderGroupVO orderGroup = new ShopMypageOrderGroupVO();
+		orderGroup.setOrdNo("ORD-0001");
+		orderGroup.setOrderDt("2026-03-20 11:40:31");
+		orderGroup.setDetailList(List.of(detailItem));
+
+		ShopMypageOrderAmountSummaryVO amountSummary = new ShopMypageOrderAmountSummaryVO();
+		amountSummary.setTotalSupplyAmt(50000L);
+		amountSummary.setTotalOrderAmt(42000L);
+		amountSummary.setTotalGoodsDiscountAmt(8000L);
+		amountSummary.setTotalGoodsCouponDiscountAmt(1000L);
+		amountSummary.setTotalCartCouponDiscountAmt(2000L);
+		amountSummary.setTotalCouponDiscountAmt(3000L);
+		amountSummary.setTotalPointUseAmt(2000L);
+		amountSummary.setDeliveryFeeAmt(3000L);
+		amountSummary.setDeliveryCouponDiscountAmt(1500L);
+		amountSummary.setFinalPayAmt(40000L);
+
+		ShopMypageOrderDetailPageVO page = new ShopMypageOrderDetailPageVO();
+		page.setOrder(orderGroup);
+		page.setAmountSummary(amountSummary);
+		when(goodsService.getShopMypageOrderDetailPage(1L, "ORD-0001")).thenReturn(page);
+
+		// 로그인 쿠키와 함께 요청하면 200 응답과 주문상세 필드를 검증합니다.
+		mockMvc.perform(
+				get("/api/shop/mypage/order/detail")
+					.param("ordNo", "ORD-0001")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.order.ordNo").value("ORD-0001"))
+			.andExpect(jsonPath("$.order.detailList[0].goodsNm").value("테스트 상품"))
+			.andExpect(jsonPath("$.amountSummary.totalSupplyAmt").value(50000))
+			.andExpect(jsonPath("$.amountSummary.totalGoodsDiscountAmt").value(8000))
+			.andExpect(jsonPath("$.amountSummary.totalGoodsCouponDiscountAmt").value(1000))
+			.andExpect(jsonPath("$.amountSummary.totalCartCouponDiscountAmt").value(2000))
+			.andExpect(jsonPath("$.amountSummary.deliveryCouponDiscountAmt").value(1500))
+			.andExpect(jsonPath("$.amountSummary.finalPayAmt").value(40000));
+	}
+
+	@Test
+	@DisplayName("마이페이지 주문상세 조회 API는 비로그인 요청이면 401을 반환한다")
+	// 비로그인 상태에서 주문상세 조회 요청 시 401 응답을 검증합니다.
+	void getShopMypageOrderDetailPage_returnsUnauthorizedWhenNotLoggedIn() throws Exception {
+		// 로그인 쿠키 없이 요청하면 401 응답과 메시지를 검증합니다.
+		mockMvc.perform(get("/api/shop/mypage/order/detail").param("ordNo", "ORD-0001").contentType(MediaType.APPLICATION_JSON))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
+	}
+
+	@Test
+	@DisplayName("마이페이지 주문상세 조회 API는 주문번호가 비어 있으면 400을 반환한다")
+	// 필수 주문번호 누락 시 400 응답과 에러 메시지를 반환하는지 검증합니다.
+	void getShopMypageOrderDetailPage_returnsBadRequestWhenOrdNoMissing() throws Exception {
+		// 공백 주문번호로 요청하면 400 응답과 메시지를 검증합니다.
+		mockMvc.perform(
+				get("/api/shop/mypage/order/detail")
+					.param("ordNo", " ")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+			)
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("주문번호를 확인해주세요."));
+	}
+
+	@Test
+	@DisplayName("마이페이지 주문상세 조회 API는 주문이 없으면 404를 반환한다")
+	// 주문 미존재 예외 발생 시 404 응답과 에러 메시지를 반환하는지 검증합니다.
+	void getShopMypageOrderDetailPage_returnsNotFoundWhenOrderMissing() throws Exception {
+		// 서비스에서 주문 미존재 예외를 반환하도록 설정합니다.
+		when(goodsService.getShopMypageOrderDetailPage(1L, "ORD-NOT-FOUND"))
+			.thenThrow(new IllegalArgumentException("주문 정보를 찾을 수 없습니다."));
+
+		// 로그인 쿠키와 함께 없는 주문번호로 요청하면 404 응답과 메시지를 검증합니다.
+		mockMvc.perform(
+				get("/api/shop/mypage/order/detail")
+					.param("ordNo", "ORD-NOT-FOUND")
+					.cookie(new Cookie("cust_no", "1"))
+					.contentType(MediaType.APPLICATION_JSON)
+			)
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.message").value("주문 정보를 찾을 수 없습니다."));
 	}
 
 	@Test

@@ -21,6 +21,8 @@ public class ShopMypageOrderDetailItemVO {
 	private String sizeId;
 	// 주문 수량입니다.
 	private Integer ordQty;
+	// 공급가입니다.
+	private Integer supplyAmt;
 	// 판매가입니다.
 	private Integer saleAmt;
 	// 추가금액입니다.

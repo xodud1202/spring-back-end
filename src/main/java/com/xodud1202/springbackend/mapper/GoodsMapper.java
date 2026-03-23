@@ -36,6 +36,7 @@ import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSizeItemVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponUnavailableGoodsVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageDownloadableCouponVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOwnedCouponVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderAmountSummaryVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderDetailItemVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderGroupVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderStatusSummaryVO;
@@ -198,8 +199,14 @@ public interface GoodsMapper {
 		@Param("pageSize") int pageSize
 	);
 
+	// 쇼핑몰 마이페이지 주문상세의 주문번호 1건을 조회합니다.
+	ShopMypageOrderGroupVO getShopMypageOrderGroup(@Param("custNo") Long custNo, @Param("ordNo") String ordNo);
+
 	// 쇼핑몰 마이페이지 주문내역의 주문상세 목록을 주문번호 기준으로 조회합니다.
 	List<ShopMypageOrderDetailItemVO> getShopMypageOrderDetailList(@Param("ordNoList") List<String> ordNoList);
+
+	// 쇼핑몰 마이페이지 주문상세의 금액 요약 정보를 조회합니다.
+	ShopMypageOrderAmountSummaryVO getShopMypageOrderAmountSummary(@Param("custNo") Long custNo, @Param("ordNo") String ordNo);
 
 	// 쇼핑몰 마이페이지 주문내역의 상태별 주문상세 건수 요약을 조회합니다.
 	ShopMypageOrderStatusSummaryVO getShopMypageOrderStatusSummary(

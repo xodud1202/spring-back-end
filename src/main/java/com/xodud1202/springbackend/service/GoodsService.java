@@ -47,7 +47,9 @@ import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponPageVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponUnavailableGoodsVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageDownloadableCouponVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOwnedCouponVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderAmountSummaryVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderDetailItemVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderDetailPageVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderGroupVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderPageVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderStatusSummaryVO;
@@ -179,6 +181,8 @@ public class GoodsService {
 	private static final int SHOP_MYPAGE_COUPON_TOOLTIP_LIMIT = 10;
 	private static final int SHOP_MYPAGE_ORDER_PAGE_SIZE = 5;
 	private static final String SHOP_MYPAGE_ORDER_DATE_INVALID_MESSAGE = "조회 기간을 확인해주세요.";
+	private static final String SHOP_MYPAGE_ORDER_NO_INVALID_MESSAGE = "주문번호를 확인해주세요.";
+	private static final String SHOP_MYPAGE_ORDER_NOT_FOUND_MESSAGE = "주문 정보를 찾을 수 없습니다.";
 	private static final DateTimeFormatter SHOP_MYPAGE_ORDER_DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 	private static final int SHOP_ORDER_ADDRESS_SEARCH_DEFAULT_PAGE = 1;
 	private static final int SHOP_ORDER_ADDRESS_SEARCH_DEFAULT_COUNT = 10;
@@ -874,6 +878,28 @@ public class GoodsService {
 		return result;
 	}
 
+	// 쇼핑몰 마이페이지 주문상세 페이지 데이터를 조회합니다.
+	public ShopMypageOrderDetailPageVO getShopMypageOrderDetailPage(Long custNo, String ordNo) {
+		// 고객번호와 주문번호를 검증합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+		String resolvedOrdNo = trimToNull(ordNo);
+		if (resolvedOrdNo == null) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_NO_INVALID_MESSAGE);
+		}
+
+		// 현재 로그인 고객의 주문번호 1건과 금액 요약을 조회합니다.
+		ShopMypageOrderGroupVO orderGroup = getShopMypageOrderGroupWithDetail(custNo, resolvedOrdNo);
+		ShopMypageOrderAmountSummaryVO amountSummary = buildShopMypageOrderAmountSummary(custNo, resolvedOrdNo);
+
+		// 주문상세 페이지 응답 객체를 구성합니다.
+		ShopMypageOrderDetailPageVO result = new ShopMypageOrderDetailPageVO();
+		result.setOrder(orderGroup);
+		result.setAmountSummary(amountSummary);
+		return result;
+	}
+
 	// 쇼핑몰 마이페이지에서 쿠폰 1건을 다운로드합니다.
 	@Transactional
 	public void downloadShopMypageCoupon(ShopMypageCouponDownloadRequestPO param, Long custNo) {
@@ -1124,6 +1150,22 @@ public class GoodsService {
 		}
 	}
 
+	// 주문번호 1건을 조회하고 주문상세 목록과 이미지 URL을 연결합니다.
+	private ShopMypageOrderGroupVO getShopMypageOrderGroupWithDetail(Long custNo, String ordNo) {
+		// 로그인 고객의 주문번호 1건을 조회합니다.
+		ShopMypageOrderGroupVO orderGroup = goodsMapper.getShopMypageOrderGroup(custNo, ordNo);
+		if (orderGroup == null) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_NOT_FOUND_MESSAGE);
+		}
+
+		// 주문상세 목록을 기존 묶음 로직으로 연결하고 노출 가능한 1건을 반환합니다.
+		List<ShopMypageOrderGroupVO> resolvedOrderList = attachShopMypageOrderDetailList(List.of(orderGroup));
+		if (resolvedOrderList.isEmpty()) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_NOT_FOUND_MESSAGE);
+		}
+		return resolvedOrderList.get(0);
+	}
+
 	// 주문번호 목록에 주문상세 목록을 묶어 주문내역 응답 구조를 완성합니다.
 	private List<ShopMypageOrderGroupVO> attachShopMypageOrderDetailList(List<ShopMypageOrderGroupVO> orderList) {
 		// 주문번호 목록이 없으면 빈 목록을 반환합니다.
@@ -1174,6 +1216,44 @@ public class GoodsService {
 		return result;
 	}
 
+	// 마이페이지 주문상세 금액 요약을 조회하고 계산값을 보정합니다.
+	private ShopMypageOrderAmountSummaryVO buildShopMypageOrderAmountSummary(Long custNo, String ordNo) {
+		// 기본 금액 요약과 결제 정보를 함께 조회합니다.
+		ShopMypageOrderAmountSummaryVO amountSummary = normalizeShopMypageOrderAmountSummary(
+			goodsMapper.getShopMypageOrderAmountSummary(custNo, ordNo)
+		);
+		ShopOrderPaymentVO payment = goodsMapper.getShopPaymentByOrdNo(ordNo);
+
+		// 상품할인 금액과 쿠폰합계 금액을 규칙에 맞게 계산합니다.
+		long totalGoodsDiscountAmt = Math.max(amountSummary.getTotalSupplyAmt() - amountSummary.getTotalOrderAmt(), 0L);
+		long totalCouponDiscountAmt =
+			amountSummary.getTotalGoodsCouponDiscountAmt()
+				+ amountSummary.getTotalCartCouponDiscountAmt();
+		amountSummary.setTotalGoodsDiscountAmt(totalGoodsDiscountAmt);
+		amountSummary.setTotalCouponDiscountAmt(totalCouponDiscountAmt);
+
+		// 결제정보 우선 규칙으로 최종 결제 금액을 계산합니다.
+		amountSummary.setFinalPayAmt(resolveShopMypageOrderFinalPayAmt(amountSummary, payment));
+		return amountSummary;
+	}
+
+	// 마이페이지 주문상세 금액 요약 응답의 null 값을 0 이상으로 보정합니다.
+	private ShopMypageOrderAmountSummaryVO normalizeShopMypageOrderAmountSummary(ShopMypageOrderAmountSummaryVO amountSummary) {
+		// 금액 요약 응답이 없으면 0 기본값 객체를 생성합니다.
+		ShopMypageOrderAmountSummaryVO result = amountSummary == null ? new ShopMypageOrderAmountSummaryVO() : amountSummary;
+		result.setTotalSupplyAmt(resolveNonNegativeLong(result.getTotalSupplyAmt()));
+		result.setTotalOrderAmt(resolveNonNegativeLong(result.getTotalOrderAmt()));
+		result.setTotalGoodsDiscountAmt(resolveNonNegativeLong(result.getTotalGoodsDiscountAmt()));
+		result.setTotalGoodsCouponDiscountAmt(resolveNonNegativeLong(result.getTotalGoodsCouponDiscountAmt()));
+		result.setTotalCartCouponDiscountAmt(resolveNonNegativeLong(result.getTotalCartCouponDiscountAmt()));
+		result.setTotalCouponDiscountAmt(resolveNonNegativeLong(result.getTotalCouponDiscountAmt()));
+		result.setTotalPointUseAmt(resolveNonNegativeLong(result.getTotalPointUseAmt()));
+		result.setDeliveryFeeAmt(resolveNonNegativeLong(result.getDeliveryFeeAmt()));
+		result.setDeliveryCouponDiscountAmt(resolveNonNegativeLong(result.getDeliveryCouponDiscountAmt()));
+		result.setFinalPayAmt(resolveNonNegativeLong(result.getFinalPayAmt()));
+		return result;
+	}
+
 	// 마이페이지 주문내역 상태 요약 응답의 null 값을 0으로 보정합니다.
 	private ShopMypageOrderStatusSummaryVO normalizeShopMypageOrderStatusSummary(ShopMypageOrderStatusSummaryVO statusSummary) {
 		// 상태 요약 응답이 없으면 0 기본값 객체를 생성합니다.
@@ -1186,6 +1266,39 @@ public class GoodsService {
 		result.setDeliveryCompletedCount(result.getDeliveryCompletedCount() == null ? 0 : result.getDeliveryCompletedCount());
 		result.setPurchaseConfirmedCount(result.getPurchaseConfirmedCount() == null ? 0 : result.getPurchaseConfirmedCount());
 		return result;
+	}
+
+	// 마이페이지 주문상세 최종 결제 금액을 결제정보 우선 규칙으로 계산합니다.
+	private long resolveShopMypageOrderFinalPayAmt(
+		ShopMypageOrderAmountSummaryVO amountSummary,
+		ShopOrderPaymentVO payment
+	) {
+		// 승인금액 또는 결제금액이 있으면 우선 사용합니다.
+		if (payment != null) {
+			if (payment.getAprvAmt() != null) {
+				return resolveNonNegativeLong(payment.getAprvAmt());
+			}
+			if (payment.getPayAmt() != null) {
+				return resolveNonNegativeLong(payment.getPayAmt());
+			}
+		}
+
+		// 결제 정보가 없으면 계산식 기준으로 최종 결제 금액을 보정합니다.
+		long calculatedFinalPayAmt =
+			amountSummary.getTotalOrderAmt()
+				+ amountSummary.getDeliveryFeeAmt()
+				- amountSummary.getTotalCouponDiscountAmt()
+				- amountSummary.getDeliveryCouponDiscountAmt()
+				- amountSummary.getTotalPointUseAmt();
+		return Math.max(calculatedFinalPayAmt, 0L);
+	}
+
+	// Long 금액값을 0 이상의 안전한 값으로 보정합니다.
+	private long resolveNonNegativeLong(Long value) {
+		if (value == null || value < 0L) {
+			return 0L;
+		}
+		return value;
 	}
 
 	// 현재 다운로드 가능한 쿠폰 목록에서 지정 쿠폰번호 1건을 조회합니다.
@@ -1433,7 +1546,8 @@ public class GoodsService {
 		// 결제금액, 주문명, 결제수단, 적립 예정 포인트를 최종 확정합니다.
 		int totalSaleAmt = calculateSelectedCartSaleAmt(discountContext.getEstimateRowList());
 		int baseDeliveryFee = resolveCouponEstimateDeliveryFee(totalSaleAmt, discountContext.getSiteInfo());
-		int normalizedDeliveryFee = Math.max(baseDeliveryFee - normalizeNonNegativeNumber(discountQuote.getDiscountAmount().getDeliveryCouponDiscountAmt()), 0);
+		int deliveryCouponDiscountAmt = normalizeNonNegativeNumber(discountQuote.getDiscountAmount().getDeliveryCouponDiscountAmt());
+		int finalDeliveryFee = Math.max(baseDeliveryFee - deliveryCouponDiscountAmt, 0);
 		int finalPayAmt = Math.max(
 			totalSaleAmt + baseDeliveryFee - normalizeNonNegativeNumber(discountQuote.getDiscountAmount().getCouponDiscountAmt()) - normalizedPointUseAmt,
 			0
@@ -1454,7 +1568,8 @@ public class GoodsService {
 			custNo,
 			selectedAddress,
 			discountQuote.getDiscountSelection().getDeliveryCouponCustCpnNo(),
-			normalizedDeliveryFee,
+			baseDeliveryFee,
+			deliveryCouponDiscountAmt,
 			deviceGbCd
 		);
 		Map<String, Object> paymentSnapshot = buildShopOrderPaymentSnapshot(
@@ -3044,7 +3159,8 @@ public class GoodsService {
 		Long custNo,
 		ShopOrderAddressVO selectedAddress,
 		Long deliveryCouponCustCpnNo,
-		int deliveryFee,
+		int baseDeliveryFee,
+		int deliveryCouponDiscountAmt,
 		String deviceGbCd
 	) {
 		// 주문 출처와 배송지 기준으로 주문 마스터 저장 파라미터를 구성합니다.
@@ -3057,7 +3173,8 @@ public class GoodsService {
 		result.setRcvAddrBase(selectedAddress.getBaseAddress());
 		result.setRcvAddrDtl(selectedAddress.getDetailAddress());
 		result.setDelvCpnNo(deliveryCouponCustCpnNo);
-		result.setOrdDelvAmt(deliveryFee);
+		result.setDelvCpnDcAmt(deliveryCouponDiscountAmt);
+		result.setOrdDelvAmt(baseDeliveryFee);
 		result.setCartYn("goods".equalsIgnoreCase(firstNonBlank(trimToNull(from), "")) ? NO : YES);
 		result.setDeviceGbCd(firstNonBlank(trimToNull(deviceGbCd), "PC"));
 		result.setRegNo(custNo);

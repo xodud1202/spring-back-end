@@ -21,7 +21,9 @@ public class ShopOrderBaseSavePO {
 	private String rcvAddrDtl;
 	// 배송비 쿠폰 고객쿠폰번호입니다.
 	private Long delvCpnNo;
-	// 배송비 금액입니다.
+	// 배송비 쿠폰 할인 금액입니다.
+	private Integer delvCpnDcAmt;
+	// 배송비 쿠폰 적용 전 배송비 금액입니다.
 	private Integer ordDelvAmt;
 	// 장바구니 구매 여부입니다.
 	private String cartYn;
