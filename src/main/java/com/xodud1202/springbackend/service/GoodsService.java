@@ -1420,7 +1420,7 @@ public class GoodsService {
 			validateShopOrderCancelFullOnly(orderGroup, cancelQtyMap);
 		}
 
-		// 배송비 환급/차감과 취소 예정 총액, PG 현금 환불액을 계산합니다.
+		// 배송비 환급/차감과 취소 예정 금액, PG 현금 환불액을 현재 주문 금액 기준으로 계산합니다.
 		boolean isFullCancel = activeRemainingRowCount > 0 && fullyCanceledRowCount == activeRemainingRowCount;
 		long paidDeliveryFeeRefundAmt =
 			isFullCancel
@@ -1442,18 +1442,14 @@ public class GoodsService {
 				&& remainingOrderAmtAfterCancel < resolveNonNegativeLong(siteInfo == null ? null : Long.valueOf(normalizeNonNegativeNumber(siteInfo.getDeliveryFeeLimit())))
 					? resolveNonNegativeLong(siteInfo == null ? null : Long.valueOf(normalizeNonNegativeNumber(siteInfo.getDeliveryFee())))
 					: 0L;
-		long paidGoodsAmt =
-			Math.max(
-				previewSummary.getTotalOrderAmt()
-					- previewSummary.getTotalGoodsCouponDiscountAmt()
-					- previewSummary.getTotalCartCouponDiscountAmt()
-					- previewSummary.getTotalPointRefundAmt(),
-				0L
-			);
-		long benefitAmt = previewSummary.getTotalPointRefundAmt() + deliveryCouponRefundAmt;
+		long paidGoodsAmt = previewSummary.getTotalOrderAmt();
+		long benefitAmt =
+			previewSummary.getTotalGoodsCouponDiscountAmt()
+				+ previewSummary.getTotalCartCouponDiscountAmt()
+				+ previewSummary.getTotalPointRefundAmt();
 		long shippingAdjustmentAmt = paidDeliveryFeeRefundAmt - shippingDeductionAmt;
-		long expectedRefundAmt = paidGoodsAmt + benefitAmt + shippingAdjustmentAmt;
-		long refundedCashAmt = paidGoodsAmt + shippingAdjustmentAmt;
+		long expectedRefundAmt = paidGoodsAmt - benefitAmt + shippingAdjustmentAmt;
+		long refundedCashAmt = expectedRefundAmt;
 		if (refundedCashAmt < 0L) {
 			throw new IllegalArgumentException("배송비 차감 후 취소 예정 금액이 0원 미만이라 신청할 수 없습니다.");
 		}

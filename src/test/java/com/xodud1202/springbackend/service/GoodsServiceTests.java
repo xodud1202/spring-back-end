@@ -67,6 +67,7 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentConfirmVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentConfirmPO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentPreparePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentPrepareVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPointDetailVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderRestoreCartItemVO;
@@ -2096,6 +2097,119 @@ class GoodsServiceTests {
 	}
 
 	@Test
+	@DisplayName("마이페이지 주문취소는 부분취소 시 상품 판매가에서 혜택과 배송비를 반영한 실제 환불금액으로 처리한다")
+	// 부분취소 시 상품 판매가, 쿠폰/포인트 환급, 무료배송 해제 배송비를 같은 기준으로 계산하는지 검증합니다.
+	void cancelShopMypageOrder_completesPartialCancelWithExpectedRefundRule() {
+		// 결제완료 부분취소 대상 주문과 요청값을 구성합니다.
+		ShopMypageOrderGroupVO orderGroup = new ShopMypageOrderGroupVO();
+		orderGroup.setOrdNo("ORD-20260323-000");
+		ShopMypageOrderDetailItemVO detailItem = new ShopMypageOrderDetailItemVO();
+		detailItem.setOrdNo("ORD-20260323-000");
+		detailItem.setOrdDtlNo(1);
+		detailItem.setOrdDtlStatCd("ORD_DTL_STAT_02");
+		detailItem.setGoodsId("GOODS-000");
+		detailItem.setSizeId("090");
+		detailItem.setOrdQty(2);
+		detailItem.setCancelableQty(2);
+		detailItem.setSupplyAmt(12000);
+		detailItem.setSaleAmt(10000);
+		detailItem.setAddAmt(0);
+		detailItem.setGoodsCouponDiscountAmt(1000);
+		detailItem.setCartCouponDiscountAmt(500);
+		detailItem.setPointUseAmt(200);
+
+		ShopOrderCancelOrderBaseVO orderBase = new ShopOrderCancelOrderBaseVO();
+		orderBase.setOrdNo("ORD-20260323-000");
+		orderBase.setCustNo(7L);
+		orderBase.setOrdDelvAmt(0);
+		orderBase.setDelvCpnDcAmt(0);
+		orderBase.setDeviceGbCd("PC");
+
+		ShopCartSiteInfoVO siteInfo = new ShopCartSiteInfoVO();
+		siteInfo.setDeliveryFee(3000);
+		siteInfo.setDeliveryFeeLimit(50000);
+
+		ShopMypageOrderCancelReasonVO reason = new ShopMypageOrderCancelReasonVO();
+		reason.setCd("C_01");
+		reason.setCdNm("단순 변심");
+
+		ShopOrderCancelItemPO cancelItem = new ShopOrderCancelItemPO();
+		cancelItem.setOrdDtlNo(1);
+		cancelItem.setCancelQty(1);
+
+		ShopOrderCancelPreviewAmountPO previewAmount = new ShopOrderCancelPreviewAmountPO();
+		previewAmount.setExpectedRefundAmt(6150L);
+		previewAmount.setPaidGoodsAmt(10000L);
+		previewAmount.setBenefitAmt(850L);
+		previewAmount.setShippingAdjustmentAmt(-3000L);
+		previewAmount.setTotalPointRefundAmt(100L);
+		previewAmount.setDeliveryCouponRefundAmt(0L);
+
+		ShopOrderCancelPO param = new ShopOrderCancelPO();
+		param.setOrdNo("ORD-20260323-000");
+		param.setReasonCd("C_01");
+		param.setCancelItemList(List.of(cancelItem));
+		param.setPreviewAmount(previewAmount);
+
+		ShopOrderPaymentVO originalPayment = new ShopOrderPaymentVO();
+		originalPayment.setPayNo(91L);
+		originalPayment.setOrdNo("ORD-20260323-000");
+		originalPayment.setCustNo(7L);
+		originalPayment.setPayStatCd("PAY_STAT_02");
+		originalPayment.setPayMethodCd("PAY_METHOD_01");
+		originalPayment.setPgGbCd("PG_GB_01");
+		originalPayment.setTradeNo("trade-origin-0");
+		originalPayment.setTossPaymentKey("toss-partial-key");
+
+		ShopOrderPointDetailVO pointDetail = new ShopOrderPointDetailVO();
+		pointDetail.setPntNo(11L);
+		pointDetail.setPntAmt(100);
+
+		ArgumentCaptor<ShopOrderPaymentSavePO> refundPaymentCaptor = ArgumentCaptor.forClass(ShopOrderPaymentSavePO.class);
+
+		// 주문/사유/결제/트랜잭션 목 데이터를 구성합니다.
+		mockShopOrderTransactionManager();
+		when(goodsMapper.getShopMypageOrderGroup(7L, "ORD-20260323-000")).thenReturn(orderGroup);
+		when(goodsMapper.getShopMypageOrderDetailList(List.of("ORD-20260323-000"))).thenReturn(List.of(detailItem));
+		when(goodsMapper.getShopOrderCancelOrderBase(7L, "ORD-20260323-000")).thenReturn(orderBase);
+		when(goodsMapper.getShopCartSiteInfo("xodud1202")).thenReturn(siteInfo);
+		when(goodsMapper.getShopMypageOrderCancelReasonList()).thenReturn(List.of(reason));
+		when(goodsMapper.getShopOrderPaymentForCancel("ORD-20260323-000")).thenReturn(originalPayment);
+		when(goodsMapper.getShopOrderPointDetailBalanceList("ORD-20260323-000")).thenReturn(List.of(pointDetail));
+		when(goodsMapper.updateShopOrderDetailCancelQuantity("ORD-20260323-000", 1, 1, "ORD_DTL_STAT_02", 7L)).thenReturn(1);
+		when(goodsMapper.insertShopPayment(refundPaymentCaptor.capture())).thenAnswer(invocation -> {
+			refundPaymentCaptor.getValue().setPayNo(291L);
+			return 1;
+		});
+		when(tossPaymentsClient.cancelPayment("toss-partial-key", "C_01", 6150L)).thenReturn("""
+			{
+			  "status": "PARTIAL_CANCELED",
+			  "cancels": [
+			    {
+			      "cancelAmount": 6150,
+			      "canceledAt": "2026-03-23T09:01:02+09:00",
+			      "transactionKey": "tx-cancel-partial"
+			    }
+			  ]
+			}
+			""");
+
+		// 부분취소 완료 시 실제 환불 결제금액과 포인트 복구가 기대값과 같은지 검증합니다.
+		ShopOrderCancelResultVO result = goodsService.cancelShopMypageOrder(param, 7L);
+		assertThat(result.getOrdNo()).isEqualTo("ORD-20260323-000");
+		assertThat(result.getRefundPayNo()).isEqualTo(291L);
+		assertThat(result.getRefundedCashAmt()).isEqualTo(6150L);
+		assertThat(result.getRestoredPointAmt()).isEqualTo(100L);
+		assertThat(refundPaymentCaptor.getValue().getPayGbCd()).isEqualTo("PAY_GB_02");
+		assertThat(refundPaymentCaptor.getValue().getPayAmt()).isEqualTo(6150L);
+		verify(goodsMapper).restoreShopGoodsSizeStock("GOODS-000", "090", 1, 7L);
+		verify(goodsMapper).restoreShopCustomerPointUseAmt(11L, 100, 7L);
+		verify(goodsMapper).insertShopOrderPointDetail(any());
+		verify(goodsMapper).updateShopOrderDetailCancelQuantity("ORD-20260323-000", 1, 1, "ORD_DTL_STAT_02", 7L);
+		verify(tossPaymentsClient).cancelPayment("toss-partial-key", "C_01", 6150L);
+	}
+
+	@Test
 	@DisplayName("마이페이지 주문취소는 화면 미리보기 금액과 서버 재계산 금액이 다르면 중단한다")
 	// 화면 금액과 서버 금액이 다를 때 환불 결제 선등록과 PG 호출 없이 오류를 반환하는지 검증합니다.
 	void cancelShopMypageOrder_blocksWhenPreviewAmountMismatch() {
@@ -2138,8 +2252,8 @@ class GoodsServiceTests {
 
 		ShopOrderCancelPreviewAmountPO previewAmount = new ShopOrderCancelPreviewAmountPO();
 		previewAmount.setExpectedRefundAmt(9251L);
-		previewAmount.setPaidGoodsAmt(9150L);
-		previewAmount.setBenefitAmt(100L);
+		previewAmount.setPaidGoodsAmt(10000L);
+		previewAmount.setBenefitAmt(850L);
 		previewAmount.setShippingAdjustmentAmt(0L);
 		previewAmount.setTotalPointRefundAmt(100L);
 		previewAmount.setDeliveryCouponRefundAmt(0L);
@@ -2208,9 +2322,9 @@ class GoodsServiceTests {
 		cancelItem.setCancelQty(2);
 
 		ShopOrderCancelPreviewAmountPO previewAmount = new ShopOrderCancelPreviewAmountPO();
-		previewAmount.setExpectedRefundAmt(20500L);
+		previewAmount.setExpectedRefundAmt(19500L);
 		previewAmount.setPaidGoodsAmt(18000L);
-		previewAmount.setBenefitAmt(1000L);
+		previewAmount.setBenefitAmt(0L);
 		previewAmount.setShippingAdjustmentAmt(1500L);
 		previewAmount.setTotalPointRefundAmt(0L);
 		previewAmount.setDeliveryCouponRefundAmt(1000L);
