@@ -2418,4 +2418,86 @@
 		   AND DEVICE_GB_CD = #{deviceGbCd}
 	</update>
 
+	<select id="countShopMypageCancelHistory" resultType="int">
+		/* GoodsMapper.countShopMypageCancelHistory: 쇼핑몰 마이페이지 취소내역 클레임 전체 건수 조회 */
+		SELECT COUNT(DISTINCT OCB.CLM_NO)
+		  FROM ORDER_CHANGE_BASE OCB
+		 WHERE OCB.REG_NO = #{custNo}
+		   AND OCB.CHG_GB_CD = 'C'
+		   AND DATE(OCB.CHG_DT) &gt;= #{startDate}
+		   AND DATE(OCB.CHG_DT) &lt;= #{endDate}
+	</select>
+
+	<select id="getShopMypageCancelHistoryList" resultType="com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCancelHistoryVO">
+		/* GoodsMapper.getShopMypageCancelHistoryList: 쇼핑몰 마이페이지 취소내역 클레임 목록 페이징 조회 */
+		SELECT OCB.CLM_NO
+		     , OCB.ORD_NO
+		     , DATE_FORMAT(OCB.CHG_DT, '%Y-%m-%d %H:%i:%s') AS CHG_DT
+		     , OCB.CHG_STAT_CD
+		     , FN_GET_CODE_NM('CHG_STAT', OCB.CHG_STAT_CD) AS CHG_STAT_NM
+		     , COALESCE(OCB.PAY_DELV_AMT, 0) AS PAY_DELV_AMT
+		     , COALESCE(P.CNL_AMT, 0) AS REFUNDED_CASH_AMT
+		  FROM ORDER_CHANGE_BASE OCB
+		  LEFT JOIN PAYMENT P ON P.CLM_NO = OCB.CLM_NO
+		 WHERE OCB.REG_NO = #{custNo}
+		   AND OCB.CHG_GB_CD = 'C'
+		   AND DATE(OCB.CHG_DT) &gt;= #{startDate}
+		   AND DATE(OCB.CHG_DT) &lt;= #{endDate}
+		 ORDER BY OCB.CHG_DT DESC, OCB.CLM_NO DESC
+		 LIMIT #{pageSize} OFFSET #{offset}
+	</select>
+
+	<select id="getShopMypageCancelHistoryDetailList" resultType="com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCancelHistoryDetailVO">
+		/* GoodsMapper.getShopMypageCancelHistoryDetailList: 쇼핑몰 마이페이지 취소내역 상품 상세 목록 조회 */
+		SELECT OCD.CLM_NO
+		     , OCD.ORD_DTL_NO
+		     , OCD.GOODS_ID
+		     , GB.GOODS_NM
+		     , OCD.SIZE_ID
+		     , OCD.QTY
+		     , COALESCE(OD.SALE_AMT, 0) AS SALE_AMT
+		     , COALESCE(OCD.ADD_AMT, 0) AS ADD_AMT
+		     , OCD.CHG_REASON_CD
+		     , FN_GET_CODE_NM('CHG_REASON', OCD.CHG_REASON_CD) AS CHG_REASON_NM
+		     , OCD.CHG_REASON_DTL
+		     , (
+		           SELECT GI.IMG_PATH
+		             FROM GOODS_IMG GI
+		            WHERE GI.GOODS_ID = OCD.GOODS_ID
+		            ORDER BY GI.DISP_ORD ASC, GI.IMG_NO ASC
+		            LIMIT 1
+		       ) AS IMG_PATH
+		     , (
+		           SELECT GI.IMG_PATH
+		             FROM GOODS_IMG GI
+		            WHERE GI.GOODS_ID = OCD.GOODS_ID
+		            ORDER BY GI.DISP_ORD ASC, GI.IMG_NO ASC
+		            LIMIT 1
+		       ) AS IMG_URL
+		  FROM ORDER_CHANGE_DETAIL OCD
+		  JOIN GOODS_BASE GB ON GB.GOODS_ID = OCD.GOODS_ID
+		  LEFT JOIN ORDER_DETAIL OD ON OD.ORD_NO = OCD.ORD_NO AND OD.ORD_DTL_NO = OCD.ORD_DTL_NO
+		 WHERE OCD.CLM_NO IN
+		<foreach collection="clmNoList" item="clmNo" open="(" separator="," close=")">
+			#{clmNo}
+		</foreach>
+		 ORDER BY OCD.CLM_NO, OCD.ORD_DTL_NO
+	</select>
+
+	<select id="getShopMypageCancelHistoryItemByClmNo" resultType="com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCancelHistoryVO">
+		/* GoodsMapper.getShopMypageCancelHistoryItemByClmNo: 쇼핑몰 마이페이지 취소상세 클레임 단건 조회 */
+		SELECT OCB.CLM_NO
+		     , OCB.ORD_NO
+		     , DATE_FORMAT(OCB.CHG_DT, '%Y-%m-%d %H:%i:%s') AS CHG_DT
+		     , OCB.CHG_STAT_CD
+		     , FN_GET_CODE_NM('CHG_STAT', OCB.CHG_STAT_CD) AS CHG_STAT_NM
+		     , COALESCE(OCB.PAY_DELV_AMT, 0) AS PAY_DELV_AMT
+		     , COALESCE(P.CNL_AMT, 0) AS REFUNDED_CASH_AMT
+		  FROM ORDER_CHANGE_BASE OCB
+		  LEFT JOIN PAYMENT P ON P.CLM_NO = OCB.CLM_NO
+		 WHERE OCB.REG_NO = #{custNo}
+		   AND OCB.CLM_NO = #{clmNo}
+		   AND OCB.CHG_GB_CD = 'C'
+	</select>
+
 </mapper>

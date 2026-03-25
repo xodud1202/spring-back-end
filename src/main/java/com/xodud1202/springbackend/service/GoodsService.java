@@ -771,6 +771,94 @@ public class GoodsService {
 		return result;
 	}
 
+	// 쇼핑몰 마이페이지 취소내역 페이지 데이터를 조회합니다.
+	public ShopMypageCancelHistoryPageVO getShopMypageCancelHistoryPage(
+		Long custNo,
+		Integer requestedPageNo,
+		String requestedStartDate,
+		String requestedEndDate
+	) {
+		// 고객번호가 없으면 로그인 예외를 반환합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+
+		// 요청 페이지 번호와 조회 기간을 각각 보정합니다.
+		int resolvedRequestedPageNo = resolveRequestedPageNo(requestedPageNo);
+		ShopMypageOrderDateRange dateRange = resolveShopMypageOrderDateRange(requestedStartDate, requestedEndDate);
+
+		// 취소 클레임 전체 건수와 전체 페이지 수를 계산합니다.
+		int cancelCount = goodsMapper.countShopMypageCancelHistory(
+			custNo,
+			dateRange.getStartDate(),
+			dateRange.getEndDate()
+		);
+		int totalPageCount = calculateTotalPageCount(cancelCount, SHOP_MYPAGE_CANCEL_PAGE_SIZE);
+		int resolvedPageNo = resolvePageNoWithinRange(resolvedRequestedPageNo, totalPageCount);
+		int offset = calculateOffset(resolvedPageNo, SHOP_MYPAGE_CANCEL_PAGE_SIZE);
+
+		// 현재 페이지의 취소 클레임 목록을 조회합니다.
+		List<ShopMypageCancelHistoryVO> cancelList = goodsMapper.getShopMypageCancelHistoryList(
+			custNo,
+			dateRange.getStartDate(),
+			dateRange.getEndDate(),
+			offset,
+			SHOP_MYPAGE_CANCEL_PAGE_SIZE
+		);
+
+		// 클레임번호 목록 기준으로 취소 상품 상세를 조회해 각 클레임에 매핑합니다.
+		if (!cancelList.isEmpty()) {
+			List<String> clmNoList = cancelList.stream()
+				.map(ShopMypageCancelHistoryVO::getClmNo)
+				.filter(clmNo -> clmNo != null && !clmNo.isBlank())
+				.distinct()
+				.collect(java.util.stream.Collectors.toList());
+			List<ShopMypageCancelHistoryDetailVO> detailList = goodsMapper.getShopMypageCancelHistoryDetailList(clmNoList);
+			Map<String, List<ShopMypageCancelHistoryDetailVO>> detailByClmNo = detailList.stream()
+				.filter(d -> d != null && d.getClmNo() != null)
+				.collect(java.util.stream.Collectors.groupingBy(ShopMypageCancelHistoryDetailVO::getClmNo));
+			for (ShopMypageCancelHistoryVO cancel : cancelList) {
+				cancel.setDetailList(detailByClmNo.getOrDefault(cancel.getClmNo(), java.util.Collections.emptyList()));
+			}
+		}
+
+		// 취소내역 페이지 응답 객체를 구성합니다.
+		ShopMypageCancelHistoryPageVO result = new ShopMypageCancelHistoryPageVO();
+		result.setCancelList(cancelList);
+		result.setCancelCount(cancelCount);
+		result.setPageNo(resolvedPageNo);
+		result.setPageSize(SHOP_MYPAGE_CANCEL_PAGE_SIZE);
+		result.setTotalPageCount(totalPageCount);
+		result.setStartDate(dateRange.getStartDate());
+		result.setEndDate(dateRange.getEndDate());
+		return result;
+	}
+
+	// 쇼핑몰 마이페이지 취소상세 단건을 클레임번호로 조회합니다.
+	public ShopMypageCancelHistoryVO getShopMypageCancelHistoryDetail(Long custNo, String clmNo) {
+		// 고객번호가 없으면 로그인 예외를 반환합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+		// 클레임번호가 없으면 요청값 예외를 반환합니다.
+		if (clmNo == null || clmNo.isBlank()) {
+			throw new IllegalArgumentException("클레임번호가 필요합니다.");
+		}
+
+		// 클레임 단건을 조회합니다.
+		ShopMypageCancelHistoryVO cancelItem = goodsMapper.getShopMypageCancelHistoryItemByClmNo(custNo, clmNo);
+		if (cancelItem == null) {
+			return null;
+		}
+
+		// 취소 상품 상세 목록을 조회해 클레임에 매핑합니다.
+		List<ShopMypageCancelHistoryDetailVO> detailList = goodsMapper.getShopMypageCancelHistoryDetailList(
+			java.util.Collections.singletonList(clmNo)
+		);
+		cancelItem.setDetailList(detailList != null ? detailList : java.util.Collections.emptyList());
+		return cancelItem;
+	}
+
 	// 쇼핑몰 마이페이지 주문취소를 즉시 완료 처리합니다.
 	public ShopOrderCancelResultVO cancelShopMypageOrder(ShopOrderCancelPO param, Long custNo) {
 		// 로그인 고객번호와 주문취소 요청값을 검증합니다.

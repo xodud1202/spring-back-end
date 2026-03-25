@@ -42,6 +42,7 @@ public final class Constants {
 		public static final int SHOP_MYPAGE_COUPON_PAGE_SIZE = 10;
 		public static final int SHOP_MYPAGE_COUPON_TOOLTIP_LIMIT = 10;
 		public static final int SHOP_MYPAGE_ORDER_PAGE_SIZE = 5;
+		public static final int SHOP_MYPAGE_CANCEL_PAGE_SIZE = 5;
 		public static final String SHOP_MYPAGE_ORDER_DATE_INVALID_MESSAGE = "조회 기간을 확인해주세요.";
 		public static final String SHOP_MYPAGE_ORDER_NO_INVALID_MESSAGE = "주문번호를 확인해주세요.";
 		public static final String SHOP_MYPAGE_ORDER_NOT_FOUND_MESSAGE = "주문 정보를 찾을 수 없습니다.";

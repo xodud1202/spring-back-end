@@ -42,6 +42,8 @@ import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderDetailItemV
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderGroupVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderStatusSummaryVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishGoodsItemVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCancelHistoryVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCancelHistoryDetailVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderBaseSavePO;
@@ -618,4 +620,31 @@ public interface GoodsMapper {
 
 	// 관리자 상품 상세 설명을 수정합니다.
 	int updateAdminGoodsDesc(GoodsDescSaveItem param);
+
+	// 쇼핑몰 마이페이지 취소내역 클레임 전체 건수를 조회합니다.
+	int countShopMypageCancelHistory(
+		@Param("custNo") Long custNo,
+		@Param("startDate") String startDate,
+		@Param("endDate") String endDate
+	);
+
+	// 쇼핑몰 마이페이지 취소내역 클레임 목록을 페이징 조회합니다.
+	List<ShopMypageCancelHistoryVO> getShopMypageCancelHistoryList(
+		@Param("custNo") Long custNo,
+		@Param("startDate") String startDate,
+		@Param("endDate") String endDate,
+		@Param("offset") int offset,
+		@Param("pageSize") int pageSize
+	);
+
+	// 쇼핑몰 마이페이지 취소내역 상품 상세 목록을 클레임번호 기준으로 조회합니다.
+	List<ShopMypageCancelHistoryDetailVO> getShopMypageCancelHistoryDetailList(
+		@Param("clmNoList") List<String> clmNoList
+	);
+
+	// 쇼핑몰 마이페이지 취소상세 클레임을 단건 조회합니다.
+	ShopMypageCancelHistoryVO getShopMypageCancelHistoryItemByClmNo(
+		@Param("custNo") Long custNo,
+		@Param("clmNo") String clmNo
+	);
 }
