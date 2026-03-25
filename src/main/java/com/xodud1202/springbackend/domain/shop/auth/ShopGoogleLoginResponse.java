@@ -1,22 +1,22 @@
 package com.xodud1202.springbackend.domain.shop.auth;
 
-import lombok.Data;
-
-@Data
 // 구글 로그인 판정 결과를 전달합니다.
-public class ShopGoogleLoginResponse {
-	// 기존 회원 로그인 성공 여부입니다.
-	private boolean loginSuccess;
-	// 추가 정보 입력 필요 여부입니다.
-	private boolean joinRequired;
-	// 고객 번호입니다.
-	private Long custNo;
-	// 고객명입니다.
-	private String custNm;
-	// 고객 등급 코드입니다.
-	private String custGradeCd;
-	// 추천 로그인 아이디입니다.
-	private String loginId;
-	// 처리 결과 메시지입니다.
-	private String message;
+public record ShopGoogleLoginResponse(
+	boolean loginSuccess,
+	boolean joinRequired,
+	Long custNo,
+	String custNm,
+	String custGradeCd,
+	String loginId,
+	String message
+) {
+	// 로그인 성공 응답을 생성합니다.
+	public static ShopGoogleLoginResponse loginSuccess(Long custNo, String custNm, String custGradeCd, String loginId) {
+		return new ShopGoogleLoginResponse(true, false, custNo, custNm, custGradeCd, loginId, null);
+	}
+
+	// 추가 정보 입력이 필요한 응답을 생성합니다.
+	public static ShopGoogleLoginResponse joinRequired(String loginId) {
+		return new ShopGoogleLoginResponse(false, true, null, null, null, loginId, null);
+	}
 }

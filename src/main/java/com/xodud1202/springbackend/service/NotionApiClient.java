@@ -2,7 +2,7 @@ package com.xodud1202.springbackend.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.beans.factory.annotation.Value;
+import com.xodud1202.springbackend.config.properties.NotionProperties;
 import org.springframework.stereotype.Component;
 
 import java.net.URI;
@@ -23,19 +23,16 @@ public class NotionApiClient {
 	private static final int PAGE_SIZE = 100;
 
 	private final ObjectMapper objectMapper;
-	private final String notionApiKey;
-	private final String notionApiVersion;
+	private final NotionProperties notionProperties;
 	private final HttpClient httpClient = HttpClient.newBuilder().build();
 
 	// 생성자에서 Notion API 인증/버전 설정을 주입받습니다.
 	public NotionApiClient(
 		ObjectMapper objectMapper,
-		@Value("${notion.api-key:}") String notionApiKey,
-		@Value("${notion.api-version:2025-09-03}") String notionApiVersion
+		NotionProperties notionProperties
 	) {
 		this.objectMapper = objectMapper;
-		this.notionApiKey = safeValue(notionApiKey);
-		this.notionApiVersion = safeValue(notionApiVersion);
+		this.notionProperties = notionProperties;
 	}
 
 	// 페이지 ID로 Notion 페이지 상세 정보를 조회합니다.
@@ -83,8 +80,8 @@ public class NotionApiClient {
 			HttpRequest request = HttpRequest.newBuilder()
 				.uri(URI.create(url))
 				.timeout(Duration.ofSeconds(HTTP_TIMEOUT_SECONDS))
-				.header("Authorization", "Bearer " + notionApiKey)
-				.header("Notion-Version", notionApiVersion)
+				.header("Authorization", "Bearer " + resolveApiKey())
+				.header("Notion-Version", resolveApiVersion())
 				.header("Accept", "application/json")
 				.GET()
 				.build();
@@ -100,12 +97,22 @@ public class NotionApiClient {
 
 	// API 호출 전 필수 인증/버전 설정을 확인합니다.
 	private void validateApiSettings() {
-		if (trimToNull(notionApiKey) == null) {
+		if (trimToNull(resolveApiKey()) == null) {
 			throw new IllegalStateException("notion.api-key 설정이 필요합니다.");
 		}
-		if (trimToNull(notionApiVersion) == null) {
+		if (trimToNull(resolveApiVersion()) == null) {
 			throw new IllegalStateException("notion.api-version 설정이 필요합니다.");
 		}
+	}
+
+	// Notion API 키를 null 안전하게 반환합니다.
+	private String resolveApiKey() {
+		return safeValue(notionProperties.apiKey());
+	}
+
+	// Notion API 버전을 null 안전하게 반환합니다.
+	private String resolveApiVersion() {
+		return safeValue(notionProperties.apiVersion());
 	}
 
 	// 문자열을 trim 처리하고 비어 있으면 null로 변환합니다.

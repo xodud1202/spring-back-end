@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 @Data
 @Component
 @ConfigurationProperties(prefix = "nas.ftp")
+// NAS FTP 설정을 타입 안전하게 바인딩합니다.
 public class FtpProperties {
 	// 접속 정보
 	private String host;

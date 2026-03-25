@@ -2,10 +2,10 @@ package com.xodud1202.springbackend.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xodud1202.springbackend.config.properties.NotionProperties;
 import com.xodud1202.springbackend.domain.notion.NotionCategoryUpsertPO;
 import com.xodud1202.springbackend.domain.notion.NotionDataListUpsertPO;
 import com.xodud1202.springbackend.mapper.NotionWebhookMapper;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.NestedExceptionUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,19 +37,19 @@ public class NotionWebhookDataSyncService {
 	private final NotionWebhookMapper notionWebhookMapper;
 	private final NotionApiClient notionApiClient;
 	private final ObjectMapper objectMapper;
-	private final String notionWebhookVerificationToken;
+	private final NotionProperties notionProperties;
 
 	// 생성자에서 동기화에 필요한 의존성과 검증 토큰 설정을 주입받습니다.
 	public NotionWebhookDataSyncService(
 		NotionWebhookMapper notionWebhookMapper,
 		NotionApiClient notionApiClient,
 		ObjectMapper objectMapper,
-		@Value("${notion.webhook-verification-token:}") String notionWebhookVerificationToken
+		NotionProperties notionProperties
 	) {
 		this.notionWebhookMapper = notionWebhookMapper;
 		this.notionApiClient = notionApiClient;
 		this.objectMapper = objectMapper;
-		this.notionWebhookVerificationToken = safeValue(notionWebhookVerificationToken);
+		this.notionProperties = notionProperties;
 	}
 
 	@Transactional
@@ -131,7 +131,7 @@ public class NotionWebhookDataSyncService {
 
 	// 검증 토큰이 설정된 경우 헤더 서명을 HMAC SHA-256으로 검증합니다.
 	private void validateSignatureIfNeeded(String requestBody, Map<String, String> headerMap) {
-		String verificationToken = trimToNull(notionWebhookVerificationToken);
+		String verificationToken = trimToNull(safeValue(notionProperties.webhookVerificationToken()));
 		if (verificationToken == null) {
 			return;
 		}

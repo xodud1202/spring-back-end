@@ -1,16 +1,12 @@
 package com.xodud1202.springbackend.domain.shop.auth;
 
-import lombok.Data;
+import jakarta.validation.constraints.NotBlank;
 
-@Data
 // 구글 로그인 식별 요청 정보를 전달합니다.
-public class ShopGoogleLoginRequest {
-	// 구글 사용자 고유 식별자입니다.
-	private String sub;
-	// 구글 이메일입니다.
-	private String email;
-	// 구글 표시 이름입니다.
-	private String name;
-	// 구글 프로필 이미지 URL입니다.
-	private String picture;
+public record ShopGoogleLoginRequest(
+	@NotBlank(message = "구글 사용자 식별값을 확인해주세요.") String sub,
+	String email,
+	String name,
+	String picture
+) {
 }

@@ -3,8 +3,8 @@ package com.xodud1202.springbackend.service;
 import static com.xodud1202.springbackend.common.Constants.Shop.TOSS_API_BASE_URL;
 import static com.xodud1202.springbackend.common.Constants.Shop.TOSS_API_VERSION;
 
+import com.xodud1202.springbackend.config.properties.TossProperties;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -21,9 +21,7 @@ import java.util.Map;
 // Toss 결제 승인 API 호출을 처리합니다.
 public class TossPaymentsClient {
 	private final RestClient.Builder restClientBuilder;
-
-	@Value("${toss.secret-key}")
-	private String tossSecretKey;
+	private final TossProperties tossProperties;
 
 	// Toss 결제 승인 API를 호출하고 원본 응답 문자열을 반환합니다.
 	public String confirmPayment(String paymentKey, String orderId, Long amount) {
@@ -90,7 +88,7 @@ public class TossPaymentsClient {
 
 	// Toss 시크릿키 기준 Basic 인증 헤더 값을 생성합니다.
 	private String buildAuthorizationHeader() {
-		String source = tossSecretKey + ":";
+		String source = tossProperties.secretKey() + ":";
 		String encoded = Base64.getEncoder().encodeToString(source.getBytes(StandardCharsets.UTF_8));
 		return "Basic " + encoded;
 	}

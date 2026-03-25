@@ -1,6 +1,7 @@
 package com.xodud1202.springbackend.config;
 
 import com.xodud1202.springbackend.security.JwtTokenProvider;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -16,52 +17,46 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 import com.xodud1202.springbackend.security.JwtAuthenticationFilter;
 import com.xodud1202.springbackend.service.CustomUserDetailService;
-import lombok.RequiredArgsConstructor;
-
 
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
+// 애플리케이션 보안 필터 체인을 구성합니다.
 public class SecurityConfig {
-    
-    private final JwtTokenProvider tokenProvider;
-    private final CustomUserDetailService userDetailsService;
-    
-    @Bean
-    public JwtAuthenticationFilter jwtAuthenticationFilter() {
-        // JwtAuthenticationFilter 생성자가 tokenProvider, UserDetailsService 를 받도록 작성되어 있으니,
-        // 그대로 넘겨주시면 됩니다.
-        return new JwtAuthenticationFilter(tokenProvider, userDetailsService);
-    }
-    
-    @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        final String[] authorizeUrlArray = new String[] {"/hello", "/api/**", "/shop/login"};
 
-        http.userDetailsService(userDetailsService)  // 추가
-                // CSRF 비활성화
-                .csrf(AbstractHttpConfigurer::disable)
-                // 세션을 Stateless로 설정
-                .sessionManagement(session ->
-                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-                )
-                // 인가 규칙 정의
-                .authorizeHttpRequests(authorize ->
-                        authorize.requestMatchers(authorizeUrlArray).permitAll().anyRequest().authenticated()
-                )
-                // 커스텀 필터 추가
-                .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
-        
-        return http.build();
-    }
+	private static final String[] PERMIT_ALL_PATTERNS = {"/hello", "/api/**", "/shop/login"};
 
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
+	private final JwtTokenProvider tokenProvider;
+	private final CustomUserDetailService userDetailsService;
 
-    @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
-        return authenticationConfiguration.getAuthenticationManager();
-    }
+	@Bean
+	public JwtAuthenticationFilter jwtAuthenticationFilter() {
+		// JWT 인증 필터를 의존성 주입 기반으로 생성합니다.
+		return new JwtAuthenticationFilter(tokenProvider, userDetailsService);
+	}
+
+	@Bean
+	public SecurityFilterChain filterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
+		// 세션 없는 JWT 기반 API 보안 필터 체인을 구성합니다.
+		http.userDetailsService(userDetailsService)
+			.csrf(AbstractHttpConfigurer::disable)
+			.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+			.authorizeHttpRequests(authorize ->
+				authorize.requestMatchers(PERMIT_ALL_PATTERNS).permitAll().anyRequest().authenticated()
+			)
+			.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+		return http.build();
+	}
+
+	@Bean
+	public PasswordEncoder passwordEncoder() {
+		// 비밀번호 인코더를 BCrypt로 제공합니다.
+		return new BCryptPasswordEncoder();
+	}
+
+	@Bean
+	public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
+		// Spring Security 인증 매니저를 외부에서 주입 가능하게 노출합니다.
+		return authenticationConfiguration.getAuthenticationManager();
+	}
 }

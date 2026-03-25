@@ -2,10 +2,10 @@ package com.xodud1202.springbackend.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xodud1202.springbackend.config.properties.JusoProperties;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSearchCommonVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSearchItemVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSearchResponseVO;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.net.URI;
@@ -25,16 +25,16 @@ public class JusoAddressApiClient {
 	private static final int HTTP_TIMEOUT_SECONDS = 15;
 
 	private final ObjectMapper objectMapper;
-	private final String apiKey;
+	private final JusoProperties jusoProperties;
 	private final HttpClient httpClient = HttpClient.newBuilder().build();
 
-	// 생성자에서 주소 검색 API 키를 주입받습니다.
+	// 생성자에서 주소 검색 API 설정을 주입받습니다.
 	public JusoAddressApiClient(
 		ObjectMapper objectMapper,
-		@Value("${juso.api-key:}") String apiKey
+		JusoProperties jusoProperties
 	) {
 		this.objectMapper = objectMapper;
-		this.apiKey = safeValue(apiKey);
+		this.jusoProperties = jusoProperties;
 	}
 
 	// 도로명 주소 검색 API를 호출해 검색 결과를 반환합니다.
@@ -75,7 +75,7 @@ public class JusoAddressApiClient {
 	// 주소 검색 요청 URL을 생성합니다.
 	private String buildSearchRequestUrl(String keyword, int currentPage, int countPerPage) {
 		String encodedKeyword = URLEncoder.encode(keyword, StandardCharsets.UTF_8);
-		String encodedApiKey = URLEncoder.encode(apiKey, StandardCharsets.UTF_8);
+		String encodedApiKey = URLEncoder.encode(resolveApiKey(), StandardCharsets.UTF_8);
 		return JUSO_ADDRESS_SEARCH_URL
 			+ "?currentPage=" + currentPage
 			+ "&countPerPage=" + countPerPage
@@ -159,9 +159,14 @@ public class JusoAddressApiClient {
 
 	// API 호출 전 필수 키 설정을 확인합니다.
 	private void validateApiKey() {
-		if (trimToNull(apiKey) == null) {
+		if (trimToNull(resolveApiKey()) == null) {
 			throw new IllegalStateException("juso.api-key 설정이 필요합니다.");
 		}
+	}
+
+	// 주소 검색 API 키를 null 안전하게 반환합니다.
+	private String resolveApiKey() {
+		return safeValue(jusoProperties.apiKey());
 	}
 
 	// 문자열을 trim 처리하고 비어 있으면 null을 반환합니다.

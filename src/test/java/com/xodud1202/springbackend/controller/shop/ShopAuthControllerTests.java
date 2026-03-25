@@ -1,5 +1,8 @@
 package com.xodud1202.springbackend.controller.shop;
 
+import com.xodud1202.springbackend.common.exception.GlobalRestExceptionHandler;
+import com.xodud1202.springbackend.config.properties.JwtProperties;
+import com.xodud1202.springbackend.security.AuthCookieFactory;
 import com.xodud1202.springbackend.service.ShopAuthService;
 import jakarta.servlet.http.Cookie;
 import org.hamcrest.Matchers;
@@ -7,7 +10,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpHeaders;
@@ -15,9 +17,11 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -33,16 +37,22 @@ class ShopAuthControllerTests {
 	@Mock
 	private ShopAuthService shopAuthService;
 
-	@InjectMocks
-	private ShopAuthController shopAuthController;
-
 	private MockMvc mockMvc;
 
 	@BeforeEach
 	// 컨트롤러 단위 검증용 MockMvc를 초기화합니다.
 	void setUp() {
-		// 단일 컨트롤러 기준 standalone MockMvc를 생성합니다.
-		mockMvc = MockMvcBuilders.standaloneSetup(shopAuthController).build();
+		// JWT 쿠키 정책과 예외 처리기를 포함한 standalone MockMvc를 생성합니다.
+		AuthCookieFactory authCookieFactory = new AuthCookieFactory(
+			new JwtProperties("test-secret-key-test-secret-key-test-secret-key", Duration.ofMinutes(30), Duration.ofDays(30), false)
+		);
+		ShopAuthController shopAuthController = new ShopAuthController(shopAuthService, authCookieFactory);
+		LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+		validator.afterPropertiesSet();
+		mockMvc = MockMvcBuilders.standaloneSetup(shopAuthController)
+			.setControllerAdvice(new GlobalRestExceptionHandler())
+			.setValidator(validator)
+			.build();
 	}
 
 	@Test
@@ -72,6 +82,25 @@ class ShopAuthControllerTests {
 
 		// 고객 등급명 조회 호출 여부를 검증합니다.
 		verify(shopAuthService, times(1)).getCustomerGradeName("CUST_GRADE_03");
+	}
+
+	@Test
+	@DisplayName("구글 로그인 API는 필수 sub 값이 없으면 400 메시지 응답을 반환한다")
+	// Bean Validation 실패 시 공통 예외 응답 구조를 검증합니다.
+	void loginWithGoogle_returnsBadRequestWhenSubMissing() throws Exception {
+		// 빈 sub 요청을 전송합니다.
+		mockMvc.perform(
+				post("/api/shop/auth/google/login")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{
+						  "sub": "",
+						  "email": "google-user@test.com"
+						}
+						""")
+			)
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("구글 사용자 식별값을 확인해주세요."));
 	}
 
 	@Test

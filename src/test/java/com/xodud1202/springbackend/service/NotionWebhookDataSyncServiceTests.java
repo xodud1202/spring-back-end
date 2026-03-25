@@ -2,6 +2,7 @@ package com.xodud1202.springbackend.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xodud1202.springbackend.config.properties.NotionProperties;
 import com.xodud1202.springbackend.domain.notion.NotionCategoryUpsertPO;
 import com.xodud1202.springbackend.domain.notion.NotionDataListUpsertPO;
 import com.xodud1202.springbackend.mapper.NotionWebhookMapper;
@@ -47,6 +48,11 @@ class NotionWebhookDataSyncServiceTests {
 		objectMapper = new ObjectMapper();
 	}
 
+	// 테스트에서 사용할 Notion 설정 객체를 생성합니다.
+	private NotionProperties createNotionProperties(String webhookVerificationToken) {
+		return new NotionProperties("", "2025-09-03", webhookVerificationToken);
+	}
+
 	@Test
 	@DisplayName("동기화 처리: verification_token 이벤트는 저장하지 않는다")
 	// 구독 검증 이벤트는 Notion 데이터 동기화에서 제외합니다.
@@ -55,7 +61,7 @@ class NotionWebhookDataSyncServiceTests {
 			notionWebhookMapper,
 			notionApiClient,
 			objectMapper,
-			""
+			createNotionProperties("")
 		);
 
 		String body = "{\"verification_token\":\"sample-token\"}";
@@ -74,7 +80,7 @@ class NotionWebhookDataSyncServiceTests {
 			notionWebhookMapper,
 			notionApiClient,
 			objectMapper,
-			""
+			createNotionProperties("")
 		);
 
 		String webhookBody = """
@@ -155,7 +161,7 @@ class NotionWebhookDataSyncServiceTests {
 			notionWebhookMapper,
 			notionApiClient,
 			objectMapper,
-			""
+			createNotionProperties("")
 		);
 
 		String webhookBody = """
@@ -200,7 +206,7 @@ class NotionWebhookDataSyncServiceTests {
 			notionWebhookMapper,
 			notionApiClient,
 			objectMapper,
-			""
+			createNotionProperties("")
 		);
 
 		String webhookBody = """
@@ -259,7 +265,7 @@ class NotionWebhookDataSyncServiceTests {
 			notionWebhookMapper,
 			notionApiClient,
 			objectMapper,
-			""
+			createNotionProperties("")
 		);
 
 		String webhookBody = """
@@ -292,7 +298,7 @@ class NotionWebhookDataSyncServiceTests {
 			notionWebhookMapper,
 			notionApiClient,
 			objectMapper,
-			"verification-secret"
+			createNotionProperties("verification-secret")
 		);
 
 		String webhookBody = "{\"entity\":{\"type\":\"page\",\"id\":\"page-id\"}}";

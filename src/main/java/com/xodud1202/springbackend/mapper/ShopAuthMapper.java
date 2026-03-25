@@ -1,5 +1,6 @@
 package com.xodud1202.springbackend.mapper;
 
+import com.xodud1202.springbackend.common.mybatis.GeneratedLongKey;
 import com.xodud1202.springbackend.domain.shop.auth.ShopCouponIssueRuleVO;
 import com.xodud1202.springbackend.domain.shop.auth.ShopCustomerCouponSavePO;
 import com.xodud1202.springbackend.domain.shop.auth.ShopCustomerGradeBenefitVO;
@@ -18,7 +19,10 @@ public interface ShopAuthMapper {
 	String getCommonCodeName(@Param("grpCd") String grpCd, @Param("cd") String cd);
 
 	// 구글 신규 회원 정보를 CUSTOMER_BASE에 등록합니다.
-	int insertShopGoogleCustomer(ShopGoogleJoinSavePO param);
+	int insertShopGoogleCustomer(
+		@Param("command") ShopGoogleJoinSavePO command,
+		@Param("generatedKey") GeneratedLongKey generatedKey
+	);
 
 	// 구글 신규 회원 등록 후 REG_NO/UDT_NO를 고객 번호로 갱신합니다.
 	int updateShopGoogleCustomerAuditNo(@Param("custNo") Long custNo, @Param("auditNo") Long auditNo);
@@ -30,14 +34,17 @@ public interface ShopAuthMapper {
 	ShopCustomerGradeBenefitVO getCustomerGradeBenefitByCustGradeCd(@Param("custGradeCd") String custGradeCd);
 
 	// 고객 가입 포인트 마스터 이력을 등록합니다.
-	int insertCustomerPointBase(ShopCustomerPointSavePO param);
+	int insertCustomerPointBase(
+		@Param("command") ShopCustomerPointSavePO command,
+		@Param("generatedKey") GeneratedLongKey generatedKey
+	);
 
 	// 고객 가입 포인트 상세 이력을 등록합니다.
-	int insertCustomerPointDetail(ShopCustomerPointDetailSavePO param);
+	int insertCustomerPointDetail(@Param("command") ShopCustomerPointDetailSavePO command);
 
 	// 발급 가능한 정상 상태 쿠폰의 사용기간 규칙 정보를 조회합니다.
 	ShopCouponIssueRuleVO getIssuableCouponIssueRule(@Param("cpnNo") Long cpnNo);
 
 	// 고객 쿠폰을 1건 지급 등록합니다.
-	int insertCustomerCoupon(ShopCustomerCouponSavePO param);
+	int insertCustomerCoupon(@Param("command") ShopCustomerCouponSavePO command);
 }

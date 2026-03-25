@@ -11,14 +11,18 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import lombok.Data;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 
 // 사용자 기본 정보를 저장하는 엔티티입니다.
-@Data
+@Getter
+@Setter
+@NoArgsConstructor
 @Entity
 @Table(name = "USER_BASE")
 public class UserBaseEntity implements UserDetails {
@@ -72,5 +76,10 @@ public class UserBaseEntity implements UserDetails {
 	@JsonIgnore
 	public Collection<? extends GrantedAuthority> getAuthorities() {
 		return Collections.singletonList(new SimpleGrantedAuthority(usrGradeCd));
+	}
+
+	// 외부 응답 전달 전 비밀번호를 제거합니다.
+	public void erasePassword() {
+		this.pwd = null;
 	}
 }

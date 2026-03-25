@@ -3,6 +3,7 @@ package com.xodud1202.springbackend.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xodud1202.springbackend.config.properties.TossProperties;
 import com.xodud1202.springbackend.domain.admin.brand.BrandVO;
 import com.xodud1202.springbackend.domain.admin.category.*;
 import com.xodud1202.springbackend.domain.admin.goods.*;
@@ -14,10 +15,10 @@ import com.xodud1202.springbackend.domain.shop.order.*;
 import com.xodud1202.springbackend.mapper.ExhibitionMapper;
 import com.xodud1202.springbackend.mapper.GoodsMapper;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.springframework.beans.factory.annotation.Value;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,21 +45,20 @@ import static com.xodud1202.springbackend.common.Constants.Common.*;
 import static com.xodud1202.springbackend.common.Constants.Shop.*;
 
 @Service
-@Slf4j
 @RequiredArgsConstructor
 // 관리자 상품 관련 비즈니스 로직을 처리합니다.
 public class GoodsService {
+	private static final Logger log = LoggerFactory.getLogger(GoodsService.class);
+
 	private final GoodsMapper goodsMapper;
 	private final ExhibitionMapper exhibitionMapper;
 	private final FtpFileService ftpFileService;
 	private final ShopAuthService shopAuthService;
 	private final JusoAddressApiClient jusoAddressApiClient;
 	private final TossPaymentsClient tossPaymentsClient;
+	private final TossProperties tossProperties;
 	private final ObjectMapper objectMapper;
 	private final PlatformTransactionManager transactionManager;
-
-	@Value("${toss.client-key}")
-	private String tossClientKey;
 	private static final int GOODS_IMAGE_MIN_SIZE = 500;
 	private static final int GOODS_IMAGE_MAX_SIZE = 1500;
 
@@ -4624,7 +4624,7 @@ public class GoodsService {
 
 	// Toss 클라이언트 키를 반환합니다.
 	private String resolveShopOrderClientKey() {
-		return firstNonBlank(trimToNull(tossClientKey), "");
+		return firstNonBlank(trimToNull(tossProperties.clientKey()), "");
 	}
 
 	// 다양한 날짜 문자열을 주문 결제 저장용 형식으로 정규화합니다.

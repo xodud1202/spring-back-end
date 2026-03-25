@@ -1,6 +1,7 @@
 package com.xodud1202.springbackend.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xodud1202.springbackend.config.properties.TossProperties;
 import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsSavePO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryItem;
@@ -119,6 +120,9 @@ class GoodsServiceTests {
 
 	@Mock
 	private TossPaymentsClient tossPaymentsClient;
+
+	@Spy
+	private TossProperties tossProperties = new TossProperties("test-client-key", "test-secret-key");
 
 	@Mock
 	private PlatformTransactionManager transactionManager;

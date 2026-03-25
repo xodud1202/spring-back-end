@@ -1,8 +1,27 @@
 package com.xodud1202.springbackend.service;
 
-import static com.xodud1202.springbackend.common.Constants.Common.*;
-import static com.xodud1202.springbackend.common.Constants.Shop.*;
+import static com.xodud1202.springbackend.common.Constants.Shop.CPN_USE_DT_DATETIME;
+import static com.xodud1202.springbackend.common.Constants.Shop.CPN_USE_DT_PERIOD;
+import static com.xodud1202.springbackend.common.Constants.Shop.AGREEMENT_N;
+import static com.xodud1202.springbackend.common.Constants.Shop.AGREEMENT_Y;
+import static com.xodud1202.springbackend.common.Constants.Shop.CUST_GRADE_GRP_CD;
+import static com.xodud1202.springbackend.common.Constants.Shop.DEFAULT_CUST_GRADE_CD;
+import static com.xodud1202.springbackend.common.Constants.Shop.DEFAULT_CUST_STAT_CD;
+import static com.xodud1202.springbackend.common.Constants.Shop.DEVICE_GB_APP;
+import static com.xodud1202.springbackend.common.Constants.Shop.DEVICE_GB_MO;
+import static com.xodud1202.springbackend.common.Constants.Shop.DEVICE_GB_PC;
+import static com.xodud1202.springbackend.common.Constants.Shop.DEVICE_TYPE_APP;
+import static com.xodud1202.springbackend.common.Constants.Shop.DEVICE_TYPE_MOBILE;
+import static com.xodud1202.springbackend.common.Constants.Shop.DEVICE_TYPE_WEB;
+import static com.xodud1202.springbackend.common.Constants.Shop.GOOGLE_JOIN_GB;
+import static com.xodud1202.springbackend.common.Constants.Shop.JOIN_POINT_GIVE_GB_CD;
+import static com.xodud1202.springbackend.common.Constants.Shop.JOIN_POINT_GIVE_MEMO;
+import static com.xodud1202.springbackend.common.Constants.Shop.SEX_FEMALE;
+import static com.xodud1202.springbackend.common.Constants.Shop.SEX_MALE;
+import static com.xodud1202.springbackend.common.Constants.Shop.SEX_UNSELECTED;
+import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_SITE_ID;
 
+import com.xodud1202.springbackend.common.mybatis.GeneratedLongKey;
 import com.xodud1202.springbackend.domain.shop.auth.ShopCouponIssueRuleVO;
 import com.xodud1202.springbackend.domain.shop.auth.ShopCustomerCouponSavePO;
 import com.xodud1202.springbackend.domain.shop.auth.ShopCustomerGradeBenefitVO;
@@ -25,9 +44,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-// 쇼핑몰 고객 로그인 관련 비즈니스 로직을 처리합니다.
 @Service
 @RequiredArgsConstructor
+// 쇼핑몰 고객 로그인 관련 비즈니스 로직을 처리합니다.
 public class ShopAuthService {
 	private static final int CUSTOMER_NAME_MAX_LENGTH = 20;
 	private static final Pattern BIRTH_PATTERN = Pattern.compile("^(\\d{4})-(\\d{2})-(\\d{2})$");
@@ -66,93 +85,93 @@ public class ShopAuthService {
 	// 구글 로그인 식별값으로 기존 회원 여부를 판정합니다.
 	public ShopGoogleLoginResponse loginWithGoogle(ShopGoogleLoginRequest request) {
 		// 요청 데이터 유효성을 확인합니다.
-		if (request == null || isBlank(request.getSub())) {
-			throw new IllegalArgumentException("구글 사용자 식별값을 확인해주세요.");
-		}
+		String normalizedSub = normalizeRequiredText(request.sub(), "구글 사용자 식별값을 확인해주세요.");
 
 		// CI에 저장된 구글 sub 기준으로 기존 고객 정보를 조회합니다.
-		String normalizedSub = request.getSub().trim();
 		ShopCustomerSessionVO customer = shopAuthMapper.getShopCustomerByCi(normalizedSub);
 
 		// 기존 고객이 있으면 즉시 로그인 가능한 응답을 구성합니다.
-		if (customer != null && customer.getCustNo() != null) {
+		if (customer != null && customer.custNo() != null) {
 			return buildLoginSuccessResponse(customer, buildGoogleLoginId(normalizedSub));
 		}
 
 		// 기존 고객이 없으면 추가 정보 입력이 필요한 응답을 반환합니다.
-		ShopGoogleLoginResponse response = new ShopGoogleLoginResponse();
-		response.setLoginSuccess(false);
-		response.setJoinRequired(true);
-		response.setLoginId(buildGoogleLoginId(normalizedSub));
-		return response;
+		return ShopGoogleLoginResponse.joinRequired(buildGoogleLoginId(normalizedSub));
 	}
 
-	// 구글 신규 회원가입을 처리하고 로그인 응답을 반환합니다.
 	@Transactional
+	// 구글 신규 회원가입을 처리하고 로그인 응답을 반환합니다.
 	public ShopGoogleLoginResponse joinWithGoogle(ShopGoogleJoinRequest request) {
 		// 요청 데이터 유효성을 먼저 검증합니다.
 		validateJoinRequest(request);
 
 		// 요청값을 저장 전 규칙에 맞게 정규화합니다.
-		String normalizedSub = request.getSub().trim();
-		String normalizedEmail = request.getEmail().trim();
-		String normalizedCustNm = normalizeCustomerName(request.getCustNm());
-		String normalizedSex = normalizeSex(request.getSex());
-		String normalizedBirth = normalizeBirthForSave(request.getBirth());
-		String normalizedPhoneNumber = normalizePhoneNumberForSave(request.getPhoneNumber());
-		String normalizedSmsRsvYn = normalizeYn(request.getSmsRsvYn());
-		String normalizedEmailRsvYn = normalizeYn(request.getEmailRsvYn());
-		String normalizedAppPushRsvYn = normalizeYn(request.getAppPushRsvYn());
-		String resolvedDeviceGbCd = resolveDeviceGbCd(request.getDeviceType());
+		String normalizedSub = request.sub().trim();
+		String normalizedEmail = request.email().trim();
+		String normalizedCustNm = normalizeCustomerName(request.custNm());
+		String normalizedSex = normalizeSex(request.sex());
+		String normalizedBirth = normalizeBirthForSave(request.birth());
+		String normalizedPhoneNumber = normalizePhoneNumberForSave(request.phoneNumber());
+		String normalizedSmsRsvYn = normalizeYn(request.smsRsvYn());
+		String normalizedEmailRsvYn = normalizeYn(request.emailRsvYn());
+		String normalizedAppPushRsvYn = normalizeYn(request.appPushRsvYn());
+		String resolvedDeviceGbCd = resolveDeviceGbCd(request.deviceType());
 
 		// 동일 CI 기존 회원이 있으면 중복 등록 없이 즉시 로그인 응답을 반환합니다.
 		ShopCustomerSessionVO existingCustomer = shopAuthMapper.getShopCustomerByCi(normalizedSub);
-		if (existingCustomer != null && existingCustomer.getCustNo() != null) {
+		if (existingCustomer != null && existingCustomer.custNo() != null) {
 			return buildLoginSuccessResponse(existingCustomer, buildGoogleLoginId(normalizedSub));
 		}
 
-		// 신규 회원 등록 파라미터를 구성합니다.
-		ShopGoogleJoinSavePO savePO = new ShopGoogleJoinSavePO();
-		savePO.setLoginId(buildGoogleLoginId(normalizedSub));
-		savePO.setPassword(null);
-		savePO.setCustNm(normalizedCustNm);
-		savePO.setCustGradeCd(DEFAULT_CUST_GRADE_CD);
-		savePO.setCustStatCd(DEFAULT_CUST_STAT_CD);
-		savePO.setJoinGb(GOOGLE_JOIN_GB);
-		savePO.setSex(normalizedSex);
-		savePO.setBirth(normalizedBirth);
-		savePO.setPhoneNumber(normalizedPhoneNumber);
-		savePO.setEmail(normalizedEmail);
-		savePO.setSmsRsvYn(normalizedSmsRsvYn);
-		savePO.setEmailRsvYn(normalizedEmailRsvYn);
-		savePO.setAppPushRsvYn(normalizedAppPushRsvYn);
-		savePO.setDeviceGbCd(resolvedDeviceGbCd);
-		savePO.setCi(normalizedSub);
-		savePO.setDi(normalizedSub);
-		savePO.setRegNo(0);
-		savePO.setUdtNo(0);
+		// 신규 회원 등록 명령을 구성합니다.
+		ShopGoogleJoinSavePO saveCommand = new ShopGoogleJoinSavePO(
+			buildGoogleLoginId(normalizedSub),
+			null,
+			normalizedCustNm,
+			DEFAULT_CUST_GRADE_CD,
+			DEFAULT_CUST_STAT_CD,
+			GOOGLE_JOIN_GB,
+			normalizedSex,
+			normalizedBirth,
+			normalizedPhoneNumber,
+			normalizedEmail,
+			normalizedSmsRsvYn,
+			normalizedEmailRsvYn,
+			normalizedAppPushRsvYn,
+			resolvedDeviceGbCd,
+			normalizedSub,
+			normalizedSub,
+			0,
+			0
+		);
 
-		// CUSTOMER_BASE 신규 회원을 등록합니다.
-		shopAuthMapper.insertShopGoogleCustomer(savePO);
-		if (savePO.getCustNo() == null) {
+		// CUSTOMER_BASE 신규 회원을 등록하고 생성키를 수집합니다.
+		GeneratedLongKey customerGeneratedKey = new GeneratedLongKey();
+		shopAuthMapper.insertShopGoogleCustomer(saveCommand, customerGeneratedKey);
+		Long createdCustNo = customerGeneratedKey.getValue();
+		if (createdCustNo == null) {
 			throw new IllegalArgumentException("회원가입 처리 중 고객번호 생성에 실패했습니다.");
 		}
 
 		// REG_NO/UDT_NO를 가입자 고객번호로 갱신합니다.
-		shopAuthMapper.updateShopGoogleCustomerAuditNo(savePO.getCustNo(), savePO.getCustNo());
+		shopAuthMapper.updateShopGoogleCustomerAuditNo(createdCustNo, createdCustNo);
 
 		// 회원가입 기본 포인트/등급 쿠폰 혜택을 지급합니다.
-		grantJoinBenefits(savePO.getCustNo(), savePO.getCustGradeCd());
+		grantJoinBenefits(createdCustNo, saveCommand.custGradeCd());
 
 		// 등록된 회원 정보를 다시 조회해 로그인 응답을 구성합니다.
 		ShopCustomerSessionVO joinedCustomer = shopAuthMapper.getShopCustomerByCi(normalizedSub);
-		if (joinedCustomer == null || joinedCustomer.getCustNo() == null) {
-			joinedCustomer = new ShopCustomerSessionVO();
-			joinedCustomer.setCustNo(savePO.getCustNo());
-			joinedCustomer.setCustNm(savePO.getCustNm());
-			joinedCustomer.setCustGradeCd(savePO.getCustGradeCd());
+		if (joinedCustomer == null || joinedCustomer.custNo() == null) {
+			joinedCustomer = new ShopCustomerSessionVO(
+				createdCustNo,
+				saveCommand.loginId(),
+				saveCommand.custNm(),
+				saveCommand.custGradeCd(),
+				saveCommand.ci(),
+				saveCommand.email()
+			);
 		}
-		return buildLoginSuccessResponse(joinedCustomer, savePO.getLoginId());
+		return buildLoginSuccessResponse(joinedCustomer, saveCommand.loginId());
 	}
 
 	// 회원가입 완료 후 포인트/쿠폰 혜택을 지급합니다.
@@ -173,27 +192,31 @@ public class ShopAuthService {
 		}
 
 		// 포인트 마스터 지급 이력을 등록합니다.
-		ShopCustomerPointSavePO pointSavePO = new ShopCustomerPointSavePO();
-		pointSavePO.setCustNo(custNo);
-		pointSavePO.setPntGiveGbCd(JOIN_POINT_GIVE_GB_CD);
-		pointSavePO.setPntGiveMemo(JOIN_POINT_GIVE_MEMO);
-		pointSavePO.setSaveAmt(joinPoint);
-		pointSavePO.setRegNo(custNo);
-		pointSavePO.setUdtNo(custNo);
-		shopAuthMapper.insertCustomerPointBase(pointSavePO);
+		ShopCustomerPointSavePO pointSaveCommand = new ShopCustomerPointSavePO(
+			custNo,
+			JOIN_POINT_GIVE_GB_CD,
+			JOIN_POINT_GIVE_MEMO,
+			joinPoint,
+			custNo,
+			custNo
+		);
+		GeneratedLongKey pointGeneratedKey = new GeneratedLongKey();
+		shopAuthMapper.insertCustomerPointBase(pointSaveCommand, pointGeneratedKey);
 
 		// 생성된 포인트 번호가 없으면 처리 실패로 간주합니다.
-		if (pointSavePO.getPntNo() == null) {
+		Long createdPointNo = pointGeneratedKey.getValue();
+		if (createdPointNo == null) {
 			throw new IllegalArgumentException("회원가입 포인트 지급 처리에 실패했습니다.");
 		}
 
 		// 포인트 상세 이력을 등록합니다.
-		ShopCustomerPointDetailSavePO pointDetailSavePO = new ShopCustomerPointDetailSavePO();
-		pointDetailSavePO.setPntNo(pointSavePO.getPntNo());
-		pointDetailSavePO.setPntAmt(joinPoint);
-		pointDetailSavePO.setBigo(JOIN_POINT_GIVE_MEMO);
-		pointDetailSavePO.setRegNo(custNo);
-		shopAuthMapper.insertCustomerPointDetail(pointDetailSavePO);
+		ShopCustomerPointDetailSavePO pointDetailCommand = new ShopCustomerPointDetailSavePO(
+			createdPointNo,
+			joinPoint,
+			JOIN_POINT_GIVE_MEMO,
+			custNo
+		);
+		shopAuthMapper.insertCustomerPointDetail(pointDetailCommand);
 	}
 
 	// 고객등급별 혜택 쿠폰을 고객에게 지급합니다.
@@ -205,13 +228,13 @@ public class ShopAuthService {
 		}
 
 		// 혜택 쿠폰 번호/수량이 설정된 항목을 고객에게 발급합니다.
-		issueShopCustomerCoupon(custNo, benefitVO.getGoodsCpnNo(), benefitVO.getGoodsCpnCnt());
-		issueShopCustomerCoupon(custNo, benefitVO.getCartCpnNo(), benefitVO.getCartCpnCnt());
-		issueShopCustomerCoupon(custNo, benefitVO.getDeliveryCpnNo(), benefitVO.getDeliveryCpnCnt());
+		issueShopCustomerCoupon(custNo, benefitVO.goodsCpnNo(), benefitVO.goodsCpnCnt());
+		issueShopCustomerCoupon(custNo, benefitVO.cartCpnNo(), benefitVO.cartCpnCnt());
+		issueShopCustomerCoupon(custNo, benefitVO.deliveryCpnNo(), benefitVO.deliveryCpnCnt());
 	}
 
-	// 단일 쿠폰을 지정 수량만큼 고객에게 지급하고 실제 지급 건수를 반환합니다.
 	@Transactional
+	// 단일 쿠폰을 지정 수량만큼 고객에게 지급하고 실제 지급 건수를 반환합니다.
 	public int issueShopCustomerCoupon(Long custNo, Long cpnNo, Integer issueCount) {
 		// 쿠폰번호/수량이 유효하지 않으면 지급을 생략합니다.
 		if (custNo == null || custNo < 1L || cpnNo == null || issueCount == null || issueCount < 1) {
@@ -235,14 +258,15 @@ public class ShopAuthService {
 		// 요청 수량만큼 고객 쿠폰을 반복 지급합니다.
 		int issuedCount = 0;
 		for (int issueIndex = 0; issueIndex < issueCount; issueIndex += 1) {
-			ShopCustomerCouponSavePO couponSavePO = new ShopCustomerCouponSavePO();
-			couponSavePO.setCustNo(custNo);
-			couponSavePO.setCpnNo(cpnNo);
-			couponSavePO.setCpnUsableStartDt(usableStartDt);
-			couponSavePO.setCpnUsableEndDt(usableEndDt);
-			couponSavePO.setRegNo(custNo);
-			couponSavePO.setUdtNo(custNo);
-			issuedCount += shopAuthMapper.insertCustomerCoupon(couponSavePO);
+			ShopCustomerCouponSavePO couponSaveCommand = new ShopCustomerCouponSavePO(
+				custNo,
+				cpnNo,
+				usableStartDt,
+				usableEndDt,
+				custNo,
+				custNo
+			);
+			issuedCount += shopAuthMapper.insertCustomerCoupon(couponSaveCommand);
 		}
 		return issuedCount;
 	}
@@ -250,13 +274,13 @@ public class ShopAuthService {
 	// 쿠폰 사용 가능 시작 일시를 계산합니다.
 	private LocalDateTime resolveCouponUsableStartDateTime(ShopCouponIssueRuleVO couponRule, LocalDateTime now) {
 		// 기간형 쿠폰은 발급 시점을 시작일시로 사용합니다.
-		if (CPN_USE_DT_PERIOD.equals(couponRule.getCpnUseDtGb())) {
+		if (CPN_USE_DT_PERIOD.equals(couponRule.cpnUseDtGb())) {
 			return now;
 		}
 
 		// 고정일시형 쿠폰은 쿠폰 기본 시작일시를 사용합니다.
-		if (CPN_USE_DT_DATETIME.equals(couponRule.getCpnUseDtGb())) {
-			return couponRule.getCpnUseStartDt();
+		if (CPN_USE_DT_DATETIME.equals(couponRule.cpnUseDtGb())) {
+			return couponRule.cpnUseStartDt();
 		}
 		return null;
 	}
@@ -264,16 +288,16 @@ public class ShopAuthService {
 	// 쿠폰 사용 가능 종료 일시를 계산합니다.
 	private LocalDateTime resolveCouponUsableEndDateTime(ShopCouponIssueRuleVO couponRule, LocalDateTime now) {
 		// 기간형 쿠폰은 사용 가능 일수 기준으로 종료일시를 계산합니다.
-		if (CPN_USE_DT_PERIOD.equals(couponRule.getCpnUseDtGb())) {
-			if (couponRule.getCpnUsableDt() == null || couponRule.getCpnUsableDt() < 1) {
+		if (CPN_USE_DT_PERIOD.equals(couponRule.cpnUseDtGb())) {
+			if (couponRule.cpnUsableDt() == null || couponRule.cpnUsableDt() < 1) {
 				return null;
 			}
-			return now.plusDays(couponRule.getCpnUsableDt());
+			return now.plusDays(couponRule.cpnUsableDt());
 		}
 
 		// 고정일시형 쿠폰은 쿠폰 기본 종료일시를 사용합니다.
-		if (CPN_USE_DT_DATETIME.equals(couponRule.getCpnUseDtGb())) {
-			return couponRule.getCpnUseEndDt();
+		if (CPN_USE_DT_DATETIME.equals(couponRule.cpnUseDtGb())) {
+			return couponRule.cpnUseEndDt();
 		}
 		return null;
 	}
@@ -281,25 +305,19 @@ public class ShopAuthService {
 	// 회원가입 요청의 필수값/약관 동의 여부를 확인합니다.
 	private void validateJoinRequest(ShopGoogleJoinRequest request) {
 		// 필수 식별값을 확인합니다.
-		if (request == null || isBlank(request.getSub())) {
-			throw new IllegalArgumentException("구글 사용자 식별값을 확인해주세요.");
-		}
+		normalizeRequiredText(request.sub(), "구글 사용자 식별값을 확인해주세요.");
 
 		// 필수 이메일을 확인합니다.
-		if (isBlank(request.getEmail())) {
-			throw new IllegalArgumentException("이메일을 확인해주세요.");
-		}
+		normalizeRequiredText(request.email(), "이메일을 확인해주세요.");
 
 		// 필수 고객명을 확인합니다.
-		if (isBlank(request.getCustNm())) {
-			throw new IllegalArgumentException("고객명을 입력해주세요.");
-		}
+		normalizeRequiredText(request.custNm(), "고객명을 입력해주세요.");
 
 		// 필수 약관 동의 여부를 확인합니다.
-		if (!AGREEMENT_Y.equals(normalizeYn(request.getPrivateAgreeYn()))) {
+		if (!AGREEMENT_Y.equals(normalizeYn(request.privateAgreeYn()))) {
 			throw new IllegalArgumentException("개인정보 처리 방침 동의는 필수입니다.");
 		}
-		if (!AGREEMENT_Y.equals(normalizeYn(request.getTermsAgreeYn()))) {
+		if (!AGREEMENT_Y.equals(normalizeYn(request.termsAgreeYn()))) {
 			throw new IllegalArgumentException("서비스 이용약관 동의는 필수입니다.");
 		}
 	}
@@ -307,14 +325,7 @@ public class ShopAuthService {
 	// 로그인 성공 응답을 공통으로 구성합니다.
 	private ShopGoogleLoginResponse buildLoginSuccessResponse(ShopCustomerSessionVO customer, String loginId) {
 		// 로그인 성공 상태를 응답 객체에 채웁니다.
-		ShopGoogleLoginResponse response = new ShopGoogleLoginResponse();
-		response.setLoginSuccess(true);
-		response.setJoinRequired(false);
-		response.setCustNo(customer.getCustNo());
-		response.setCustNm(customer.getCustNm());
-		response.setCustGradeCd(customer.getCustGradeCd());
-		response.setLoginId(loginId);
-		return response;
+		return ShopGoogleLoginResponse.loginSuccess(customer.custNo(), customer.custNm(), customer.custGradeCd(), loginId);
 	}
 
 	// 구글 사용자 식별값으로 내부 로그인 아이디를 생성합니다.
@@ -435,8 +446,26 @@ public class ShopAuthService {
 		throw new IllegalArgumentException("가입 디바이스 값이 올바르지 않습니다.");
 	}
 
+	// 필수 문자열을 trim 처리하고 비어 있으면 예외를 반환합니다.
+	private String normalizeRequiredText(String value, String errorMessage) {
+		String normalizedValue = trimToNull(value);
+		if (normalizedValue == null) {
+			throw new IllegalArgumentException(errorMessage);
+		}
+		return normalizedValue;
+	}
+
+	// 문자열을 trim 처리하고 비어 있으면 null을 반환합니다.
+	private String trimToNull(String value) {
+		if (value == null) {
+			return null;
+		}
+		String normalizedValue = value.trim();
+		return normalizedValue.isEmpty() ? null : normalizedValue;
+	}
+
 	// 문자열 공백 여부를 확인합니다.
 	private boolean isBlank(String value) {
-		return value == null || value.trim().isEmpty();
+		return trimToNull(value) == null;
 	}
 }

@@ -3,7 +3,41 @@
 		"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
 <mapper namespace="com.xodud1202.springbackend.mapper.ShopAuthMapper">
-	<select id="getShopCustomerByCi" resultType="com.xodud1202.springbackend.domain.shop.auth.ShopCustomerSessionVO">
+	<resultMap id="shopCustomerSessionResultMap" type="com.xodud1202.springbackend.domain.shop.auth.ShopCustomerSessionVO">
+		<constructor>
+			<idArg column="CUST_NO" javaType="java.lang.Long"/>
+			<arg column="LOGIN_ID" javaType="java.lang.String"/>
+			<arg column="CUST_NM" javaType="java.lang.String"/>
+			<arg column="CUST_GRADE_CD" javaType="java.lang.String"/>
+			<arg column="CI" javaType="java.lang.String"/>
+			<arg column="EMAIL" javaType="java.lang.String"/>
+		</constructor>
+	</resultMap>
+
+	<resultMap id="shopCustomerGradeBenefitResultMap" type="com.xodud1202.springbackend.domain.shop.auth.ShopCustomerGradeBenefitVO">
+		<constructor>
+			<idArg column="CUST_GRADE_CD" javaType="java.lang.String"/>
+			<arg column="GOODS_CPN_NO" javaType="java.lang.Long"/>
+			<arg column="GOODS_CPN_CNT" javaType="java.lang.Integer"/>
+			<arg column="CART_CPN_NO" javaType="java.lang.Long"/>
+			<arg column="CART_CPN_CNT" javaType="java.lang.Integer"/>
+			<arg column="DELIVERY_CPN_NO" javaType="java.lang.Long"/>
+			<arg column="DELIVERY_CPN_CNT" javaType="java.lang.Integer"/>
+		</constructor>
+	</resultMap>
+
+	<resultMap id="shopCouponIssueRuleResultMap" type="com.xodud1202.springbackend.domain.shop.auth.ShopCouponIssueRuleVO">
+		<constructor>
+			<idArg column="CPN_NO" javaType="java.lang.Long"/>
+			<arg column="CPN_STAT_CD" javaType="java.lang.String"/>
+			<arg column="CPN_USE_DT_GB" javaType="java.lang.String"/>
+			<arg column="CPN_USABLE_DT" javaType="java.lang.Integer"/>
+			<arg column="CPN_USE_START_DT" javaType="java.time.LocalDateTime"/>
+			<arg column="CPN_USE_END_DT" javaType="java.time.LocalDateTime"/>
+		</constructor>
+	</resultMap>
+
+	<select id="getShopCustomerByCi" resultMap="shopCustomerSessionResultMap">
 		/* ShopAuthMapper.getShopCustomerByCi: CI 값으로 쇼핑몰 고객 로그인 정보를 조회 */
 		SELECT CUST_NO
 		     , LOGIN_ID
@@ -26,7 +60,7 @@
 		 LIMIT 1
 	</select>
 
-	<insert id="insertShopGoogleCustomer" useGeneratedKeys="true" keyProperty="custNo" keyColumn="CUST_NO">
+	<insert id="insertShopGoogleCustomer" useGeneratedKeys="true" keyProperty="generatedKey.value" keyColumn="CUST_NO">
 		/* ShopAuthMapper.insertShopGoogleCustomer: 구글 신규 회원 정보를 등록 */
 		INSERT INTO CUSTOMER_BASE (
 		       LOGIN_ID
@@ -51,27 +85,27 @@
 		     , REG_NO
 		     , UDT_NO
 		) VALUES (
-		       #{loginId}
-		     , #{password}
-		     , #{custNm}
-		     , #{custGradeCd}
-		     , #{custStatCd}
-		     , #{joinGb}
-		     , #{sex}
-		     , #{birth}
-		     , #{phoneNumber}
-		     , #{email}
-		     , #{smsRsvYn}
-		     , CASE WHEN #{smsRsvYn} = 'Y' THEN NOW() ELSE NULL END
-		     , #{emailRsvYn}
-		     , CASE WHEN #{emailRsvYn} = 'Y' THEN NOW() ELSE NULL END
-		     , #{appPushRsvYn}
-		     , CASE WHEN #{appPushRsvYn} = 'Y' THEN NOW() ELSE NULL END
-		     , #{deviceGbCd}
-		     , #{ci}
-		     , #{di}
-		     , #{regNo}
-		     , #{udtNo}
+		       #{command.loginId}
+		     , #{command.password}
+		     , #{command.custNm}
+		     , #{command.custGradeCd}
+		     , #{command.custStatCd}
+		     , #{command.joinGb}
+		     , #{command.sex}
+		     , #{command.birth}
+		     , #{command.phoneNumber}
+		     , #{command.email}
+		     , #{command.smsRsvYn}
+		     , CASE WHEN #{command.smsRsvYn} = 'Y' THEN NOW() ELSE NULL END
+		     , #{command.emailRsvYn}
+		     , CASE WHEN #{command.emailRsvYn} = 'Y' THEN NOW() ELSE NULL END
+		     , #{command.appPushRsvYn}
+		     , CASE WHEN #{command.appPushRsvYn} = 'Y' THEN NOW() ELSE NULL END
+		     , #{command.deviceGbCd}
+		     , #{command.ci}
+		     , #{command.di}
+		     , #{command.regNo}
+		     , #{command.udtNo}
 		)
 	</insert>
 
@@ -91,7 +125,7 @@
 		 LIMIT 1
 	</select>
 
-	<select id="getCustomerGradeBenefitByCustGradeCd" resultType="com.xodud1202.springbackend.domain.shop.auth.ShopCustomerGradeBenefitVO">
+	<select id="getCustomerGradeBenefitByCustGradeCd" resultMap="shopCustomerGradeBenefitResultMap">
 		/* ShopAuthMapper.getCustomerGradeBenefitByCustGradeCd: 고객등급별 쿠폰 혜택 정보를 조회 */
 		SELECT CUST_GRADE_CD
 		     , GOODS_CPN_NO
@@ -105,7 +139,7 @@
 		 LIMIT 1
 	</select>
 
-	<insert id="insertCustomerPointBase" useGeneratedKeys="true" keyProperty="pntNo" keyColumn="PNT_NO">
+	<insert id="insertCustomerPointBase" useGeneratedKeys="true" keyProperty="generatedKey.value" keyColumn="PNT_NO">
 		/* ShopAuthMapper.insertCustomerPointBase: 회원가입 포인트 마스터 이력을 등록 */
 		INSERT INTO CUSTOMER_POINT_BASE (
 		       CUST_NO
@@ -117,14 +151,14 @@
 		     , REG_NO
 		     , UDT_NO
 		) VALUES (
-		       #{custNo}
-		     , #{pntGiveGbCd}
-		     , #{pntGiveMemo}
-		     , #{saveAmt}
+		       #{command.custNo}
+		     , #{command.pntGiveGbCd}
+		     , #{command.pntGiveMemo}
+		     , #{command.saveAmt}
 		     , 0
-		     , #{saveAmt}
-		     , #{regNo}
-		     , #{udtNo}
+		     , #{command.saveAmt}
+		     , #{command.regNo}
+		     , #{command.udtNo}
 		)
 	</insert>
 
@@ -136,14 +170,14 @@
 		     , BIGO
 		     , REG_NO
 		) VALUES (
-		       #{pntNo}
-		     , #{pntAmt}
-		     , #{bigo}
-		     , #{regNo}
+		       #{command.pntNo}
+		     , #{command.pntAmt}
+		     , #{command.bigo}
+		     , #{command.regNo}
 		)
 	</insert>
 
-	<select id="getIssuableCouponIssueRule" resultType="com.xodud1202.springbackend.domain.shop.auth.ShopCouponIssueRuleVO">
+	<select id="getIssuableCouponIssueRule" resultMap="shopCouponIssueRuleResultMap">
 		/* ShopAuthMapper.getIssuableCouponIssueRule: 발급 가능한 정상 상태 쿠폰 사용기간 규칙 조회 */
 		SELECT CPN_NO
 		     , CPN_STAT_CD
@@ -175,13 +209,13 @@
 		     , REG_NO
 		     , UDT_NO
 		) VALUES (
-		       #{custNo}
-		     , #{cpnNo}
-		     , #{cpnUsableStartDt}
-		     , #{cpnUsableEndDt}
+		       #{command.custNo}
+		     , #{command.cpnNo}
+		     , #{command.cpnUsableStartDt}
+		     , #{command.cpnUsableEndDt}
 		     , 'N'
-		     , #{regNo}
-		     , #{udtNo}
+		     , #{command.regNo}
+		     , #{command.udtNo}
 		)
 	</insert>
 </mapper>
