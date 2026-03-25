@@ -1752,7 +1752,7 @@ class GoodsServiceTests {
 		payment.setOrdNo("O220260319170925876");
 		payment.setCustNo(7L);
 		payment.setPayMethodCd("PAY_METHOD_02");
-		payment.setPayStatCd("PAY_STAT_05");
+		payment.setPayStatCd("PAY_STAT_01");
 		payment.setRspRawJson("""
 			{"secret":"ps_LkKEypNArWdRengm2gYL8lmeaxYG"}
 			""");
@@ -1902,7 +1902,7 @@ class GoodsServiceTests {
 		payment.setOrdNo("O720260319180000111");
 		payment.setCustNo(7L);
 		payment.setPayAmt(10000L);
-		payment.setPayStatCd("PAY_STAT_01");
+		payment.setPayStatCd("PAY_STAT_00");
 		payment.setPayMethodCd("PAY_METHOD_01");
 		payment.setReqRawJson("""
 			{
@@ -1984,7 +1984,7 @@ class GoodsServiceTests {
 		payment.setOrdNo("O720260319180500333");
 		payment.setCustNo(7L);
 		payment.setPayAmt(12000L);
-		payment.setPayStatCd("PAY_STAT_01");
+		payment.setPayStatCd("PAY_STAT_00");
 		payment.setPayMethodCd("PAY_METHOD_02");
 		payment.setReqRawJson("""
 			{
@@ -2004,7 +2004,7 @@ class GoodsServiceTests {
 		updatedPayment.setOrdNo("O720260319180500333");
 		updatedPayment.setCustNo(7L);
 		updatedPayment.setPayAmt(12000L);
-		updatedPayment.setPayStatCd("PAY_STAT_05");
+		updatedPayment.setPayStatCd("PAY_STAT_01");
 		updatedPayment.setPayMethodCd("PAY_METHOD_02");
 		updatedPayment.setReqRawJson(payment.getReqRawJson());
 		updatedPayment.setBankCd("88");
@@ -2062,7 +2062,7 @@ class GoodsServiceTests {
 		payment.setOrdNo("O720260319181500222");
 		payment.setCustNo(7L);
 		payment.setPayMethodCd("PAY_METHOD_02");
-		payment.setPayStatCd("PAY_STAT_05");
+		payment.setPayStatCd("PAY_STAT_01");
 		payment.setRspRawJson("""
 			{"secret":"ps_LkKEypNArWdRengm2gYL8lmeaxYG"}
 			""");
@@ -2201,7 +2201,7 @@ class GoodsServiceTests {
 		assertThat(result.getRefundedCashAmt()).isEqualTo(6150L);
 		assertThat(result.getRestoredPointAmt()).isEqualTo(100L);
 		assertThat(refundPaymentCaptor.getValue().getPayGbCd()).isEqualTo("PAY_GB_02");
-		assertThat(refundPaymentCaptor.getValue().getPayAmt()).isEqualTo(6150L);
+		assertThat(refundPaymentCaptor.getValue().getPayAmt()).isEqualTo(-6150L);
 		verify(goodsMapper).restoreShopGoodsSizeStock("GOODS-000", "090", 1, 7L);
 		verify(goodsMapper).restoreShopCustomerPointUseAmt(11L, 100, 7L);
 		verify(goodsMapper).insertShopOrderPointDetail(any());
@@ -2280,8 +2280,8 @@ class GoodsServiceTests {
 	}
 
 	@Test
-	@DisplayName("마이페이지 주문취소는 무통장입금 대기 주문을 즉시 전체 취소 완료 처리한다")
-	// 무통장입금 대기 주문 전체취소 시 환불 결제, 주문변경, 배송비쿠폰 원복, 주문상태 완료 처리가 함께 수행되는지 검증합니다.
+	@DisplayName("마이페이지 주문취소는 무통장입금 입금 전 주문을 즉시 전체 취소 완료 처리한다")
+	// 무통장입금 입금 전 전체취소 시 환불 결제, 주문변경, 고객쿠폰 원복, 주문상태 완료 처리가 함께 수행되는지 검증합니다.
 	void cancelShopMypageOrder_completesWaitingDepositFullCancel() {
 		// 무통장입금 전체취소 대상 주문과 요청값을 구성합니다.
 		ShopMypageOrderGroupVO orderGroup = new ShopMypageOrderGroupVO();
@@ -2339,7 +2339,7 @@ class GoodsServiceTests {
 		originalPayment.setPayNo(101L);
 		originalPayment.setOrdNo("ORD-20260323-002");
 		originalPayment.setCustNo(7L);
-		originalPayment.setPayStatCd("PAY_STAT_05");
+		originalPayment.setPayStatCd("PAY_STAT_01");
 		originalPayment.setPayMethodCd("PAY_METHOD_02");
 		originalPayment.setPgGbCd("PG_GB_01");
 		originalPayment.setTradeNo("trade-origin");
@@ -2373,7 +2373,7 @@ class GoodsServiceTests {
 			}
 			""");
 
-		// 전체취소 완료 시 환불 결제, 주문상태, 배송비쿠폰 원복이 모두 반영되는지 검증합니다.
+		// 전체취소 완료 시 환불 결제, 주문상태, 고객쿠폰 원복이 모두 반영되는지 검증합니다.
 		ShopOrderCancelResultVO result = goodsService.cancelShopMypageOrder(param, 7L);
 		assertThat(result.getOrdNo()).isEqualTo("ORD-20260323-002");
 		assertThat(result.getRefundPayNo()).isEqualTo(301L);
@@ -2381,11 +2381,13 @@ class GoodsServiceTests {
 		assertThat(result.getRefundedCashAmt()).isEqualTo(19500L);
 		assertThat(result.getRestoredPointAmt()).isZero();
 		assertThat(refundPaymentCaptor.getValue().getPayGbCd()).isEqualTo("PAY_GB_02");
-		assertThat(refundPaymentCaptor.getValue().getPayAmt()).isEqualTo(19500L);
+		assertThat(refundPaymentCaptor.getValue().getPayAmt()).isEqualTo(-19500L);
 		assertThat(refundPaymentCaptor.getValue().getOrgPayNo()).isEqualTo(101L);
 		assertThat(refundPaymentCaptor.getValue().getClmNo()).isNotBlank();
 		verify(goodsMapper).restoreShopGoodsSizeStock("GOODS-002", "100", 2, 7L);
-		verify(goodsMapper).restoreShopCustomerCouponUseByCustCpnNo(7L, 501L, 7L);
+		verify(goodsMapper).resetShopOrderDetailCouponDiscount("ORD-20260323-002", 7L);
+		verify(goodsMapper).resetShopOrderBaseDeliveryCouponDiscount("ORD-20260323-002", 7L);
+		verify(goodsMapper).restoreShopCustomerCouponUse(7L, "ORD-20260323-002", 7L);
 		verify(goodsMapper).updateShopOrderDetailCancelQuantity("ORD-20260323-002", 1, 2, "ORD_DTL_STAT_99", 7L);
 		verify(goodsMapper).updateShopOrderBaseStatus("ORD-20260323-002", "ORD_STAT_03", 7L);
 		verify(goodsMapper).updateShopPaymentCancelSuccess(
@@ -2397,6 +2399,128 @@ class GoodsServiceTests {
 			eq("취소 완료"),
 			any(),
 			eq("2026-03-23 10:11:12"),
+			eq(7L)
+		);
+	}
+
+	@Test
+	@DisplayName("마이페이지 주문취소는 결제완료 전체취소 시 상품/장바구니/배송비 쿠폰과 할인금액을 함께 원복한다")
+	// 결제완료 전체취소 시 주문 쿠폰 할인정보와 고객쿠폰 사용 상태가 모두 초기화되는지 검증합니다.
+	void cancelShopMypageOrder_restoresCouponUsageAndDiscountAmountsWhenPaymentDoneFullCancel() {
+		// 결제완료 전체취소 대상 주문과 요청값을 구성합니다.
+		ShopMypageOrderGroupVO orderGroup = new ShopMypageOrderGroupVO();
+		orderGroup.setOrdNo("ORD-20260323-002A");
+		ShopMypageOrderDetailItemVO detailItem = new ShopMypageOrderDetailItemVO();
+		detailItem.setOrdNo("ORD-20260323-002A");
+		detailItem.setOrdDtlNo(1);
+		detailItem.setOrdDtlStatCd("ORD_DTL_STAT_02");
+		detailItem.setGoodsId("GOODS-002A");
+		detailItem.setSizeId("095");
+		detailItem.setOrdQty(1);
+		detailItem.setCancelableQty(1);
+		detailItem.setSupplyAmt(15000);
+		detailItem.setSaleAmt(12500);
+		detailItem.setAddAmt(0);
+		detailItem.setGoodsCouponDiscountAmt(10000);
+		detailItem.setCartCouponDiscountAmt(1350);
+		detailItem.setPointUseAmt(0);
+
+		ShopOrderCancelOrderBaseVO orderBase = new ShopOrderCancelOrderBaseVO();
+		orderBase.setOrdNo("ORD-20260323-002A");
+		orderBase.setCustNo(7L);
+		orderBase.setOrdDelvAmt(3000);
+		orderBase.setDelvCpnNo(601L);
+		orderBase.setDelvCpnDcAmt(3000);
+		orderBase.setDeviceGbCd("PC");
+
+		ShopCartSiteInfoVO siteInfo = new ShopCartSiteInfoVO();
+		siteInfo.setDeliveryFee(3000);
+		siteInfo.setDeliveryFeeLimit(50000);
+
+		ShopMypageOrderCancelReasonVO reason = new ShopMypageOrderCancelReasonVO();
+		reason.setCd("C_01");
+		reason.setCdNm("단순 변심");
+
+		ShopOrderCancelItemPO cancelItem = new ShopOrderCancelItemPO();
+		cancelItem.setOrdDtlNo(1);
+		cancelItem.setCancelQty(1);
+
+		ShopOrderCancelPreviewAmountPO previewAmount = new ShopOrderCancelPreviewAmountPO();
+		previewAmount.setExpectedRefundAmt(1150L);
+		previewAmount.setPaidGoodsAmt(12500L);
+		previewAmount.setBenefitAmt(11350L);
+		previewAmount.setShippingAdjustmentAmt(0L);
+		previewAmount.setTotalPointRefundAmt(0L);
+		previewAmount.setDeliveryCouponRefundAmt(3000L);
+
+		ShopOrderCancelPO param = new ShopOrderCancelPO();
+		param.setOrdNo("ORD-20260323-002A");
+		param.setReasonCd("C_01");
+		param.setCancelItemList(List.of(cancelItem));
+		param.setPreviewAmount(previewAmount);
+
+		ShopOrderPaymentVO originalPayment = new ShopOrderPaymentVO();
+		originalPayment.setPayNo(151L);
+		originalPayment.setOrdNo("ORD-20260323-002A");
+		originalPayment.setCustNo(7L);
+		originalPayment.setPayStatCd("PAY_STAT_02");
+		originalPayment.setPayMethodCd("PAY_METHOD_01");
+		originalPayment.setPgGbCd("PG_GB_01");
+		originalPayment.setTradeNo("trade-origin-2a");
+		originalPayment.setTossPaymentKey("toss-done-full-key");
+
+		ArgumentCaptor<ShopOrderPaymentSavePO> refundPaymentCaptor = ArgumentCaptor.forClass(ShopOrderPaymentSavePO.class);
+
+		// 주문/사유/결제/트랜잭션 목 데이터를 구성합니다.
+		mockShopOrderTransactionManager();
+		when(goodsMapper.getShopMypageOrderGroup(7L, "ORD-20260323-002A")).thenReturn(orderGroup);
+		when(goodsMapper.getShopMypageOrderDetailList(List.of("ORD-20260323-002A"))).thenReturn(List.of(detailItem));
+		when(goodsMapper.getShopOrderCancelOrderBase(7L, "ORD-20260323-002A")).thenReturn(orderBase);
+		when(goodsMapper.getShopCartSiteInfo("xodud1202")).thenReturn(siteInfo);
+		when(goodsMapper.getShopMypageOrderCancelReasonList()).thenReturn(List.of(reason));
+		when(goodsMapper.getShopOrderPaymentForCancel("ORD-20260323-002A")).thenReturn(originalPayment);
+		when(goodsMapper.updateShopOrderDetailCancelQuantity("ORD-20260323-002A", 1, 1, "ORD_DTL_STAT_99", 7L)).thenReturn(1);
+		when(goodsMapper.insertShopPayment(refundPaymentCaptor.capture())).thenAnswer(invocation -> {
+			refundPaymentCaptor.getValue().setPayNo(351L);
+			return 1;
+		});
+		when(tossPaymentsClient.cancelPayment("toss-done-full-key", "C_01", 1150L)).thenReturn("""
+			{
+			  "status": "CANCELED",
+			  "cancels": [
+			    {
+			      "cancelAmount": 1150,
+			      "canceledAt": "2026-03-23T10:21:22+09:00",
+			      "transactionKey": "tx-cancel-done-full"
+			    }
+			  ]
+			}
+			""");
+
+		// 결제완료 전체취소 시 주문 쿠폰 할인정보와 고객쿠폰 원복이 함께 수행되는지 검증합니다.
+		ShopOrderCancelResultVO result = goodsService.cancelShopMypageOrder(param, 7L);
+		assertThat(result.getOrdNo()).isEqualTo("ORD-20260323-002A");
+		assertThat(result.getRefundPayNo()).isEqualTo(351L);
+		assertThat(result.getPayStatCd()).isEqualTo("PAY_STAT_04");
+		assertThat(result.getRefundedCashAmt()).isEqualTo(1150L);
+		assertThat(refundPaymentCaptor.getValue().getPayGbCd()).isEqualTo("PAY_GB_02");
+		assertThat(refundPaymentCaptor.getValue().getPayAmt()).isEqualTo(-1150L);
+		verify(goodsMapper).restoreShopGoodsSizeStock("GOODS-002A", "095", 1, 7L);
+		verify(goodsMapper).resetShopOrderDetailCouponDiscount("ORD-20260323-002A", 7L);
+		verify(goodsMapper).resetShopOrderBaseDeliveryCouponDiscount("ORD-20260323-002A", 7L);
+		verify(goodsMapper).restoreShopCustomerCouponUse(7L, "ORD-20260323-002A", 7L);
+		verify(goodsMapper).updateShopOrderDetailCancelQuantity("ORD-20260323-002A", 1, 1, "ORD_DTL_STAT_99", 7L);
+		verify(goodsMapper).updateShopOrderBaseStatus("ORD-20260323-002A", "ORD_STAT_03", 7L);
+		verify(tossPaymentsClient).cancelPayment("toss-done-full-key", "C_01", 1150L);
+		verify(goodsMapper).updateShopPaymentCancelSuccess(
+			eq(351L),
+			eq("PAY_STAT_04"),
+			eq(1150L),
+			eq("tx-cancel-done-full"),
+			eq("CANCELED"),
+			eq("취소 완료"),
+			any(),
+			eq("2026-03-23 10:21:22"),
 			eq(7L)
 		);
 	}
@@ -2493,6 +2617,7 @@ class GoodsServiceTests {
 			.isInstanceOf(IllegalArgumentException.class)
 			.hasMessage("이미 취소된 결제입니다.");
 		assertThat(refundPaymentCaptor.getValue().getPayNo()).isEqualTo(401L);
+		assertThat(refundPaymentCaptor.getValue().getPayAmt()).isEqualTo(-10000L);
 		verify(goodsMapper).updateShopPaymentCancelFailure(
 			401L,
 			"PAY_STAT_03",

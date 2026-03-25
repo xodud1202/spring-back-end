@@ -1351,7 +1351,7 @@
 		  FROM PAYMENT
 		 WHERE ORD_NO = #{ordNo}
 		   AND PAY_GB_CD = 'PAY_GB_01'
-		   AND PAY_STAT_CD IN ('PAY_STAT_02', 'PAY_STAT_05')
+		   AND PAY_STAT_CD IN ('PAY_STAT_02', 'PAY_STAT_01')
 		 ORDER BY PAY_NO DESC
 		 LIMIT 1
 	</select>
@@ -1483,6 +1483,28 @@
 		 WHERE ORD_NO = #{ordNo}
 		   AND ORD_DTL_NO = #{ordDtlNo}
 		   AND COALESCE(RMN_QTY, ORD_QTY, 0) &gt;= #{cancelQty}
+	</update>
+
+	<update id="resetShopOrderDetailCouponDiscount">
+		/* GoodsMapper.resetShopOrderDetailCouponDiscount: 전체취소 주문상세 쿠폰 적용 정보 초기화 */
+		UPDATE ORDER_DETAIL
+		   SET GOODS_CPN_NO = NULL
+		     , GOODS_CPN_DC_AMT = 0
+		     , CART_CPN_NO = NULL
+		     , CART_CPN_DC_AMT = 0
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE ORD_NO = #{ordNo}
+	</update>
+
+	<update id="resetShopOrderBaseDeliveryCouponDiscount">
+		/* GoodsMapper.resetShopOrderBaseDeliveryCouponDiscount: 전체취소 주문 마스터 배송비쿠폰 적용 정보 초기화 */
+		UPDATE ORDER_BASE
+		   SET DELV_CPN_NO = NULL
+		     , DELV_CPN_DC_AMT = 0
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE ORD_NO = #{ordNo}
 	</update>
 
 	<update id="updateShopPaymentSuccess">

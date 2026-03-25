@@ -1573,7 +1573,7 @@ public class GoodsService {
 			refundPaymentSavePO.setPgGbCd(originalPayment == null ? SHOP_ORDER_PG_GB_TOSS : originalPayment.getPgGbCd());
 			refundPaymentSavePO.setOrgPayNo(originalPayment == null ? null : originalPayment.getPayNo());
 			refundPaymentSavePO.setClmNo(clmNo);
-			refundPaymentSavePO.setPayAmt(cancelComputation == null ? 0L : cancelComputation.getRefundedCashAmt());
+			refundPaymentSavePO.setPayAmt(resolveRefundPaymentAmt(cancelComputation == null ? null : cancelComputation.getRefundedCashAmt()));
 			refundPaymentSavePO.setDeviceGbCd(orderBase == null ? "PC" : firstNonBlank(trimToNull(orderBase.getDeviceGbCd()), "PC"));
 			refundPaymentSavePO.setReqRawJson(writeShopOrderJson(refundSnapshot));
 			refundPaymentSavePO.setRegNo(custNo);
@@ -1630,12 +1630,11 @@ public class GoodsService {
 			}
 		}
 
-		// 취소 수량만큼 재고와 포인트를 복구하고, 전체취소일 때 배송비쿠폰 사용도 원복합니다.
+		// 취소 수량만큼 재고와 포인트를 복구하고, 전체취소면 주문 쿠폰 적용 정보도 함께 원복합니다.
 		restoreShopOrderCancelSelectedStock(cancelComputation.getSelectedItemList(), custNo);
 		restoreShopOrderPointByAmount(custNo, orderBase.getOrdNo(), cancelComputation.getRestoredPointAmt());
-		if (cancelComputation.isFullCancel() && orderBase.getDelvCpnNo() != null && orderBase.getDelvCpnNo() > 0L) {
-			goodsMapper.restoreShopCustomerCouponUseByCustCpnNo(custNo, orderBase.getDelvCpnNo(), custNo);
-		}
+		resetShopOrderCancelCouponDiscount(orderBase.getOrdNo(), cancelComputation, custNo);
+		restoreShopOrderCancelCouponUse(custNo, orderBase.getOrdNo(), cancelComputation);
 
 		// PG 취소 성공 응답을 저장하고, 전체취소면 주문 마스터도 완료 상태로 변경합니다.
 		ShopOrderCancelPgResult cancelPgResult = cancelShopOrderPaymentWithPg(originalPayment, param, cancelComputation);
@@ -1663,6 +1662,33 @@ public class GoodsService {
 		result.setRefundedCashAmt(cancelComputation.getRefundedCashAmt());
 		result.setRestoredPointAmt(cancelComputation.getRestoredPointAmt());
 		return result;
+	}
+
+	// 주문취소 완료 후 전체취소 여부에 맞춰 주문 쿠폰 할인 정보를 초기화합니다.
+	private void resetShopOrderCancelCouponDiscount(String ordNo, ShopOrderCancelComputation cancelComputation, Long auditNo) {
+		// 전체취소가 아니거나 주문번호가 비어 있으면 주문 쿠폰 할인 정보는 유지합니다.
+		if (auditNo == null || auditNo < 1L || isBlank(ordNo) || cancelComputation == null || !cancelComputation.isFullCancel()) {
+			return;
+		}
+
+		// 전체취소면 주문상세와 주문마스터의 쿠폰 적용 정보와 할인금액을 함께 초기화합니다.
+		goodsMapper.resetShopOrderDetailCouponDiscount(ordNo, auditNo);
+		goodsMapper.resetShopOrderBaseDeliveryCouponDiscount(ordNo, auditNo);
+	}
+
+	// 주문취소 완료 후 전체취소 여부에 맞춰 고객쿠폰 사용 상태를 원복합니다.
+	private void restoreShopOrderCancelCouponUse(
+		Long custNo,
+		String ordNo,
+		ShopOrderCancelComputation cancelComputation
+	) {
+		// 전체취소가 아니거나 주문번호가 비어 있으면 고객쿠폰 원복을 수행하지 않습니다.
+		if (custNo == null || custNo < 1L || isBlank(ordNo) || cancelComputation == null || !cancelComputation.isFullCancel()) {
+			return;
+		}
+
+		// 전체취소면 결제상태와 관계없이 주문번호 기준 사용 쿠폰 전체를 원복합니다.
+		goodsMapper.restoreShopCustomerCouponUse(custNo, ordNo, custNo);
 	}
 
 	// 주문취소 대상 상품 수량만큼 재고를 복구합니다.
@@ -2018,6 +2044,13 @@ public class GoodsService {
 			return 0L;
 		}
 		return value;
+	}
+
+	// 환불 PAYMENT 저장금액을 음수 기준으로 변환합니다.
+	private long resolveRefundPaymentAmt(Long refundedCashAmt) {
+		// 환불 저장금액은 절댓값 기준으로 음수화합니다.
+		long normalizedRefundedCashAmt = Math.abs(refundedCashAmt == null ? 0L : refundedCashAmt.longValue());
+		return normalizedRefundedCashAmt * -1L;
 	}
 
 	// 현재 다운로드 가능한 쿠폰 목록에서 지정 쿠폰번호 1건을 조회합니다.

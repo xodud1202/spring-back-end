@@ -292,8 +292,14 @@ public interface GoodsMapper {
 		@Param("udtNo") Long udtNo
 	);
 
+	// 전체취소된 주문상세의 쿠폰 적용 정보를 초기화합니다.
+	int resetShopOrderDetailCouponDiscount(@Param("ordNo") String ordNo, @Param("udtNo") Long udtNo);
+
 	// 쇼핑몰 주문 마스터 상태를 변경합니다.
 	int updateShopOrderBaseStatus(@Param("ordNo") String ordNo, @Param("ordStatCd") String ordStatCd, @Param("udtNo") Long udtNo);
+
+	// 전체취소된 주문 마스터의 배송비쿠폰 적용 정보를 초기화합니다.
+	int resetShopOrderBaseDeliveryCouponDiscount(@Param("ordNo") String ordNo, @Param("udtNo") Long udtNo);
 
 	// 쇼핑몰 주문 마스터 상태와 결제 시각을 변경합니다.
 	int updateShopOrderBaseStatusAndDates(
