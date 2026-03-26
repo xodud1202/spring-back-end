@@ -111,6 +111,81 @@
 		</if>
 	</select>
 
+	<sql id="adminOrderWhere">
+		/* GoodsMapper.adminOrderWhere: 관리자 주문 목록 공통 조회 조건 */
+		WHERE 1 = 1
+		  AND OD.ORD_DTL_STAT_CD != 'ORD_DTL_STAT_00'
+		<if test="searchValue != null and searchValue != ''">
+			<choose>
+				<when test="searchGb == 'ordNo'">
+		   AND OD.ORD_NO = #{searchValue}
+				</when>
+				<when test="searchGb == 'goodsId'">
+		   AND OD.GOODS_ID LIKE CONCAT('%', #{searchValue}, '%')
+				</when>
+			</choose>
+		</if>
+		<if test="dateGb == 'ORDER_DT'">
+		   AND COALESCE(OB.ORDER_DT, OB.REG_DT) &gt;= #{startDateTime}
+		   AND COALESCE(OB.ORDER_DT, OB.REG_DT) &lt; #{endExclusiveDateTime}
+		</if>
+		<if test="dateGb == 'PAY_DT'">
+		   AND OB.ORDER_CONFIRM_DT &gt;= #{startDateTime}
+		   AND OB.ORDER_CONFIRM_DT &lt; #{endExclusiveDateTime}
+		</if>
+		<if test="ordDtlStatCd != null and ordDtlStatCd != ''">
+		   AND OD.ORD_DTL_STAT_CD = #{ordDtlStatCd}
+		</if>
+		<if test="chgDtlStatCd != null and chgDtlStatCd != ''">
+		   AND EXISTS (
+		       SELECT 1
+		         FROM ORDER_CHANGE_DETAIL OCD
+		        WHERE OCD.ORD_NO = OD.ORD_NO
+		          AND OCD.ORD_DTL_NO = OD.ORD_DTL_NO
+		          AND OCD.CHG_DTL_STAT_CD = #{chgDtlStatCd}
+		   )
+		</if>
+	</sql>
+
+	<select id="getAdminOrderList" resultType="com.xodud1202.springbackend.domain.admin.order.AdminOrderListRowVO">
+		/* GoodsMapper.getAdminOrderList: 관리자 주문 목록 조회 */
+		SELECT OD.ORD_NO
+		     , OD.ORD_DTL_NO
+		     , DATE_FORMAT(COALESCE(OB.ORDER_DT, OB.REG_DT), '%Y-%m-%d %H:%i:%s') AS ORDER_DT
+		     , OD.ORD_DTL_STAT_CD
+		     , FN_GET_CODE_NM('ORD_DTL_STAT', OD.ORD_DTL_STAT_CD) AS ORD_DTL_STAT_NM
+		     , OD.GOODS_ID
+		     , OD.SIZE_ID
+		     , (COALESCE(OD.SUPPLY_AMT, 0) * COALESCE(OD.ORD_QTY, 0)) AS SUPPLY_AMT
+		     , ((COALESCE(OD.SALE_AMT, 0) + COALESCE(OD.ADD_AMT, 0)) * COALESCE(OD.ORD_QTY, 0)) AS SALE_AMT
+		     , GREATEST(
+		           ((COALESCE(OD.SALE_AMT, 0) + COALESCE(OD.ADD_AMT, 0)) * COALESCE(OD.ORD_QTY, 0))
+		           - COALESCE(OD.GOODS_CPN_DC_AMT, 0)
+		           - COALESCE(OD.CART_CPN_DC_AMT, 0)
+		           - COALESCE(OD.POINT_USE_AMT, 0),
+		           0
+		       ) AS FINAL_PAY_AMT
+		     , COALESCE(OD.GOODS_CPN_DC_AMT, 0) AS GOODS_COUPON_DISCOUNT_AMT
+		     , COALESCE(OD.CART_CPN_DC_AMT, 0) AS CART_COUPON_DISCOUNT_AMT
+		     , COALESCE(OD.POINT_USE_AMT, 0) AS POINT_USE_AMT
+		     , COALESCE(OB.ORD_DELV_AMT, 0) AS DELIVERY_FEE_AMT
+		  FROM ORDER_DETAIL OD
+		  JOIN ORDER_BASE OB
+		    ON OB.ORD_NO = OD.ORD_NO
+		<include refid="adminOrderWhere" />
+		 ORDER BY COALESCE(OB.ORDER_DT, OB.REG_DT) DESC, OD.ORD_NO DESC, OD.ORD_DTL_NO ASC
+		 LIMIT #{pageSize} OFFSET #{offset}
+	</select>
+
+	<select id="getAdminOrderCount" resultType="int">
+		/* GoodsMapper.getAdminOrderCount: 관리자 주문 목록 조회 수 */
+		SELECT COUNT(1)
+		  FROM ORDER_DETAIL OD
+		  JOIN ORDER_BASE OB
+		    ON OB.ORD_NO = OD.ORD_NO
+		<include refid="adminOrderWhere" />
+	</select>
+
 	<select id="getGoodsMerchList" resultType="com.xodud1202.springbackend.domain.admin.goods.GoodsMerchVO">
 		/* GoodsMapper.getGoodsMerchList: 상품 분류 목록 조회 */
 		SELECT GOODS_MERCH_ID
@@ -2498,6 +2573,40 @@
 		 WHERE OCB.REG_NO = #{custNo}
 		   AND OCB.CLM_NO = #{clmNo}
 		   AND OCB.CHG_GB_CD = 'C'
+	</select>
+
+	<select id="getShopMypagePointItemList" resultType="com.xodud1202.springbackend.domain.shop.mypage.ShopMypagePointItemVO">
+		/* GoodsMapper.getShopMypagePointItemList: 마이페이지 포인트 적립/차감 내역 목록 페이징 조회 */
+		SELECT CPD.PNT_NO
+		     , CPD.PNT_AMT
+		     , CPD.ORD_NO
+		     , CPD.BIGO
+		     , DATE_FORMAT(CPD.REG_DT, '%Y-%m-%d') AS REG_DT
+		  FROM CUSTOMER_POINT_DETAIL CPD
+		 INNER JOIN CUSTOMER_POINT_BASE CPB ON CPB.PNT_NO = CPD.PNT_NO
+		 WHERE CPB.CUST_NO = #{custNo}
+		 ORDER BY CPD.REG_DT DESC, CPD.PNT_NO DESC
+		 LIMIT #{pageSize} OFFSET #{offset}
+	</select>
+
+	<select id="getShopMypagePointItemCount" resultType="Integer">
+		/* GoodsMapper.getShopMypagePointItemCount: 마이페이지 포인트 적립/차감 내역 전체 건수 조회 */
+		SELECT COUNT(*)
+		  FROM CUSTOMER_POINT_DETAIL CPD
+		 INNER JOIN CUSTOMER_POINT_BASE CPB ON CPB.PNT_NO = CPD.PNT_NO
+		 WHERE CPB.CUST_NO = #{custNo}
+	</select>
+
+	<select id="getShopMypageExpiringPointAmt" resultType="Integer">
+		/* GoodsMapper.getShopMypageExpiringPointAmt: 마이페이지 7일 이내 만료 예정 포인트 합계 조회 */
+		SELECT COALESCE(SUM(RMN_AMT), 0)
+		  FROM CUSTOMER_POINT_BASE
+		 WHERE CUST_NO = #{custNo}
+		   AND RMN_AMT &gt; 0
+		   AND EXPIRE_DT IS NOT NULL
+		   AND EXPIRE_DT != '0000-00-00 00:00:00'
+		   AND EXPIRE_DT &gt;= NOW()
+		   AND EXPIRE_DT &lt; DATE_ADD(NOW(), INTERVAL 7 DAY)
 	</select>
 
 </mapper>

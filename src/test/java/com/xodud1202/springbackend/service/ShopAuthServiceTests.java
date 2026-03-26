@@ -455,6 +455,7 @@ class ShopAuthServiceTests {
 		when(shopAuthMapper.getCustomerGradeBenefitByCustGradeCd("CUST_GRADE_01")).thenReturn(null);
 
 		// 회원가입을 수행합니다.
+		LocalDateTime beforeJoin = LocalDateTime.now().withNano(0);
 		shopAuthService.joinWithGoogle(
 			new ShopGoogleJoinRequest(
 				"google-sub",
@@ -471,6 +472,7 @@ class ShopAuthServiceTests {
 				"WEB"
 			)
 		);
+		LocalDateTime afterJoin = LocalDateTime.now().withNano(0);
 
 		// 포인트 마스터 저장값을 검증합니다.
 		ArgumentCaptor<ShopCustomerPointSavePO> pointSaveCaptor = ArgumentCaptor.forClass(ShopCustomerPointSavePO.class);
@@ -479,6 +481,9 @@ class ShopAuthServiceTests {
 		assertEquals(31L, capturedPointSavePO.custNo());
 		assertEquals("JOIN_POINT", capturedPointSavePO.pntGiveGbCd());
 		assertEquals(2000, capturedPointSavePO.saveAmt());
+		assertNotNull(capturedPointSavePO.expireDt());
+		assertFalse(capturedPointSavePO.expireDt().isBefore(beforeJoin.plusMonths(1L)));
+		assertFalse(capturedPointSavePO.expireDt().isAfter(afterJoin.plusMonths(1L)));
 		assertEquals(31L, capturedPointSavePO.regNo());
 		assertEquals(31L, capturedPointSavePO.udtNo());
 

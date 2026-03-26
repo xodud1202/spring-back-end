@@ -11,6 +11,8 @@ import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderListRowVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderPO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsDescSaveItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsDescVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsImageSavePO;
@@ -44,6 +46,7 @@ import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderStatusSumma
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishGoodsItemVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCancelHistoryVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCancelHistoryDetailVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypagePointItemVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderBaseSavePO;
@@ -71,6 +74,12 @@ public interface GoodsMapper {
 
 	// 관리자 상품 목록 건수를 조회합니다.
 	int getAdminGoodsCount(GoodsPO param);
+
+	// 관리자 주문 목록을 조회합니다.
+	List<AdminOrderListRowVO> getAdminOrderList(AdminOrderPO param);
+
+	// 관리자 주문 목록 건수를 조회합니다.
+	int getAdminOrderCount(AdminOrderPO param);
 
 	// 상품 분류 목록을 조회합니다.
 	List<GoodsMerchVO> getGoodsMerchList();
@@ -647,4 +656,17 @@ public interface GoodsMapper {
 		@Param("custNo") Long custNo,
 		@Param("clmNo") String clmNo
 	);
+
+	// 마이페이지 포인트 내역 목록을 페이징 조회합니다.
+	List<ShopMypagePointItemVO> getShopMypagePointItemList(
+		@Param("custNo") Long custNo,
+		@Param("pageSize") int pageSize,
+		@Param("offset") int offset
+	);
+
+	// 마이페이지 포인트 내역 전체 건수를 조회합니다.
+	Integer getShopMypagePointItemCount(@Param("custNo") Long custNo);
+
+	// 마이페이지 7일 이내 만료 예정 포인트 합계를 조회합니다.
+	Integer getShopMypageExpiringPointAmt(@Param("custNo") Long custNo);
 }

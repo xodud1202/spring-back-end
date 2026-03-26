@@ -148,6 +148,7 @@
 		     , SAVE_AMT
 		     , USE_AMT
 		     , RMN_AMT
+		     , EXPIRE_DT
 		     , REG_NO
 		     , UDT_NO
 		) VALUES (
@@ -157,6 +158,7 @@
 		     , #{command.saveAmt}
 		     , 0
 		     , #{command.saveAmt}
+		     , #{command.expireDt}
 		     , #{command.regNo}
 		     , #{command.udtNo}
 		)

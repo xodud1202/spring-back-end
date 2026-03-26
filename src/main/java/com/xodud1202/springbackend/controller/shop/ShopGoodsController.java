@@ -15,6 +15,7 @@ import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderCancelPageV
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderDetailPageVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderPageVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishPageVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypagePointPageVO;
 import com.xodud1202.springbackend.service.GoodsService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -732,6 +733,32 @@ public class ShopGoodsController {
 		// 숫자/문자열 값을 정수로 바꾼 뒤 1 이상만 허용합니다.
 		Integer parsedValue = parseIntegerValue(rawValue);
 		return parsedValue == null || parsedValue < 1 ? null : parsedValue;
+	}
+
+	// 쇼핑몰 마이페이지 포인트 내역 페이지 데이터를 조회합니다.
+	@GetMapping("/api/shop/mypage/point/page")
+	public ResponseEntity<Object> getShopMypagePointPage(
+		@RequestParam(required = false) Integer pageNo,
+		HttpServletRequest request
+	) {
+		try {
+			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			// 포인트 내역 페이지 데이터를 조회해 반환합니다.
+			ShopMypagePointPageVO result = goodsService.getShopMypagePointPage(custNo, pageNo);
+			return ResponseEntity.ok(result);
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
+			log.error("쇼핑몰 마이페이지 포인트 내역 조회 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "포인트 내역 조회에 실패했습니다."));
+		}
 	}
 
 	// URL 인코딩된 쿠키 값을 원문 문자열로 디코딩합니다.

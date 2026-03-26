@@ -7,6 +7,7 @@ import com.xodud1202.springbackend.config.properties.TossProperties;
 import com.xodud1202.springbackend.domain.admin.brand.BrandVO;
 import com.xodud1202.springbackend.domain.admin.category.*;
 import com.xodud1202.springbackend.domain.admin.goods.*;
+import com.xodud1202.springbackend.domain.admin.order.*;
 import com.xodud1202.springbackend.domain.shop.cart.*;
 import com.xodud1202.springbackend.domain.shop.category.ShopCategoryGoodsItemVO;
 import com.xodud1202.springbackend.domain.shop.goods.*;
@@ -61,6 +62,9 @@ public class GoodsService {
 	private final PlatformTransactionManager transactionManager;
 	private static final int GOODS_IMAGE_MIN_SIZE = 500;
 	private static final int GOODS_IMAGE_MAX_SIZE = 1500;
+	private static final int ADMIN_ORDER_DEFAULT_PAGE = 1;
+	private static final int ADMIN_ORDER_DEFAULT_PAGE_SIZE = 20;
+	private static final int ADMIN_ORDER_MAX_PAGE_SIZE = 200;
 
 	// 관리자 상품 목록을 페이징 조건으로 조회합니다.
 	public Map<String, Object> getAdminGoodsList(GoodsPO param) {
@@ -87,6 +91,59 @@ public class GoodsService {
 		result.put("totalCount", totalCount);
 		result.put("page", page);
 		result.put("pageSize", pageSize);
+		return result;
+	}
+
+	// 관리자 주문 목록을 조회합니다.
+	public AdminOrderListResponseVO getAdminOrderList(
+		Integer page,
+		Integer pageSize,
+		String searchGb,
+		String searchValue,
+		String dateGb,
+		String searchStartDt,
+		String searchEndDt,
+		String ordDtlStatCd,
+		String chgDtlStatCd
+	) {
+		// 페이징 기본값을 계산합니다.
+		int resolvedPage = page == null || page < 1 ? ADMIN_ORDER_DEFAULT_PAGE : page;
+		int resolvedPageSize = pageSize == null || pageSize < 1
+			? ADMIN_ORDER_DEFAULT_PAGE_SIZE
+			: Math.min(pageSize, ADMIN_ORDER_MAX_PAGE_SIZE);
+		int offset = (resolvedPage - 1) * resolvedPageSize;
+
+		// 검색 조건과 조회 기간을 정규화합니다.
+		String normalizedSearchValue = trimToNull(searchValue);
+		String normalizedSearchGb = normalizeAdminOrderSearchGb(searchGb);
+		String normalizedDateGb = normalizeAdminOrderDateGb(dateGb);
+		ShopMypageOrderDateRange dateRange = resolveShopMypageOrderDateRange(searchStartDt, searchEndDt);
+
+		// 매퍼 조회용 파라미터를 구성합니다.
+		AdminOrderPO param = new AdminOrderPO();
+		param.setPage(resolvedPage);
+		param.setPageSize(resolvedPageSize);
+		param.setOffset(offset);
+		param.setSearchGb(normalizedSearchGb);
+		param.setSearchValue(normalizedSearchValue);
+		param.setDateGb(normalizedDateGb);
+		param.setSearchStartDt(dateRange.getStartDate());
+		param.setSearchEndDt(dateRange.getEndDate());
+		param.setStartDateTime(dateRange.getStartDateTime());
+		param.setEndExclusiveDateTime(dateRange.getEndExclusiveDateTime());
+		param.setOrdDtlStatCd(trimToNull(ordDtlStatCd));
+		param.setChgDtlStatCd(trimToNull(chgDtlStatCd));
+
+		// 목록과 건수를 조회합니다.
+		List<AdminOrderListRowVO> list = goodsMapper.getAdminOrderList(param);
+		int totalCount = goodsMapper.getAdminOrderCount(param);
+
+		// 응답 객체를 구성합니다.
+		AdminOrderListResponseVO result = new AdminOrderListResponseVO();
+		result.setList(list == null ? List.of() : list);
+		result.setTotalCount(totalCount);
+		result.setPage(resolvedPage);
+		result.setPageSize(resolvedPageSize);
 		return result;
 	}
 
@@ -271,6 +328,18 @@ public class GoodsService {
 		}
 		String trimmed = value.trim();
 		return trimmed.isEmpty() ? null : trimmed;
+	}
+
+	// 관리자 주문 검색 구분값을 허용 범위로 보정합니다.
+	private String normalizeAdminOrderSearchGb(String searchGb) {
+		// 상품코드 검색만 허용하고 나머지는 주문번호 검색으로 고정합니다.
+		return "goodsId".equalsIgnoreCase(trimToNull(searchGb)) ? "goodsId" : "ordNo";
+	}
+
+	// 관리자 주문 기간 구분값을 허용 범위로 보정합니다.
+	private String normalizeAdminOrderDateGb(String dateGb) {
+		// 결제기간 검색만 별도로 허용하고 나머지는 주문기간 검색으로 고정합니다.
+		return "PAY_DT".equalsIgnoreCase(trimToNull(dateGb)) ? "PAY_DT" : "ORDER_DT";
 	}
 
 	// Y/N 값을 보정하고 그 외 값은 N으로 반환합니다.
@@ -857,6 +926,44 @@ public class GoodsService {
 		);
 		cancelItem.setDetailList(detailList != null ? detailList : java.util.Collections.emptyList());
 		return cancelItem;
+	}
+
+	// 쇼핑몰 마이페이지 포인트 내역 페이지 데이터를 조회합니다.
+	public ShopMypagePointPageVO getShopMypagePointPage(Long custNo, Integer requestedPageNo) {
+		// 고객번호가 없으면 로그인 예외를 반환합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+
+		// 요청 페이지 번호를 1 이상으로 보정합니다.
+		int resolvedRequestedPageNo = resolveRequestedPageNo(requestedPageNo);
+		// 포인트 내역 전체 건수를 조회합니다.
+		Integer pointCountResult = goodsMapper.getShopMypagePointItemCount(custNo);
+		int pointCount = pointCountResult == null ? 0 : pointCountResult;
+		// 전체 페이지 수를 계산합니다.
+		int totalPageCount = calculateTotalPageCount(pointCount, SHOP_MYPAGE_POINT_PAGE_SIZE);
+		// 범위를 초과한 페이지 번호를 마지막 페이지로 보정합니다.
+		int resolvedPageNo = totalPageCount == 0 ? 1 : Math.min(resolvedRequestedPageNo, totalPageCount);
+		// 페이지 조회 오프셋을 계산합니다.
+		int offset = calculateOffset(resolvedPageNo, SHOP_MYPAGE_POINT_PAGE_SIZE);
+
+		// 포인트 내역 목록을 조회합니다.
+		List<ShopMypagePointItemVO> pointList = goodsMapper.getShopMypagePointItemList(custNo, SHOP_MYPAGE_POINT_PAGE_SIZE, offset);
+		// 사용 가능 포인트 합계를 조회합니다.
+		Integer availablePointAmt = goodsMapper.getShopAvailablePointAmt(custNo);
+		// 7일 이내 만료 예정 포인트 합계를 조회합니다.
+		Integer expiringPointAmt = goodsMapper.getShopMypageExpiringPointAmt(custNo);
+
+		// 포인트 내역 페이지 응답 객체를 구성합니다.
+		ShopMypagePointPageVO result = new ShopMypagePointPageVO();
+		result.setAvailablePointAmt(availablePointAmt == null ? 0 : availablePointAmt);
+		result.setExpiringPointAmt(expiringPointAmt == null ? 0 : expiringPointAmt);
+		result.setPointList(pointList == null ? java.util.Collections.emptyList() : pointList);
+		result.setPointCount(pointCount);
+		result.setPageNo(resolvedPageNo);
+		result.setPageSize(SHOP_MYPAGE_POINT_PAGE_SIZE);
+		result.setTotalPageCount(totalPageCount);
+		return result;
 	}
 
 	// 쇼핑몰 마이페이지 주문취소를 즉시 완료 처리합니다.

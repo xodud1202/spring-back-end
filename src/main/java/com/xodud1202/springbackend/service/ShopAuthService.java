@@ -49,6 +49,7 @@ import java.util.regex.Pattern;
 // 쇼핑몰 고객 로그인 관련 비즈니스 로직을 처리합니다.
 public class ShopAuthService {
 	private static final int CUSTOMER_NAME_MAX_LENGTH = 20;
+	private static final long JOIN_POINT_EXPIRE_MONTHS = 1L;
 	private static final Pattern BIRTH_PATTERN = Pattern.compile("^(\\d{4})-(\\d{2})-(\\d{2})$");
 	private static final Pattern PHONE_NUMBER_PATTERN = Pattern.compile("^\\d{3}-\\d{4}-\\d{4}$");
 
@@ -191,12 +192,16 @@ public class ShopAuthService {
 			return;
 		}
 
+		// 회원가입 포인트 만료일시를 가입 시점 기준 1개월 후로 계산합니다.
+		LocalDateTime joinPointExpireDt = resolveJoinPointExpireDateTime();
+
 		// 포인트 마스터 지급 이력을 등록합니다.
 		ShopCustomerPointSavePO pointSaveCommand = new ShopCustomerPointSavePO(
 			custNo,
 			JOIN_POINT_GIVE_GB_CD,
 			JOIN_POINT_GIVE_MEMO,
 			joinPoint,
+			joinPointExpireDt,
 			custNo,
 			custNo
 		);
@@ -217,6 +222,12 @@ public class ShopAuthService {
 			custNo
 		);
 		shopAuthMapper.insertCustomerPointDetail(pointDetailCommand);
+	}
+
+	// 회원가입 포인트 만료 일시를 계산합니다.
+	private LocalDateTime resolveJoinPointExpireDateTime() {
+		// 가입 시점 기준 1개월 후 만료되도록 초 단위 기준으로 계산합니다.
+		return LocalDateTime.now().withNano(0).plusMonths(JOIN_POINT_EXPIRE_MONTHS);
 	}
 
 	// 고객등급별 혜택 쿠폰을 고객에게 지급합니다.
