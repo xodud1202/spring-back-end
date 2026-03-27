@@ -2609,4 +2609,48 @@
 		   AND EXPIRE_DT &lt; DATE_ADD(NOW(), INTERVAL 7 DAY)
 	</select>
 
+	<select id="getAdminOrderMaster" resultType="com.xodud1202.springbackend.domain.admin.order.AdminOrderMasterVO">
+		/* GoodsMapper.getAdminOrderMaster: 관리자 주문 상세 마스터 정보 조회 */
+		SELECT OB.ORD_NO
+		     , DATE_FORMAT(OB.ORDER_DT, '%Y-%m-%d %H:%i:%s') AS ORDER_DT
+		     , DATE_FORMAT(OB.ORDER_CONFIRM_DT, '%Y-%m-%d %H:%i:%s') AS ORDER_CONFIRM_DT
+		     , CB.CUST_NM
+		     , CB.PHONE_NUMBER AS CUST_PHONE_NUMBER
+		     , CB.EMAIL AS CUST_EMAIL
+		     , OB.RCV_NM
+		     , OB.RCV_POST_NO
+		     , OB.RCV_ADDR_BASE
+		     , OB.RCV_ADDR_DTL
+		     , COALESCE(OB.ORD_DELV_AMT, 0) AS ORD_DELV_AMT
+		     , COALESCE(OB.DELV_CPN_DC_AMT, 0) AS DELV_CPN_DC_AMT
+		  FROM ORDER_BASE OB
+		  JOIN CUSTOMER_BASE CB ON CB.CUST_NO = OB.CUST_NO
+		 WHERE OB.ORD_NO = #{ordNo}
+	</select>
+
+	<select id="getAdminOrderDetailList" resultType="com.xodud1202.springbackend.domain.admin.order.AdminOrderDetailRowVO">
+		/* GoodsMapper.getAdminOrderDetailList: 관리자 주문 상세 목록 조회 */
+		SELECT ORD_DTL_NO
+		     , GOODS_ID
+		     , SIZE_ID
+		     , ORD_QTY
+		     , CNC_QTY
+		     , RMN_QTY
+		     , SUPPLY_AMT
+		     , (SALE_AMT + ADD_AMT) AS SALE_AMT
+		     , COALESCE(GOODS_CPN_DC_AMT, 0) AS GOODS_CPN_DC_AMT
+		     , COALESCE(CART_CPN_DC_AMT, 0) AS CART_CPN_DC_AMT
+		     , COALESCE(POINT_USE_AMT, 0) AS POINT_USE_AMT
+		     , GREATEST(
+		           (SALE_AMT + ADD_AMT) * RMN_QTY
+		           - COALESCE(GOODS_CPN_DC_AMT, 0)
+		           - COALESCE(CART_CPN_DC_AMT, 0)
+		           - COALESCE(POINT_USE_AMT, 0),
+		           0
+		       ) AS FINAL_PAY_AMT
+		  FROM ORDER_DETAIL
+		 WHERE ORD_NO = #{ordNo}
+		 ORDER BY ORD_DTL_NO ASC
+	</select>
+
 </mapper>

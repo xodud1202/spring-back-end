@@ -147,6 +147,29 @@ public class GoodsService {
 		return result;
 	}
 
+	// 관리자 주문 상세 정보를 조회합니다.
+	public AdminOrderDetailVO getAdminOrderDetail(String ordNo) {
+		// 주문번호 필수 검증을 수행합니다.
+		if (ordNo == null || ordNo.isBlank()) {
+			throw new IllegalArgumentException("주문번호는 필수입니다.");
+		}
+
+		// 주문 마스터 정보를 조회합니다.
+		AdminOrderMasterVO master = goodsMapper.getAdminOrderMaster(ordNo.trim());
+		if (master == null) {
+			throw new IllegalArgumentException("존재하지 않는 주문번호입니다: " + ordNo);
+		}
+
+		// 주문 상세 목록을 조회합니다.
+		List<AdminOrderDetailRowVO> detailList = goodsMapper.getAdminOrderDetailList(ordNo.trim());
+
+		// 응답 객체를 구성합니다.
+		AdminOrderDetailVO result = new AdminOrderDetailVO();
+		result.setMaster(master);
+		result.setList(detailList == null ? List.of() : detailList);
+		return result;
+	}
+
 	// 상품 분류 목록을 조회합니다.
 	public List<GoodsMerchVO> getGoodsMerchList() {
 		return goodsMapper.getGoodsMerchList();

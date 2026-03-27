@@ -17,6 +17,20 @@ import java.util.Map;
 public class AdminOrderController {
 	private final GoodsService goodsService;
 
+	// 관리자 주문 상세 정보를 조회합니다.
+	@GetMapping("/api/admin/order/detail")
+	public ResponseEntity<Object> getOrderDetail(
+		@RequestParam String ordNo
+	) {
+		try {
+			// 주문번호 기준으로 주문 상세 정보를 반환합니다.
+			return ResponseEntity.ok(goodsService.getAdminOrderDetail(ordNo));
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		}
+	}
+
 	// 관리자 주문 목록을 조회합니다.
 	@GetMapping("/api/admin/order/list")
 	public ResponseEntity<Object> getOrderList(

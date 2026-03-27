@@ -11,7 +11,9 @@ import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderDetailRowVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderListRowVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderMasterVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderPO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsDescSaveItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsDescVO;
@@ -669,4 +671,10 @@ public interface GoodsMapper {
 
 	// 마이페이지 7일 이내 만료 예정 포인트 합계를 조회합니다.
 	Integer getShopMypageExpiringPointAmt(@Param("custNo") Long custNo);
+
+	// 관리자 주문 상세 마스터 정보를 조회합니다.
+	AdminOrderMasterVO getAdminOrderMaster(@Param("ordNo") String ordNo);
+
+	// 관리자 주문 상세 목록을 조회합니다.
+	List<AdminOrderDetailRowVO> getAdminOrderDetailList(@Param("ordNo") String ordNo);
 }
