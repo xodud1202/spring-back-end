@@ -1049,6 +1049,105 @@ public class GoodsService {
 		}
 	}
 
+	// 관리자 주문취소 신청 화면 데이터를 조회합니다.
+	public ShopMypageOrderCancelPageVO getAdminOrderCancelPage(String ordNo) {
+		// 주문번호 필수 검증을 수행합니다.
+		String resolvedOrdNo = trimToNull(ordNo);
+		if (resolvedOrdNo == null) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_NO_INVALID_MESSAGE);
+		}
+
+		// 주문번호로 고객번호를 조회합니다.
+		Long custNo = goodsMapper.getOrderCustNo(resolvedOrdNo);
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_NO_INVALID_MESSAGE);
+		}
+
+		// 주문 그룹/금액 요약/취소 사유/배송비 기준 정보를 조회합니다.
+		// 관리자는 validateShopMypageOrderCancelAccess 검증을 생략합니다.
+		ShopMypageOrderGroupVO orderGroup = getShopMypageOrderGroupWithDetail(custNo, resolvedOrdNo);
+		if (orderGroup == null) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_NO_INVALID_MESSAGE);
+		}
+		ShopMypageOrderAmountSummaryVO amountSummary = buildShopMypageOrderAmountSummary(custNo, orderGroup);
+		List<ShopMypageOrderCancelReasonVO> reasonList = normalizeShopMypageOrderCancelReasonList(
+			goodsMapper.getShopMypageOrderCancelReasonList()
+		);
+		ShopCartSiteInfoVO siteInfo = resolveShopCartSiteInfo();
+
+		// 관리자 주문취소 신청 화면 응답 객체를 구성합니다.
+		ShopMypageOrderCancelPageVO result = new ShopMypageOrderCancelPageVO();
+		result.setOrder(orderGroup);
+		result.setAmountSummary(amountSummary);
+		result.setReasonList(reasonList);
+		result.setSiteInfo(siteInfo);
+		return result;
+	}
+
+	// 관리자 주문취소를 즉시 완료 처리합니다. (ORD_DTL_STAT_03 상품준비중 취소 포함)
+	public ShopOrderCancelResultVO cancelAdminOrder(ShopOrderCancelPO param) {
+		// 취소 요청값을 검증합니다.
+		if (param == null) {
+			throw new IllegalArgumentException("취소 정보를 확인해주세요.");
+		}
+		String ordNo = trimToNull(param.getOrdNo());
+		if (ordNo == null) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_NO_INVALID_MESSAGE);
+		}
+
+		// 주문번호로 고객번호를 조회합니다.
+		Long custNo = goodsMapper.getOrderCustNo(ordNo);
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_NO_INVALID_MESSAGE);
+		}
+
+		// 현재 주문/주문마스터/배송 기준과 취소사유 코드를 조회합니다.
+		ShopMypageOrderGroupVO orderGroup = getShopMypageOrderGroupWithDetail(custNo, ordNo);
+		ShopOrderCancelOrderBaseVO orderBase = resolveShopOrderCancelOrderBase(custNo, ordNo);
+		ShopCartSiteInfoVO siteInfo = resolveShopCartSiteInfo();
+		List<ShopMypageOrderCancelReasonVO> reasonList = normalizeShopMypageOrderCancelReasonList(
+			goodsMapper.getShopMypageOrderCancelReasonList()
+		);
+
+		// 취소 요청을 검증하고 관리자 모드로 서버 금액을 재계산합니다.
+		validateShopOrderCancelReason(param, reasonList);
+		Map<Integer, Integer> cancelQtyMap = resolveShopOrderCancelQtyMap(param.getCancelItemList());
+		// adminMode=true: 상품준비중(ORD_DTL_STAT_03)도 결제완료 취소 경로로 허용합니다.
+		ShopOrderCancelComputation cancelComputation = buildShopOrderCancelComputation(orderGroup, orderBase, siteInfo, cancelQtyMap, true);
+		validateShopOrderCancelPreviewAmount(param.getPreviewAmount(), cancelComputation.getPreviewAmount());
+
+		// 취소 대상 원결제와 환불 결제 row를 먼저 준비합니다.
+		ShopOrderPaymentVO originalPayment = resolveShopOrderPaymentForCancel(ordNo);
+		String clmNo = generateShopOrderClaimNo(custNo);
+		ShopOrderPaymentSavePO refundPaymentSavePO = createShopOrderCancelRefundPayment(
+			orderBase,
+			originalPayment,
+			clmNo,
+			param,
+			cancelComputation,
+			custNo
+		);
+
+		// PG 취소 성공 시 주문/클레임/재고/포인트를 한 트랜잭션으로 반영합니다.
+		try {
+			return executeInShopOrderTransaction(() -> applyShopOrderCancelSuccess(
+				param,
+				custNo,
+				orderGroup,
+				orderBase,
+				originalPayment,
+				refundPaymentSavePO,
+				clmNo,
+				cancelQtyMap,
+				cancelComputation
+			));
+		} catch (TossPaymentClientException exception) {
+			// PG 취소 실패 시 환불 결제 row만 실패 상태로 남기고 주문 변경은 롤백합니다.
+			handleShopOrderCancelPaymentFailure(refundPaymentSavePO.getPayNo(), exception, custNo);
+			throw new IllegalArgumentException(resolveShopOrderCancelPgErrorMessage(exception));
+		}
+	}
+
 	// 쇼핑몰 마이페이지에서 쿠폰 1건을 다운로드합니다.
 	@Transactional
 	public void downloadShopMypageCoupon(ShopMypageCouponDownloadRequestPO param, Long custNo) {
@@ -1567,6 +1666,18 @@ public class GoodsService {
 		ShopCartSiteInfoVO siteInfo,
 		Map<Integer, Integer> cancelQtyMap
 	) {
+		// 기본 호출은 관리자 모드 없이 실행합니다.
+		return buildShopOrderCancelComputation(orderGroup, orderBase, siteInfo, cancelQtyMap, false);
+	}
+
+	// 주문취소 요청 기준 서버 재계산 결과를 구성합니다. (adminMode=true이면 상품준비중 취소 허용)
+	private ShopOrderCancelComputation buildShopOrderCancelComputation(
+		ShopMypageOrderGroupVO orderGroup,
+		ShopOrderCancelOrderBaseVO orderBase,
+		ShopCartSiteInfoVO siteInfo,
+		Map<Integer, Integer> cancelQtyMap,
+		boolean adminMode
+	) {
 		// 주문상세 목록이 없으면 취소 불가 예외를 반환합니다.
 		if (orderGroup == null || orderGroup.getDetailList() == null || orderGroup.getDetailList().isEmpty()) {
 			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_CANCEL_UNAVAILABLE_MESSAGE);
@@ -1603,7 +1714,9 @@ public class GoodsService {
 
 			// 현재 상태와 남은 수량 기준으로 취소 가능 여부와 수량 범위를 검증합니다.
 			boolean waitingDepositCancelable = SHOP_ORDER_DTL_STAT_WAITING_DEPOSIT.equals(detailItem.getOrdDtlStatCd());
-			boolean paymentDoneCancelable = SHOP_ORDER_DTL_STAT_DONE.equals(detailItem.getOrdDtlStatCd());
+			// adminMode=true이면 상품준비중(ORD_DTL_STAT_03)도 결제완료 취소 경로로 처리합니다.
+			boolean paymentDoneCancelable = SHOP_ORDER_DTL_STAT_DONE.equals(detailItem.getOrdDtlStatCd())
+				|| (adminMode && SHOP_ORDER_DTL_STAT_PREPARING.equals(detailItem.getOrdDtlStatCd()));
 			if (!waitingDepositCancelable && !paymentDoneCancelable) {
 				throw new IllegalArgumentException("주문상품 정보를 확인해주세요.");
 			}
@@ -2111,6 +2224,16 @@ public class GoodsService {
 		result.setChangeOrdDtlNo(null);
 		result.setRegNo(auditNo);
 		result.setUdtNo(auditNo);
+		// 취소 수량에 비례한 쿠폰/포인트 배분 금액을 계산하여 설정합니다.
+		ShopMypageOrderDetailItemVO detailItem = selectedItem == null ? null : selectedItem.getDetailItem();
+		if (detailItem != null && selectedItem.getCancelQty() > 0) {
+			int originalQty = resolveShopOrderOriginalQty(detailItem);
+			int canceledBeforeQty = resolveShopOrderCanceledQty(detailItem);
+			int cancelQty = selectedItem.getCancelQty();
+			result.setGoodsCpnDcAmt((int) resolveShopOrderIncrementAllocatedAmt(detailItem.getGoodsCouponDiscountAmt(), originalQty, canceledBeforeQty, cancelQty));
+			result.setCartCpnDcAmt((int) resolveShopOrderIncrementAllocatedAmt(detailItem.getCartCouponDiscountAmt(), originalQty, canceledBeforeQty, cancelQty));
+			result.setPointDcAmt((int) resolveShopOrderIncrementAllocatedAmt(detailItem.getPointUseAmt(), originalQty, canceledBeforeQty, cancelQty));
+		}
 		return result;
 	}
 

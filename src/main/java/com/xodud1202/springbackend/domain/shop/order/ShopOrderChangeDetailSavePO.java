@@ -33,4 +33,10 @@ public class ShopOrderChangeDetailSavePO {
 	private Long regNo;
 	// 수정자 번호입니다.
 	private Long udtNo;
+	// 상품쿠폰 할인금액입니다. (취소 수량 비례 배분)
+	private Integer goodsCpnDcAmt;
+	// 장바구니쿠폰 할인금액입니다. (취소 수량 비례 배분)
+	private Integer cartCpnDcAmt;
+	// 포인트 할인금액입니다. (취소 수량 비례 배분)
+	private Integer pointDcAmt;
 }

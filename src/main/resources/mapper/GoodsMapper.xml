@@ -1493,6 +1493,9 @@
 		     , SIZE_ID
 		     , QTY
 		     , ADD_AMT
+		     , GOODS_CPN_DC_AMT
+		     , CART_CPN_DC_AMT
+		     , POINT_DC_AMT
 		     , CHANGE_ORD_DTL_NO
 		     , REG_NO
 		     , UDT_NO
@@ -1508,6 +1511,9 @@
 		     , #{sizeId}
 		     , #{qty}
 		     , #{addAmt}
+		     , #{goodsCpnDcAmt}
+		     , #{cartCpnDcAmt}
+		     , #{pointDcAmt}
 		     , #{changeOrdDtlNo}
 		     , #{regNo}
 		     , #{udtNo}
@@ -2651,6 +2657,14 @@
 		  FROM ORDER_DETAIL
 		 WHERE ORD_NO = #{ordNo}
 		 ORDER BY ORD_DTL_NO ASC
+	</select>
+
+	<select id="getOrderCustNo" resultType="Long">
+		/* GoodsMapper.getOrderCustNo: 주문번호로 고객번호 조회 */
+		SELECT CUST_NO
+		  FROM ORDER_BASE
+		 WHERE ORD_NO = #{ordNo}
+		 LIMIT 1
 	</select>
 
 </mapper>

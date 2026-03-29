@@ -228,6 +228,9 @@ public interface GoodsMapper {
 	// 쇼핑몰 마이페이지 주문취소 사유 코드 목록을 조회합니다.
 	List<ShopMypageOrderCancelReasonVO> getShopMypageOrderCancelReasonList();
 
+	// 주문번호로 고객번호를 조회합니다.
+	Long getOrderCustNo(@Param("ordNo") String ordNo);
+
 	// 쇼핑몰 마이페이지 주문내역의 상태별 주문상세 건수 요약을 조회합니다.
 	ShopMypageOrderStatusSummaryVO getShopMypageOrderStatusSummary(
 		@Param("custNo") Long custNo,

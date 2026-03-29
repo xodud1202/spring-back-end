@@ -1,10 +1,13 @@
 package com.xodud1202.springbackend.controller.bo;
 
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderCancelPO;
 import com.xodud1202.springbackend.service.GoodsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -28,6 +31,37 @@ public class AdminOrderController {
 		} catch (IllegalArgumentException exception) {
 			// 요청값 오류는 400 응답으로 반환합니다.
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		}
+	}
+
+	// 관리자 주문취소 신청 화면 데이터를 조회합니다.
+	@GetMapping("/api/admin/order/cancel/page")
+	public ResponseEntity<Object> getAdminOrderCancelPage(
+		@RequestParam String ordNo
+	) {
+		try {
+			// 주문번호 기준으로 취소 신청 화면 데이터를 반환합니다.
+			return ResponseEntity.ok(goodsService.getAdminOrderCancelPage(ordNo));
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		}
+	}
+
+	// 관리자 주문취소를 즉시 완료 처리합니다.
+	@PostMapping("/api/admin/order/cancel")
+	public ResponseEntity<Object> cancelAdminOrder(
+		@RequestBody ShopOrderCancelPO param
+	) {
+		try {
+			// 취소 요청을 처리하고 완료 결과를 반환합니다.
+			return ResponseEntity.ok(goodsService.cancelAdminOrder(param));
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 예상치 못한 오류는 500 응답으로 반환합니다.
+			return ResponseEntity.internalServerError().body(Map.of("message", "주문 취소 처리 중 오류가 발생했습니다."));
 		}
 	}
 
