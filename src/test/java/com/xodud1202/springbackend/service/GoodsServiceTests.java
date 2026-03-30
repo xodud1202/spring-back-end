@@ -2,6 +2,10 @@ package com.xodud1202.springbackend.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xodud1202.springbackend.config.properties.TossProperties;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderClaimRowVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderDetailRowVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderDetailVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderMasterVO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsSavePO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryItem;
@@ -3552,6 +3556,60 @@ class GoodsServiceTests {
 		ShopCartCouponEstimateRequestPO request = new ShopCartCouponEstimateRequestPO();
 		request.setCartItemList(List.of(cartItemList));
 		return request;
+	}
+
+	@Test
+	@DisplayName("관리자 주문 상세 조회는 클레임 목록을 함께 반환한다")
+	// 관리자 주문 상세 응답에 claimList가 포함되고 주문번호 공백이 제거된 조회값을 재사용하는지 검증합니다.
+	void getAdminOrderDetail_returnsClaimList() {
+		// 주문 마스터, 상세, 클레임 목 데이터를 구성합니다.
+		AdminOrderMasterVO master = new AdminOrderMasterVO();
+		master.setOrdNo("ORD-DETAIL-001");
+		AdminOrderDetailRowVO detailRow = new AdminOrderDetailRowVO();
+		detailRow.setOrdDtlNo(11);
+		AdminOrderClaimRowVO claimRow = new AdminOrderClaimRowVO();
+		claimRow.setClmNo("CLM-001");
+		claimRow.setOrdDtlNo(11);
+		claimRow.setExpectedRefundAmt(18500);
+
+		// 주문번호 공백이 제거된 동일 값으로 모든 조회가 수행되도록 설정합니다.
+		when(goodsMapper.getAdminOrderMaster("ORD-DETAIL-001")).thenReturn(master);
+		when(goodsMapper.getAdminOrderDetailList("ORD-DETAIL-001")).thenReturn(List.of(detailRow));
+		when(goodsMapper.getAdminOrderClaimList("ORD-DETAIL-001")).thenReturn(List.of(claimRow));
+
+		// 주문 상세를 조회합니다.
+		AdminOrderDetailVO result = goodsService.getAdminOrderDetail("  ORD-DETAIL-001  ");
+
+		// 마스터/상세/클레임 목록이 모두 응답에 포함되는지 검증합니다.
+		assertThat(result.getMaster()).isSameAs(master);
+		assertThat(result.getList()).containsExactly(detailRow);
+		assertThat(result.getClaimList()).containsExactly(claimRow);
+		verify(goodsMapper).getAdminOrderMaster("ORD-DETAIL-001");
+		verify(goodsMapper).getAdminOrderDetailList("ORD-DETAIL-001");
+		verify(goodsMapper).getAdminOrderClaimList("ORD-DETAIL-001");
+	}
+
+	@Test
+	@DisplayName("관리자 주문 상세 조회는 클레임 목록이 없으면 빈 목록을 반환한다")
+	// 관리자 주문 상세 응답이 null claimList를 그대로 노출하지 않고 빈 리스트로 정규화하는지 검증합니다.
+	void getAdminOrderDetail_returnsEmptyClaimListWhenMapperReturnsNull() {
+		// 주문 마스터와 상세만 존재하는 응답 상황을 구성합니다.
+		AdminOrderMasterVO master = new AdminOrderMasterVO();
+		master.setOrdNo("ORD-DETAIL-002");
+		AdminOrderDetailRowVO detailRow = new AdminOrderDetailRowVO();
+		detailRow.setOrdDtlNo(21);
+
+		// 클레임 조회가 null이어도 서비스가 빈 리스트로 보정하도록 설정합니다.
+		when(goodsMapper.getAdminOrderMaster("ORD-DETAIL-002")).thenReturn(master);
+		when(goodsMapper.getAdminOrderDetailList("ORD-DETAIL-002")).thenReturn(List.of(detailRow));
+		when(goodsMapper.getAdminOrderClaimList("ORD-DETAIL-002")).thenReturn(null);
+
+		// 주문 상세를 조회합니다.
+		AdminOrderDetailVO result = goodsService.getAdminOrderDetail("ORD-DETAIL-002");
+
+		// 클레임 목록이 비어 있는 안전한 응답 구조로 반환되는지 검증합니다.
+		assertThat(result.getList()).containsExactly(detailRow);
+		assertThat(result.getClaimList()).isEmpty();
 	}
 
 	// 테스트용 주문서 상품쿠폰 선택 항목을 생성합니다.

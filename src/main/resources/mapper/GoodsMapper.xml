@@ -2691,6 +2691,46 @@
 		 ORDER BY ORD_DTL_NO ASC
 	</select>
 
+	<select id="getAdminOrderClaimList" resultType="com.xodud1202.springbackend.domain.admin.order.AdminOrderClaimRowVO">
+		/* GoodsMapper.getAdminOrderClaimList: 관리자 주문 상세 하단 클레임 목록 조회 */
+		SELECT OCD.CLM_NO
+		     , OCD.CHG_DTL_GB_CD
+		     , FN_GET_CODE_NM('CHG_DTL_GB', OCD.CHG_DTL_GB_CD) AS CHG_DTL_GB_NM
+		     , OCD.ORD_NO
+		     , OCD.ORD_DTL_NO
+		     , OCD.CHG_DTL_STAT_CD
+		     , FN_GET_CODE_NM('CHG_DTL_STAT', OCD.CHG_DTL_STAT_CD) AS CHG_DTL_STAT_NM
+		     , OCD.GOODS_ID
+		     , OCD.SIZE_ID
+		     , OCD.CHG_REASON_CD
+		     , FN_GET_CODE_NM('CHG_REASON', OCD.CHG_REASON_CD) AS CHG_REASON_NM
+		     , OCD.CHG_REASON_DTL
+		     , GB.GOODS_NM
+		     , OCD.QTY
+		     , (COALESCE(OD.SALE_AMT, 0) + COALESCE(OCD.ADD_AMT, OD.ADD_AMT, 0)) AS SALE_AMT
+		     , COALESCE(OCD.GOODS_CPN_DC_AMT, 0) AS GOODS_CPN_DC_AMT
+		     , COALESCE(OCD.CART_CPN_DC_AMT, 0) AS CART_CPN_DC_AMT
+		     , COALESCE(OCD.POINT_DC_AMT, 0) AS POINT_DC_AMT
+		     , GREATEST(
+		           ((COALESCE(OD.SALE_AMT, 0) + COALESCE(OCD.ADD_AMT, OD.ADD_AMT, 0)) * COALESCE(OCD.QTY, 0))
+		           - COALESCE(OCD.GOODS_CPN_DC_AMT, 0)
+		           - COALESCE(OCD.CART_CPN_DC_AMT, 0)
+		           - COALESCE(OCD.POINT_DC_AMT, 0),
+		           0
+		       ) AS EXPECTED_REFUND_AMT
+		  FROM ORDER_CHANGE_DETAIL OCD
+		  JOIN ORDER_CHANGE_BASE OCB
+		    ON OCB.CLM_NO = OCD.CLM_NO
+		   AND OCB.ORD_NO = OCD.ORD_NO
+		  LEFT JOIN ORDER_DETAIL OD
+		    ON OD.ORD_NO = OCD.ORD_NO
+		   AND OD.ORD_DTL_NO = OCD.ORD_DTL_NO
+		  LEFT JOIN GOODS_BASE GB
+		    ON GB.GOODS_ID = OCD.GOODS_ID
+		 WHERE OCD.ORD_NO = #{ordNo}
+		 ORDER BY OCB.CHG_DT DESC, OCD.CLM_NO DESC, OCD.ORD_DTL_NO ASC
+	</select>
+
 	<select id="getOrderCustNo" resultType="Long">
 		/* GoodsMapper.getOrderCustNo: 주문번호로 고객번호 조회 */
 		SELECT CUST_NO

@@ -154,19 +154,26 @@ public class GoodsService {
 			throw new IllegalArgumentException("주문번호는 필수입니다.");
 		}
 
+		// 공백 제거된 주문번호를 재사용합니다.
+		String trimmedOrdNo = ordNo.trim();
+
 		// 주문 마스터 정보를 조회합니다.
-		AdminOrderMasterVO master = goodsMapper.getAdminOrderMaster(ordNo.trim());
+		AdminOrderMasterVO master = goodsMapper.getAdminOrderMaster(trimmedOrdNo);
 		if (master == null) {
 			throw new IllegalArgumentException("존재하지 않는 주문번호입니다: " + ordNo);
 		}
 
 		// 주문 상세 목록을 조회합니다.
-		List<AdminOrderDetailRowVO> detailList = goodsMapper.getAdminOrderDetailList(ordNo.trim());
+		List<AdminOrderDetailRowVO> detailList = goodsMapper.getAdminOrderDetailList(trimmedOrdNo);
+
+		// 주문 클레임 목록을 조회합니다.
+		List<AdminOrderClaimRowVO> claimList = goodsMapper.getAdminOrderClaimList(trimmedOrdNo);
 
 		// 응답 객체를 구성합니다.
 		AdminOrderDetailVO result = new AdminOrderDetailVO();
 		result.setMaster(master);
 		result.setList(detailList == null ? List.of() : detailList);
+		result.setClaimList(claimList == null ? List.of() : claimList);
 		return result;
 	}
 

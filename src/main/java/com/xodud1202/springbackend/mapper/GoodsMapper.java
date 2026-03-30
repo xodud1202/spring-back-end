@@ -11,6 +11,7 @@ import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderClaimRowVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderDetailRowVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderListRowVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderMasterVO;
@@ -688,4 +689,7 @@ public interface GoodsMapper {
 
 	// 관리자 주문 상세 목록을 조회합니다.
 	List<AdminOrderDetailRowVO> getAdminOrderDetailList(@Param("ordNo") String ordNo);
+
+	// 관리자 주문 클레임 목록을 조회합니다.
+	List<AdminOrderClaimRowVO> getAdminOrderClaimList(@Param("ordNo") String ordNo);
 }
