@@ -1129,6 +1129,9 @@
 		     , DELV_CPN_NO
 		     , DELV_CPN_DC_AMT
 		     , ORD_DELV_AMT
+		     , REFUND_BANK_CD
+		     , REFUND_BANK_NO
+		     , REFUND_HOLDER_NM
 		     , CART_YN
 		     , DEVICE_GB_CD
 		     , REG_NO
@@ -1144,6 +1147,9 @@
 		     , #{delvCpnNo}
 		     , #{delvCpnDcAmt}
 		     , #{ordDelvAmt}
+		     , #{refundBankCd}
+		     , #{refundBankNo}
+		     , #{refundHolderNm}
 		     , #{cartYn}
 		     , #{deviceGbCd}
 		     , #{regNo}
@@ -1449,6 +1455,9 @@
 		     , DELV_CPN_NO
 		     , COALESCE(DELV_CPN_DC_AMT, 0) AS DELV_CPN_DC_AMT
 		     , COALESCE(ORD_DELV_AMT, 0) AS ORD_DELV_AMT
+		     , REFUND_BANK_CD
+		     , REFUND_BANK_NO
+		     , REFUND_HOLDER_NM
 		     , DEVICE_GB_CD
 		  FROM ORDER_BASE
 		 WHERE CUST_NO = #{custNo}
@@ -2729,6 +2738,36 @@
 		    ON GB.GOODS_ID = OCD.GOODS_ID
 		 WHERE OCD.ORD_NO = #{ordNo}
 		 ORDER BY OCB.CHG_DT DESC, OCD.CLM_NO DESC, OCD.ORD_DTL_NO ASC
+	</select>
+
+	<select id="getAdminOrderPaymentList" resultType="com.xodud1202.springbackend.domain.admin.order.AdminOrderPaymentRowVO">
+		/* GoodsMapper.getAdminOrderPaymentList: 관리자 주문 상세 하단 결제 목록 조회 */
+		SELECT P.ORD_NO
+		     , P.CLM_NO
+		     , P.PAY_STAT_CD
+		     , FN_GET_CODE_NM('PAY_STAT', P.PAY_STAT_CD) AS PAY_STAT_NM
+		     , P.PAY_METHOD_CD
+		     , FN_GET_CODE_NM('PAY_METHOD', P.PAY_METHOD_CD) AS PAY_METHOD_NM
+		     , COALESCE(P.PAY_AMT, 0) AS PAY_AMT
+		     , P.TRADE_NO
+		     , P.RSP_CODE
+		     , P.RSP_MSG
+		     , P.BANK_CD
+		     , FN_GET_CODE_NM('BANK', P.BANK_CD) AS BANK_NM
+		     , P.BANK_NO
+		     , OB.REFUND_BANK_CD
+		     , OB.REFUND_BANK_NO
+		     , CASE
+		         WHEN COALESCE(P.APPR_DT, P.WEBHOOK_DT, P.REQ_DT) IS NULL
+		           OR COALESCE(P.APPR_DT, P.WEBHOOK_DT, P.REQ_DT) = '0000-00-00 00:00:00' THEN NULL
+		         ELSE DATE_FORMAT(COALESCE(P.APPR_DT, P.WEBHOOK_DT, P.REQ_DT), '%Y-%m-%d %H:%i:%s')
+		       END AS PROCESS_DT
+		  FROM PAYMENT P
+		  JOIN ORDER_BASE OB
+		    ON OB.ORD_NO = P.ORD_NO
+		 WHERE P.ORD_NO = #{ordNo}
+		   AND P.PAY_STAT_CD != 'PAY_STAT_00'
+		 ORDER BY COALESCE(P.APPR_DT, P.WEBHOOK_DT, P.REQ_DT) DESC, P.PAY_NO DESC
 	</select>
 
 	<select id="getOrderCustNo" resultType="Long">

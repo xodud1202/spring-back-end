@@ -25,6 +25,12 @@ public class ShopOrderBaseSavePO {
 	private Integer delvCpnDcAmt;
 	// 배송비 쿠폰 적용 전 배송비 금액입니다.
 	private Integer ordDelvAmt;
+	// 환불 은행코드입니다.
+	private String refundBankCd;
+	// 환불 계좌번호입니다.
+	private String refundBankNo;
+	// 환불 예금주명입니다.
+	private String refundHolderNm;
 	// 장바구니 구매 여부입니다.
 	private String cartYn;
 	// 결제 디바이스 코드입니다.

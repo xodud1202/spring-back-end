@@ -16,6 +16,7 @@ import com.xodud1202.springbackend.domain.admin.order.AdminOrderDetailRowVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderListRowVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderMasterVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderPO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderPaymentRowVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsDescSaveItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsDescVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsImageSavePO;
@@ -83,6 +84,9 @@ public interface GoodsMapper {
 
 	// 관리자 주문 목록 건수를 조회합니다.
 	int getAdminOrderCount(AdminOrderPO param);
+
+	// 관리자 주문 상세 하단 결제 목록을 조회합니다.
+	List<AdminOrderPaymentRowVO> getAdminOrderPaymentList(@Param("ordNo") String ordNo);
 
 	// 상품 분류 목록을 조회합니다.
 	List<GoodsMerchVO> getGoodsMerchList();

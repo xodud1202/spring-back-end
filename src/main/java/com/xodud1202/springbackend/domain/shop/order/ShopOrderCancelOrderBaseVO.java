@@ -21,6 +21,12 @@ public class ShopOrderCancelOrderBaseVO {
 	private Integer delvCpnDcAmt;
 	// 배송비 쿠폰 적용 전 기본 배송비입니다.
 	private Integer ordDelvAmt;
+	// 환불 은행코드입니다.
+	private String refundBankCd;
+	// 환불 계좌번호입니다.
+	private String refundBankNo;
+	// 환불 예금주명입니다.
+	private String refundHolderNm;
 	// 디바이스 구분 코드입니다.
 	private String deviceGbCd;
 }

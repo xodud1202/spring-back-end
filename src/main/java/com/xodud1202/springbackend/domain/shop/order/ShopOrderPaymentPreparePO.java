@@ -21,4 +21,10 @@ public class ShopOrderPaymentPreparePO {
 	private Integer pointUseAmt;
 	// 결제수단 코드입니다.
 	private String paymentMethodCd;
+	// 환불 은행코드입니다.
+	private String refundBankCd;
+	// 환불 계좌번호입니다.
+	private String refundBankNo;
+	// 환불 예금주명입니다.
+	private String refundHolderNm;
 }

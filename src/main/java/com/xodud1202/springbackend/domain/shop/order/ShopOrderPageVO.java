@@ -1,5 +1,6 @@
 package com.xodud1202.springbackend.domain.shop.order;
 
+import com.xodud1202.springbackend.domain.common.CommonCodeVO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartItemVO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartSiteInfoVO;
 import lombok.Data;
@@ -29,6 +30,8 @@ public class ShopOrderPageVO {
 	private ShopOrderDiscountAmountVO discountAmount;
 	// 결제창 실행에 필요한 환경 정보입니다.
 	private ShopOrderPaymentConfigVO paymentConfig;
+	// 무통장입금 환불은행 선택 목록입니다.
+	private List<CommonCodeVO> refundBankList;
 	// 주문 고객 결제 기본 정보입니다.
 	private ShopOrderCustomerInfoVO customerInfo;
 	// 적립 예정 포인트 요약 정보입니다.

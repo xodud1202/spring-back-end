@@ -8,11 +8,13 @@ import com.xodud1202.springbackend.domain.admin.brand.BrandVO;
 import com.xodud1202.springbackend.domain.admin.category.*;
 import com.xodud1202.springbackend.domain.admin.goods.*;
 import com.xodud1202.springbackend.domain.admin.order.*;
+import com.xodud1202.springbackend.domain.common.CommonCodeVO;
 import com.xodud1202.springbackend.domain.shop.cart.*;
 import com.xodud1202.springbackend.domain.shop.category.ShopCategoryGoodsItemVO;
 import com.xodud1202.springbackend.domain.shop.goods.*;
 import com.xodud1202.springbackend.domain.shop.mypage.*;
 import com.xodud1202.springbackend.domain.shop.order.*;
+import com.xodud1202.springbackend.mapper.CommonMapper;
 import com.xodud1202.springbackend.mapper.ExhibitionMapper;
 import com.xodud1202.springbackend.mapper.GoodsMapper;
 import lombok.RequiredArgsConstructor;
@@ -52,6 +54,7 @@ public class GoodsService {
 	private static final Logger log = LoggerFactory.getLogger(GoodsService.class);
 
 	private final GoodsMapper goodsMapper;
+	private final CommonMapper commonMapper;
 	private final ExhibitionMapper exhibitionMapper;
 	private final FtpFileService ftpFileService;
 	private final ShopAuthService shopAuthService;
@@ -65,6 +68,14 @@ public class GoodsService {
 	private static final int ADMIN_ORDER_DEFAULT_PAGE = 1;
 	private static final int ADMIN_ORDER_DEFAULT_PAGE_SIZE = 20;
 	private static final int ADMIN_ORDER_MAX_PAGE_SIZE = 200;
+
+	// 쇼핑몰 무통장입금 환불계좌 정규화 결과를 전달합니다.
+	private record ShopOrderRefundAccountInfo(
+		String refundBankCd,
+		String refundBankNo,
+		String refundHolderNm
+	) {
+	}
 
 	// 관리자 상품 목록을 페이징 조건으로 조회합니다.
 	public Map<String, Object> getAdminGoodsList(GoodsPO param) {
@@ -169,11 +180,15 @@ public class GoodsService {
 		// 주문 클레임 목록을 조회합니다.
 		List<AdminOrderClaimRowVO> claimList = goodsMapper.getAdminOrderClaimList(trimmedOrdNo);
 
+		// 주문 결제 목록을 조회합니다.
+		List<AdminOrderPaymentRowVO> paymentList = goodsMapper.getAdminOrderPaymentList(trimmedOrdNo);
+
 		// 응답 객체를 구성합니다.
 		AdminOrderDetailVO result = new AdminOrderDetailVO();
 		result.setMaster(master);
 		result.setList(detailList == null ? List.of() : detailList);
 		result.setClaimList(claimList == null ? List.of() : claimList);
+		result.setPaymentList(paymentList == null ? List.of() : paymentList);
 		return result;
 	}
 
@@ -1894,6 +1909,7 @@ public class GoodsService {
 		refundSnapshot.put("cancelItemList", param == null ? List.of() : param.getCancelItemList());
 		refundSnapshot.put("previewAmount", cancelComputation == null ? null : cancelComputation.getPreviewAmount());
 		refundSnapshot.put("refundedCashAmt", cancelComputation == null ? 0L : cancelComputation.getRefundedCashAmt());
+		refundSnapshot.put("refundReceiveAccount", buildRefundReceiveAccountSnapshot(orderBase));
 
 		// 환불 PAYMENT row는 메인 트랜잭션과 분리해 먼저 커밋합니다.
 		return executeInNewShopOrderTransaction(() -> {
@@ -1918,6 +1934,24 @@ public class GoodsService {
 			}
 			return refundPaymentSavePO;
 		});
+	}
+
+	// 환불 PAYMENT 요청 스냅샷에 저장할 환불 수취 계좌 정보를 구성합니다.
+	private Map<String, Object> buildRefundReceiveAccountSnapshot(ShopOrderCancelOrderBaseVO orderBase) {
+		// 주문 마스터 환불계좌 정보가 없으면 null을 반환합니다.
+		String refundBankCd = trimToNull(orderBase == null ? null : orderBase.getRefundBankCd());
+		String refundBankNo = trimToNull(orderBase == null ? null : orderBase.getRefundBankNo());
+		String refundHolderNm = trimToNull(orderBase == null ? null : orderBase.getRefundHolderNm());
+		if (refundBankCd == null && refundBankNo == null && refundHolderNm == null) {
+			return null;
+		}
+
+		// 추적 가능한 동일 구조로 은행코드/계좌번호/예금주명을 저장합니다.
+		Map<String, Object> result = new LinkedHashMap<>();
+		result.put("bank", refundBankCd);
+		result.put("accountNumber", refundBankNo);
+		result.put("holderName", refundHolderNm);
+		return result;
 	}
 
 	// 메인 주문취소 트랜잭션을 실행합니다.
@@ -1976,7 +2010,7 @@ public class GoodsService {
 		restoreShopOrderPointByAmount(custNo, orderBase.getOrdNo(), cancelComputation.getRestoredPointAmt());
 
 		// PG 취소 성공 응답을 저장하고, 전체취소면 주문 마스터도 배송비쿠폰 초기화까지 한 번에 완료 처리합니다.
-		ShopOrderCancelPgResult cancelPgResult = cancelShopOrderPaymentWithPg(originalPayment, param, cancelComputation);
+		ShopOrderCancelPgResult cancelPgResult = cancelShopOrderPaymentWithPg(originalPayment, orderBase, param, cancelComputation);
 		goodsMapper.updateShopPaymentCancelSuccess(
 			refundPaymentSavePO.getPayNo(),
 			SHOP_ORDER_PAY_STAT_CANCEL,
@@ -2149,6 +2183,7 @@ public class GoodsService {
 	// 주문취소용 PG 취소 API를 호출하고 성공 응답을 해석합니다.
 	private ShopOrderCancelPgResult cancelShopOrderPaymentWithPg(
 		ShopOrderPaymentVO originalPayment,
+		ShopOrderCancelOrderBaseVO orderBase,
 		ShopOrderCancelPO param,
 		ShopOrderCancelComputation cancelComputation
 	) {
@@ -2164,11 +2199,23 @@ public class GoodsService {
 				: cancelComputation.getRefundedCashAmt() > 0L
 					? cancelComputation.getRefundedCashAmt()
 					: null;
-		String rawResponse = tossPaymentsClient.cancelPayment(
-			originalPayment.getTossPaymentKey().trim(),
-			resolveShopOrderCancelPgReason(param),
-			cancelAmount
-		);
+		TossPaymentRefundReceiveAccount refundReceiveAccount =
+			SHOP_ORDER_PAYMENT_METHOD_VIRTUAL_ACCOUNT.equals(originalPayment.getPayMethodCd())
+				&& !SHOP_ORDER_PAY_STAT_WAITING_DEPOSIT.equals(originalPayment.getPayStatCd())
+				? buildTossPaymentRefundReceiveAccount(orderBase)
+				: null;
+		String rawResponse = refundReceiveAccount == null
+			? tossPaymentsClient.cancelPayment(
+				originalPayment.getTossPaymentKey().trim(),
+				resolveShopOrderCancelPgReason(param),
+				cancelAmount
+			)
+			: tossPaymentsClient.cancelPayment(
+				originalPayment.getTossPaymentKey().trim(),
+				resolveShopOrderCancelPgReason(param),
+				cancelAmount,
+				refundReceiveAccount
+			);
 		JsonNode responseNode = readShopOrderJsonNode(rawResponse);
 		String paymentStatus = firstNonBlank(resolveJsonText(responseNode, "status"), "");
 		if (!"CANCELED".equals(paymentStatus) && !"PARTIAL_CANCELED".equals(paymentStatus)) {
@@ -2705,6 +2752,7 @@ public class GoodsService {
 			throw new IllegalArgumentException("결제 금액을 확인해주세요.");
 		}
 		String resolvedPaymentMethodCd = resolveRequiredShopOrderPaymentMethodCd(param.getPaymentMethodCd());
+		ShopOrderRefundAccountInfo refundAccountInfo = resolveShopOrderRefundAccountInfo(param, resolvedPaymentMethodCd);
 		String tossMethod = resolveTossMethodByPayMethodCd(resolvedPaymentMethodCd);
 		String ordNo = generateShopOrderNo(custNo);
 		String orderName = buildShopOrderName(orderCartItemList);
@@ -2719,7 +2767,8 @@ public class GoodsService {
 			discountQuote.getDiscountSelection().getDeliveryCouponCustCpnNo(),
 			baseDeliveryFee,
 			deliveryCouponDiscountAmt,
-			deviceGbCd
+			deviceGbCd,
+			refundAccountInfo
 		);
 		Map<String, Object> paymentSnapshot = buildShopOrderPaymentSnapshot(
 			param.getFrom(),
@@ -2729,7 +2778,8 @@ public class GoodsService {
 			discountQuote.getDiscountSelection(),
 			normalizedPointUseAmt,
 			orderName,
-			finalPayAmt
+			finalPayAmt,
+			refundAccountInfo
 		);
 		String paymentSnapshotJson = writeShopOrderJson(paymentSnapshot);
 		insertShopOrderBaseAndDetail(
@@ -4240,6 +4290,7 @@ public class GoodsService {
 		result.setDiscountSelection(autoDiscountQuote.getDiscountSelection());
 		result.setDiscountAmount(autoDiscountQuote.getDiscountAmount());
 		result.setPaymentConfig(buildShopOrderPaymentConfig(shopOrigin));
+		result.setRefundBankList(resolveShopOrderRefundBankList());
 		result.setCustomerInfo(customerInfo);
 		result.setPointSaveSummary(pointSaveSummary);
 		return result;
@@ -4310,7 +4361,8 @@ public class GoodsService {
 		Long deliveryCouponCustCpnNo,
 		int baseDeliveryFee,
 		int deliveryCouponDiscountAmt,
-		String deviceGbCd
+		String deviceGbCd,
+		ShopOrderRefundAccountInfo refundAccountInfo
 	) {
 		// 주문 출처와 배송지 기준으로 주문 마스터 저장 파라미터를 구성합니다.
 		ShopOrderBaseSavePO result = new ShopOrderBaseSavePO();
@@ -4324,6 +4376,9 @@ public class GoodsService {
 		result.setDelvCpnNo(deliveryCouponCustCpnNo);
 		result.setDelvCpnDcAmt(deliveryCouponDiscountAmt);
 		result.setOrdDelvAmt(baseDeliveryFee);
+		result.setRefundBankCd(refundAccountInfo == null ? null : refundAccountInfo.refundBankCd());
+		result.setRefundBankNo(refundAccountInfo == null ? null : refundAccountInfo.refundBankNo());
+		result.setRefundHolderNm(refundAccountInfo == null ? null : refundAccountInfo.refundHolderNm());
 		result.setCartYn("goods".equalsIgnoreCase(firstNonBlank(trimToNull(from), "")) ? NO : YES);
 		result.setDeviceGbCd(firstNonBlank(trimToNull(deviceGbCd), "PC"));
 		result.setRegNo(custNo);
@@ -4346,6 +4401,13 @@ public class GoodsService {
 		return selectedAddress;
 	}
 
+	// 주문서에서 노출할 무통장입금 환불은행 목록을 조회합니다.
+	private List<CommonCodeVO> resolveShopOrderRefundBankList() {
+		// BANK 공통코드가 없으면 빈 목록으로 정규화해 반환합니다.
+		List<CommonCodeVO> refundBankList = commonMapper.getCommonCodeList("BANK");
+		return refundBankList == null ? List.of() : refundBankList;
+	}
+
 	// 결제수단 코드를 필수값 기준으로 검증합니다.
 	private String resolveRequiredShopOrderPaymentMethodCd(String paymentMethodCd) {
 		// 지원하는 결제수단 코드만 허용합니다.
@@ -4356,6 +4418,56 @@ public class GoodsService {
 			return normalizedPaymentMethodCd;
 		}
 		throw new IllegalArgumentException("결제수단을 선택해주세요.");
+	}
+
+	// 결제 준비 요청의 환불계좌 정보를 결제수단 기준으로 검증/정규화합니다.
+	private ShopOrderRefundAccountInfo resolveShopOrderRefundAccountInfo(
+		ShopOrderPaymentPreparePO param,
+		String paymentMethodCd
+	) {
+		// 무통장입금이 아니면 환불계좌 저장값을 모두 제거합니다.
+		if (!SHOP_ORDER_PAYMENT_METHOD_VIRTUAL_ACCOUNT.equals(paymentMethodCd)) {
+			return new ShopOrderRefundAccountInfo(null, null, null);
+		}
+
+		// 무통장입금은 환불은행/계좌번호/예금주를 모두 필수로 검증합니다.
+		String refundBankCd = trimToNull(param == null ? null : param.getRefundBankCd());
+		String refundBankNo = trimToNull(param == null ? null : param.getRefundBankNo());
+		String refundHolderNm = trimToNull(param == null ? null : param.getRefundHolderNm());
+		if (refundBankCd == null) {
+			throw new IllegalArgumentException("환불 은행을 선택해주세요.");
+		}
+		if (refundBankNo == null) {
+			throw new IllegalArgumentException("환불 계좌번호를 입력해주세요.");
+		}
+		if (!refundBankNo.matches("\\d+")) {
+			throw new IllegalArgumentException("환불 계좌번호는 숫자만 입력해주세요.");
+		}
+		if (refundBankNo.length() > 50) {
+			throw new IllegalArgumentException("환불 계좌번호를 확인해주세요.");
+		}
+		if (refundHolderNm == null) {
+			throw new IllegalArgumentException("환불 예금주명을 입력해주세요.");
+		}
+		if (refundHolderNm.length() > 20) {
+			throw new IllegalArgumentException("환불 예금주명을 확인해주세요.");
+		}
+		validateShopOrderRefundBankCode(refundBankCd);
+		return new ShopOrderRefundAccountInfo(refundBankCd, refundBankNo, refundHolderNm);
+	}
+
+	// 환불 은행코드가 사용 가능한 BANK 공통코드인지 검증합니다.
+	private void validateShopOrderRefundBankCode(String refundBankCd) {
+		// 은행코드 목록에 존재하지 않으면 주문 결제를 중단합니다.
+		boolean exists =
+			resolveShopOrderRefundBankList().stream()
+				.filter(Objects::nonNull)
+				.map(CommonCodeVO::getCd)
+				.filter(Objects::nonNull)
+				.anyMatch(refundBankCd::equals);
+		if (!exists) {
+			throw new IllegalArgumentException("환불 은행을 확인해주세요.");
+		}
 	}
 
 	// 결제수단 코드 기준 Toss method 값을 반환합니다.
@@ -4371,6 +4483,22 @@ public class GoodsService {
 			return SHOP_ORDER_TOSS_METHOD_TRANSFER;
 		}
 		throw new IllegalArgumentException("결제수단을 확인해주세요.");
+	}
+
+	// 무통장입금 결제 취소 시 Toss 환불 수취 계좌 파라미터를 구성합니다.
+	private TossPaymentRefundReceiveAccount buildTossPaymentRefundReceiveAccount(ShopOrderCancelOrderBaseVO orderBase) {
+		// 주문 마스터에 저장된 환불계좌 3개 필드가 모두 있어야 Toss 취소 API를 호출합니다.
+		String refundBankCd = trimToNull(orderBase == null ? null : orderBase.getRefundBankCd());
+		String refundBankNo = trimToNull(orderBase == null ? null : orderBase.getRefundBankNo());
+		String refundHolderNm = trimToNull(orderBase == null ? null : orderBase.getRefundHolderNm());
+		if (refundBankCd == null || refundBankNo == null || refundHolderNm == null) {
+			throw new IllegalArgumentException("무통장입금 환불 계좌 정보를 확인해주세요.");
+		}
+		if (!refundBankNo.matches("\\d+")) {
+			throw new IllegalArgumentException("무통장입금 환불 계좌 정보를 확인해주세요.");
+		}
+		validateShopOrderRefundBankCode(refundBankCd);
+		return new TossPaymentRefundReceiveAccount(refundBankCd, refundBankNo, refundHolderNm);
 	}
 
 	// 입력 포인트 사용 금액을 최대 사용 가능 금액 기준으로 보정합니다.
@@ -4539,7 +4667,8 @@ public class GoodsService {
 		ShopOrderDiscountSelectionVO discountSelection,
 		int pointUseAmt,
 		String orderName,
-		int amount
+		int amount,
+		ShopOrderRefundAccountInfo refundAccountInfo
 	) {
 		// 재시도 복귀와 후처리에 필요한 최소 정보를 스냅샷으로 저장합니다.
 		Map<String, Object> result = new LinkedHashMap<>();
@@ -4551,6 +4680,9 @@ public class GoodsService {
 		result.put("pointUseAmt", pointUseAmt);
 		result.put("orderName", orderName);
 		result.put("amount", amount);
+		result.put("refundBankCd", refundAccountInfo == null ? null : refundAccountInfo.refundBankCd());
+		result.put("refundBankNo", refundAccountInfo == null ? null : refundAccountInfo.refundBankNo());
+		result.put("refundHolderNm", refundAccountInfo == null ? null : refundAccountInfo.refundHolderNm());
 		return result;
 	}
 

@@ -13,4 +13,6 @@ public class AdminOrderDetailVO {
 	private List<AdminOrderDetailRowVO> list;
 	// 주문 클레임 목록입니다.
 	private List<AdminOrderClaimRowVO> claimList;
+	// 주문 결제 목록입니다.
+	private List<AdminOrderPaymentRowVO> paymentList;
 }

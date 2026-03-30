@@ -6,8 +6,10 @@ import com.xodud1202.springbackend.domain.admin.order.AdminOrderClaimRowVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderDetailRowVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderDetailVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderMasterVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderPaymentRowVO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsSavePO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
+import com.xodud1202.springbackend.domain.common.CommonCodeVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategoryItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsCategorySavePO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsSizeVO;
@@ -76,6 +78,7 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderPointDetailVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderRestoreCartItemVO;
+import com.xodud1202.springbackend.mapper.CommonMapper;
 import com.xodud1202.springbackend.mapper.ExhibitionMapper;
 import com.xodud1202.springbackend.mapper.GoodsMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -100,6 +103,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -110,6 +114,9 @@ import static org.mockito.Mockito.when;
 class GoodsServiceTests {
 	@Mock
 	private GoodsMapper goodsMapper;
+
+	@Mock
+	private CommonMapper commonMapper;
 
 	@Mock
 	private ExhibitionMapper exhibitionMapper;
@@ -1518,6 +1525,7 @@ class GoodsServiceTests {
 		customerInfo.setEmail("test@test.com");
 		customerInfo.setPhoneNumber("010-1234-5678");
 		customerInfo.setCustGradeCd("WELCOME");
+		CommonCodeVO refundBank = createCommonCode("BANK", "088", "신한");
 
 		// 주문서 대상 cartId 조회와 이미지 URL/배송지 보정 목 응답을 설정합니다.
 		when(goodsMapper.getShopOrderCartItemList(7L, List.of(12L, 15L))).thenReturn(List.of(firstCartItem, secondCartItem));
@@ -1539,6 +1547,7 @@ class GoodsServiceTests {
 		when(goodsMapper.getShopAvailablePointAmt(7L)).thenReturn(9000);
 		when(ftpFileService.buildGoodsImageUrl("GOODS100", "order-1.png")).thenReturn("https://image.test/goods/GOODS100/order-1.png");
 		when(ftpFileService.buildGoodsImageUrl("GOODS200", "order-2.png")).thenReturn("https://image.test/goods/GOODS200/order-2.png");
+		when(commonMapper.getCommonCodeList("BANK")).thenReturn(List.of(refundBank));
 
 		// 유효한 cartId 요청 시 주문서 페이지 데이터가 구성되는지 검증합니다.
 		ShopOrderPageVO result = goodsService.getShopOrderPage(List.of(12L, 15L), 7L, "PC", "http://127.0.0.1:3014");
@@ -1570,6 +1579,7 @@ class GoodsServiceTests {
 		assertThat(result.getPaymentConfig().getApiVersion()).isEqualTo("2022-11-16");
 		assertThat(result.getPaymentConfig().getSuccessUrlBase()).isEqualTo("http://127.0.0.1:3014/order/success");
 		assertThat(result.getPaymentConfig().getFailUrlBase()).isEqualTo("http://127.0.0.1:3014/order/fail");
+		assertThat(result.getRefundBankList()).extracting(CommonCodeVO::getCd).containsExactly("088");
 		assertThat(result.getCustomerInfo()).isNotNull();
 		assertThat(result.getCustomerInfo().getCustomerKey()).isEqualTo("SHOP-CUST-7");
 		assertThat(result.getCustomerInfo().getDeviceGbCd()).isEqualTo("PC");
@@ -1856,6 +1866,50 @@ class GoodsServiceTests {
 		assertThat(orderBaseCaptor.getValue().getDelvCpnNo()).isNull();
 		assertThat(orderBaseCaptor.getValue().getDelvCpnDcAmt()).isEqualTo(0);
 		assertThat(orderBaseCaptor.getValue().getOrdDelvAmt()).isEqualTo(3000);
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 주문 결제 준비 시 무통장입금 환불계좌 정보를 ORDER_BASE에 저장한다")
+	// 무통장입금 결제 준비에서는 환불은행/계좌번호/예금주가 주문 마스터 저장값으로 함께 전달되는지 검증합니다.
+	void prepareShopOrderPayment_savesRefundAccountForVirtualAccount() {
+		// 무통장입금 결제 준비 요청과 공통 목 응답을 구성합니다.
+		ShopOrderPaymentPreparePO param = createShopOrderPaymentPrepareParam(3001L);
+		param.setPaymentMethodCd("PAY_METHOD_02");
+		param.setRefundBankCd("088");
+		param.setRefundBankNo("110123456789");
+		param.setRefundHolderNm("홍길동");
+		mockPrepareShopOrderPaymentSuccessDependencies();
+		when(commonMapper.getCommonCodeList("BANK")).thenReturn(List.of(createCommonCode("BANK", "088", "신한")));
+
+		// 결제 준비를 수행하고 주문 마스터 저장값을 캡처합니다.
+		goodsService.prepareShopOrderPayment(param, 7L, "PC", "http://127.0.0.1:3014");
+		ArgumentCaptor<ShopOrderBaseSavePO> orderBaseCaptor = ArgumentCaptor.forClass(ShopOrderBaseSavePO.class);
+		verify(goodsMapper).insertShopOrderBase(orderBaseCaptor.capture());
+
+		// ORDER_BASE에 무통장입금 환불계좌 정보가 그대로 저장되는지 검증합니다.
+		assertThat(orderBaseCaptor.getValue().getRefundBankCd()).isEqualTo("088");
+		assertThat(orderBaseCaptor.getValue().getRefundBankNo()).isEqualTo("110123456789");
+		assertThat(orderBaseCaptor.getValue().getRefundHolderNm()).isEqualTo("홍길동");
+	}
+
+	@Test
+	@DisplayName("쇼핑몰 주문 결제 준비 시 무통장입금 환불계좌 정보가 없으면 예외를 반환한다")
+	// 무통장입금 결제 준비에서는 환불계좌 3개 항목이 모두 있어야 주문/결제 준비가 생성되는지 검증합니다.
+	void prepareShopOrderPayment_throwsWhenVirtualAccountRefundInfoMissing() {
+		// 환불 계좌번호가 비어 있는 무통장입금 결제 준비 요청과 공통 목 응답을 구성합니다.
+		ShopOrderPaymentPreparePO param = createShopOrderPaymentPrepareParam(3001L);
+		param.setPaymentMethodCd("PAY_METHOD_02");
+		param.setRefundBankCd("088");
+		param.setRefundBankNo("");
+		param.setRefundHolderNm("홍길동");
+		mockPrepareShopOrderPaymentSuccessDependencies();
+
+		// 환불 계좌번호 누락이면 주문/결제 준비 저장 없이 예외가 발생하는지 검증합니다.
+		assertThatThrownBy(() -> goodsService.prepareShopOrderPayment(param, 7L, "PC", "http://127.0.0.1:3014"))
+			.isInstanceOf(IllegalArgumentException.class)
+			.hasMessage("환불 계좌번호를 입력해주세요.");
+		verify(goodsMapper, never()).insertShopOrderBase(any());
+		verify(goodsMapper, never()).insertShopPayment(any());
 	}
 
 	@Test
@@ -2653,6 +2707,121 @@ class GoodsServiceTests {
 			any(),
 			eq("2026-03-23 10:11:12"),
 			eq(7L)
+		);
+	}
+
+	@Test
+	@DisplayName("마이페이지 주문취소는 입금완료 무통장입금 취소 시 Toss 환불계좌 정보를 함께 전달한다")
+	// 입금완료 무통장입금 전체취소에서는 ORDER_BASE 환불계좌 정보를 Toss cancel API의 refundReceiveAccount로 전달하는지 검증합니다.
+	void cancelShopMypageOrder_includesRefundReceiveAccountForPaidVirtualAccount() {
+		// 입금완료 무통장입금 전체취소 대상 주문과 요청값을 구성합니다.
+		ShopMypageOrderGroupVO orderGroup = new ShopMypageOrderGroupVO();
+		orderGroup.setOrdNo("ORD-20260323-002V");
+		ShopMypageOrderDetailItemVO detailItem = new ShopMypageOrderDetailItemVO();
+		detailItem.setOrdNo("ORD-20260323-002V");
+		detailItem.setOrdDtlNo(1);
+		detailItem.setOrdDtlStatCd("ORD_DTL_STAT_02");
+		detailItem.setGoodsId("GOODS-002V");
+		detailItem.setSizeId("100");
+		detailItem.setOrdQty(1);
+		detailItem.setCancelableQty(1);
+		detailItem.setSupplyAmt(22000);
+		detailItem.setSaleAmt(19500);
+		detailItem.setAddAmt(0);
+		detailItem.setGoodsCouponDiscountAmt(0);
+		detailItem.setCartCouponDiscountAmt(0);
+		detailItem.setPointUseAmt(0);
+
+		ShopOrderCancelOrderBaseVO orderBase = new ShopOrderCancelOrderBaseVO();
+		orderBase.setOrdNo("ORD-20260323-002V");
+		orderBase.setCustNo(7L);
+		orderBase.setOrdDelvAmt(0);
+		orderBase.setDelvCpnDcAmt(0);
+		orderBase.setDeviceGbCd("PC");
+		orderBase.setRefundBankCd("088");
+		orderBase.setRefundBankNo("110123456789");
+		orderBase.setRefundHolderNm("홍길동");
+
+		ShopCartSiteInfoVO siteInfo = new ShopCartSiteInfoVO();
+		siteInfo.setDeliveryFee(3000);
+		siteInfo.setDeliveryFeeLimit(50000);
+
+		ShopMypageOrderCancelReasonVO reason = new ShopMypageOrderCancelReasonVO();
+		reason.setCd("C_01");
+		reason.setCdNm("단순 변심");
+
+		ShopOrderCancelItemPO cancelItem = new ShopOrderCancelItemPO();
+		cancelItem.setOrdDtlNo(1);
+		cancelItem.setCancelQty(1);
+
+		ShopOrderCancelPreviewAmountPO previewAmount = new ShopOrderCancelPreviewAmountPO();
+		previewAmount.setExpectedRefundAmt(19500L);
+		previewAmount.setPaidGoodsAmt(19500L);
+		previewAmount.setBenefitAmt(0L);
+		previewAmount.setShippingAdjustmentAmt(0L);
+		previewAmount.setTotalPointRefundAmt(0L);
+		previewAmount.setDeliveryCouponRefundAmt(0L);
+
+		ShopOrderCancelPO param = new ShopOrderCancelPO();
+		param.setOrdNo("ORD-20260323-002V");
+		param.setReasonCd("C_01");
+		param.setCancelItemList(List.of(cancelItem));
+		param.setPreviewAmount(previewAmount);
+
+		ShopOrderPaymentVO originalPayment = new ShopOrderPaymentVO();
+		originalPayment.setPayNo(161L);
+		originalPayment.setOrdNo("ORD-20260323-002V");
+		originalPayment.setCustNo(7L);
+		originalPayment.setPayStatCd("PAY_STAT_02");
+		originalPayment.setPayMethodCd("PAY_METHOD_02");
+		originalPayment.setPgGbCd("PG_GB_01");
+		originalPayment.setTradeNo("trade-origin-2v");
+		originalPayment.setTossPaymentKey("toss-done-vact-key");
+
+		ArgumentCaptor<ShopOrderPaymentSavePO> refundPaymentCaptor = ArgumentCaptor.forClass(ShopOrderPaymentSavePO.class);
+
+		// 주문/사유/결제/환불은행/트랜잭션 목 데이터를 구성합니다.
+		mockShopOrderTransactionManager();
+		when(goodsMapper.getShopMypageOrderGroup(7L, "ORD-20260323-002V")).thenReturn(orderGroup);
+		when(goodsMapper.getShopMypageOrderDetailList(List.of("ORD-20260323-002V"))).thenReturn(List.of(detailItem));
+		when(goodsMapper.getShopOrderCancelOrderBase(7L, "ORD-20260323-002V")).thenReturn(orderBase);
+		when(goodsMapper.getShopCartSiteInfo("xodud1202")).thenReturn(siteInfo);
+		when(goodsMapper.getShopMypageOrderCancelReasonList()).thenReturn(List.of(reason));
+		when(goodsMapper.getShopOrderPaymentForCancel("ORD-20260323-002V")).thenReturn(originalPayment);
+		when(goodsMapper.updateShopOrderDetailCancelQuantity("ORD-20260323-002V", 1, 1, "ORD_DTL_STAT_99", 0, 0, 0, 7L)).thenReturn(1);
+		when(goodsMapper.insertShopPayment(refundPaymentCaptor.capture())).thenAnswer(invocation -> {
+			refundPaymentCaptor.getValue().setPayNo(361L);
+			return 1;
+		});
+		when(commonMapper.getCommonCodeList("BANK")).thenReturn(List.of(createCommonCode("BANK", "088", "신한")));
+		when(tossPaymentsClient.cancelPayment(
+			eq("toss-done-vact-key"),
+			eq("C_01"),
+			eq(19500L),
+			eq(new TossPaymentRefundReceiveAccount("088", "110123456789", "홍길동"))
+		)).thenReturn("""
+			{
+			  "status": "CANCELED",
+			  "cancels": [
+			    {
+			      "cancelAmount": 19500,
+			      "canceledAt": "2026-03-23T10:31:32+09:00",
+			      "transactionKey": "tx-cancel-done-vact"
+			    }
+			  ]
+			}
+			""");
+
+		// 입금완료 무통장입금 전체취소 시 refundReceiveAccount가 포함된 Toss 취소 호출이 수행되는지 검증합니다.
+		ShopOrderCancelResultVO result = goodsService.cancelShopMypageOrder(param, 7L);
+		assertThat(result.getOrdNo()).isEqualTo("ORD-20260323-002V");
+		assertThat(result.getRefundPayNo()).isEqualTo(361L);
+		assertThat(result.getRefundedCashAmt()).isEqualTo(19500L);
+		verify(tossPaymentsClient).cancelPayment(
+			"toss-done-vact-key",
+			"C_01",
+			19500L,
+			new TossPaymentRefundReceiveAccount("088", "110123456789", "홍길동")
 		);
 	}
 
@@ -3503,22 +3672,22 @@ class GoodsServiceTests {
 		ShopCartCustomerCouponVO deliveryCoupon = createCustomerCoupon(3001L, 301L, "CPN_GB_04", "CPN_TARGET_99", "CPN_DC_GB_01", 3000);
 
 		// 주문 결제 준비에 필요한 조회/저장 목 응답을 설정합니다.
-		when(goodsMapper.getShopOrderCartItemList(7L, List.of(12L, 15L))).thenReturn(List.of(firstCartItem, secondCartItem));
-		when(goodsMapper.getAdminGoodsSizeDetail("GOODS100", "095")).thenReturn(goods100SizeDetail);
-		when(goodsMapper.getAdminGoodsSizeDetail("GOODS200", "100")).thenReturn(goods200SizeDetail);
-		when(goodsMapper.getShopOrderAddressList(7L)).thenReturn(List.of(defaultAddress));
-		when(goodsMapper.getShopOrderCustomerInfo(7L)).thenReturn(customerInfo);
-		when(goodsMapper.getShopPointSaveRateByCustGradeCd("WELCOME")).thenReturn(1);
-		when(goodsMapper.getShopCartSiteInfo("xodud1202")).thenReturn(siteInfo);
-		when(goodsMapper.getShopCustomerCouponList(7L)).thenReturn(List.of(allGoodsCoupon, goodsTargetCoupon, cartCoupon, deliveryCoupon));
-		when(goodsMapper.getShopCouponTargetList(101L)).thenReturn(List.of());
-		when(goodsMapper.getShopCouponTargetList(103L)).thenReturn(List.of(createCouponTarget("TARGET_GB_01", "GOODS200")));
-		when(goodsMapper.getShopGoodsCategoryIdList("GOODS100")).thenReturn(List.of());
-		when(goodsMapper.getShopGoodsCategoryIdList("GOODS200")).thenReturn(List.of());
-		when(goodsMapper.getShopGoodsExhibitionTabNoList("GOODS100")).thenReturn(List.of());
-		when(goodsMapper.getShopGoodsExhibitionTabNoList("GOODS200")).thenReturn(List.of());
-		when(goodsMapper.getShopAvailablePointAmt(7L)).thenReturn(9000);
-		when(goodsMapper.insertShopPayment(any())).thenAnswer(invocation -> {
+		lenient().when(goodsMapper.getShopOrderCartItemList(7L, List.of(12L, 15L))).thenReturn(List.of(firstCartItem, secondCartItem));
+		lenient().when(goodsMapper.getAdminGoodsSizeDetail("GOODS100", "095")).thenReturn(goods100SizeDetail);
+		lenient().when(goodsMapper.getAdminGoodsSizeDetail("GOODS200", "100")).thenReturn(goods200SizeDetail);
+		lenient().when(goodsMapper.getShopOrderAddressList(7L)).thenReturn(List.of(defaultAddress));
+		lenient().when(goodsMapper.getShopOrderCustomerInfo(7L)).thenReturn(customerInfo);
+		lenient().when(goodsMapper.getShopPointSaveRateByCustGradeCd("WELCOME")).thenReturn(1);
+		lenient().when(goodsMapper.getShopCartSiteInfo("xodud1202")).thenReturn(siteInfo);
+		lenient().when(goodsMapper.getShopCustomerCouponList(7L)).thenReturn(List.of(allGoodsCoupon, goodsTargetCoupon, cartCoupon, deliveryCoupon));
+		lenient().when(goodsMapper.getShopCouponTargetList(101L)).thenReturn(List.of());
+		lenient().when(goodsMapper.getShopCouponTargetList(103L)).thenReturn(List.of(createCouponTarget("TARGET_GB_01", "GOODS200")));
+		lenient().when(goodsMapper.getShopGoodsCategoryIdList("GOODS100")).thenReturn(List.of());
+		lenient().when(goodsMapper.getShopGoodsCategoryIdList("GOODS200")).thenReturn(List.of());
+		lenient().when(goodsMapper.getShopGoodsExhibitionTabNoList("GOODS100")).thenReturn(List.of());
+		lenient().when(goodsMapper.getShopGoodsExhibitionTabNoList("GOODS200")).thenReturn(List.of());
+		lenient().when(goodsMapper.getShopAvailablePointAmt(7L)).thenReturn(9000);
+		lenient().when(goodsMapper.insertShopPayment(any())).thenAnswer(invocation -> {
 			// 결제 준비 저장 후 생성된 결제번호를 응답 객체에 반영합니다.
 			ShopOrderPaymentSavePO paymentSavePO = invocation.getArgument(0);
 			paymentSavePO.setPayNo(5001L);
@@ -3562,7 +3731,7 @@ class GoodsServiceTests {
 	@DisplayName("관리자 주문 상세 조회는 클레임 목록을 함께 반환한다")
 	// 관리자 주문 상세 응답에 claimList가 포함되고 주문번호 공백이 제거된 조회값을 재사용하는지 검증합니다.
 	void getAdminOrderDetail_returnsClaimList() {
-		// 주문 마스터, 상세, 클레임 목 데이터를 구성합니다.
+		// 주문 마스터, 상세, 클레임, 결제 목 데이터를 구성합니다.
 		AdminOrderMasterVO master = new AdminOrderMasterVO();
 		master.setOrdNo("ORD-DETAIL-001");
 		AdminOrderDetailRowVO detailRow = new AdminOrderDetailRowVO();
@@ -3571,22 +3740,30 @@ class GoodsServiceTests {
 		claimRow.setClmNo("CLM-001");
 		claimRow.setOrdDtlNo(11);
 		claimRow.setExpectedRefundAmt(18500);
+		AdminOrderPaymentRowVO paymentRow = new AdminOrderPaymentRowVO();
+		paymentRow.setOrdNo("ORD-DETAIL-001");
+		paymentRow.setPayStatCd("PAY_STAT_02");
+		paymentRow.setPayStatNm("승인");
+		paymentRow.setPayAmt(18500L);
 
 		// 주문번호 공백이 제거된 동일 값으로 모든 조회가 수행되도록 설정합니다.
 		when(goodsMapper.getAdminOrderMaster("ORD-DETAIL-001")).thenReturn(master);
 		when(goodsMapper.getAdminOrderDetailList("ORD-DETAIL-001")).thenReturn(List.of(detailRow));
 		when(goodsMapper.getAdminOrderClaimList("ORD-DETAIL-001")).thenReturn(List.of(claimRow));
+		when(goodsMapper.getAdminOrderPaymentList("ORD-DETAIL-001")).thenReturn(List.of(paymentRow));
 
 		// 주문 상세를 조회합니다.
 		AdminOrderDetailVO result = goodsService.getAdminOrderDetail("  ORD-DETAIL-001  ");
 
-		// 마스터/상세/클레임 목록이 모두 응답에 포함되는지 검증합니다.
+		// 마스터/상세/클레임/결제 목록이 모두 응답에 포함되는지 검증합니다.
 		assertThat(result.getMaster()).isSameAs(master);
 		assertThat(result.getList()).containsExactly(detailRow);
 		assertThat(result.getClaimList()).containsExactly(claimRow);
+		assertThat(result.getPaymentList()).containsExactly(paymentRow);
 		verify(goodsMapper).getAdminOrderMaster("ORD-DETAIL-001");
 		verify(goodsMapper).getAdminOrderDetailList("ORD-DETAIL-001");
 		verify(goodsMapper).getAdminOrderClaimList("ORD-DETAIL-001");
+		verify(goodsMapper).getAdminOrderPaymentList("ORD-DETAIL-001");
 	}
 
 	@Test
@@ -3599,17 +3776,19 @@ class GoodsServiceTests {
 		AdminOrderDetailRowVO detailRow = new AdminOrderDetailRowVO();
 		detailRow.setOrdDtlNo(21);
 
-		// 클레임 조회가 null이어도 서비스가 빈 리스트로 보정하도록 설정합니다.
+		// 클레임/결제 조회가 null이어도 서비스가 빈 리스트로 보정하도록 설정합니다.
 		when(goodsMapper.getAdminOrderMaster("ORD-DETAIL-002")).thenReturn(master);
 		when(goodsMapper.getAdminOrderDetailList("ORD-DETAIL-002")).thenReturn(List.of(detailRow));
 		when(goodsMapper.getAdminOrderClaimList("ORD-DETAIL-002")).thenReturn(null);
+		when(goodsMapper.getAdminOrderPaymentList("ORD-DETAIL-002")).thenReturn(null);
 
 		// 주문 상세를 조회합니다.
 		AdminOrderDetailVO result = goodsService.getAdminOrderDetail("ORD-DETAIL-002");
 
-		// 클레임 목록이 비어 있는 안전한 응답 구조로 반환되는지 검증합니다.
+		// 클레임/결제 목록이 비어 있는 안전한 응답 구조로 반환되는지 검증합니다.
 		assertThat(result.getList()).containsExactly(detailRow);
 		assertThat(result.getClaimList()).isEmpty();
+		assertThat(result.getPaymentList()).isEmpty();
 	}
 
 	// 테스트용 주문서 상품쿠폰 선택 항목을 생성합니다.
@@ -3640,6 +3819,16 @@ class GoodsServiceTests {
 		coupon.setCpnDcGbCd(cpnDcGbCd);
 		coupon.setCpnDcVal(cpnDcVal);
 		return coupon;
+	}
+
+	// 테스트용 공통 코드 정보를 생성합니다.
+	private CommonCodeVO createCommonCode(String grpCd, String cd, String cdNm) {
+		// 그룹코드/코드/코드명을 세팅합니다.
+		CommonCodeVO commonCode = new CommonCodeVO();
+		commonCode.setGrpCd(grpCd);
+		commonCode.setCd(cd);
+		commonCode.setCdNm(cdNm);
+		return commonCode;
 	}
 
 	// 테스트용 쿠폰 타겟 정보를 생성합니다.

@@ -18,7 +18,7 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
-// Toss 결제 승인 API 호출을 처리합니다.
+// Toss 결제 승인/취소 API 호출을 처리합니다.
 public class TossPaymentsClient {
 	private final RestClient.Builder restClientBuilder;
 	private final TossProperties tossProperties;
@@ -56,11 +56,30 @@ public class TossPaymentsClient {
 
 	// Toss 결제 취소 API를 호출하고 원본 응답 문자열을 반환합니다.
 	public String cancelPayment(String paymentKey, String cancelReason, Long cancelAmount) {
+		// 환불 수취 계좌 정보가 없는 기본 취소 요청을 위임합니다.
+		return cancelPayment(paymentKey, cancelReason, cancelAmount, null);
+	}
+
+	// Toss 결제 취소 API를 호출하고 원본 응답 문자열을 반환합니다.
+	public String cancelPayment(
+		String paymentKey,
+		String cancelReason,
+		Long cancelAmount,
+		TossPaymentRefundReceiveAccount refundReceiveAccount
+	) {
 		// 취소 사유와 부분취소 금액을 Toss 규격에 맞게 구성합니다.
 		Map<String, Object> requestBody = new LinkedHashMap<>();
 		requestBody.put("cancelReason", cancelReason);
 		if (cancelAmount != null && cancelAmount > 0L) {
 			requestBody.put("cancelAmount", cancelAmount);
+		}
+		if (refundReceiveAccount != null) {
+			// 가상계좌 결제 취소 시 환불 수취 계좌 정보를 함께 전달합니다.
+			Map<String, Object> refundReceiveAccountMap = new LinkedHashMap<>();
+			refundReceiveAccountMap.put("bank", refundReceiveAccount.bank());
+			refundReceiveAccountMap.put("accountNumber", refundReceiveAccount.accountNumber());
+			refundReceiveAccountMap.put("holderName", refundReceiveAccount.holderName());
+			requestBody.put("refundReceiveAccount", refundReceiveAccountMap);
 		}
 
 		// Basic 인증과 API 버전을 포함해 취소 API를 호출합니다.
