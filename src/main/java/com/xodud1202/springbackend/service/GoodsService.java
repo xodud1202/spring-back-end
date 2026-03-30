@@ -1039,7 +1039,6 @@ public class GoodsService {
 				originalPayment,
 				refundPaymentSavePO,
 				clmNo,
-				cancelQtyMap,
 				cancelComputation
 			));
 		} catch (TossPaymentClientException exception) {
@@ -1138,7 +1137,6 @@ public class GoodsService {
 				originalPayment,
 				refundPaymentSavePO,
 				clmNo,
-				cancelQtyMap,
 				cancelComputation
 			));
 		} catch (TossPaymentClientException exception) {
@@ -1552,30 +1550,29 @@ public class GoodsService {
 		ShopOrderCancelOrderBaseVO orderBase,
 		ShopCartSiteInfoVO siteInfo
 	) {
-		// 주문상세별 남은 수량과 남은 쿠폰/포인트 배분 금액을 누적합니다.
+		// 주문상세별 남은 수량과 ORDER_DETAIL에 남아 있는 현재 할인금액을 누적합니다.
 		ShopMypageOrderAmountSummaryVO amountSummary = normalizeShopMypageOrderAmountSummary(new ShopMypageOrderAmountSummaryVO());
 		long currentOrderAmt = 0L;
 		for (ShopMypageOrderDetailItemVO detailItem : orderGroup == null ? List.<ShopMypageOrderDetailItemVO>of() : orderGroup.getDetailList()) {
-			int originalQty = resolveShopOrderOriginalQty(detailItem);
 			int remainingQty = resolveShopOrderRemainingQty(detailItem);
-			if (originalQty < 1 || remainingQty < 1) {
+			if (remainingQty < 1) {
 				continue;
 			}
 
-			// 현재 남은 주문상품 금액과 남은 할인 배분 금액을 더합니다.
+			// 현재 남은 주문상품 금액과 현재 잔여 할인금액을 더합니다.
 			long rowSupplyAmt = (long) normalizeNonNegativeNumber(detailItem.getSupplyAmt()) * remainingQty;
 			long rowOrderAmt = (long) resolveShopOrderUnitOrderAmt(detailItem) * remainingQty;
 			currentOrderAmt += rowOrderAmt;
 			amountSummary.setTotalSupplyAmt(amountSummary.getTotalSupplyAmt() + rowSupplyAmt);
 			amountSummary.setTotalOrderAmt(amountSummary.getTotalOrderAmt() + rowOrderAmt);
 			amountSummary.setTotalGoodsCouponDiscountAmt(
-				amountSummary.getTotalGoodsCouponDiscountAmt() + resolveShopOrderRemainingAllocatedAmt(detailItem.getGoodsCouponDiscountAmt(), originalQty, remainingQty)
+				amountSummary.getTotalGoodsCouponDiscountAmt() + normalizeNonNegativeNumber(detailItem.getGoodsCouponDiscountAmt())
 			);
 			amountSummary.setTotalCartCouponDiscountAmt(
-				amountSummary.getTotalCartCouponDiscountAmt() + resolveShopOrderRemainingAllocatedAmt(detailItem.getCartCouponDiscountAmt(), originalQty, remainingQty)
+				amountSummary.getTotalCartCouponDiscountAmt() + normalizeNonNegativeNumber(detailItem.getCartCouponDiscountAmt())
 			);
 			amountSummary.setTotalPointUseAmt(
-				amountSummary.getTotalPointUseAmt() + resolveShopOrderRemainingAllocatedAmt(detailItem.getPointUseAmt(), originalQty, remainingQty)
+				amountSummary.getTotalPointUseAmt() + normalizeNonNegativeNumber(detailItem.getPointUseAmt())
 			);
 		}
 
@@ -1830,14 +1827,13 @@ public class GoodsService {
 		ShopMypageOrderDetailItemVO detailItem,
 		int cancelQty
 	) {
-		// 주문상세 원수량과 이미 취소된 수량 기준으로 이번 취소분의 배분 금액을 계산합니다.
-		int originalQty = resolveShopOrderOriginalQty(detailItem);
-		int canceledBeforeQty = resolveShopOrderCanceledQty(detailItem);
+		// DB의 쿠폰/포인트 할인금액은 이전 취소 후 이미 차감된 현재 잔여 금액이므로, RMN_QTY(현재 잔여 수량) 기준으로 비례 계산합니다.
+		int remainingQty = resolveShopOrderRemainingQty(detailItem);
 		long supplyAmt = (long) normalizeNonNegativeNumber(detailItem.getSupplyAmt()) * cancelQty;
 		long orderAmt = (long) resolveShopOrderUnitOrderAmt(detailItem) * cancelQty;
-		long goodsCouponDiscountAmt = resolveShopOrderIncrementAllocatedAmt(detailItem.getGoodsCouponDiscountAmt(), originalQty, canceledBeforeQty, cancelQty);
-		long cartCouponDiscountAmt = resolveShopOrderIncrementAllocatedAmt(detailItem.getCartCouponDiscountAmt(), originalQty, canceledBeforeQty, cancelQty);
-		long pointRefundAmt = resolveShopOrderIncrementAllocatedAmt(detailItem.getPointUseAmt(), originalQty, canceledBeforeQty, cancelQty);
+		long goodsCouponDiscountAmt = resolveShopOrderIncrementAllocatedAmt(detailItem.getGoodsCouponDiscountAmt(), remainingQty, 0, cancelQty);
+		long cartCouponDiscountAmt = resolveShopOrderIncrementAllocatedAmt(detailItem.getCartCouponDiscountAmt(), remainingQty, 0, cancelQty);
+		long pointRefundAmt = resolveShopOrderIncrementAllocatedAmt(detailItem.getPointUseAmt(), remainingQty, 0, cancelQty);
 
 		// 공급가/상품가/상품할인과 상품쿠폰/장바구니쿠폰/포인트 환급 누계를 반영합니다.
 		previewAmount.setTotalSupplyAmt(previewAmount.getTotalSupplyAmt() + supplyAmt);
@@ -1941,19 +1937,23 @@ public class GoodsService {
 		ShopOrderPaymentVO originalPayment,
 		ShopOrderPaymentSavePO refundPaymentSavePO,
 		String clmNo,
-		Map<Integer, Integer> cancelQtyMap,
 		ShopOrderCancelComputation cancelComputation
 	) {
-		// 주문변경 마스터/상세와 주문상세 취소 수량을 먼저 반영합니다.
+		// 주문변경 마스터/상세와 주문상세 취소 수량 및 쿠폰/포인트 할인금액을 먼저 반영합니다.
 		String cancelDt = LocalDateTime.now().format(SHOP_MYPAGE_ORDER_DATE_TIME_FORMATTER);
 		goodsMapper.insertShopOrderChangeBase(buildShopOrderChangeBaseSavePO(clmNo, orderBase, cancelComputation, cancelDt, custNo));
 		for (ShopOrderCancelSelectedItem selectedItem : cancelComputation.getSelectedItemList()) {
-			goodsMapper.insertShopOrderChangeDetail(buildShopOrderChangeDetailSavePO(clmNo, selectedItem, param, custNo));
+			// 취소 수량 비례 배분 금액을 클레임 상세에 함께 저장합니다.
+			ShopOrderChangeDetailSavePO changeDetail = buildShopOrderChangeDetailSavePO(clmNo, selectedItem, param, custNo);
+			goodsMapper.insertShopOrderChangeDetail(changeDetail);
 			int updatedCount = goodsMapper.updateShopOrderDetailCancelQuantity(
 				orderBase.getOrdNo(),
 				selectedItem.getDetailItem().getOrdDtlNo(),
 				selectedItem.getCancelQty(),
 				selectedItem.getNextOrdDtlStatCd(),
+				changeDetail.getGoodsCpnDcAmt() != null ? changeDetail.getGoodsCpnDcAmt() : 0,
+				changeDetail.getCartCpnDcAmt() != null ? changeDetail.getCartCpnDcAmt() : 0,
+				changeDetail.getPointDcAmt() != null ? changeDetail.getPointDcAmt() : 0,
 				custNo
 			);
 			if (updatedCount < 1) {
@@ -1961,13 +1961,14 @@ public class GoodsService {
 			}
 		}
 
-		// 취소 수량만큼 재고와 포인트를 복구하고, 전체취소면 주문 쿠폰 적용 정보도 함께 원복합니다.
+		// 취소 후 더 이상 사용 중이 아닌 고객쿠폰만 CUST_CPN_NO 기준으로 원복합니다.
+		restoreShopOrderCancelCouponUse(custNo, orderBase.getOrdNo(), orderBase, orderGroup, cancelComputation);
+
+		// 취소 수량만큼 재고와 포인트를 복구합니다.
 		restoreShopOrderCancelSelectedStock(cancelComputation.getSelectedItemList(), custNo);
 		restoreShopOrderPointByAmount(custNo, orderBase.getOrdNo(), cancelComputation.getRestoredPointAmt());
-		resetShopOrderCancelCouponDiscount(orderBase.getOrdNo(), cancelComputation, custNo);
-		restoreShopOrderCancelCouponUse(custNo, orderBase.getOrdNo(), cancelComputation);
 
-		// PG 취소 성공 응답을 저장하고, 전체취소면 주문 마스터도 완료 상태로 변경합니다.
+		// PG 취소 성공 응답을 저장하고, 전체취소면 주문 마스터도 배송비쿠폰 초기화까지 한 번에 완료 처리합니다.
 		ShopOrderCancelPgResult cancelPgResult = cancelShopOrderPaymentWithPg(originalPayment, param, cancelComputation);
 		goodsMapper.updateShopPaymentCancelSuccess(
 			refundPaymentSavePO.getPayNo(),
@@ -1981,7 +1982,7 @@ public class GoodsService {
 			custNo
 		);
 		if (cancelComputation.isFullCancel()) {
-			goodsMapper.updateShopOrderBaseStatus(orderBase.getOrdNo(), SHOP_ORDER_STAT_CANCEL, custNo);
+			goodsMapper.updateShopOrderBaseFullCancel(orderBase.getOrdNo(), SHOP_ORDER_STAT_CANCEL, custNo);
 		}
 
 		// 주문취소 완료 응답 객체를 구성합니다.
@@ -1995,31 +1996,87 @@ public class GoodsService {
 		return result;
 	}
 
-	// 주문취소 완료 후 전체취소 여부에 맞춰 주문 쿠폰 할인 정보를 초기화합니다.
-	private void resetShopOrderCancelCouponDiscount(String ordNo, ShopOrderCancelComputation cancelComputation, Long auditNo) {
-		// 전체취소가 아니거나 주문번호가 비어 있으면 주문 쿠폰 할인 정보는 유지합니다.
-		if (auditNo == null || auditNo < 1L || isBlank(ordNo) || cancelComputation == null || !cancelComputation.isFullCancel()) {
-			return;
-		}
-
-		// 전체취소면 주문상세와 주문마스터의 쿠폰 적용 정보와 할인금액을 함께 초기화합니다.
-		goodsMapper.resetShopOrderDetailCouponDiscount(ordNo, auditNo);
-		goodsMapper.resetShopOrderBaseDeliveryCouponDiscount(ordNo, auditNo);
-	}
-
-	// 주문취소 완료 후 전체취소 여부에 맞춰 고객쿠폰 사용 상태를 원복합니다.
+	// 주문취소 완료 후 더 이상 사용 중이 아닌 고객쿠폰 사용 상태를 원복합니다.
 	private void restoreShopOrderCancelCouponUse(
 		Long custNo,
 		String ordNo,
+		ShopOrderCancelOrderBaseVO orderBase,
+		ShopMypageOrderGroupVO orderGroup,
 		ShopOrderCancelComputation cancelComputation
 	) {
-		// 전체취소가 아니거나 주문번호가 비어 있으면 고객쿠폰 원복을 수행하지 않습니다.
-		if (custNo == null || custNo < 1L || isBlank(ordNo) || cancelComputation == null || !cancelComputation.isFullCancel()) {
+		// 고객번호/주문번호가 없거나 계산 결과가 없으면 고객쿠폰 원복을 수행하지 않습니다.
+		if (custNo == null || custNo < 1L || isBlank(ordNo) || cancelComputation == null) {
 			return;
 		}
 
-		// 전체취소면 결제상태와 관계없이 주문번호 기준 사용 쿠폰 전체를 원복합니다.
-		goodsMapper.restoreShopCustomerCouponUse(custNo, ordNo, custNo);
+		// 취소 후 더 이상 활성 주문상세가 참조하지 않는 고객쿠폰번호 목록만 원복합니다.
+		List<Long> restorableCustCpnNoList = resolveRestorableShopOrderCancelCouponNoList(orderBase, orderGroup, cancelComputation);
+		if (restorableCustCpnNoList.isEmpty()) {
+			return;
+		}
+		goodsMapper.restoreShopCustomerCouponUseByCustCpnNoList(custNo, ordNo, restorableCustCpnNoList, custNo);
+	}
+
+	// 주문취소 후 CUSTOMER_COUPON 미사용 원복 대상 고객쿠폰번호 목록을 계산합니다.
+	private List<Long> resolveRestorableShopOrderCancelCouponNoList(
+		ShopOrderCancelOrderBaseVO orderBase,
+		ShopMypageOrderGroupVO orderGroup,
+		ShopOrderCancelComputation cancelComputation
+	) {
+		// 선택된 주문상세가 없으면 원복 대상도 없습니다.
+		if (cancelComputation == null || cancelComputation.getSelectedItemList() == null || cancelComputation.getSelectedItemList().isEmpty()) {
+			return List.of();
+		}
+
+		// 취소 후 남은 수량과 활성 장바구니쿠폰 집계를 계산할 선택 주문상세 맵을 먼저 구성합니다.
+		Map<Integer, ShopOrderCancelSelectedItem> selectedItemMap = new LinkedHashMap<>();
+		for (ShopOrderCancelSelectedItem selectedItem : cancelComputation.getSelectedItemList()) {
+			if (selectedItem == null || selectedItem.getDetailItem() == null || selectedItem.getDetailItem().getOrdDtlNo() == null) {
+				continue;
+			}
+			selectedItemMap.put(selectedItem.getDetailItem().getOrdDtlNo(), selectedItem);
+		}
+
+		// 취소 후에도 남아 있는 장바구니쿠폰 집합을 한 번에 계산합니다.
+		Set<Long> activeCartCouponNoSet = new HashSet<>();
+		for (ShopMypageOrderDetailItemVO detailItem : orderGroup == null ? List.<ShopMypageOrderDetailItemVO>of() : orderGroup.getDetailList()) {
+			if (detailItem == null) {
+				continue;
+			}
+			ShopOrderCancelSelectedItem selectedItem = detailItem.getOrdDtlNo() == null ? null : selectedItemMap.get(detailItem.getOrdDtlNo());
+			int remainingAfterCancelQty = selectedItem == null ? resolveShopOrderRemainingQty(detailItem) : Math.max(selectedItem.getRemainingAfterCancelQty(), 0);
+			if (remainingAfterCancelQty < 1 || detailItem.getCartCpnNo() == null || detailItem.getCartCpnNo() < 1L) {
+				continue;
+			}
+			activeCartCouponNoSet.add(detailItem.getCartCpnNo());
+		}
+
+		// 상품쿠폰/장바구니쿠폰/배송비쿠폰 중 이번 취소 후 완전히 해제되는 고객쿠폰번호만 수집합니다.
+		Set<Long> restorableCustCpnNoSet = new LinkedHashSet<>();
+		for (ShopOrderCancelSelectedItem selectedItem : cancelComputation.getSelectedItemList()) {
+			if (selectedItem == null || selectedItem.getDetailItem() == null || selectedItem.getRemainingAfterCancelQty() > 0) {
+				continue;
+			}
+
+			// 상품쿠폰은 해당 주문상세가 전량 취소된 시점에만 원복 후보가 됩니다.
+			Long goodsCpnNo = selectedItem.getDetailItem().getGoodsCpnNo();
+			if (goodsCpnNo != null && goodsCpnNo > 0L) {
+				restorableCustCpnNoSet.add(goodsCpnNo);
+			}
+
+			// 장바구니쿠폰은 같은 쿠폰을 참조하는 활성 주문상세가 더 이상 없을 때만 원복합니다.
+			Long cartCpnNo = selectedItem.getDetailItem().getCartCpnNo();
+			if (cartCpnNo != null && cartCpnNo > 0L && !activeCartCouponNoSet.contains(cartCpnNo)) {
+				restorableCustCpnNoSet.add(cartCpnNo);
+			}
+		}
+
+		// 전체취소면 배송비쿠폰도 함께 원복합니다.
+		Long deliveryCpnNo = orderBase == null ? null : orderBase.getDelvCpnNo();
+		if (cancelComputation.isFullCancel() && deliveryCpnNo != null && deliveryCpnNo > 0L) {
+			restorableCustCpnNoSet.add(deliveryCpnNo);
+		}
+		return new ArrayList<>(restorableCustCpnNoSet);
 	}
 
 	// 주문취소 대상 상품 수량만큼 재고를 복구합니다.
@@ -2225,14 +2282,14 @@ public class GoodsService {
 		result.setRegNo(auditNo);
 		result.setUdtNo(auditNo);
 		// 취소 수량에 비례한 쿠폰/포인트 배분 금액을 계산하여 설정합니다.
+		// DB의 쿠폰/포인트 할인금액은 이전 취소 후 이미 차감된 현재 잔여 금액이므로, RMN_QTY(현재 잔여 수량) 기준으로 비례 계산합니다.
 		ShopMypageOrderDetailItemVO detailItem = selectedItem == null ? null : selectedItem.getDetailItem();
 		if (detailItem != null && selectedItem.getCancelQty() > 0) {
-			int originalQty = resolveShopOrderOriginalQty(detailItem);
-			int canceledBeforeQty = resolveShopOrderCanceledQty(detailItem);
+			int remainingQty = resolveShopOrderRemainingQty(detailItem);
 			int cancelQty = selectedItem.getCancelQty();
-			result.setGoodsCpnDcAmt((int) resolveShopOrderIncrementAllocatedAmt(detailItem.getGoodsCouponDiscountAmt(), originalQty, canceledBeforeQty, cancelQty));
-			result.setCartCpnDcAmt((int) resolveShopOrderIncrementAllocatedAmt(detailItem.getCartCouponDiscountAmt(), originalQty, canceledBeforeQty, cancelQty));
-			result.setPointDcAmt((int) resolveShopOrderIncrementAllocatedAmt(detailItem.getPointUseAmt(), originalQty, canceledBeforeQty, cancelQty));
+			result.setGoodsCpnDcAmt((int) resolveShopOrderIncrementAllocatedAmt(detailItem.getGoodsCouponDiscountAmt(), remainingQty, 0, cancelQty));
+			result.setCartCpnDcAmt((int) resolveShopOrderIncrementAllocatedAmt(detailItem.getCartCouponDiscountAmt(), remainingQty, 0, cancelQty));
+			result.setPointDcAmt((int) resolveShopOrderIncrementAllocatedAmt(detailItem.getPointUseAmt(), remainingQty, 0, cancelQty));
 		}
 		return result;
 	}
@@ -2293,14 +2350,6 @@ public class GoodsService {
 		long beforeAmt = resolveShopOrderCumulativeAllocatedAmt(allocatedAmt, originalQty, canceledBeforeQty);
 		long afterAmt = resolveShopOrderCumulativeAllocatedAmt(allocatedAmt, originalQty, canceledBeforeQty + cancelQty);
 		return Math.max(afterAmt - beforeAmt, 0L);
-	}
-
-	// 주문상세의 현재 남은 수량 기준 배분 금액을 계산합니다.
-	private long resolveShopOrderRemainingAllocatedAmt(Integer allocatedAmt, int originalQty, int remainingQty) {
-		// 전체 배분 금액에서 이미 취소된 누적 배분 금액을 제외해 현재 남은 금액을 계산합니다.
-		long safeAllocatedAmt = normalizeNonNegativeNumber(allocatedAmt);
-		long canceledAllocatedAmt = resolveShopOrderCumulativeAllocatedAmt(allocatedAmt, originalQty, Math.max(originalQty - remainingQty, 0));
-		return Math.max(safeAllocatedAmt - canceledAllocatedAmt, 0L);
 	}
 
 	// JSON 노드의 숫자 필드를 long으로 안전하게 읽습니다.

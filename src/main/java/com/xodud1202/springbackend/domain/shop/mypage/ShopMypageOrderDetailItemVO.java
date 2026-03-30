@@ -35,6 +35,10 @@ public class ShopMypageOrderDetailItemVO {
 	private Integer cartCouponDiscountAmt;
 	// 포인트 사용 금액입니다.
 	private Integer pointUseAmt;
+	// 상품쿠폰 고객쿠폰번호입니다.
+	private Long goodsCpnNo;
+	// 장바구니쿠폰 고객쿠폰번호입니다.
+	private Long cartCpnNo;
 	// 상품 이미지 경로입니다.
 	private String imgPath;
 	// 상품 이미지 전체 URL입니다.

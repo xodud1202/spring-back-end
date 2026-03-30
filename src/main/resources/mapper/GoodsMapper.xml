@@ -827,6 +827,8 @@
 		     , COALESCE(OD.GOODS_CPN_DC_AMT, 0) AS GOODS_COUPON_DISCOUNT_AMT
 		     , COALESCE(OD.CART_CPN_DC_AMT, 0) AS CART_COUPON_DISCOUNT_AMT
 		     , COALESCE(OD.POINT_USE_AMT, 0) AS POINT_USE_AMT
+		     , OD.GOODS_CPN_NO
+		     , OD.CART_CPN_NO
 		     , (
 		         SELECT GI.IMG_PATH
 		           FROM GOODS_IMG GI
@@ -1529,6 +1531,17 @@
 		 WHERE ORD_NO = #{ordNo}
 	</update>
 
+	<update id="updateShopOrderBaseFullCancel">
+		/* GoodsMapper.updateShopOrderBaseFullCancel: 전체취소 주문 마스터 상태와 배송비쿠폰 적용 정보를 함께 갱신 */
+		UPDATE ORDER_BASE
+		   SET ORD_STAT_CD = #{ordStatCd}
+		     , DELV_CPN_NO = NULL
+		     , DELV_CPN_DC_AMT = 0
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE ORD_NO = #{ordNo}
+	</update>
+
 	<update id="updateShopOrderBaseStatusAndDates">
 		/* GoodsMapper.updateShopOrderBaseStatusAndDates: 쇼핑몰 주문 마스터 상태와 결제 시각 변경 */
 		UPDATE ORDER_BASE
@@ -1554,38 +1567,19 @@
 	</update>
 
 	<update id="updateShopOrderDetailCancelQuantity">
-		/* GoodsMapper.updateShopOrderDetailCancelQuantity: 주문상세 취소 수량과 상태 반영 */
+		/* GoodsMapper.updateShopOrderDetailCancelQuantity: 주문상세 취소 수량/상태와 쿠폰/포인트 할인금액 차감 반영 */
 		UPDATE ORDER_DETAIL
 		   SET CNC_QTY = COALESCE(CNC_QTY, 0) + #{cancelQty}
 		     , RMN_QTY = COALESCE(RMN_QTY, ORD_QTY, 0) - #{cancelQty}
 		     , ORD_DTL_STAT_CD = #{nextOrdDtlStatCd}
+		     , GOODS_CPN_DC_AMT = GREATEST(COALESCE(GOODS_CPN_DC_AMT, 0) - #{goodsCpnDcAmt}, 0)
+		     , CART_CPN_DC_AMT = GREATEST(COALESCE(CART_CPN_DC_AMT, 0) - #{cartCpnDcAmt}, 0)
+		     , POINT_USE_AMT = GREATEST(COALESCE(POINT_USE_AMT, 0) - #{pointUseAmt}, 0)
 		     , UDT_NO = #{udtNo}
 		     , UDT_DT = NOW()
 		 WHERE ORD_NO = #{ordNo}
 		   AND ORD_DTL_NO = #{ordDtlNo}
 		   AND COALESCE(RMN_QTY, ORD_QTY, 0) &gt;= #{cancelQty}
-	</update>
-
-	<update id="resetShopOrderDetailCouponDiscount">
-		/* GoodsMapper.resetShopOrderDetailCouponDiscount: 전체취소 주문상세 쿠폰 적용 정보 초기화 */
-		UPDATE ORDER_DETAIL
-		   SET GOODS_CPN_NO = NULL
-		     , GOODS_CPN_DC_AMT = 0
-		     , CART_CPN_NO = NULL
-		     , CART_CPN_DC_AMT = 0
-		     , UDT_NO = #{udtNo}
-		     , UDT_DT = NOW()
-		 WHERE ORD_NO = #{ordNo}
-	</update>
-
-	<update id="resetShopOrderBaseDeliveryCouponDiscount">
-		/* GoodsMapper.resetShopOrderBaseDeliveryCouponDiscount: 전체취소 주문 마스터 배송비쿠폰 적용 정보 초기화 */
-		UPDATE ORDER_BASE
-		   SET DELV_CPN_NO = NULL
-		     , DELV_CPN_DC_AMT = 0
-		     , UDT_NO = #{udtNo}
-		     , UDT_DT = NOW()
-		 WHERE ORD_NO = #{ordNo}
 	</update>
 
 	<update id="updateShopPaymentSuccess">
@@ -1698,7 +1692,9 @@
 	</update>
 
 	<update id="restoreShopCustomerCouponUse">
-		/* GoodsMapper.restoreShopCustomerCouponUse: 주문번호 기준 고객쿠폰 사용 처리 원복 */
+		/* GoodsMapper.restoreShopCustomerCouponUse: 주문번호 기준 고객쿠폰 사용 처리 원복
+		   - ORDER_DETAIL의 GOODS_CPN_NO, CART_CPN_NO와 ORDER_BASE의 DELV_CPN_NO를 읽어 해당 CUST_CPN_NO만 원복
+		   - CUSTOMER_COUPON.ORD_NO = #{ordNo} 조건으로 재사용된 쿠폰(다른 주문에 이미 사용된 경우)은 원복 제외 */
 		UPDATE CUSTOMER_COUPON
 		   SET CPN_USE_YN = 'N'
 		     , ORD_NO = NULL
@@ -1706,6 +1702,25 @@
 		     , UDT_DT = NOW()
 		 WHERE CUST_NO = #{custNo}
 		   AND ORD_NO = #{ordNo}
+		   AND CUST_CPN_NO IN (
+		       SELECT cpn_no
+		         FROM (
+		              SELECT GOODS_CPN_NO AS cpn_no
+		                FROM ORDER_DETAIL
+		               WHERE ORD_NO = #{ordNo}
+		                 AND GOODS_CPN_NO IS NOT NULL
+		               UNION
+		              SELECT CART_CPN_NO AS cpn_no
+		                FROM ORDER_DETAIL
+		               WHERE ORD_NO = #{ordNo}
+		                 AND CART_CPN_NO IS NOT NULL
+		               UNION
+		              SELECT DELV_CPN_NO AS cpn_no
+		                FROM ORDER_BASE
+		               WHERE ORD_NO = #{ordNo}
+		                 AND DELV_CPN_NO IS NOT NULL
+		         ) AS cpn_list
+		   )
 	</update>
 
 	<update id="restoreShopCustomerCouponUseByCustCpnNo">
@@ -1717,6 +1732,23 @@
 		     , UDT_DT = NOW()
 		 WHERE CUST_NO = #{custNo}
 		   AND CUST_CPN_NO = #{custCpnNo}
+	</update>
+
+	<update id="restoreShopCustomerCouponUseByCustCpnNoList">
+		/* GoodsMapper.restoreShopCustomerCouponUseByCustCpnNoList: 고객쿠폰번호 목록 기준 고객쿠폰 사용 처리 원복 */
+		UPDATE CUSTOMER_COUPON
+		   SET CPN_USE_YN = 'N'
+		     , ORD_NO = NULL
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE CUST_NO = #{custNo}
+		   AND CUST_CPN_NO IN
+		<foreach collection="custCpnNoList" item="custCpnNo" open="(" separator="," close=")">
+			#{custCpnNo}
+		</foreach>
+		<if test="ordNo != null and ordNo != ''">
+		   AND ORD_NO = #{ordNo}
+		</if>
 	</update>
 
 	<select id="getShopAvailablePointBaseList" resultType="com.xodud1202.springbackend.domain.shop.order.ShopOrderPointBaseVO">

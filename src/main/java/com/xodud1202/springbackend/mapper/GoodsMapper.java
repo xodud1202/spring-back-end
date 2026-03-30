@@ -299,23 +299,23 @@ public interface GoodsMapper {
 	// 주문변경 상세를 등록합니다.
 	int insertShopOrderChangeDetail(ShopOrderChangeDetailSavePO param);
 
-	// 주문상세 취소 수량과 상태를 반영합니다.
+	// 주문상세 취소 수량/상태와 쿠폰/포인트 할인금액 차감을 함께 반영합니다.
 	int updateShopOrderDetailCancelQuantity(
 		@Param("ordNo") String ordNo,
 		@Param("ordDtlNo") Integer ordDtlNo,
 		@Param("cancelQty") Integer cancelQty,
 		@Param("nextOrdDtlStatCd") String nextOrdDtlStatCd,
+		@Param("goodsCpnDcAmt") int goodsCpnDcAmt,
+		@Param("cartCpnDcAmt") int cartCpnDcAmt,
+		@Param("pointUseAmt") int pointUseAmt,
 		@Param("udtNo") Long udtNo
 	);
-
-	// 전체취소된 주문상세의 쿠폰 적용 정보를 초기화합니다.
-	int resetShopOrderDetailCouponDiscount(@Param("ordNo") String ordNo, @Param("udtNo") Long udtNo);
 
 	// 쇼핑몰 주문 마스터 상태를 변경합니다.
 	int updateShopOrderBaseStatus(@Param("ordNo") String ordNo, @Param("ordStatCd") String ordStatCd, @Param("udtNo") Long udtNo);
 
-	// 전체취소된 주문 마스터의 배송비쿠폰 적용 정보를 초기화합니다.
-	int resetShopOrderBaseDeliveryCouponDiscount(@Param("ordNo") String ordNo, @Param("udtNo") Long udtNo);
+	// 전체취소된 주문 마스터 상태와 배송비쿠폰 적용 정보를 함께 갱신합니다.
+	int updateShopOrderBaseFullCancel(@Param("ordNo") String ordNo, @Param("ordStatCd") String ordStatCd, @Param("udtNo") Long udtNo);
 
 	// 쇼핑몰 주문 마스터 상태와 결제 시각을 변경합니다.
 	int updateShopOrderBaseStatusAndDates(
@@ -426,6 +426,14 @@ public interface GoodsMapper {
 	int restoreShopCustomerCouponUseByCustCpnNo(
 		@Param("custNo") Long custNo,
 		@Param("custCpnNo") Long custCpnNo,
+		@Param("udtNo") Long udtNo
+	);
+
+	// 고객쿠폰번호 목록 기준으로 사용 상태를 원복합니다.
+	int restoreShopCustomerCouponUseByCustCpnNoList(
+		@Param("custNo") Long custNo,
+		@Param("ordNo") String ordNo,
+		@Param("custCpnNoList") List<Long> custCpnNoList,
 		@Param("udtNo") Long udtNo
 	);
 
