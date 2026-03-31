@@ -15,6 +15,14 @@ public class ShopOrderCancelOrderBaseVO {
 	private String orderDt;
 	// 주문 확정 일시입니다.
 	private String orderConfirmDt;
+	// 수령인 이름입니다.
+	private String rcvNm;
+	// 수령인 우편번호입니다.
+	private String rcvPostNo;
+	// 수령인 기본주소입니다.
+	private String rcvAddrBase;
+	// 수령인 상세주소입니다.
+	private String rcvAddrDtl;
 	// 배송비 쿠폰 고객쿠폰번호입니다.
 	private Long delvCpnNo;
 	// 배송비 쿠폰 할인 금액입니다.

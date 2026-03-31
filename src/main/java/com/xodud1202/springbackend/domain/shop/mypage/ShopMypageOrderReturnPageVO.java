@@ -1,6 +1,7 @@
 package com.xodud1202.springbackend.domain.shop.mypage;
 
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartSiteInfoVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressVO;
 import lombok.Data;
 
 import java.util.List;
@@ -16,4 +17,8 @@ public class ShopMypageOrderReturnPageVO {
 	private List<ShopMypageOrderCancelReasonVO> reasonList;
 	// 현재 사이트 배송 기준 정보입니다.
 	private ShopCartSiteInfoVO siteInfo;
+	// 고객 배송지 목록입니다.
+	private List<ShopOrderAddressVO> addressList;
+	// 현재 반품 회수지 정보입니다.
+	private ShopOrderAddressVO pickupAddress;
 }

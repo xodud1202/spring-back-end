@@ -1215,11 +1215,14 @@ public class GoodsService {
 		// 현재 로그인 고객의 주문번호 1건과 금액/사유/배송 기준 정보를 조회합니다.
 		ShopMypageOrderGroupVO orderGroup = getShopMypageOrderGroupWithDetail(custNo, resolvedOrdNo);
 		validateShopMypageOrderReturnAccess(orderGroup, ordDtlNo);
-		ShopMypageOrderAmountSummaryVO amountSummary = buildShopMypageOrderAmountSummary(custNo, orderGroup);
+		ShopOrderCancelOrderBaseVO orderBase = resolveShopOrderCancelOrderBase(custNo, resolvedOrdNo);
+		List<ShopOrderAddressVO> addressList = resolveShopOrderAddressList(custNo);
 		List<ShopMypageOrderCancelReasonVO> reasonList = normalizeShopMypageOrderCancelReasonList(
 			goodsMapper.getShopMypageOrderReturnReasonList()
 		);
 		ShopCartSiteInfoVO siteInfo = resolveShopCartSiteInfo();
+		ShopMypageOrderAmountSummaryVO amountSummary = buildShopOrderRemainingAmountSummary(orderGroup, orderBase, siteInfo);
+		ShopOrderAddressVO pickupAddress = createShopOrderPickupAddress(custNo, orderBase);
 
 		// 반품 신청 화면 응답 객체를 구성합니다.
 		ShopMypageOrderReturnPageVO result = new ShopMypageOrderReturnPageVO();
@@ -1227,6 +1230,8 @@ public class GoodsService {
 		result.setAmountSummary(amountSummary);
 		result.setReasonList(reasonList);
 		result.setSiteInfo(siteInfo);
+		result.setAddressList(addressList);
+		result.setPickupAddress(pickupAddress);
 		return result;
 	}
 
@@ -2107,6 +2112,33 @@ public class GoodsService {
 			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_NOT_FOUND_MESSAGE);
 		}
 		return orderBase;
+	}
+
+	// 주문 당시 배송지 정보를 반품 회수지 기본값 형식으로 변환합니다.
+	private ShopOrderAddressVO createShopOrderPickupAddress(Long custNo, ShopOrderCancelOrderBaseVO orderBase) {
+		// 주문 배송지 정보가 없으면 기본 회수지를 생성하지 않습니다.
+		if (orderBase == null) {
+			return null;
+		}
+		String receiverName = trimToNull(orderBase.getRcvNm());
+		String postNo = trimToNull(orderBase.getRcvPostNo());
+		String baseAddress = trimToNull(orderBase.getRcvAddrBase());
+		String detailAddress = trimToNull(orderBase.getRcvAddrDtl());
+		if (receiverName == null && postNo == null && baseAddress == null && detailAddress == null) {
+			return null;
+		}
+
+		// 주문 배송지 노출용 회수지 객체를 구성합니다.
+		ShopOrderAddressVO result = new ShopOrderAddressVO();
+		result.setCustNo(custNo);
+		result.setAddressNm("주문 배송지");
+		result.setPostNo(postNo == null ? "" : postNo);
+		result.setBaseAddress(baseAddress == null ? "" : baseAddress);
+		result.setDetailAddress(detailAddress == null ? "" : detailAddress);
+		result.setPhoneNumber("");
+		result.setRsvNm(receiverName == null ? "" : receiverName);
+		result.setDefaultYn(NO);
+		return result;
 	}
 
 	// 현재 남아 있는 주문수량 기준으로 주문 금액 요약을 계산합니다.
