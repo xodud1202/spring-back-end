@@ -653,7 +653,7 @@ public class GoodsService {
 		Long udtNo = resolveCurrentAdminUserNo();
 
 		// 현재 상태와 일치하는 선택 상품만 다음 상태로 변경합니다.
-		int updatedCount = goodsMapper.updateAdminOrderStartDeliveryStatusList(
+		int updatedCount = updateOrderDetailStatusByKeyList(
 			itemList,
 			fromOrdDtlStatCd,
 			toOrdDtlStatCd,
@@ -1386,6 +1386,34 @@ public class GoodsService {
 		}
 	}
 
+	// 쇼핑몰 마이페이지 배송중 주문상품을 배송완료 처리합니다.
+	@Transactional
+	public ShopOrderDetailStatusUpdateVO completeShopMypageOrderDelivery(ShopOrderDetailStatusUpdatePO param, Long custNo) {
+		// 배송중 상품만 배송완료로 변경합니다.
+		return applyShopMypageOrderDetailStatusChange(
+			param,
+			custNo,
+			SHOP_ORDER_DTL_STAT_DELIVERING,
+			SHOP_ORDER_DTL_STAT_DELIVERY_COMPLETE,
+			SHOP_MYPAGE_ORDER_DELIVERY_COMPLETE_UNAVAILABLE_MESSAGE,
+			true
+		);
+	}
+
+	// 쇼핑몰 마이페이지 배송완료 주문상품을 구매확정 처리합니다.
+	@Transactional
+	public ShopOrderDetailStatusUpdateVO confirmShopMypageOrderPurchase(ShopOrderDetailStatusUpdatePO param, Long custNo) {
+		// 배송완료 상품만 구매확정으로 변경합니다.
+		return applyShopMypageOrderDetailStatusChange(
+			param,
+			custNo,
+			SHOP_ORDER_DTL_STAT_DELIVERY_COMPLETE,
+			SHOP_ORDER_DTL_STAT_PURCHASE_CONFIRM,
+			SHOP_MYPAGE_ORDER_PURCHASE_CONFIRM_UNAVAILABLE_MESSAGE,
+			false
+		);
+	}
+
 	// 관리자 주문취소 신청 화면 데이터를 조회합니다.
 	public ShopMypageOrderCancelPageVO getAdminOrderCancelPage(String ordNo) {
 		// 주문번호 필수 검증을 수행합니다.
@@ -1795,6 +1823,124 @@ public class GoodsService {
 		if (!matchedRequestedDetail) {
 			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_DETAIL_ITEM_INVALID_MESSAGE);
 		}
+	}
+
+	// 마이페이지 주문상태 변경 요청을 검증하고 대상 주문상세를 반환합니다.
+	private ShopMypageOrderDetailItemVO validateShopMypageOrderStatusActionTarget(
+		ShopOrderDetailStatusUpdatePO param,
+		Long custNo,
+		String expectedOrdDtlStatCd,
+		String invalidMessage
+	) {
+		// 로그인 고객번호와 요청 본문을 먼저 검증합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+		if (param == null) {
+			throw new IllegalArgumentException(invalidMessage);
+		}
+
+		// 주문번호와 주문상세번호를 정규화하고 현재 고객 주문인지 확인합니다.
+		String ordNo = trimToNull(param.getOrdNo());
+		Integer ordDtlNo = param.getOrdDtlNo();
+		if (ordNo == null) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_NO_INVALID_MESSAGE);
+		}
+		if (ordDtlNo == null || ordDtlNo < 1) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_DETAIL_ITEM_INVALID_MESSAGE);
+		}
+
+		// 현재 로그인 고객의 주문상세 목록에서 대상 행을 찾고 상태를 검증합니다.
+		ShopMypageOrderGroupVO orderGroup = getShopMypageOrderGroupWithDetail(custNo, ordNo);
+		ShopMypageOrderDetailItemVO detailItem = findShopMypageOrderDetailItem(orderGroup, ordDtlNo);
+		if (detailItem == null) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_DETAIL_ITEM_INVALID_MESSAGE);
+		}
+		if (!expectedOrdDtlStatCd.equals(detailItem.getOrdDtlStatCd())) {
+			throw new IllegalArgumentException(invalidMessage);
+		}
+		return detailItem;
+	}
+
+	// 마이페이지 주문상태 변경 공통 로직을 수행합니다.
+	private ShopOrderDetailStatusUpdateVO applyShopMypageOrderDetailStatusChange(
+		ShopOrderDetailStatusUpdatePO param,
+		Long custNo,
+		String fromOrdDtlStatCd,
+		String toOrdDtlStatCd,
+		String invalidMessage,
+		boolean updateDelvCompleteDt
+	) {
+		// 대상 주문상세를 검증하고 복합키 기준 상태 변경 대상을 구성합니다.
+		ShopMypageOrderDetailItemVO detailItem = validateShopMypageOrderStatusActionTarget(
+			param,
+			custNo,
+			fromOrdDtlStatCd,
+			invalidMessage
+		);
+		AdminOrderStartDeliveryKeyItemPO statusChangeTarget = new AdminOrderStartDeliveryKeyItemPO();
+		statusChangeTarget.setOrdNo(detailItem.getOrdNo());
+		statusChangeTarget.setOrdDtlNo(detailItem.getOrdDtlNo());
+
+		// 관리자 배송 상태 변경과 동일한 쿼리를 재사용해 실제 상태를 반영합니다.
+		int updatedCount = updateOrderDetailStatusByKeyList(
+			List.of(statusChangeTarget),
+			fromOrdDtlStatCd,
+			toOrdDtlStatCd,
+			custNo,
+			updateDelvCompleteDt
+		);
+		if (updatedCount != 1) {
+			throw new IllegalArgumentException(invalidMessage);
+		}
+
+		// 변경 결과를 응답 객체에 담아 반환합니다.
+		ShopOrderDetailStatusUpdateVO result = new ShopOrderDetailStatusUpdateVO();
+		result.setOrdNo(detailItem.getOrdNo());
+		result.setOrdDtlNo(detailItem.getOrdDtlNo());
+		result.setOrdDtlStatCd(toOrdDtlStatCd);
+		result.setUpdatedCount(updatedCount);
+		return result;
+	}
+
+	// 주문 그룹에서 지정한 주문상세번호 1건을 찾습니다.
+	private ShopMypageOrderDetailItemVO findShopMypageOrderDetailItem(ShopMypageOrderGroupVO orderGroup, Integer ordDtlNo) {
+		// 주문상세 목록이 없거나 주문상세번호가 없으면 조회하지 않습니다.
+		if (orderGroup == null || orderGroup.getDetailList() == null || ordDtlNo == null) {
+			return null;
+		}
+
+		// 동일 주문상세번호를 가진 행 1건을 반환합니다.
+		for (ShopMypageOrderDetailItemVO detailItem : orderGroup.getDetailList()) {
+			if (detailItem == null || detailItem.getOrdDtlNo() == null) {
+				continue;
+			}
+			if (ordDtlNo.equals(detailItem.getOrdDtlNo())) {
+				return detailItem;
+			}
+		}
+		return null;
+	}
+
+	// 주문상세 복합키 목록 기준 상태 변경 쿼리를 재사용합니다.
+	private int updateOrderDetailStatusByKeyList(
+		List<AdminOrderStartDeliveryKeyItemPO> itemList,
+		String fromOrdDtlStatCd,
+		String toOrdDtlStatCd,
+		Long udtNo,
+		boolean updateDelvCompleteDt
+	) {
+		// 복합키 목록이 비어 있으면 변경할 대상이 없습니다.
+		if (itemList == null || itemList.isEmpty()) {
+			return 0;
+		}
+		return goodsMapper.updateAdminOrderStartDeliveryStatusList(
+			itemList,
+			fromOrdDtlStatCd,
+			toOrdDtlStatCd,
+			udtNo,
+			updateDelvCompleteDt
+		);
 	}
 
 	// 주문번호 목록에 주문상세 목록을 묶어 주문내역 응답 구조를 완성합니다.

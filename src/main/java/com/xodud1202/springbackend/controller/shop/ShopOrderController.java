@@ -4,7 +4,9 @@ import static com.xodud1202.springbackend.common.Constants.Shop.*;
 
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressRegisterPO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderCancelPO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderDetailStatusUpdatePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressUpdatePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderDetailStatusUpdateVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderDiscountQuotePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentConfirmPO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentFailPO;
@@ -279,6 +281,68 @@ public class ShopOrderController {
 			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
 			log.error("쇼핑몰 마이페이지 주문취소 처리 실패 message={}", exception.getMessage(), exception);
 			return ResponseEntity.internalServerError().body(Map.of("message", "주문취소 처리에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 마이페이지 배송중 주문상품을 배송완료 처리합니다.
+	@PostMapping("/api/shop/mypage/order/delivery/complete")
+	public ResponseEntity<Object> completeShopMypageOrderDelivery(
+		@RequestBody(required = false) ShopOrderDetailStatusUpdatePO param,
+		HttpServletRequest request
+	) {
+		try {
+			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			// 배송완료 처리 결과를 반환합니다.
+			ShopOrderDetailStatusUpdateVO result = goodsService.completeShopMypageOrderDelivery(param, custNo);
+			return ResponseEntity.ok(result);
+		} catch (IllegalArgumentException exception) {
+			// 주문 미존재는 404 응답으로 반환합니다.
+			if (SHOP_MYPAGE_ORDER_NOT_FOUND_MESSAGE.equals(exception.getMessage())) {
+				return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", exception.getMessage()));
+			}
+
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
+			log.error("쇼핑몰 마이페이지 배송완료 처리 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "배송완료 처리에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 마이페이지 배송완료 주문상품을 구매확정 처리합니다.
+	@PostMapping("/api/shop/mypage/order/purchase/confirm")
+	public ResponseEntity<Object> confirmShopMypageOrderPurchase(
+		@RequestBody(required = false) ShopOrderDetailStatusUpdatePO param,
+		HttpServletRequest request
+	) {
+		try {
+			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			// 구매확정 처리 결과를 반환합니다.
+			ShopOrderDetailStatusUpdateVO result = goodsService.confirmShopMypageOrderPurchase(param, custNo);
+			return ResponseEntity.ok(result);
+		} catch (IllegalArgumentException exception) {
+			// 주문 미존재는 404 응답으로 반환합니다.
+			if (SHOP_MYPAGE_ORDER_NOT_FOUND_MESSAGE.equals(exception.getMessage())) {
+				return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", exception.getMessage()));
+			}
+
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
+			log.error("쇼핑몰 마이페이지 구매확정 처리 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "구매확정 처리에 실패했습니다."));
 		}
 	}
 

@@ -50,6 +50,8 @@ public final class Constants {
 		public static final String SHOP_MYPAGE_ORDER_DETAIL_ITEM_INVALID_MESSAGE = "주문상품 정보를 확인해주세요.";
 		public static final String SHOP_MYPAGE_ORDER_CANCEL_UNAVAILABLE_MESSAGE = "취소 가능한 주문상품 정보를 찾을 수 없습니다.";
 		public static final String SHOP_MYPAGE_ORDER_CANCEL_AMOUNT_MISMATCH_MESSAGE = "환불 금액이 상이합니다.";
+		public static final String SHOP_MYPAGE_ORDER_DELIVERY_COMPLETE_UNAVAILABLE_MESSAGE = "배송중 주문상품만 처리할 수 있습니다.";
+		public static final String SHOP_MYPAGE_ORDER_PURCHASE_CONFIRM_UNAVAILABLE_MESSAGE = "배송완료 주문상품만 처리할 수 있습니다.";
 		public static final DateTimeFormatter SHOP_MYPAGE_ORDER_DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 		public static final int SHOP_ORDER_ADDRESS_SEARCH_DEFAULT_PAGE = 1;
 		public static final int SHOP_ORDER_ADDRESS_SEARCH_DEFAULT_COUNT = 10;
@@ -81,6 +83,7 @@ public final class Constants {
 		public static final String SHOP_ORDER_DTL_STAT_DELIVERY_PREPARING = "ORD_DTL_STAT_04";
 		public static final String SHOP_ORDER_DTL_STAT_DELIVERING = "ORD_DTL_STAT_05";
 		public static final String SHOP_ORDER_DTL_STAT_DELIVERY_COMPLETE = "ORD_DTL_STAT_06";
+		public static final String SHOP_ORDER_DTL_STAT_PURCHASE_CONFIRM = "ORD_DTL_STAT_07";
 		public static final String SHOP_ORDER_DTL_STAT_CANCEL = "ORD_DTL_STAT_99";
 		public static final String SHOP_ORDER_PAY_STAT_READY = "PAY_STAT_00";
 		public static final String SHOP_ORDER_PAY_STAT_DONE = "PAY_STAT_02";
