@@ -78,6 +78,9 @@ public final class Constants {
 		public static final String SHOP_ORDER_DTL_STAT_WAITING_DEPOSIT = "ORD_DTL_STAT_01";
 		public static final String SHOP_ORDER_DTL_STAT_DONE = "ORD_DTL_STAT_02";
 		public static final String SHOP_ORDER_DTL_STAT_PREPARING = "ORD_DTL_STAT_03";
+		public static final String SHOP_ORDER_DTL_STAT_DELIVERY_PREPARING = "ORD_DTL_STAT_04";
+		public static final String SHOP_ORDER_DTL_STAT_DELIVERING = "ORD_DTL_STAT_05";
+		public static final String SHOP_ORDER_DTL_STAT_DELIVERY_COMPLETE = "ORD_DTL_STAT_06";
 		public static final String SHOP_ORDER_DTL_STAT_CANCEL = "ORD_DTL_STAT_99";
 		public static final String SHOP_ORDER_PAY_STAT_READY = "PAY_STAT_00";
 		public static final String SHOP_ORDER_PAY_STAT_DONE = "PAY_STAT_02";

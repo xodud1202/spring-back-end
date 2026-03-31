@@ -17,6 +17,10 @@ import com.xodud1202.springbackend.domain.admin.order.AdminOrderListRowVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderMasterVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderPO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderPaymentRowVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderStartDeliveryKeyItemPO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderStartDeliveryListRowVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderStartDeliveryPO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderStartDeliveryPrepareItemPO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsDescSaveItem;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsDescVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsImageSavePO;
@@ -84,6 +88,12 @@ public interface GoodsMapper {
 
 	// 관리자 주문 목록 건수를 조회합니다.
 	int getAdminOrderCount(AdminOrderPO param);
+
+	// 관리자 배송 시작 관리 목록을 조회합니다.
+	List<AdminOrderStartDeliveryListRowVO> getAdminOrderStartDeliveryList(AdminOrderStartDeliveryPO param);
+
+	// 관리자 배송 시작 관리 목록 건수를 조회합니다.
+	int getAdminOrderStartDeliveryCount(AdminOrderStartDeliveryPO param);
 
 	// 관리자 주문 상세 하단 결제 목록을 조회합니다.
 	List<AdminOrderPaymentRowVO> getAdminOrderPaymentList(@Param("ordNo") String ordNo);
@@ -333,6 +343,32 @@ public interface GoodsMapper {
 
 	// 쇼핑몰 주문 상세 상태를 일괄 변경합니다.
 	int updateShopOrderDetailStatus(@Param("ordNo") String ordNo, @Param("ordDtlStatCd") String ordDtlStatCd, @Param("udtNo") Long udtNo);
+
+	// 관리자 주문 상세 상태를 선택 주문상세번호 기준으로 일괄 변경합니다.
+	int updateAdminOrderDetailStatusByOrdDtlNoList(
+		@Param("ordNo") String ordNo,
+		@Param("ordDtlNoList") List<Integer> ordDtlNoList,
+		@Param("fromOrdDtlStatCd") String fromOrdDtlStatCd,
+		@Param("toOrdDtlStatCd") String toOrdDtlStatCd,
+		@Param("udtNo") Long udtNo
+	);
+
+	// 관리자 배송 준비중 일괄 처리를 반영합니다.
+	int updateAdminOrderStartDeliveryPrepareList(
+		@Param("itemList") List<AdminOrderStartDeliveryPrepareItemPO> itemList,
+		@Param("fromOrdDtlStatCd") String fromOrdDtlStatCd,
+		@Param("toOrdDtlStatCd") String toOrdDtlStatCd,
+		@Param("udtNo") Long udtNo
+	);
+
+	// 관리자 배송 상태 일괄 처리를 반영합니다.
+	int updateAdminOrderStartDeliveryStatusList(
+		@Param("itemList") List<AdminOrderStartDeliveryKeyItemPO> itemList,
+		@Param("fromOrdDtlStatCd") String fromOrdDtlStatCd,
+		@Param("toOrdDtlStatCd") String toOrdDtlStatCd,
+		@Param("udtNo") Long udtNo,
+		@Param("updateDelvCompleteDt") boolean updateDelvCompleteDt
+	);
 
 	// 카드/계좌이체 승인 성공 결과로 결제 정보를 갱신합니다.
 	int updateShopPaymentSuccess(

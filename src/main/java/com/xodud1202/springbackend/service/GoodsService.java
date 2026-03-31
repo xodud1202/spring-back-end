@@ -9,6 +9,7 @@ import com.xodud1202.springbackend.domain.admin.category.*;
 import com.xodud1202.springbackend.domain.admin.goods.*;
 import com.xodud1202.springbackend.domain.admin.order.*;
 import com.xodud1202.springbackend.domain.common.CommonCodeVO;
+import com.xodud1202.springbackend.entity.UserBaseEntity;
 import com.xodud1202.springbackend.domain.shop.cart.*;
 import com.xodud1202.springbackend.domain.shop.category.ShopCategoryGoodsItemVO;
 import com.xodud1202.springbackend.domain.shop.goods.*;
@@ -22,6 +23,8 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -68,6 +71,13 @@ public class GoodsService {
 	private static final int ADMIN_ORDER_DEFAULT_PAGE = 1;
 	private static final int ADMIN_ORDER_DEFAULT_PAGE_SIZE = 20;
 	private static final int ADMIN_ORDER_MAX_PAGE_SIZE = 200;
+	private static final String ADMIN_ORDER_START_DELIVERY_COMPANY_GRP_CD = "DELV_COMP";
+	private static final int ADMIN_ORDER_START_DELIVERY_INVOICE_NO_MAX_LENGTH = 20;
+	private static final Set<String> ADMIN_ORDER_START_DELIVERY_STATUS_SET = Set.of(
+		SHOP_ORDER_DTL_STAT_PREPARING,
+		SHOP_ORDER_DTL_STAT_DELIVERY_PREPARING,
+		SHOP_ORDER_DTL_STAT_DELIVERING
+	);
 
 	// 쇼핑몰 무통장입금 환불계좌 정규화 결과를 전달합니다.
 	private record ShopOrderRefundAccountInfo(
@@ -158,6 +168,42 @@ public class GoodsService {
 		return result;
 	}
 
+	// 관리자 배송 시작 관리 목록을 조회합니다.
+	public AdminOrderStartDeliveryListResponseVO getAdminOrderStartDeliveryList(
+		Integer page,
+		Integer pageSize,
+		String ordDtlStatCd
+	) {
+		// 페이징 기본값을 계산합니다.
+		int resolvedPage = page == null || page < 1 ? ADMIN_ORDER_DEFAULT_PAGE : page;
+		int resolvedPageSize = pageSize == null || pageSize < 1
+			? ADMIN_ORDER_DEFAULT_PAGE_SIZE
+			: Math.min(pageSize, ADMIN_ORDER_MAX_PAGE_SIZE);
+		int offset = (resolvedPage - 1) * resolvedPageSize;
+
+		// 허용된 배송 상태만 조회 조건으로 사용합니다.
+		String normalizedOrdDtlStatCd = normalizeAdminOrderStartDeliveryStatus(ordDtlStatCd);
+
+		// 매퍼 조회용 파라미터를 구성합니다.
+		AdminOrderStartDeliveryPO param = new AdminOrderStartDeliveryPO();
+		param.setPage(resolvedPage);
+		param.setPageSize(resolvedPageSize);
+		param.setOffset(offset);
+		param.setOrdDtlStatCd(normalizedOrdDtlStatCd);
+
+		// 목록과 건수를 조회합니다.
+		List<AdminOrderStartDeliveryListRowVO> list = goodsMapper.getAdminOrderStartDeliveryList(param);
+		int totalCount = goodsMapper.getAdminOrderStartDeliveryCount(param);
+
+		// 응답 객체를 구성합니다.
+		AdminOrderStartDeliveryListResponseVO result = new AdminOrderStartDeliveryListResponseVO();
+		result.setList(list == null ? List.of() : list);
+		result.setTotalCount(totalCount);
+		result.setPage(resolvedPage);
+		result.setPageSize(resolvedPageSize);
+		return result;
+	}
+
 	// 관리자 주문 상세 정보를 조회합니다.
 	public AdminOrderDetailVO getAdminOrderDetail(String ordNo) {
 		// 주문번호 필수 검증을 수행합니다.
@@ -190,6 +236,118 @@ public class GoodsService {
 		result.setClaimList(claimList == null ? List.of() : claimList);
 		result.setPaymentList(paymentList == null ? List.of() : paymentList);
 		return result;
+	}
+
+	// 관리자 주문상세를 상품 준비중 상태로 변경합니다.
+	@Transactional
+	public AdminOrderDetailStatusUpdateVO prepareAdminOrderDetail(AdminOrderDetailStatusUpdatePO param) {
+		// 요청 데이터와 주문번호를 검증합니다.
+		if (param == null) {
+			throw new IllegalArgumentException("결제 완료 주문건만 선택해주세요.");
+		}
+		String ordNo = trimToNull(param.getOrdNo());
+		if (ordNo == null) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_NO_INVALID_MESSAGE);
+		}
+
+		// 선택 주문상세번호 목록을 중복 제거된 양수 목록으로 정규화합니다.
+		List<Integer> ordDtlNoList = normalizeAdminOrderDetailNoList(param.getOrdDtlNoList());
+		if (ordDtlNoList.isEmpty()) {
+			throw new IllegalArgumentException("결제 완료 주문건만 선택해주세요.");
+		}
+
+		// 주문번호로 고객번호를 조회해 감사 컬럼 갱신값으로 재사용합니다.
+		Long custNo = goodsMapper.getOrderCustNo(ordNo);
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_NO_INVALID_MESSAGE);
+		}
+
+		// 결제 완료 상태의 선택 주문상세만 상품 준비중으로 변경합니다.
+		int updatedCount = goodsMapper.updateAdminOrderDetailStatusByOrdDtlNoList(
+			ordNo,
+			ordDtlNoList,
+			SHOP_ORDER_DTL_STAT_DONE,
+			SHOP_ORDER_DTL_STAT_PREPARING,
+			custNo
+		);
+		if (updatedCount != ordDtlNoList.size()) {
+			throw new IllegalArgumentException("결제 완료 주문건만 선택해주세요.");
+		}
+
+		// 변경 건수를 응답 객체에 담아 반환합니다.
+		AdminOrderDetailStatusUpdateVO result = new AdminOrderDetailStatusUpdateVO();
+		result.setUpdatedCount(updatedCount);
+		return result;
+	}
+
+	// 관리자 상품 준비중 주문을 배송 준비중 상태로 변경합니다.
+	@Transactional
+	public AdminOrderStartDeliveryStatusUpdateVO prepareAdminOrderStartDelivery(AdminOrderStartDeliveryPreparePO param) {
+		// 요청 데이터와 배송업체 공통코드를 검증 준비합니다.
+		if (param == null) {
+			throw new IllegalArgumentException("상품 준비중 주문건만 선택해주세요.");
+		}
+		Set<String> deliveryCompanyCodeSet = getAdminOrderStartDeliveryCompanyCodeSet();
+
+		// 요청 상품 목록을 정규화하고 배송정보를 검증합니다.
+		List<AdminOrderStartDeliveryPrepareItemPO> itemList = normalizeAdminOrderStartDeliveryPrepareItemList(
+			param.getItemList(),
+			deliveryCompanyCodeSet
+		);
+		if (itemList.isEmpty()) {
+			throw new IllegalArgumentException("상품 준비중 주문건만 선택해주세요.");
+		}
+
+		// 현재 로그인 관리자 번호를 감사 컬럼에 반영합니다.
+		Long udtNo = resolveCurrentAdminUserNo();
+
+		// 상품 준비중 상태의 선택 상품만 배송 준비중으로 변경합니다.
+		int updatedCount = goodsMapper.updateAdminOrderStartDeliveryPrepareList(
+			itemList,
+			SHOP_ORDER_DTL_STAT_PREPARING,
+			SHOP_ORDER_DTL_STAT_DELIVERY_PREPARING,
+			udtNo
+		);
+		if (updatedCount != itemList.size()) {
+			throw new IllegalArgumentException("상품 준비중 주문건만 선택해주세요.");
+		}
+
+		// 변경 건수를 응답 객체에 담아 반환합니다.
+		AdminOrderStartDeliveryStatusUpdateVO result = new AdminOrderStartDeliveryStatusUpdateVO();
+		result.setUpdatedCount(updatedCount);
+		return result;
+	}
+
+	// 관리자 배송 준비중 주문을 배송중 상태로 변경합니다.
+	@Transactional
+	public AdminOrderStartDeliveryStatusUpdateVO startAdminOrderStartDelivery(AdminOrderStartDeliveryStatusPO param) {
+		// 배송 준비중 상품 키 목록만 정규화해 상태 변경을 위임합니다.
+		List<AdminOrderStartDeliveryKeyItemPO> itemList = normalizeAdminOrderStartDeliveryKeyItemList(
+			param == null ? null : param.getItemList()
+		);
+		return applyAdminOrderStartDeliveryStatusChange(
+			itemList,
+			SHOP_ORDER_DTL_STAT_DELIVERY_PREPARING,
+			SHOP_ORDER_DTL_STAT_DELIVERING,
+			"배송 준비중 주문건만 선택해주세요.",
+			false
+		);
+	}
+
+	// 관리자 배송중 주문을 배송완료 상태로 변경합니다.
+	@Transactional
+	public AdminOrderStartDeliveryStatusUpdateVO completeAdminOrderStartDelivery(AdminOrderStartDeliveryStatusPO param) {
+		// 배송중 상품 키 목록만 정규화해 상태 변경을 위임합니다.
+		List<AdminOrderStartDeliveryKeyItemPO> itemList = normalizeAdminOrderStartDeliveryKeyItemList(
+			param == null ? null : param.getItemList()
+		);
+		return applyAdminOrderStartDeliveryStatusChange(
+			itemList,
+			SHOP_ORDER_DTL_STAT_DELIVERING,
+			SHOP_ORDER_DTL_STAT_DELIVERY_COMPLETE,
+			"배송중 주문건만 선택해주세요.",
+			true
+		);
 	}
 
 	// 상품 분류 목록을 조회합니다.
@@ -385,6 +543,164 @@ public class GoodsService {
 	private String normalizeAdminOrderDateGb(String dateGb) {
 		// 결제기간 검색만 별도로 허용하고 나머지는 주문기간 검색으로 고정합니다.
 		return "PAY_DT".equalsIgnoreCase(trimToNull(dateGb)) ? "PAY_DT" : "ORDER_DT";
+	}
+
+	// 관리자 배송 시작 관리 상태값을 허용 범위로 보정합니다.
+	private String normalizeAdminOrderStartDeliveryStatus(String ordDtlStatCd) {
+		// 값이 비어 있으면 기본 조회 상태를 상품 준비중으로 고정합니다.
+		String normalizedOrdDtlStatCd = trimToNull(ordDtlStatCd);
+		if (normalizedOrdDtlStatCd == null) {
+			return SHOP_ORDER_DTL_STAT_PREPARING;
+		}
+		if (!ADMIN_ORDER_START_DELIVERY_STATUS_SET.contains(normalizedOrdDtlStatCd)) {
+			throw new IllegalArgumentException("상품 상태를 확인해주세요.");
+		}
+		return normalizedOrdDtlStatCd;
+	}
+
+	// 관리자 배송업체 공통코드 목록을 조회해 코드 집합으로 반환합니다.
+	private Set<String> getAdminOrderStartDeliveryCompanyCodeSet() {
+		// 공통코드 조회 결과에서 실제 사용 가능한 배송업체 코드만 추출합니다.
+		Set<String> result = new LinkedHashSet<>();
+		for (CommonCodeVO item : commonMapper.getCommonCodeList(ADMIN_ORDER_START_DELIVERY_COMPANY_GRP_CD)) {
+			String code = trimToNull(item == null ? null : item.getCd());
+			if (code != null) {
+				result.add(code);
+			}
+		}
+		return Set.copyOf(result);
+	}
+
+	// 관리자 배송 준비중 요청 상품 목록을 정규화합니다.
+	private List<AdminOrderStartDeliveryPrepareItemPO> normalizeAdminOrderStartDeliveryPrepareItemList(
+		List<AdminOrderStartDeliveryPrepareItemPO> itemList,
+		Set<String> deliveryCompanyCodeSet
+	) {
+		// null/중복/비정상 값을 제거하지 않고 즉시 검증 오류를 반환합니다.
+		if (itemList == null || itemList.isEmpty()) {
+			return List.of();
+		}
+
+		Map<String, AdminOrderStartDeliveryPrepareItemPO> normalizedMap = new LinkedHashMap<>();
+		for (AdminOrderStartDeliveryPrepareItemPO item : itemList) {
+			String ordNo = trimToNull(item == null ? null : item.getOrdNo());
+			Integer ordDtlNo = item == null ? null : item.getOrdDtlNo();
+			String delvCompCd = trimToNull(item == null ? null : item.getDelvCompCd());
+			String invoiceNo = normalizeAdminOrderStartDeliveryInvoiceNo(item == null ? null : item.getInvoiceNo());
+
+			// 복합키와 배송정보의 기본 형식을 검증합니다.
+			if (ordNo == null || ordDtlNo == null || ordDtlNo < 1) {
+				throw new IllegalArgumentException("선택 주문건 정보를 확인해주세요.");
+			}
+			if (delvCompCd == null || !deliveryCompanyCodeSet.contains(delvCompCd)) {
+				throw new IllegalArgumentException("배송업체를 선택해주세요.");
+			}
+			if (!isValidAdminOrderStartDeliveryInvoiceNo(invoiceNo)) {
+				throw new IllegalArgumentException("송장번호는 숫자 20자리 이하로 입력해주세요.");
+			}
+
+			// 검증된 값만 새 객체로 복사해 이후 로직에서 재사용합니다.
+			AdminOrderStartDeliveryPrepareItemPO normalizedItem = new AdminOrderStartDeliveryPrepareItemPO();
+			normalizedItem.setOrdNo(ordNo);
+			normalizedItem.setOrdDtlNo(ordDtlNo);
+			normalizedItem.setDelvCompCd(delvCompCd);
+			normalizedItem.setInvoiceNo(invoiceNo);
+			normalizedMap.putIfAbsent(buildAdminOrderStartDeliveryItemKey(ordNo, ordDtlNo), normalizedItem);
+		}
+		return List.copyOf(normalizedMap.values());
+	}
+
+	// 관리자 배송 상태 변경 대상 키 목록을 정규화합니다.
+	private List<AdminOrderStartDeliveryKeyItemPO> normalizeAdminOrderStartDeliveryKeyItemList(
+		List<AdminOrderStartDeliveryKeyItemPO> itemList
+	) {
+		// null/음수/중복 값을 제거하고 유효한 복합키만 유지합니다.
+		if (itemList == null || itemList.isEmpty()) {
+			return List.of();
+		}
+
+		Map<String, AdminOrderStartDeliveryKeyItemPO> normalizedMap = new LinkedHashMap<>();
+		for (AdminOrderStartDeliveryKeyItemPO item : itemList) {
+			String ordNo = trimToNull(item == null ? null : item.getOrdNo());
+			Integer ordDtlNo = item == null ? null : item.getOrdDtlNo();
+			if (ordNo == null || ordDtlNo == null || ordDtlNo < 1) {
+				throw new IllegalArgumentException("선택 주문건 정보를 확인해주세요.");
+			}
+
+			// 검증된 복합키만 새 객체로 복사해 상태 변경 요청으로 사용합니다.
+			AdminOrderStartDeliveryKeyItemPO normalizedItem = new AdminOrderStartDeliveryKeyItemPO();
+			normalizedItem.setOrdNo(ordNo);
+			normalizedItem.setOrdDtlNo(ordDtlNo);
+			normalizedMap.putIfAbsent(buildAdminOrderStartDeliveryItemKey(ordNo, ordDtlNo), normalizedItem);
+		}
+		return List.copyOf(normalizedMap.values());
+	}
+
+	// 관리자 배송 상태 변경 공통 로직을 수행합니다.
+	private AdminOrderStartDeliveryStatusUpdateVO applyAdminOrderStartDeliveryStatusChange(
+		List<AdminOrderStartDeliveryKeyItemPO> itemList,
+		String fromOrdDtlStatCd,
+		String toOrdDtlStatCd,
+		String invalidMessage,
+		boolean updateDelvCompleteDt
+	) {
+		// 선택 목록이 없으면 상태 변경을 진행하지 않습니다.
+		if (itemList.isEmpty()) {
+			throw new IllegalArgumentException(invalidMessage);
+		}
+
+		// 현재 로그인 관리자 번호를 감사 컬럼에 반영합니다.
+		Long udtNo = resolveCurrentAdminUserNo();
+
+		// 현재 상태와 일치하는 선택 상품만 다음 상태로 변경합니다.
+		int updatedCount = goodsMapper.updateAdminOrderStartDeliveryStatusList(
+			itemList,
+			fromOrdDtlStatCd,
+			toOrdDtlStatCd,
+			udtNo,
+			updateDelvCompleteDt
+		);
+		if (updatedCount != itemList.size()) {
+			throw new IllegalArgumentException(invalidMessage);
+		}
+
+		// 변경 건수를 응답 객체에 담아 반환합니다.
+		AdminOrderStartDeliveryStatusUpdateVO result = new AdminOrderStartDeliveryStatusUpdateVO();
+		result.setUpdatedCount(updatedCount);
+		return result;
+	}
+
+	// 관리자 배송 시작 관리 송장번호를 정규화합니다.
+	private String normalizeAdminOrderStartDeliveryInvoiceNo(String invoiceNo) {
+		// 공백만 제거하고 서버에서는 숫자 형식 여부를 별도로 검증합니다.
+		return trimToNull(invoiceNo);
+	}
+
+	// 관리자 배송 시작 관리 송장번호 형식을 검증합니다.
+	private boolean isValidAdminOrderStartDeliveryInvoiceNo(String invoiceNo) {
+		// 숫자만 허용하고 DB 컬럼 길이 20자를 초과하지 않아야 합니다.
+		return invoiceNo != null
+			&& invoiceNo.length() <= ADMIN_ORDER_START_DELIVERY_INVOICE_NO_MAX_LENGTH
+			&& invoiceNo.chars().allMatch(Character::isDigit);
+	}
+
+	// 관리자 배송 시작 관리 요청 항목의 복합키 문자열을 생성합니다.
+	private String buildAdminOrderStartDeliveryItemKey(String ordNo, Integer ordDtlNo) {
+		return ordNo + ":" + ordDtlNo;
+	}
+
+	// 현재 로그인한 관리자 번호를 조회합니다.
+	private Long resolveCurrentAdminUserNo() {
+		// 스프링 시큐리티 인증정보에서 관리자 사용자번호를 추출합니다.
+		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+		if (authentication == null) {
+			return null;
+		}
+		Object principal = authentication.getPrincipal();
+		if (principal instanceof UserBaseEntity userBaseEntity) {
+			return userBaseEntity.getUsrNo();
+		}
+		return null;
 	}
 
 	// Y/N 값을 보정하고 그 외 값은 N으로 반환합니다.
@@ -1952,6 +2268,22 @@ public class GoodsService {
 		result.put("accountNumber", refundBankNo);
 		result.put("holderName", refundHolderNm);
 		return result;
+	}
+
+	// 관리자 주문상세번호 목록을 중복 제거된 양수 목록으로 정규화합니다.
+	private List<Integer> normalizeAdminOrderDetailNoList(List<Integer> ordDtlNoList) {
+		// null/음수/0 값은 제거하고 입력 순서는 유지합니다.
+		if (ordDtlNoList == null || ordDtlNoList.isEmpty()) {
+			return List.of();
+		}
+
+		Set<Integer> normalizedSet = new LinkedHashSet<>();
+		for (Integer ordDtlNo : ordDtlNoList) {
+			if (ordDtlNo != null && ordDtlNo > 0) {
+				normalizedSet.add(ordDtlNo);
+			}
+		}
+		return List.copyOf(normalizedSet);
 	}
 
 	// 메인 주문취소 트랜잭션을 실행합니다.

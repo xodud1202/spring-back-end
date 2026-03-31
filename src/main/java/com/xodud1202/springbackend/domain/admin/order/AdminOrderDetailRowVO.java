@@ -7,6 +7,10 @@ import lombok.Data;
 public class AdminOrderDetailRowVO {
 	// 주문상세번호입니다.
 	private Integer ordDtlNo;
+	// 주문상세 상태 코드입니다.
+	private String ordDtlStatCd;
+	// 주문상세 상태명입니다.
+	private String ordDtlStatNm;
 	// 상품코드입니다.
 	private String goodsId;
 	// 사이즈코드입니다.
