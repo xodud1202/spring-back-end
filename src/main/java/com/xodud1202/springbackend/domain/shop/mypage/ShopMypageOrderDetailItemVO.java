@@ -13,6 +13,8 @@ public class ShopMypageOrderDetailItemVO {
 	private String ordDtlStatCd;
 	// 주문상세 상태명입니다.
 	private String ordDtlStatNm;
+	// 반품신청 가능 여부입니다.
+	private Boolean returnApplyableYn;
 	// 상품코드입니다.
 	private String goodsId;
 	// 상품명입니다.

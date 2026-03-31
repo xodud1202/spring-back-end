@@ -49,6 +49,7 @@ public final class Constants {
 		public static final String SHOP_MYPAGE_ORDER_NOT_FOUND_MESSAGE = "주문 정보를 찾을 수 없습니다.";
 		public static final String SHOP_MYPAGE_ORDER_DETAIL_ITEM_INVALID_MESSAGE = "주문상품 정보를 확인해주세요.";
 		public static final String SHOP_MYPAGE_ORDER_CANCEL_UNAVAILABLE_MESSAGE = "취소 가능한 주문상품 정보를 찾을 수 없습니다.";
+		public static final String SHOP_MYPAGE_ORDER_RETURN_UNAVAILABLE_MESSAGE = "반품 신청 가능한 주문상품 정보를 찾을 수 없습니다.";
 		public static final String SHOP_MYPAGE_ORDER_CANCEL_AMOUNT_MISMATCH_MESSAGE = "환불 금액이 상이합니다.";
 		public static final String SHOP_MYPAGE_ORDER_DELIVERY_COMPLETE_UNAVAILABLE_MESSAGE = "배송중 주문상품만 처리할 수 있습니다.";
 		public static final String SHOP_MYPAGE_ORDER_PURCHASE_CONFIRM_UNAVAILABLE_MESSAGE = "배송완료 주문상품만 처리할 수 있습니다.";

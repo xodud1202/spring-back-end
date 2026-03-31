@@ -14,6 +14,7 @@ import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCancelHistoryVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderCancelPageVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderDetailPageVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderPageVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderReturnPageVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishPageVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypagePointPageVO;
 import com.xodud1202.springbackend.service.GoodsService;
@@ -335,6 +336,49 @@ public class ShopGoodsController {
 				exception
 			);
 			return ResponseEntity.internalServerError().body(Map.of("message", "주문취소 신청 화면 조회에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 마이페이지 반품 신청 화면 데이터를 조회합니다.
+	@GetMapping("/api/shop/mypage/order/return/page")
+	public ResponseEntity<Object> getShopMypageOrderReturnPage(
+		@RequestParam(value = "ordNo", required = false) String ordNo,
+		@RequestParam(value = "ordDtlNo", required = false) Integer ordDtlNo,
+		HttpServletRequest request
+	) {
+		try {
+			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			// 주문번호 필수값을 확인합니다.
+			if (ordNo == null || ordNo.trim().isEmpty()) {
+				return ResponseEntity.badRequest().body(Map.of("message", "주문번호를 확인해주세요."));
+			}
+
+			// 반품 신청 화면 데이터를 조회해 반환합니다.
+			ShopMypageOrderReturnPageVO result = goodsService.getShopMypageOrderReturnPage(custNo, ordNo, ordDtlNo);
+			return ResponseEntity.ok(result);
+		} catch (IllegalArgumentException exception) {
+			// 주문 미존재는 404 응답으로 반환합니다.
+			if ("주문 정보를 찾을 수 없습니다.".equals(exception.getMessage())) {
+				return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", exception.getMessage()));
+			}
+
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 기타 예외는 500 응답과 함께 에러 로그를 반환합니다.
+			log.error(
+				"쇼핑몰 마이페이지 반품 신청 화면 조회 실패 message={} ordNo={} ordDtlNo={}",
+				exception.getMessage(),
+				ordNo,
+				ordDtlNo,
+				exception
+			);
+			return ResponseEntity.internalServerError().body(Map.of("message", "반품 신청 화면 조회에 실패했습니다."));
 		}
 	}
 

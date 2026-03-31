@@ -856,6 +856,23 @@
 		     , OD.ORD_DTL_NO
 		     , OD.ORD_DTL_STAT_CD
 		     , FN_GET_CODE_NM('ORD_DTL_STAT', OD.ORD_DTL_STAT_CD) AS ORD_DTL_STAT_NM
+		     , CASE
+		         WHEN OD.ORD_DTL_STAT_CD = 'ORD_DTL_STAT_06'
+		          AND COALESCE(OD.RMN_QTY, OD.ORD_QTY, 0) &gt; 0
+		          AND NOT EXISTS (
+		              SELECT 1
+		                FROM ORDER_CHANGE_DETAIL OCD
+		                JOIN ORDER_CHANGE_BASE OCB
+		                  ON OCB.CLM_NO = OCD.CLM_NO
+		                 AND OCB.ORD_NO = OCD.ORD_NO
+		               WHERE OCD.ORD_NO = OD.ORD_NO
+		                 AND OCD.ORD_DTL_NO = OD.ORD_DTL_NO
+		                 AND COALESCE(OCB.CHG_STAT_CD, '') != 'CHG_STAT_02'
+		                 AND COALESCE(OCD.CHG_DTL_STAT_CD, '') NOT IN ('CHG_DTL_STAT_02', 'CHG_DTL_STAT_14', 'CHG_DTL_STAT_33')
+		          )
+		           THEN TRUE
+		         ELSE FALSE
+		       END AS RETURN_APPLYABLE_YN
 		     , OD.GOODS_ID
 		     , GB.GOODS_NM
 		     , OD.SIZE_ID
@@ -916,6 +933,17 @@
 		  FROM COMMON_CODE
 		 WHERE GRP_CD = 'CHG_REASON'
 		   AND CD LIKE 'C_%'
+		   AND USE_YN = 'Y'
+		 ORDER BY DISP_ORD ASC, CD ASC
+	</select>
+
+	<select id="getShopMypageOrderReturnReasonList" resultType="com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderCancelReasonVO">
+		/* GoodsMapper.getShopMypageOrderReturnReasonList: 쇼핑몰 마이페이지 반품 사유 코드 목록 조회 */
+		SELECT CD
+		     , CD_NM
+		  FROM COMMON_CODE
+		 WHERE GRP_CD = 'CHG_REASON'
+		   AND CD LIKE 'R_%'
 		   AND USE_YN = 'Y'
 		 ORDER BY DISP_ORD ASC, CD ASC
 	</select>

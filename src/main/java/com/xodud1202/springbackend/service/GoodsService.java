@@ -1201,6 +1201,35 @@ public class GoodsService {
 		return result;
 	}
 
+	// 쇼핑몰 마이페이지 반품 신청 화면 데이터를 조회합니다.
+	public ShopMypageOrderReturnPageVO getShopMypageOrderReturnPage(Long custNo, String ordNo, Integer ordDtlNo) {
+		// 고객번호와 주문번호를 검증합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+		String resolvedOrdNo = trimToNull(ordNo);
+		if (resolvedOrdNo == null) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_NO_INVALID_MESSAGE);
+		}
+
+		// 현재 로그인 고객의 주문번호 1건과 금액/사유/배송 기준 정보를 조회합니다.
+		ShopMypageOrderGroupVO orderGroup = getShopMypageOrderGroupWithDetail(custNo, resolvedOrdNo);
+		validateShopMypageOrderReturnAccess(orderGroup, ordDtlNo);
+		ShopMypageOrderAmountSummaryVO amountSummary = buildShopMypageOrderAmountSummary(custNo, orderGroup);
+		List<ShopMypageOrderCancelReasonVO> reasonList = normalizeShopMypageOrderCancelReasonList(
+			goodsMapper.getShopMypageOrderReturnReasonList()
+		);
+		ShopCartSiteInfoVO siteInfo = resolveShopCartSiteInfo();
+
+		// 반품 신청 화면 응답 객체를 구성합니다.
+		ShopMypageOrderReturnPageVO result = new ShopMypageOrderReturnPageVO();
+		result.setOrder(orderGroup);
+		result.setAmountSummary(amountSummary);
+		result.setReasonList(reasonList);
+		result.setSiteInfo(siteInfo);
+		return result;
+	}
+
 	// 쇼핑몰 마이페이지 취소내역 페이지 데이터를 조회합니다.
 	public ShopMypageCancelHistoryPageVO getShopMypageCancelHistoryPage(
 		Long custNo,
@@ -1823,6 +1852,58 @@ public class GoodsService {
 		if (!matchedRequestedDetail) {
 			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_DETAIL_ITEM_INVALID_MESSAGE);
 		}
+	}
+
+	// 반품 신청 화면 진입 시 주문상세번호와 반품 가능 상태를 검증합니다.
+	private void validateShopMypageOrderReturnAccess(ShopMypageOrderGroupVO orderGroup, Integer ordDtlNo) {
+		// 주문상세 목록이 없으면 반품 불가 예외를 반환합니다.
+		if (orderGroup == null || orderGroup.getDetailList() == null || orderGroup.getDetailList().isEmpty()) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_RETURN_UNAVAILABLE_MESSAGE);
+		}
+
+		// 반품 가능 상품 존재 여부와 요청 주문상세번호 유효성을 함께 확인합니다.
+		boolean hasReturnApplyableDetail = false;
+		boolean matchedRequestedDetail = ordDtlNo == null;
+		for (ShopMypageOrderDetailItemVO detailItem : orderGroup.getDetailList()) {
+			if (detailItem == null) {
+				continue;
+			}
+
+			// 배송완료 상태이면서 진행중 클레임이 없는 상품만 반품 대상 후보로 인정합니다.
+			boolean returnApplyable = isShopMypageOrderReturnApplyable(detailItem);
+			if (returnApplyable) {
+				hasReturnApplyableDetail = true;
+			}
+
+			// 요청 주문상세번호가 있으면 현재 주문의 반품 가능 상품과 일치하는지 확인합니다.
+			if (ordDtlNo != null && ordDtlNo.equals(detailItem.getOrdDtlNo())) {
+				if (!returnApplyable) {
+					throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_DETAIL_ITEM_INVALID_MESSAGE);
+				}
+				matchedRequestedDetail = true;
+			}
+		}
+
+		// 반품 가능한 상품이 없으면 반품 신청 화면 진입을 막습니다.
+		if (!hasReturnApplyableDetail) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_RETURN_UNAVAILABLE_MESSAGE);
+		}
+
+		// 요청 주문상세번호가 현재 주문에 없으면 잘못된 접근으로 처리합니다.
+		if (!matchedRequestedDetail) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_DETAIL_ITEM_INVALID_MESSAGE);
+		}
+	}
+
+	// 주문상세 행이 반품신청 가능한 상태인지 반환합니다.
+	private boolean isShopMypageOrderReturnApplyable(ShopMypageOrderDetailItemVO detailItem) {
+		// 배송완료 상태, 잔여 수량, 진행중 클레임 차단 여부를 함께 확인합니다.
+		if (detailItem == null) {
+			return false;
+		}
+		return SHOP_ORDER_DTL_STAT_DELIVERY_COMPLETE.equals(detailItem.getOrdDtlStatCd())
+			&& normalizeNonNegativeNumber(detailItem.getCancelableQty()) > 0
+			&& Boolean.TRUE.equals(detailItem.getReturnApplyableYn());
 	}
 
 	// 마이페이지 주문상태 변경 요청을 검증하고 대상 주문상세를 반환합니다.
