@@ -2026,6 +2026,49 @@ public class GoodsService {
 		return result;
 	}
 
+	// 관리자 주문반품 신청 화면 데이터를 조회합니다.
+	public AdminOrderReturnPageVO getAdminOrderReturnPage(String ordNo) {
+		// 주문번호 필수 검증을 수행합니다.
+		String resolvedOrdNo = trimToNull(ordNo);
+		if (resolvedOrdNo == null) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_NO_INVALID_MESSAGE);
+		}
+
+		// 주문번호 기준 고객번호와 주문 그룹 정보를 조회합니다.
+		Long custNo = goodsMapper.getOrderCustNo(resolvedOrdNo);
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_NO_INVALID_MESSAGE);
+		}
+		ShopMypageOrderGroupVO orderGroup = getShopMypageOrderGroupWithDetail(custNo, resolvedOrdNo);
+		if (orderGroup == null) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_NO_INVALID_MESSAGE);
+		}
+
+		// 관리자 반품 화면 구성에 필요한 금액/사유/배송 기준/회수지 데이터를 조합합니다.
+		ShopOrderCancelOrderBaseVO orderBase = resolveShopOrderCancelOrderBase(custNo, resolvedOrdNo);
+		List<ShopMypageOrderCancelReasonVO> reasonList = normalizeShopMypageOrderCancelReasonList(
+			goodsMapper.getShopMypageOrderReturnReasonList()
+		);
+		ShopCartSiteInfoVO siteInfo = resolveShopCartSiteInfo();
+		ShopMypageOrderAmountSummaryVO amountSummary = buildShopOrderRemainingAmountSummary(orderGroup, orderBase, siteInfo);
+		ShopMypageOrderReturnFeeContextVO returnFeeContext = buildShopMypageOrderReturnFeeContext(
+			resolvedOrdNo,
+			orderBase,
+			amountSummary
+		);
+		ShopOrderAddressVO pickupAddress = createShopOrderPickupAddress(custNo, orderBase);
+
+		// 관리자 반품 신청 화면 응답 객체를 구성합니다.
+		AdminOrderReturnPageVO result = new AdminOrderReturnPageVO();
+		result.setOrder(orderGroup);
+		result.setAmountSummary(amountSummary);
+		result.setReasonList(reasonList);
+		result.setSiteInfo(siteInfo);
+		result.setReturnFeeContext(returnFeeContext);
+		result.setPickupAddress(pickupAddress);
+		return result;
+	}
+
 	// 주문 그룹에서 지정한 주문상세번호 1건을 찾습니다.
 	private ShopMypageOrderDetailItemVO findShopMypageOrderDetailItem(ShopMypageOrderGroupVO orderGroup, Integer ordDtlNo) {
 		// 주문상세 목록이 없거나 주문상세번호가 없으면 조회하지 않습니다.
@@ -3809,6 +3852,18 @@ public class GoodsService {
 		if (custNo == null || custNo < 1L) {
 			throw new IllegalArgumentException("로그인이 필요합니다.");
 		}
+		return searchOrderAddress(keyword, currentPage, countPerPage);
+	}
+
+	// 관리자 주문 반품 회수지 우편번호 검색 결과를 조회합니다.
+	public ShopOrderAddressSearchResponseVO searchAdminOrderAddress(String keyword, Integer currentPage, Integer countPerPage) {
+		// 관리자 화면에서 사용할 주소 검색 결과를 공통 로직으로 조회합니다.
+		return searchOrderAddress(keyword, currentPage, countPerPage);
+	}
+
+	// 주문 주소 검색 공통 로직으로 도로명 검색 결과를 조회합니다.
+	private ShopOrderAddressSearchResponseVO searchOrderAddress(String keyword, Integer currentPage, Integer countPerPage) {
+		// 검색어 유효성을 확인합니다.
 		String normalizedKeyword = trimToNull(keyword);
 		if (normalizedKeyword == null) {
 			throw new IllegalArgumentException("주소 검색어를 입력해주세요.");

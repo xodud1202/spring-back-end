@@ -1,6 +1,7 @@
 package com.xodud1202.springbackend.controller.bo;
 
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderDetailStatusUpdatePO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnPageVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderStartDeliveryPreparePO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderStartDeliveryStatusPO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderCancelPO;
@@ -65,6 +66,40 @@ public class AdminOrderController {
 		} catch (Exception exception) {
 			// 예상치 못한 오류는 500 응답으로 반환합니다.
 			return ResponseEntity.internalServerError().body(Map.of("message", "주문 취소 처리 중 오류가 발생했습니다."));
+		}
+	}
+
+	// 관리자 주문반품 신청 화면 데이터를 조회합니다.
+	@GetMapping("/api/admin/order/return/page")
+	public ResponseEntity<Object> getAdminOrderReturnPage(
+		@RequestParam String ordNo
+	) {
+		try {
+			// 주문번호 기준으로 반품 신청 화면 데이터를 반환합니다.
+			AdminOrderReturnPageVO result = goodsService.getAdminOrderReturnPage(ordNo);
+			return ResponseEntity.ok(result);
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		}
+	}
+
+	// 관리자 주문 반품 회수지 우편번호 검색 결과를 조회합니다.
+	@GetMapping("/api/admin/order/address/search")
+	public ResponseEntity<Object> searchAdminOrderAddress(
+		@RequestParam(value = "keyword", required = false) String keyword,
+		@RequestParam(value = "currentPage", required = false) Integer currentPage,
+		@RequestParam(value = "countPerPage", required = false) Integer countPerPage
+	) {
+		try {
+			// 주소 검색 결과를 조회해 반환합니다.
+			return ResponseEntity.ok(goodsService.searchAdminOrderAddress(keyword, currentPage, countPerPage));
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 예상치 못한 오류는 500 응답으로 반환합니다.
+			return ResponseEntity.internalServerError().body(Map.of("message", "주소 검색에 실패했습니다."));
 		}
 	}
 

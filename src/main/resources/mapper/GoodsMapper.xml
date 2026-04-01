@@ -2848,6 +2848,23 @@
 		SELECT ORD_DTL_NO
 		     , ORD_DTL_STAT_CD
 		     , FN_GET_CODE_NM('ORD_DTL_STAT', ORD_DTL_STAT_CD) AS ORD_DTL_STAT_NM
+		     , CASE
+		         WHEN ORD_DTL_STAT_CD = 'ORD_DTL_STAT_06'
+		          AND COALESCE(RMN_QTY, ORD_QTY, 0) &gt; 0
+		          AND NOT EXISTS (
+		              SELECT 1
+		                FROM ORDER_CHANGE_DETAIL OCD
+		                JOIN ORDER_CHANGE_BASE OCB
+		                  ON OCB.CLM_NO = OCD.CLM_NO
+		                 AND OCB.ORD_NO = OCD.ORD_NO
+		               WHERE OCD.ORD_NO = ORDER_DETAIL.ORD_NO
+		                 AND OCD.ORD_DTL_NO = ORDER_DETAIL.ORD_DTL_NO
+		                 AND COALESCE(OCB.CHG_STAT_CD, '') != 'CHG_STAT_02'
+		                 AND COALESCE(OCD.CHG_DTL_STAT_CD, '') NOT IN ('CHG_DTL_STAT_02', 'CHG_DTL_STAT_14', 'CHG_DTL_STAT_33')
+		          )
+		           THEN TRUE
+		         ELSE FALSE
+		       END AS RETURN_APPLYABLE_YN
 		     , GOODS_ID
 		     , SIZE_ID
 		     , ORD_QTY
