@@ -9,4 +9,8 @@ public class ShopOrderCancelItemPO {
 	private Integer ordDtlNo;
 	// 취소 요청 수량입니다.
 	private Integer cancelQty;
+	// 개별 상품 취소 사유 코드입니다.
+	private String reasonCd;
+	// 개별 상품 취소 사유 상세 내용입니다.
+	private String reasonDetail;
 }

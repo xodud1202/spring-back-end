@@ -17,6 +17,8 @@ public class ShopMypageOrderReturnPageVO {
 	private List<ShopMypageOrderCancelReasonVO> reasonList;
 	// 현재 사이트 배송 기준 정보입니다.
 	private ShopCartSiteInfoVO siteInfo;
+	// 반품 배송비 계산 컨텍스트입니다.
+	private ShopMypageOrderReturnFeeContextVO returnFeeContext;
 	// 고객 배송지 목록입니다.
 	private List<ShopOrderAddressVO> addressList;
 	// 현재 반품 회수지 정보입니다.

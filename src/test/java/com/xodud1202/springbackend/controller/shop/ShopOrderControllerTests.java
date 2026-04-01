@@ -255,9 +255,7 @@ class ShopOrderControllerTests {
 					.content("""
 						{
 						  "ordNo":"ORD-CANCEL-API-01",
-						  "reasonCd":"C_01",
-						  "reasonDetail":"",
-						  "cancelItemList":[{"ordDtlNo":11,"cancelQty":1}],
+						  "cancelItemList":[{"ordDtlNo":11,"cancelQty":1,"reasonCd":"C_01","reasonDetail":""}],
 						  "previewAmount":{
 						    "expectedRefundAmt":12500,
 						    "paidGoodsAmt":12000,
@@ -294,9 +292,7 @@ class ShopOrderControllerTests {
 					.content("""
 						{
 						  "ordNo":"ORD-CANCEL-API-02",
-						  "reasonCd":"C_03",
-						  "reasonDetail":"사유 입력",
-						  "cancelItemList":[{"ordDtlNo":21,"cancelQty":1}],
+						  "cancelItemList":[{"ordDtlNo":21,"cancelQty":1,"reasonCd":"C_03","reasonDetail":"사유 입력"}],
 						  "previewAmount":{
 						    "expectedRefundAmt":10000,
 						    "paidGoodsAmt":9000,

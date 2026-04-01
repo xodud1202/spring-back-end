@@ -2199,6 +2199,7 @@ class GoodsServiceTests {
 		ShopOrderCancelItemPO cancelItem = new ShopOrderCancelItemPO();
 		cancelItem.setOrdDtlNo(1);
 		cancelItem.setCancelQty(1);
+		cancelItem.setReasonCd("C_01");
 
 		ShopOrderCancelPreviewAmountPO previewAmount = new ShopOrderCancelPreviewAmountPO();
 		previewAmount.setExpectedRefundAmt(6150L);
@@ -2210,7 +2211,6 @@ class GoodsServiceTests {
 
 		ShopOrderCancelPO param = new ShopOrderCancelPO();
 		param.setOrdNo("ORD-20260323-000");
-		param.setReasonCd("C_01");
 		param.setCancelItemList(List.of(cancelItem));
 		param.setPreviewAmount(previewAmount);
 
@@ -2312,6 +2312,7 @@ class GoodsServiceTests {
 		ShopOrderCancelItemPO cancelItem = new ShopOrderCancelItemPO();
 		cancelItem.setOrdDtlNo(1);
 		cancelItem.setCancelQty(1);
+		cancelItem.setReasonCd("C_01");
 
 		ShopOrderCancelPreviewAmountPO previewAmount = new ShopOrderCancelPreviewAmountPO();
 		previewAmount.setExpectedRefundAmt(9251L);
@@ -2323,7 +2324,6 @@ class GoodsServiceTests {
 
 		ShopOrderCancelPO param = new ShopOrderCancelPO();
 		param.setOrdNo("ORD-20260323-001");
-		param.setReasonCd("C_01");
 		param.setCancelItemList(List.of(cancelItem));
 		param.setPreviewAmount(previewAmount);
 
@@ -2384,6 +2384,7 @@ class GoodsServiceTests {
 		ShopOrderCancelItemPO cancelItem = new ShopOrderCancelItemPO();
 		cancelItem.setOrdDtlNo(1);
 		cancelItem.setCancelQty(1);
+		cancelItem.setReasonCd("C_01");
 
 		ShopOrderCancelPreviewAmountPO previewAmount = new ShopOrderCancelPreviewAmountPO();
 		previewAmount.setExpectedRefundAmt(8749L);
@@ -2395,7 +2396,6 @@ class GoodsServiceTests {
 
 		ShopOrderCancelPO param = new ShopOrderCancelPO();
 		param.setOrdNo("ORD-20260323-001A");
-		param.setReasonCd("C_01");
 		param.setCancelItemList(List.of(cancelItem));
 		param.setPreviewAmount(previewAmount);
 
@@ -2516,6 +2516,7 @@ class GoodsServiceTests {
 		ShopOrderCancelItemPO cancelItem = new ShopOrderCancelItemPO();
 		cancelItem.setOrdDtlNo(1);
 		cancelItem.setCancelQty(1);
+		cancelItem.setReasonCd("C_01");
 
 		ShopOrderCancelPreviewAmountPO previewAmount = new ShopOrderCancelPreviewAmountPO();
 		previewAmount.setExpectedRefundAmt(8100L);
@@ -2527,7 +2528,6 @@ class GoodsServiceTests {
 
 		ShopOrderCancelPO param = new ShopOrderCancelPO();
 		param.setOrdNo("ORD-20260323-001B");
-		param.setReasonCd("C_01");
 		param.setCancelItemList(List.of(cancelItem));
 		param.setPreviewAmount(previewAmount);
 
@@ -2623,6 +2623,7 @@ class GoodsServiceTests {
 		ShopOrderCancelItemPO cancelItem = new ShopOrderCancelItemPO();
 		cancelItem.setOrdDtlNo(1);
 		cancelItem.setCancelQty(2);
+		cancelItem.setReasonCd("C_01");
 
 		ShopOrderCancelPreviewAmountPO previewAmount = new ShopOrderCancelPreviewAmountPO();
 		previewAmount.setExpectedRefundAmt(19500L);
@@ -2634,7 +2635,6 @@ class GoodsServiceTests {
 
 		ShopOrderCancelPO param = new ShopOrderCancelPO();
 		param.setOrdNo("ORD-20260323-002");
-		param.setReasonCd("C_01");
 		param.setCancelItemList(List.of(cancelItem));
 		param.setPreviewAmount(previewAmount);
 
@@ -2753,6 +2753,7 @@ class GoodsServiceTests {
 		ShopOrderCancelItemPO cancelItem = new ShopOrderCancelItemPO();
 		cancelItem.setOrdDtlNo(1);
 		cancelItem.setCancelQty(1);
+		cancelItem.setReasonCd("C_01");
 
 		ShopOrderCancelPreviewAmountPO previewAmount = new ShopOrderCancelPreviewAmountPO();
 		previewAmount.setExpectedRefundAmt(19500L);
@@ -2764,7 +2765,6 @@ class GoodsServiceTests {
 
 		ShopOrderCancelPO param = new ShopOrderCancelPO();
 		param.setOrdNo("ORD-20260323-002V");
-		param.setReasonCd("C_01");
 		param.setCancelItemList(List.of(cancelItem));
 		param.setPreviewAmount(previewAmount);
 
@@ -2868,6 +2868,7 @@ class GoodsServiceTests {
 		ShopOrderCancelItemPO cancelItem = new ShopOrderCancelItemPO();
 		cancelItem.setOrdDtlNo(1);
 		cancelItem.setCancelQty(1);
+		cancelItem.setReasonCd("C_01");
 
 		ShopOrderCancelPreviewAmountPO previewAmount = new ShopOrderCancelPreviewAmountPO();
 		previewAmount.setExpectedRefundAmt(1150L);
@@ -2879,7 +2880,6 @@ class GoodsServiceTests {
 
 		ShopOrderCancelPO param = new ShopOrderCancelPO();
 		param.setOrdNo("ORD-20260323-002A");
-		param.setReasonCd("C_01");
 		param.setCancelItemList(List.of(cancelItem));
 		param.setPreviewAmount(previewAmount);
 
@@ -2993,6 +2993,7 @@ class GoodsServiceTests {
 		ShopOrderCancelItemPO cancelItem = new ShopOrderCancelItemPO();
 		cancelItem.setOrdDtlNo(1);
 		cancelItem.setCancelQty(1);
+		cancelItem.setReasonCd("C_01");
 
 		ShopOrderCancelPreviewAmountPO previewAmount = new ShopOrderCancelPreviewAmountPO();
 		previewAmount.setExpectedRefundAmt(10000L);
@@ -3004,7 +3005,6 @@ class GoodsServiceTests {
 
 		ShopOrderCancelPO param = new ShopOrderCancelPO();
 		param.setOrdNo("ORD-20260323-003");
-		param.setReasonCd("C_01");
 		param.setCancelItemList(List.of(cancelItem));
 		param.setPreviewAmount(previewAmount);
 
@@ -3110,6 +3110,7 @@ class GoodsServiceTests {
 		ShopOrderCancelItemPO cancelItem = new ShopOrderCancelItemPO();
 		cancelItem.setOrdDtlNo(1);
 		cancelItem.setCancelQty(1);
+		cancelItem.setReasonCd("C_01");
 
 		ShopOrderCancelPreviewAmountPO previewAmount = new ShopOrderCancelPreviewAmountPO();
 		previewAmount.setExpectedRefundAmt(9200L);
@@ -3121,7 +3122,6 @@ class GoodsServiceTests {
 
 		ShopOrderCancelPO param = new ShopOrderCancelPO();
 		param.setOrdNo("ORD-ADMIN-001");
-		param.setReasonCd("C_01");
 		param.setCancelItemList(List.of(cancelItem));
 		param.setPreviewAmount(previewAmount);
 

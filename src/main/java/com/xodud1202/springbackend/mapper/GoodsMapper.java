@@ -50,6 +50,7 @@ import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOwnedCouponVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderAmountSummaryVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderDetailItemVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderGroupVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderReturnFeeContextVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderStatusSummaryVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishGoodsItemVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCancelHistoryVO;
@@ -245,6 +246,9 @@ public interface GoodsMapper {
 
 	// 쇼핑몰 마이페이지 반품 사유 코드 목록을 조회합니다.
 	List<ShopMypageOrderCancelReasonVO> getShopMypageOrderReturnReasonList();
+
+	// 쇼핑몰 마이페이지 반품 배송비 계산 이력 컨텍스트를 조회합니다.
+	ShopMypageOrderReturnFeeContextVO getShopMypageOrderReturnFeeContext(@Param("ordNo") String ordNo);
 
 	// 주문번호로 고객번호를 조회합니다.
 	Long getOrderCustNo(@Param("ordNo") String ordNo);

@@ -948,6 +948,43 @@
 		 ORDER BY DISP_ORD ASC, CD ASC
 	</select>
 
+	<select id="getShopMypageOrderReturnFeeContext" resultType="com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderReturnFeeContextVO">
+		/* GoodsMapper.getShopMypageOrderReturnFeeContext: 쇼핑몰 마이페이지 반품 배송비 계산 이력 컨텍스트 조회 */
+		SELECT CASE
+		         WHEN EXISTS (
+		           SELECT 1
+		             FROM ORDER_CHANGE_BASE OCB
+		             JOIN ORDER_CHANGE_DETAIL OCD
+		               ON OCD.CLM_NO = OCB.CLM_NO
+		              AND OCD.ORD_NO = OCB.ORD_NO
+		            WHERE OCB.ORD_NO = #{ordNo}
+		              AND OCB.CHG_GB_CD IN ('R', 'E')
+		              AND COALESCE(OCB.CHG_STAT_CD, '') != 'CHG_STAT_02'
+		              AND (
+		                   (OCB.CHG_GB_CD = 'R' AND COALESCE(OCD.CHG_REASON_CD, '') LIKE 'R_2%')
+		                OR (OCB.CHG_GB_CD = 'E' AND COALESCE(OCD.CHG_REASON_CD, '') LIKE 'E_2%')
+		              )
+		         ) THEN TRUE
+		         ELSE FALSE
+		       END AS HAS_PRIOR_COMPANY_FAULT_RETURN_OR_EXCHANGE
+		     , CASE
+		         WHEN EXISTS (
+		           SELECT 1
+		             FROM ORDER_CHANGE_BASE OCB
+		             JOIN ORDER_CHANGE_DETAIL OCD
+		               ON OCD.CLM_NO = OCB.CLM_NO
+		              AND OCD.ORD_NO = OCB.ORD_NO
+		            WHERE OCB.ORD_NO = #{ordNo}
+		              AND OCB.CHG_GB_CD = 'R'
+		              AND COALESCE(OCB.CHG_STAT_CD, '') != 'CHG_STAT_02'
+		              AND COALESCE(OCB.PAY_DELV_AMT, 0) &lt; 0
+		              AND COALESCE(OCD.CHG_REASON_CD, '') LIKE 'R_1%'
+		         ) THEN TRUE
+		         ELSE FALSE
+		       END AS HAS_PRIOR_CUSTOMER_FAULT_RETURN_DEDUCTION
+		  FROM DUAL
+	</select>
+
 	<select id="getShopMypageOrderStatusSummary" resultType="com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderStatusSummaryVO">
 		/* GoodsMapper.getShopMypageOrderStatusSummary: 쇼핑몰 마이페이지 주문내역 상태 요약 건수 조회 */
 		SELECT COALESCE(SUM(CASE WHEN OD.ORD_DTL_STAT_CD = 'ORD_DTL_STAT_01' THEN 1 ELSE 0 END), 0) AS WAITING_FOR_DEPOSIT_COUNT

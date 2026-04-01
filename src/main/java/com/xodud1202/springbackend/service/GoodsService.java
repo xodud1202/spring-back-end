@@ -1222,6 +1222,11 @@ public class GoodsService {
 		);
 		ShopCartSiteInfoVO siteInfo = resolveShopCartSiteInfo();
 		ShopMypageOrderAmountSummaryVO amountSummary = buildShopOrderRemainingAmountSummary(orderGroup, orderBase, siteInfo);
+		ShopMypageOrderReturnFeeContextVO returnFeeContext = buildShopMypageOrderReturnFeeContext(
+			resolvedOrdNo,
+			orderBase,
+			amountSummary
+		);
 		ShopOrderAddressVO pickupAddress = createShopOrderPickupAddress(custNo, orderBase);
 
 		// 반품 신청 화면 응답 객체를 구성합니다.
@@ -1230,8 +1235,40 @@ public class GoodsService {
 		result.setAmountSummary(amountSummary);
 		result.setReasonList(reasonList);
 		result.setSiteInfo(siteInfo);
+		result.setReturnFeeContext(returnFeeContext);
 		result.setAddressList(addressList);
 		result.setPickupAddress(pickupAddress);
+		return result;
+	}
+
+	// 쇼핑몰 마이페이지 반품 배송비 계산 컨텍스트를 구성합니다.
+	private ShopMypageOrderReturnFeeContextVO buildShopMypageOrderReturnFeeContext(
+		String ordNo,
+		ShopOrderCancelOrderBaseVO orderBase,
+		ShopMypageOrderAmountSummaryVO amountSummary
+	) {
+		// 이력 기반 배송비 계산 컨텍스트가 없으면 기본 객체를 생성합니다.
+		ShopMypageOrderReturnFeeContextVO result = goodsMapper.getShopMypageOrderReturnFeeContext(ordNo);
+		if (result == null) {
+			result = new ShopMypageOrderReturnFeeContextVO();
+		}
+
+		// 원주문 실결제 배송비와 무료배송 여부를 계산합니다.
+		int originalPaidDeliveryAmt = Math.max(
+			normalizeNonNegativeNumber(orderBase == null ? null : orderBase.getOrdDelvAmt())
+				- normalizeNonNegativeNumber(orderBase == null ? null : orderBase.getDelvCpnDcAmt()),
+			0
+		);
+		result.setOriginalPaidDeliveryAmt(originalPaidDeliveryAmt);
+		result.setOriginalFreeDeliveryYn(originalPaidDeliveryAmt < 1);
+
+		// 이력 여부와 현재 잔여 결제금액을 프론트 계산용 기본값으로 보정합니다.
+		result.setHasPriorCompanyFaultReturnOrExchange(Boolean.TRUE.equals(result.getHasPriorCompanyFaultReturnOrExchange()));
+		result.setHasPriorCustomerFaultReturnDeduction(Boolean.TRUE.equals(result.getHasPriorCustomerFaultReturnDeduction()));
+		result.setCurrentRemainingFinalPayAmt((int) Math.min(
+			resolveNonNegativeLong(amountSummary == null ? null : amountSummary.getFinalPayAmt()),
+			Integer.MAX_VALUE
+		));
 		return result;
 	}
 
@@ -2211,26 +2248,49 @@ public class GoodsService {
 
 	// 주문취소 사유 코드와 직접입력값을 검증합니다.
 	private void validateShopOrderCancelReason(ShopOrderCancelPO param, List<ShopMypageOrderCancelReasonVO> reasonList) {
-		// 선택한 취소 사유 코드가 비어 있거나 현재 사용 가능한 사유가 아니면 예외를 반환합니다.
-		String reasonCd = trimToNull(param == null ? null : param.getReasonCd());
-		if (reasonCd == null) {
-			throw new IllegalArgumentException("주문 취소 사유를 선택해주세요.");
+		// 선택 상품별 취소 사유 코드가 비어 있거나 현재 사용 가능한 사유가 아니면 예외를 반환합니다.
+		List<ShopOrderCancelItemPO> cancelItemList = param == null ? null : param.getCancelItemList();
+		if (cancelItemList == null || cancelItemList.isEmpty()) {
+			return;
 		}
-		ShopMypageOrderCancelReasonVO matchedReason = null;
-		for (ShopMypageOrderCancelReasonVO reasonItem : reasonList == null ? List.<ShopMypageOrderCancelReasonVO>of() : reasonList) {
-			if (reasonCd.equals(trimToNull(reasonItem.getCd()))) {
-				matchedReason = reasonItem;
-				break;
+		for (ShopOrderCancelItemPO cancelItem : cancelItemList) {
+			String reasonCd = trimToNull(cancelItem == null ? null : cancelItem.getReasonCd());
+			if (reasonCd == null) {
+				throw new IllegalArgumentException("주문 취소 사유를 선택해주세요.");
+			}
+
+			ShopMypageOrderCancelReasonVO matchedReason = findShopOrderCancelReason(reasonList, reasonCd);
+			if (matchedReason == null) {
+				throw new IllegalArgumentException("주문 취소 사유를 선택해주세요.");
+			}
+
+			// 기타 사유는 상품별 직접입력값을 필수로 확인합니다.
+			if (isShopOrderReasonDetailRequired(matchedReason)
+				&& trimToNull(cancelItem == null ? null : cancelItem.getReasonDetail()) == null) {
+				throw new IllegalArgumentException("기타 사유를 입력해주세요.");
 			}
 		}
-		if (matchedReason == null) {
-			throw new IllegalArgumentException("주문 취소 사유를 선택해주세요.");
-		}
+	}
 
-		// 기타 사유는 직접입력값을 필수로 확인합니다.
-		if ("C_03".equals(matchedReason.getCd()) && trimToNull(param.getReasonDetail()) == null) {
-			throw new IllegalArgumentException("기타 사유를 입력해주세요.");
+	// 주문취소 사유 목록에서 요청 사유 코드 1건을 찾습니다.
+	private ShopMypageOrderCancelReasonVO findShopOrderCancelReason(
+		List<ShopMypageOrderCancelReasonVO> reasonList,
+		String reasonCd
+	) {
+		// 현재 사용 가능한 사유 목록에서 코드가 일치하는 항목을 반환합니다.
+		for (ShopMypageOrderCancelReasonVO reasonItem : reasonList == null ? List.<ShopMypageOrderCancelReasonVO>of() : reasonList) {
+			if (reasonCd.equals(trimToNull(reasonItem.getCd()))) {
+				return reasonItem;
+			}
 		}
+		return null;
+	}
+
+	// 주문취소 사유가 직접입력값을 요구하는지 반환합니다.
+	private boolean isShopOrderReasonDetailRequired(ShopMypageOrderCancelReasonVO reasonItem) {
+		// 사유명에 기타가 포함되면 직접입력값을 필수로 처리합니다.
+		String reasonName = trimToNull(reasonItem == null ? null : reasonItem.getCdNm());
+		return reasonName != null && reasonName.contains("기타");
 	}
 
 	// 주문취소 요청 상품 목록을 주문상세번호별 취소수량 맵으로 정규화합니다.
@@ -2479,8 +2539,7 @@ public class GoodsService {
 		Map<String, Object> refundSnapshot = new LinkedHashMap<>();
 		refundSnapshot.put("ordNo", orderBase == null ? null : orderBase.getOrdNo());
 		refundSnapshot.put("clmNo", clmNo);
-		refundSnapshot.put("reasonCd", trimToNull(param == null ? null : param.getReasonCd()));
-		refundSnapshot.put("reasonDetail", trimToNull(param == null ? null : param.getReasonDetail()));
+		refundSnapshot.put("cancelPgReason", resolveShopOrderCancelPgReason(param));
 		refundSnapshot.put("cancelItemList", param == null ? List.of() : param.getCancelItemList());
 		refundSnapshot.put("previewAmount", cancelComputation == null ? null : cancelComputation.getPreviewAmount());
 		refundSnapshot.put("refundedCashAmt", cancelComputation == null ? 0L : cancelComputation.getRefundedCashAmt());
@@ -2872,13 +2931,25 @@ public class GoodsService {
 
 	// PG 취소 사유 문자열을 Toss 전송용 텍스트로 구성합니다.
 	private String resolveShopOrderCancelPgReason(ShopOrderCancelPO param) {
-		// 사유 코드와 상세 입력을 조합해 최대한 읽기 쉬운 문구로 정리합니다.
-		String reasonCd = trimToNull(param == null ? null : param.getReasonCd());
-		String reasonDetail = trimToNull(param == null ? null : param.getReasonDetail());
-		if (reasonCd == null) {
+		// 상품별 사유가 1종류면 그대로 사용하고, 여러 종류면 공통 문구로 축약합니다.
+		List<ShopOrderCancelItemPO> cancelItemList = param == null ? null : param.getCancelItemList();
+		if (cancelItemList == null || cancelItemList.isEmpty()) {
 			return "주문 취소";
 		}
-		return reasonDetail == null ? reasonCd : reasonCd + " - " + reasonDetail;
+
+		Set<String> reasonTextSet = new LinkedHashSet<>();
+		for (ShopOrderCancelItemPO cancelItem : cancelItemList) {
+			String reasonCd = trimToNull(cancelItem == null ? null : cancelItem.getReasonCd());
+			String reasonDetail = trimToNull(cancelItem == null ? null : cancelItem.getReasonDetail());
+			if (reasonCd == null) {
+				continue;
+			}
+			reasonTextSet.add(reasonDetail == null ? reasonCd : reasonCd + " - " + reasonDetail);
+		}
+		if (reasonTextSet.isEmpty()) {
+			return "주문 취소";
+		}
+		return reasonTextSet.size() == 1 ? reasonTextSet.iterator().next() : "주문 취소";
 	}
 
 	// 주문변경 마스터 저장 파라미터를 생성합니다.
@@ -2911,14 +2982,18 @@ public class GoodsService {
 		Long auditNo
 	) {
 		// 선택한 주문상품 기준 취소완료 이력 한 건을 구성합니다.
+		ShopOrderCancelItemPO requestCancelItem = resolveShopOrderCancelItem(
+			param,
+			selectedItem == null || selectedItem.getDetailItem() == null ? null : selectedItem.getDetailItem().getOrdDtlNo()
+		);
 		ShopOrderChangeDetailSavePO result = new ShopOrderChangeDetailSavePO();
 		result.setClmNo(clmNo);
 		result.setOrdNo(selectedItem == null || selectedItem.getDetailItem() == null ? null : selectedItem.getDetailItem().getOrdNo());
 		result.setOrdDtlNo(selectedItem == null || selectedItem.getDetailItem() == null ? null : selectedItem.getDetailItem().getOrdDtlNo());
 		result.setChgDtlGbCd(SHOP_ORDER_CHANGE_DTL_GB_CANCEL);
 		result.setChgDtlStatCd(SHOP_ORDER_CHANGE_DTL_STAT_DONE);
-		result.setChgReasonCd(trimToNull(param == null ? null : param.getReasonCd()));
-		result.setChgReasonDtl(trimToNull(param == null ? null : param.getReasonDetail()));
+		result.setChgReasonCd(trimToNull(requestCancelItem == null ? null : requestCancelItem.getReasonCd()));
+		result.setChgReasonDtl(trimToNull(requestCancelItem == null ? null : requestCancelItem.getReasonDetail()));
 		result.setGoodsId(selectedItem == null || selectedItem.getDetailItem() == null ? null : selectedItem.getDetailItem().getGoodsId());
 		result.setSizeId(selectedItem == null || selectedItem.getDetailItem() == null ? null : selectedItem.getDetailItem().getSizeId());
 		result.setQty(selectedItem == null ? null : selectedItem.getCancelQty());
@@ -2937,6 +3012,20 @@ public class GoodsService {
 			result.setPointDcAmt((int) resolveShopOrderIncrementAllocatedAmt(detailItem.getPointUseAmt(), remainingQty, 0, cancelQty));
 		}
 		return result;
+	}
+
+	// 주문상세번호 기준으로 주문취소 요청 상품 1건을 반환합니다.
+	private ShopOrderCancelItemPO resolveShopOrderCancelItem(ShopOrderCancelPO param, Integer ordDtlNo) {
+		// 요청 상품 목록에서 동일한 주문상세번호 1건을 찾아 반환합니다.
+		if (param == null || ordDtlNo == null || ordDtlNo < 1 || param.getCancelItemList() == null) {
+			return null;
+		}
+		for (ShopOrderCancelItemPO cancelItem : param.getCancelItemList()) {
+			if (cancelItem != null && ordDtlNo.equals(cancelItem.getOrdDtlNo())) {
+				return cancelItem;
+			}
+		}
+		return null;
 	}
 
 	// 주문상세 1건과 취소수량으로 취소 반영 대상 행 정보를 생성합니다.
