@@ -1,31 +1,29 @@
-## spring-back-end 작업 가이드
+## spring-back-end 작업 진입점
 
-### 1) 컨트롤러 파일명 규칙
-- 컨트롤러는 `프로젝트 + 도메인` 단위로 생성한다.
-- 예시:
-  - 쇼핑몰 배너: `ShopBannerController`
-  - 쇼핑몰 카테고리: `ShopCategoryController`
-  - 쇼핑몰 브랜드: `ShopBrandController`
-- 기능 단위 임시/중복 컨트롤러(`ShopMainController` 등)는 생성하지 않는다.
+### 1) 먼저 읽을 문서
+- 공통 규칙: `../AGENTS.md`
+- 프로젝트 개요: `docs/index.md`
+- 도메인 구조: `docs/domain-map.md`
+- 검증 기준: `harness/README.md`
+- DB 조회 절차: `../AGENTS/runbooks/db-query.md`
 
-### 2) 서비스 계층 관리 규칙
-- `Service` 계층부터는 **도메인 기준**으로 파일을 관리한다.
-- 동일 도메인 기능 확장은 기존 도메인 서비스에 메서드로 통합한다.
-  - 예시: 쇼핑 메인 배너 조회 로직은 `BannerService`에 통합
-- 특별한 사유 없이 도메인이 동일한 신규 서비스 파일을 추가하지 않는다.
+### 2) 자동 선독 세부 규칙
+- `spring-back-end` 작업이 식별되면 `docs/index.md`, `docs/domain-map.md`, `harness/README.md`를 먼저 읽고 작업한다.
+- API 추가, 수정, 리팩토링, 컨트롤러/서비스/매퍼 변경은 `../AGENTS/harness/checklists/backend-api-change.md`를 함께 확인한다.
+- DB 관련 요청이나 테이블, 컬럼, 코드값, 정합성, 통계 검토는 `../AGENTS/runbooks/db-query.md`를 함께 확인한다.
+- 배송비 계산 로직을 추가, 수정, 검토할 때는 `../AGENTS/references/DELIVERY_FEE.md`를 함께 확인한다.
 
-### 3) 서비스 이후 계층 관리 규칙
-- `Mapper`, `Domain(VO/PO)`, `Test`도 서비스와 동일하게 도메인 기준으로 관리한다.
-- 신규 기능 추가 시 우선 기존 도메인 파일에 확장 가능한지 검토 후 진행한다.
-- 분리 필요 시에도 도메인 경계를 명확히 유지한다.
+### 3) 프로젝트 경계
+- 본 프로젝트는 전체 백엔드 API와 DB 연동을 담당한다.
+- 프론트에서 `/api`로 호출하는 백엔드 코드는 반드시 본 프로젝트에 구현한다.
+- 배송비 계산 로직을 추가, 수정, 검토할 때는 반드시 `../AGENTS/references/DELIVERY_FEE.md`를 먼저 읽는다.
 
-### 4) 공통 준수사항
-- 최소 변경 원칙을 지킨다.
-- 요청 없는 대규모 리네이밍/리포맷은 금지한다.
-- 모든 메서드/함수/클래스에 주석을 작성하고, 메서드 내부 기능별 주석도 작성한다.
-- 텍스트 파일은 `UTF-8(BOM 없음)`, `LF`를 유지한다.
+### 4) 기본 검증
+- `.\gradlew.bat compileJava`
+- `.\gradlew.bat test`
+- JDK 경로는 `D:\react_project\bin\jdk-21.0.9+10`을 기준으로 사용한다.
+- 백엔드 API 변경 체크는 공통 체크리스트 `../AGENTS/harness/checklists/backend-api-change.md`를 따른다.
 
-### 5) react-shop 쇼핑몰 정보 조회시 준수 사항
-- 쇼핑몰에서 상품 조회를 위한 상품정보(GOODS_BASE)를 조회할때는 GOODS_STAT_02(판매중)인 상품만 조회한다.
-  (이미 주문한 주문/취소 정보, 등록된 장바구니 정보 제외)
-- 
+### 5) 금지 및 주의사항
+- DB 관련 요청은 실제 조회 없이 처리하지 않는다.
+- 상세 도메인 규칙은 본 문서에 계속 누적하지 않고 `docs/`와 `harness/`에 기록한다.

@@ -5,7 +5,10 @@ import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnPageVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderStartDeliveryPreparePO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderStartDeliveryStatusPO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderCancelPO;
-import com.xodud1202.springbackend.service.GoodsService;
+import com.xodud1202.springbackend.service.DeliveryService;
+import com.xodud1202.springbackend.service.OrderCancelService;
+import com.xodud1202.springbackend.service.OrderReturnService;
+import com.xodud1202.springbackend.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -22,7 +25,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 // 관리자 주문 API를 제공합니다.
 public class AdminOrderController {
-	private final GoodsService goodsService;
+	private final OrderService orderService;
+	private final OrderCancelService orderCancelService;
+	private final OrderReturnService orderReturnService;
+	private final DeliveryService deliveryService;
 
 	// 관리자 주문 상세 정보를 조회합니다.
 	@GetMapping("/api/admin/order/detail")
@@ -31,7 +37,7 @@ public class AdminOrderController {
 	) {
 		try {
 			// 주문번호 기준으로 주문 상세 정보를 반환합니다.
-			return ResponseEntity.ok(goodsService.getAdminOrderDetail(ordNo));
+			return ResponseEntity.ok(orderService.getAdminOrderDetail(ordNo));
 		} catch (IllegalArgumentException exception) {
 			// 요청값 오류는 400 응답으로 반환합니다.
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
@@ -45,7 +51,7 @@ public class AdminOrderController {
 	) {
 		try {
 			// 주문번호 기준으로 취소 신청 화면 데이터를 반환합니다.
-			return ResponseEntity.ok(goodsService.getAdminOrderCancelPage(ordNo));
+			return ResponseEntity.ok(orderCancelService.getAdminOrderCancelPage(ordNo));
 		} catch (IllegalArgumentException exception) {
 			// 요청값 오류는 400 응답으로 반환합니다.
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
@@ -59,7 +65,7 @@ public class AdminOrderController {
 	) {
 		try {
 			// 취소 요청을 처리하고 완료 결과를 반환합니다.
-			return ResponseEntity.ok(goodsService.cancelAdminOrder(param));
+			return ResponseEntity.ok(orderCancelService.cancelAdminOrder(param));
 		} catch (IllegalArgumentException exception) {
 			// 요청값 오류는 400 응답으로 반환합니다.
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
@@ -76,7 +82,7 @@ public class AdminOrderController {
 	) {
 		try {
 			// 주문번호 기준으로 반품 신청 화면 데이터를 반환합니다.
-			AdminOrderReturnPageVO result = goodsService.getAdminOrderReturnPage(ordNo);
+			AdminOrderReturnPageVO result = orderReturnService.getAdminOrderReturnPage(ordNo);
 			return ResponseEntity.ok(result);
 		} catch (IllegalArgumentException exception) {
 			// 요청값 오류는 400 응답으로 반환합니다.
@@ -93,7 +99,7 @@ public class AdminOrderController {
 	) {
 		try {
 			// 주소 검색 결과를 조회해 반환합니다.
-			return ResponseEntity.ok(goodsService.searchAdminOrderAddress(keyword, currentPage, countPerPage));
+			return ResponseEntity.ok(orderService.searchAdminOrderAddress(keyword, currentPage, countPerPage));
 		} catch (IllegalArgumentException exception) {
 			// 요청값 오류는 400 응답으로 반환합니다.
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
@@ -110,7 +116,7 @@ public class AdminOrderController {
 	) {
 		try {
 			// 선택한 주문상세를 상품 준비중 상태로 변경한 결과를 반환합니다.
-			return ResponseEntity.ok(goodsService.prepareAdminOrderDetail(param));
+			return ResponseEntity.ok(deliveryService.prepareAdminOrderDetail(param));
 		} catch (IllegalArgumentException exception) {
 			// 요청값 오류는 400 응답으로 반환합니다.
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
@@ -129,7 +135,7 @@ public class AdminOrderController {
 	) {
 		try {
 			// 조회 조건으로 관리자 배송 시작 관리 목록을 반환합니다.
-			return ResponseEntity.ok(goodsService.getAdminOrderStartDeliveryList(page, pageSize, ordDtlStatCd));
+			return ResponseEntity.ok(deliveryService.getAdminOrderStartDeliveryList(page, pageSize, ordDtlStatCd));
 		} catch (IllegalArgumentException exception) {
 			// 요청값 오류는 400 응답으로 반환합니다.
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
@@ -143,7 +149,7 @@ public class AdminOrderController {
 	) {
 		try {
 			// 선택한 상품을 배송 준비중 상태로 변경한 결과를 반환합니다.
-			return ResponseEntity.ok(goodsService.prepareAdminOrderStartDelivery(param));
+			return ResponseEntity.ok(deliveryService.prepareAdminOrderStartDelivery(param));
 		} catch (IllegalArgumentException exception) {
 			// 요청값 오류는 400 응답으로 반환합니다.
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
@@ -160,7 +166,7 @@ public class AdminOrderController {
 	) {
 		try {
 			// 선택한 상품을 배송중 상태로 변경한 결과를 반환합니다.
-			return ResponseEntity.ok(goodsService.startAdminOrderStartDelivery(param));
+			return ResponseEntity.ok(deliveryService.startAdminOrderStartDelivery(param));
 		} catch (IllegalArgumentException exception) {
 			// 요청값 오류는 400 응답으로 반환합니다.
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
@@ -177,7 +183,7 @@ public class AdminOrderController {
 	) {
 		try {
 			// 선택한 상품을 배송완료 상태로 변경한 결과를 반환합니다.
-			return ResponseEntity.ok(goodsService.completeAdminOrderStartDelivery(param));
+			return ResponseEntity.ok(deliveryService.completeAdminOrderStartDelivery(param));
 		} catch (IllegalArgumentException exception) {
 			// 요청값 오류는 400 응답으로 반환합니다.
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
@@ -202,7 +208,7 @@ public class AdminOrderController {
 	) {
 		try {
 			// 조회 조건으로 관리자 주문 목록을 반환합니다.
-			return ResponseEntity.ok(goodsService.getAdminOrderList(
+			return ResponseEntity.ok(orderService.getAdminOrderList(
 				page,
 				pageSize,
 				searchGb,
