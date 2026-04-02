@@ -23,4 +23,6 @@ public class ShopMypageOrderReturnPageVO {
 	private List<ShopOrderAddressVO> addressList;
 	// 현재 반품 회수지 정보입니다.
 	private ShopOrderAddressVO pickupAddress;
+	// 반품 회수지 연락처로 노출할 고객 휴대폰번호입니다.
+	private String customerPhoneNumber;
 }

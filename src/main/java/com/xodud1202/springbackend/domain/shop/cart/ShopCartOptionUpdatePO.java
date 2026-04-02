@@ -5,6 +5,8 @@ import lombok.Data;
 @Data
 // 쇼핑몰 장바구니 옵션 변경 요청 데이터를 전달합니다.
 public class ShopCartOptionUpdatePO {
+	// 변경 대상 장바구니번호입니다.
+	private Long cartId;
 	// 변경 대상 상품코드입니다.
 	private String goodsId;
 	// 변경 대상 현재 사이즈 코드입니다.

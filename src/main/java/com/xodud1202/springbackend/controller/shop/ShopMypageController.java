@@ -11,6 +11,8 @@ import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderReturnPageV
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypagePointPageVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishPageVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderCancelPO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnPO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnResultVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderDetailStatusUpdatePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderDetailStatusUpdateVO;
 import com.xodud1202.springbackend.service.DeliveryService;
@@ -33,6 +35,7 @@ import java.util.Map;
 
 import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_MYPAGE_ORDER_CANCEL_AMOUNT_MISMATCH_MESSAGE;
 import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_MYPAGE_ORDER_NOT_FOUND_MESSAGE;
+import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_MYPAGE_ORDER_RETURN_AMOUNT_MISMATCH_MESSAGE;
 
 @Slf4j
 @RestController
@@ -234,6 +237,34 @@ public class ShopMypageController extends ShopControllerSupport {
 				exception
 			);
 			return ResponseEntity.internalServerError().body(Map.of("message", "반품 신청 화면 조회에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 마이페이지 반품 신청을 저장합니다.
+	@PostMapping("/api/shop/mypage/order/return")
+	public ResponseEntity<Object> returnShopMypageOrder(
+		@RequestBody(required = false) ShopOrderReturnPO param,
+		HttpServletRequest request
+	) {
+		try {
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			ShopOrderReturnResultVO result = orderReturnService.returnShopMypageOrder(param, custNo);
+			return ResponseEntity.ok(result);
+		} catch (IllegalArgumentException exception) {
+			if (SHOP_MYPAGE_ORDER_RETURN_AMOUNT_MISMATCH_MESSAGE.equals(exception.getMessage())) {
+				return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", exception.getMessage()));
+			}
+			if (SHOP_MYPAGE_ORDER_NOT_FOUND_MESSAGE.equals(exception.getMessage())) {
+				return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", exception.getMessage()));
+			}
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			log.error("쇼핑몰 마이페이지 반품 신청 처리 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "반품 신청 처리에 실패했습니다."));
 		}
 	}
 

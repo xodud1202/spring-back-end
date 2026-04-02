@@ -1,0 +1,246 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+		"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.xodud1202.springbackend.mapper.CartMapper">
+	<select id="getShopCartItemList" resultType="com.xodud1202.springbackend.domain.shop.cart.ShopCartItemVO">
+		/* CartMapper.getShopCartItemList: 쇼핑몰 장바구니 목록 조회 */
+		SELECT C.CART_ID
+		     , C.CART_GB_CD
+		     , C.CUST_NO
+		     , C.GOODS_ID
+		     , GB.BRAND_NO
+		     , BB.BRAND_NM
+		     , GB.GOODS_NM
+		     , C.SIZE_ID
+		     , C.QTY
+		     , GB.SUPPLY_AMT
+		     , GB.SALE_AMT
+		     , GS.ADD_AMT
+		     , C.EXHIBITION_NO
+		     , (
+		         SELECT GI.IMG_PATH
+		           FROM GOODS_IMG GI
+		          WHERE GI.GOODS_ID = C.GOODS_ID
+		          ORDER BY GI.DISP_ORD ASC, GI.IMG_NO ASC
+		          LIMIT 1
+		       ) AS IMG_PATH
+		  FROM CART C
+		  JOIN GOODS_BASE GB
+		    ON GB.GOODS_ID = C.GOODS_ID
+		  JOIN GOODS_SIZE GS
+		    ON GS.GOODS_ID = C.GOODS_ID
+		   AND GS.SIZE_ID = C.SIZE_ID
+		  LEFT JOIN BRAND_BASE BB
+		    ON BB.BRAND_NO = GB.BRAND_NO
+		 WHERE C.CUST_NO = #{custNo}
+		   AND C.CART_GB_CD = 'C'
+		 ORDER BY C.REG_DT DESC, C.CART_ID DESC, C.GOODS_ID DESC, C.SIZE_ID ASC
+	</select>
+
+	<select id="getShopCartItem" resultType="com.xodud1202.springbackend.domain.shop.cart.ShopCartItemVO">
+		/* CartMapper.getShopCartItem: 쇼핑몰 장바구니 단건 조회 */
+		SELECT C.CART_ID
+		     , C.CART_GB_CD
+		     , C.CUST_NO
+		     , C.GOODS_ID
+		     , GB.BRAND_NO
+		     , BB.BRAND_NM
+		     , GB.GOODS_NM
+		     , C.SIZE_ID
+		     , C.QTY
+		     , GB.SUPPLY_AMT
+		     , GB.SALE_AMT
+		     , GS.ADD_AMT
+		     , C.EXHIBITION_NO
+		     , (
+		         SELECT GI.IMG_PATH
+		           FROM GOODS_IMG GI
+		          WHERE GI.GOODS_ID = C.GOODS_ID
+		          ORDER BY GI.DISP_ORD ASC, GI.IMG_NO ASC
+		          LIMIT 1
+		       ) AS IMG_PATH
+		  FROM CART C
+		  JOIN GOODS_BASE GB
+		    ON GB.GOODS_ID = C.GOODS_ID
+		  JOIN GOODS_SIZE GS
+		    ON GS.GOODS_ID = C.GOODS_ID
+		   AND GS.SIZE_ID = C.SIZE_ID
+		  LEFT JOIN BRAND_BASE BB
+		    ON BB.BRAND_NO = GB.BRAND_NO
+		 WHERE C.CUST_NO = #{custNo}
+		   AND C.CART_ID = #{cartId}
+		   AND C.CART_GB_CD = 'C'
+		 LIMIT 1
+	</select>
+
+	<select id="countShopCartByGoodsIdAndSizeId" resultType="int">
+		/* CartMapper.countShopCartByGoodsIdAndSizeId: 쇼핑몰 장바구니의 동일 상품/사이즈 등록 건수 조회 */
+		SELECT COUNT(1)
+		  FROM CART
+		 WHERE CUST_NO = #{custNo}
+		   AND GOODS_ID = #{goodsId}
+		   AND SIZE_ID = #{sizeId}
+		   AND CART_GB_CD = 'C'
+	</select>
+
+	<select id="getShopCartIdByGoodsIdAndSizeId" resultType="long">
+		/* CartMapper.getShopCartIdByGoodsIdAndSizeId: 쇼핑몰 장바구니의 동일 상품/사이즈 장바구니번호 조회 */
+		SELECT CART_ID
+		  FROM CART
+		 WHERE CUST_NO = #{custNo}
+		   AND GOODS_ID = #{goodsId}
+		   AND SIZE_ID = #{sizeId}
+		   AND CART_GB_CD = 'C'
+		 ORDER BY REG_DT DESC, CART_ID DESC
+		 LIMIT 1
+	</select>
+
+	<insert id="insertShopCart" useGeneratedKeys="true" keyProperty="cartId" keyColumn="CART_ID">
+		/* CartMapper.insertShopCart: 쇼핑몰 장바구니 등록 */
+		INSERT INTO CART (
+		       CART_GB_CD
+		     , CUST_NO
+		     , GOODS_ID
+		     , SIZE_ID
+		     , QTY
+		     , EXHIBITION_NO
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{cartGbCd}
+		     , #{custNo}
+		     , #{goodsId}
+		     , #{sizeId}
+		     , #{qty}
+		     , #{exhibitionNo}
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+
+	<update id="addShopCartQtyByGoodsIdAndSizeId">
+		/* CartMapper.addShopCartQtyByGoodsIdAndSizeId: 쇼핑몰 장바구니의 동일 상품/사이즈 수량 추가 */
+		UPDATE CART
+		   SET QTY = QTY + #{qty}
+		     , EXHIBITION_NO = #{exhibitionNo}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE CUST_NO = #{custNo}
+		   AND GOODS_ID = #{goodsId}
+		   AND SIZE_ID = #{sizeId}
+		   AND CART_GB_CD = 'C'
+	</update>
+
+	<select id="getShopCartQtyByGoodsIdAndSizeId" resultType="int">
+		/* CartMapper.getShopCartQtyByGoodsIdAndSizeId: 쇼핑몰 장바구니의 동일 상품/사이즈 현재 수량 조회 */
+		SELECT QTY
+		  FROM CART
+		 WHERE CUST_NO = #{custNo}
+		   AND GOODS_ID = #{goodsId}
+		   AND SIZE_ID = #{sizeId}
+		   AND CART_GB_CD = 'C'
+		 ORDER BY REG_DT DESC, CART_ID DESC
+		 LIMIT 1
+	</select>
+
+	<update id="updateShopCartQtyByCartId">
+		/* CartMapper.updateShopCartQtyByCartId: 쇼핑몰 장바구니 수량 수정 */
+		UPDATE CART
+		   SET QTY = #{qty}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE CUST_NO = #{custNo}
+		   AND CART_ID = #{cartId}
+		   AND CART_GB_CD = 'C'
+	</update>
+
+	<update id="updateShopCartOptionByCartId">
+		/* CartMapper.updateShopCartOptionByCartId: 쇼핑몰 장바구니 옵션(사이즈/수량) 변경 */
+		UPDATE CART
+		   SET SIZE_ID = #{targetSizeId}
+		     , QTY = #{targetQty}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE CUST_NO = #{custNo}
+		   AND CART_ID = #{cartId}
+		   AND CART_GB_CD = 'C'
+	</update>
+
+	<delete id="deleteShopCartByCartId">
+		/* CartMapper.deleteShopCartByCartId: 쇼핑몰 장바구니 단건 삭제 */
+		DELETE
+		  FROM CART
+		 WHERE CUST_NO = #{custNo}
+		   AND CART_ID = #{cartId}
+		   AND CART_GB_CD = 'C'
+	</delete>
+
+	<delete id="deleteShopCartByGoodsIdAndSizeId">
+		/* CartMapper.deleteShopCartByGoodsIdAndSizeId: 쇼핑몰 장바구니 단건 삭제 */
+		DELETE
+		  FROM CART
+		 WHERE CUST_NO = #{custNo}
+		   AND GOODS_ID = #{goodsId}
+		   AND SIZE_ID = #{sizeId}
+		   AND CART_GB_CD = 'C'
+	</delete>
+
+	<delete id="deleteShopCartAll">
+		/* CartMapper.deleteShopCartAll: 쇼핑몰 장바구니 전체 삭제 */
+		DELETE
+		  FROM CART
+		 WHERE CUST_NO = #{custNo}
+		   AND CART_GB_CD = 'C'
+	</delete>
+
+	<select id="getShopOrderCartItemList" resultType="com.xodud1202.springbackend.domain.shop.cart.ShopCartItemVO">
+		/* CartMapper.getShopOrderCartItemList: 쇼핑몰 주문서 대상 장바구니 목록 조회 */
+		SELECT C.CART_ID
+		     , C.CART_GB_CD
+		     , C.CUST_NO
+		     , C.GOODS_ID
+		     , GB.BRAND_NO
+		     , BB.BRAND_NM
+		     , GB.GOODS_NM
+		     , C.SIZE_ID
+		     , C.QTY
+		     , GB.SUPPLY_AMT
+		     , GB.SALE_AMT
+		     , GS.ADD_AMT
+		     , C.EXHIBITION_NO
+		     , (
+		         SELECT GI.IMG_PATH
+		           FROM GOODS_IMG GI
+		          WHERE GI.GOODS_ID = C.GOODS_ID
+		          ORDER BY GI.DISP_ORD ASC, GI.IMG_NO ASC
+		          LIMIT 1
+		       ) AS IMG_PATH
+		  FROM CART C
+		  JOIN GOODS_BASE GB
+		    ON GB.GOODS_ID = C.GOODS_ID
+		  JOIN GOODS_SIZE GS
+		    ON GS.GOODS_ID = C.GOODS_ID
+		   AND GS.SIZE_ID = C.SIZE_ID
+		  LEFT JOIN BRAND_BASE BB
+		    ON BB.BRAND_NO = GB.BRAND_NO
+		 WHERE C.CUST_NO = #{custNo}
+		   AND C.CART_ID IN
+		<foreach collection="cartIdList" item="cartId" open="(" separator="," close=")">
+			#{cartId}
+		</foreach>
+		   AND C.CART_GB_CD IN ('C', 'O')
+		 ORDER BY C.REG_DT DESC, C.CART_ID DESC
+	</select>
+
+	<delete id="deleteShopCartByCartIdList">
+		/* CartMapper.deleteShopCartByCartIdList: 선택 장바구니 번호 목록 삭제 */
+		DELETE
+		  FROM CART
+		 WHERE CUST_NO = #{custNo}
+		   AND CART_ID IN
+		<foreach collection="cartIdList" item="cartId" open="(" separator="," close=")">
+			#{cartId}
+		</foreach>
+	</delete>
+</mapper>

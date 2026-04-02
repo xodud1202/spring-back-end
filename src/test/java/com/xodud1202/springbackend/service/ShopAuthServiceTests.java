@@ -11,7 +11,9 @@ import com.xodud1202.springbackend.domain.shop.auth.ShopGoogleJoinRequest;
 import com.xodud1202.springbackend.domain.shop.auth.ShopGoogleJoinSavePO;
 import com.xodud1202.springbackend.domain.shop.auth.ShopGoogleLoginRequest;
 import com.xodud1202.springbackend.domain.shop.auth.ShopGoogleLoginResponse;
+import com.xodud1202.springbackend.domain.shop.site.ShopSiteInfoVO;
 import com.xodud1202.springbackend.mapper.ShopAuthMapper;
+import com.xodud1202.springbackend.mapper.SiteInfoMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -42,6 +44,8 @@ import static org.mockito.Mockito.when;
 class ShopAuthServiceTests {
 	@Mock
 	private ShopAuthMapper shopAuthMapper;
+	@Mock
+	private SiteInfoMapper siteInfoMapper;
 
 	@InjectMocks
 	private ShopAuthService shopAuthService;
@@ -446,7 +450,7 @@ class ShopAuthServiceTests {
 			generatedKey.setValue(31L);
 			return 1;
 		}).when(shopAuthMapper).insertShopGoogleCustomer(any(ShopGoogleJoinSavePO.class), any(GeneratedLongKey.class));
-		when(shopAuthMapper.getShopJoinPoint("xodud1202")).thenReturn(2000);
+		when(siteInfoMapper.getShopSiteInfo("xodud1202")).thenReturn(createSiteInfo(2000));
 		doAnswer(invocation -> {
 			GeneratedLongKey generatedKey = invocation.getArgument(1);
 			generatedKey.setValue(41L);
@@ -519,7 +523,7 @@ class ShopAuthServiceTests {
 			generatedKey.setValue(51L);
 			return 1;
 		}).when(shopAuthMapper).insertShopGoogleCustomer(any(ShopGoogleJoinSavePO.class), any(GeneratedLongKey.class));
-		when(shopAuthMapper.getShopJoinPoint("xodud1202")).thenReturn(0);
+		when(siteInfoMapper.getShopSiteInfo("xodud1202")).thenReturn(createSiteInfo(0));
 
 		// 고객등급 혜택(상품 쿠폰 2장, 장바구니 쿠폰 1장)을 구성합니다.
 		ShopCustomerGradeBenefitVO benefitVO = new ShopCustomerGradeBenefitVO("CUST_GRADE_01", 1L, 2, 2L, 1, null, null);
@@ -591,7 +595,7 @@ class ShopAuthServiceTests {
 			generatedKey.setValue(61L);
 			return 1;
 		}).when(shopAuthMapper).insertShopGoogleCustomer(any(ShopGoogleJoinSavePO.class), any(GeneratedLongKey.class));
-		when(shopAuthMapper.getShopJoinPoint("xodud1202")).thenReturn(0);
+		when(siteInfoMapper.getShopSiteInfo("xodud1202")).thenReturn(createSiteInfo(0));
 
 		// 기간형 쿠폰 2장 지급 혜택을 구성합니다.
 		ShopCustomerGradeBenefitVO benefitVO = new ShopCustomerGradeBenefitVO("CUST_GRADE_01", null, null, 2L, 2, null, null);
@@ -705,5 +709,13 @@ class ShopAuthServiceTests {
 			"Y",
 			"WEB"
 		);
+	}
+
+	// 회원가입 포인트 테스트용 사이트 정보를 생성합니다.
+	private ShopSiteInfoVO createSiteInfo(Integer joinPoint) {
+		// 필요한 가입 포인트 값만 채운 사이트 정보를 반환합니다.
+		ShopSiteInfoVO siteInfo = new ShopSiteInfoVO();
+		siteInfo.setJoinPoint(joinPoint);
+		return siteInfo;
 	}
 }

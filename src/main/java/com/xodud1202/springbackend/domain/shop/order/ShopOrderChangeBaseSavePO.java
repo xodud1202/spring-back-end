@@ -17,7 +17,7 @@ public class ShopOrderChangeBaseSavePO {
 	private String chgCompleteDt;
 	// 변경 상태 코드입니다.
 	private String chgStatCd;
-	// 취소 계산에 반영된 배송비 조정 금액입니다.
+	// 클레임 계산에 반영된 배송비 조정 금액입니다.
 	private Integer payDelvAmt;
 	// 등록자 번호입니다.
 	private Long regNo;

@@ -61,6 +61,7 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderBaseSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderCancelOrderBaseVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderChangeBaseSavePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderChangeExchangeAddressSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderChangeDetailSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderCustomerInfoVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderDetailSavePO;
@@ -135,9 +136,6 @@ public interface OrderMapper {
 		@Param("endExclusiveDateTime") String endExclusiveDateTime
 	);
 
-	// 쇼핑몰 주문서 대상 장바구니 목록을 조회합니다.
-	List<ShopCartItemVO> getShopOrderCartItemList(@Param("custNo") Long custNo, @Param("cartIdList") List<Long> cartIdList);
-
 	// 쇼핑몰 주문서 배송지 목록을 조회합니다.
 	List<ShopOrderAddressVO> getShopOrderAddressList(@Param("custNo") Long custNo);
 
@@ -179,6 +177,9 @@ public interface OrderMapper {
 
 	// 주문변경 상세를 등록합니다.
 	int insertShopOrderChangeDetail(ShopOrderChangeDetailSavePO param);
+
+	// 주문변경 회수지/도착지 주소를 등록합니다.
+	int insertShopOrderChangeExchangeAddress(ShopOrderChangeExchangeAddressSavePO param);
 
 	// 주문상세 취소 수량/상태와 쿠폰/포인트 할인금액 차감을 함께 반영합니다.
 	int updateShopOrderDetailCancelQuantity(
@@ -354,9 +355,6 @@ public interface OrderMapper {
 
 	// 주문번호 기준 포인트 사용/복구 누적 요약을 조회합니다.
 	List<ShopOrderPointDetailVO> getShopOrderPointDetailBalanceList(@Param("ordNo") String ordNo);
-
-	// 선택 장바구니 번호 목록을 삭제합니다.
-	int deleteShopCartByCartIdList(@Param("custNo") Long custNo, @Param("cartIdList") List<Long> cartIdList);
 
 	// 주문번호 기준 장바구니 복구 대상 목록을 조회합니다.
 	List<ShopOrderRestoreCartItemVO> getShopOrderRestoreCartItemList(@Param("ordNo") String ordNo);

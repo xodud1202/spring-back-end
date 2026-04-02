@@ -4,9 +4,20 @@
 
 <mapper namespace="com.xodud1202.springbackend.mapper.SiteInfoMapper">
 	<select id="getShopSiteInfo" resultType="com.xodud1202.springbackend.domain.shop.site.ShopSiteInfoVO">
-		/* SiteInfoMapper.getShopSiteInfo: 쇼핑몰 사이트 기본 정보 조회 */
+		/* SiteInfoMapper.getShopSiteInfo: 쇼핑몰 사이트 통합 정보 조회 */
 		SELECT SITE_ID
 		     , SITE_NM
+		     , DELIVERY_FEE
+		     , DELIVERY_FEE_LIMIT
+		     , JOIN_POINT
+		     , REG_NO
+		     , REG_DT
+		     , UDT_NO
+		     , UDT_DT
+		     , WH_POST_NO
+		     , WH_ADDR_BASE
+		     , WH_ADDR_DTL
+		     , CS_TELL
 		  FROM SITE_INFO
 		 WHERE SITE_ID = #{siteId}
 	</select>

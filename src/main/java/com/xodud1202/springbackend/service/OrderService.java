@@ -12,10 +12,13 @@ import com.xodud1202.springbackend.domain.shop.cart.*;
 import com.xodud1202.springbackend.domain.shop.goods.*;
 import com.xodud1202.springbackend.domain.shop.mypage.*;
 import com.xodud1202.springbackend.domain.shop.order.*;
+import com.xodud1202.springbackend.domain.shop.site.ShopSiteInfoVO;
+import com.xodud1202.springbackend.mapper.CartMapper;
 import com.xodud1202.springbackend.mapper.CommonMapper;
 import com.xodud1202.springbackend.mapper.ExhibitionMapper;
 import com.xodud1202.springbackend.mapper.GoodsMapper;
 import com.xodud1202.springbackend.mapper.OrderMapper;
+import com.xodud1202.springbackend.mapper.SiteInfoMapper;
 import com.xodud1202.springbackend.service.order.support.ShopCartCouponEstimateRow;
 import com.xodud1202.springbackend.service.order.support.ShopCartValidatedInput;
 import com.xodud1202.springbackend.service.order.support.ShopMypageOrderDateRange;
@@ -50,10 +53,12 @@ import static com.xodud1202.springbackend.common.Constants.Shop.*;
 public class OrderService {
 	private static final Logger log = LoggerFactory.getLogger(OrderService.class);
 
+	private final CartMapper cartMapper;
 	private final OrderMapper orderMapper;
 	private final GoodsMapper goodsMapper;
 	private final CommonMapper commonMapper;
 	private final ExhibitionMapper exhibitionMapper;
+	private final SiteInfoMapper siteInfoMapper;
 	private final GoodsImageService goodsImageService;
 	private final ShopAuthService shopAuthService;
 	private final JusoAddressApiClient jusoAddressApiClient;
@@ -601,6 +606,7 @@ public class OrderService {
 			orderBase,
 			amountSummary
 		);
+		ShopOrderCustomerInfoVO customerInfo = orderMapper.getShopOrderCustomerInfo(custNo);
 		ShopOrderAddressVO pickupAddress = createShopOrderPickupAddress(custNo, orderBase);
 
 		// 반품 신청 화면 응답 객체를 구성합니다.
@@ -612,6 +618,7 @@ public class OrderService {
 		result.setReturnFeeContext(returnFeeContext);
 		result.setAddressList(addressList);
 		result.setPickupAddress(pickupAddress);
+		result.setCustomerPhoneNumber(firstNonBlank(trimToNull(customerInfo == null ? null : customerInfo.getPhoneNumber()), ""));
 		return result;
 	}
 
@@ -1122,7 +1129,7 @@ public class OrderService {
 	}
 
 	// 현재 남아 있는 주문수량 기준으로 주문 금액 요약을 계산합니다.
-	private ShopMypageOrderAmountSummaryVO buildShopOrderRemainingAmountSummary(
+	public ShopMypageOrderAmountSummaryVO buildShopOrderRemainingAmountSummary(
 		ShopMypageOrderGroupVO orderGroup,
 		ShopOrderCancelOrderBaseVO orderBase,
 		ShopCartSiteInfoVO siteInfo
@@ -1910,7 +1917,7 @@ public class OrderService {
 		}
 
 		// 현재 장바구니와 선택 키 목록을 조회해 실제 계산 대상 행을 확정합니다.
-		List<ShopCartItemVO> cartItemList = goodsMapper.getShopCartItemList(custNo);
+		List<ShopCartItemVO> cartItemList = cartMapper.getShopCartItemList(custNo);
 		Set<String> selectedCartItemKeySet = buildShopCartCouponEstimateKeySet(param.getCartItemList());
 		List<ShopCartItemVO> selectedCartItemList = resolveSelectedCartItemListForCouponEstimate(cartItemList, selectedCartItemKeySet);
 		if (selectedCartItemList.isEmpty()) {
@@ -2147,13 +2154,12 @@ public class OrderService {
 		}
 
 		// 할인 구분 코드에 따라 금액/정률 할인액을 계산합니다.
-		int safeBaseAmt = Math.max(baseAmt, 0);
 		int cpnDcVal = normalizeNonNegativeNumber(coupon.getCpnDcVal());
 		if (CPN_DC_GB_AMOUNT.equals(coupon.getCpnDcGbCd())) {
-			return Math.min(safeBaseAmt, cpnDcVal);
+			return Math.min(baseAmt, cpnDcVal);
 		}
 		if (CPN_DC_GB_RATE.equals(coupon.getCpnDcGbCd())) {
-			return (int) Math.floor((double) safeBaseAmt * (double) cpnDcVal / 100.0d);
+			return (int) Math.floor((double) baseAmt * (double) cpnDcVal / 100.0d);
 		}
 		return 0;
 	}
@@ -2206,9 +2212,7 @@ public class OrderService {
 		int matrixSize = Math.max(rowCount, columnCount);
 		int[][] paddedMatrix = new int[matrixSize + 1][matrixSize + 1];
 		for (int rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
-			for (int columnIndex = 0; columnIndex < columnCount; columnIndex += 1) {
-				paddedMatrix[rowIndex + 1][columnIndex + 1] = weightMatrix[rowIndex][columnIndex];
-			}
+			System.arraycopy(weightMatrix[rowIndex], 0, paddedMatrix[rowIndex + 1], 1, columnCount);
 		}
 
 		// 최소 비용 문제 형태로 변환한 뒤 최적 할당을 계산합니다.
@@ -2443,7 +2447,7 @@ public class OrderService {
 		}
 
 		// 현재 로그인 고객의 cartId 목록을 조회해 모두 유효한지 검증합니다.
-		List<ShopCartItemVO> orderCartItemList = orderMapper.getShopOrderCartItemList(custNo, normalizedCartIdList);
+		List<ShopCartItemVO> orderCartItemList = cartMapper.getShopOrderCartItemList(custNo, normalizedCartIdList);
 		if (orderCartItemList == null || orderCartItemList.size() != normalizedCartIdList.size()) {
 			throw new IllegalArgumentException("주문 정보가 맞지 않습니다.");
 		}
@@ -2658,10 +2662,7 @@ public class OrderService {
 		int normalizedGoodsCouponDiscountAmt = Math.max(goodsCouponDiscountAmt, 0);
 		int normalizedCartCouponDiscountAmt = Math.max(cartCouponDiscountAmt, 0);
 		int normalizedDeliveryCouponDiscountAmt = Math.max(deliveryCouponDiscountAmt, 0);
-		int maxPointUseAmt = Math.min(
-			Math.max(availablePointAmt, 0),
-			Math.max(discountedSaleAmt - normalizedCartCouponDiscountAmt, 0)
-		);
+		int maxPointUseAmt = Math.clamp(availablePointAmt, 0, Math.max(discountedSaleAmt - normalizedCartCouponDiscountAmt, 0));
 
 		// 선택 상태와 할인 금액 요약을 응답 객체로 설정합니다.
 		ShopOrderDiscountAmountVO discountAmount = new ShopOrderDiscountAmountVO();
@@ -2703,7 +2704,7 @@ public class OrderService {
 				if (!isMatchedShopCartGoodsCoupon(coupon, targetList, estimateRow)) {
 					continue;
 				}
-				int discountAmt = calculateCouponDiscountAmount(coupon, estimateRow == null ? 0 : estimateRow.rowSaleAmt());
+				int discountAmt = calculateCouponDiscountAmount(coupon, estimateRow.rowSaleAmt());
 				weightMatrix[rowIndex][couponIndex] = discountAmt;
 				if (discountAmt > 0) {
 					hasPositiveWeight = true;
@@ -2760,7 +2761,7 @@ public class OrderService {
 			}
 			Set<Long> candidateSet = new HashSet<>();
 			for (ShopOrderCouponItemVO coupon : group.getCouponList() == null ? List.<ShopOrderCouponItemVO>of() : group.getCouponList()) {
-				if (coupon == null || coupon.getCustCpnNo() == null) {
+				if (coupon.getCustCpnNo() == null) {
 					continue;
 				}
 				candidateSet.add(coupon.getCustCpnNo());
@@ -2818,7 +2819,7 @@ public class OrderService {
 
 		// 후보 목록에 없는 쿠폰이면 예외를 반환합니다.
 		for (ShopOrderCouponItemVO coupon : couponList == null ? List.<ShopOrderCouponItemVO>of() : couponList) {
-			if (coupon == null || coupon.getCustCpnNo() == null) {
+			if (coupon.getCustCpnNo() == null) {
 				continue;
 			}
 			if (custCpnNo.equals(coupon.getCustCpnNo())) {
@@ -2906,7 +2907,7 @@ public class OrderService {
 
 		// 장바구니 행별 사이즈 옵션 목록을 매핑합니다.
 		for (ShopCartItemVO cartItem : cartItemList == null ? List.<ShopCartItemVO>of() : cartItemList) {
-			if (cartItem == null || isBlank(cartItem.getGoodsId())) {
+			if (isBlank(cartItem.getGoodsId())) {
 				continue;
 			}
 			String normalizedGoodsId = cartItem.getGoodsId().trim();
@@ -2983,9 +2984,6 @@ public class OrderService {
 		int pointSaveRate = resolveShopPointSaveRate(resolveCustGradeCd(custGradeCd));
 		int totalExpectedPoint = 0;
 		for (ShopCartItemVO cartItem : cartItemList == null ? List.<ShopCartItemVO>of() : cartItemList) {
-			if (cartItem == null) {
-				continue;
-			}
 			totalExpectedPoint += resolveShopOrderPointSaveAmt(cartItem, pointSaveRate);
 		}
 
@@ -3159,10 +3157,10 @@ public class OrderService {
 	// Toss 주문명을 생성합니다.
 	private String buildShopOrderName(List<ShopCartItemVO> cartItemList) {
 		// 첫 상품명을 기준으로 다건 여부를 반영한 주문명을 생성합니다.
-		if (cartItemList == null || cartItemList.isEmpty() || isBlank(cartItemList.get(0).getGoodsNm())) {
+		if (cartItemList == null || cartItemList.isEmpty() || isBlank(cartItemList.getFirst().getGoodsNm())) {
 			return "주문 상품";
 		}
-		String firstGoodsName = cartItemList.get(0).getGoodsNm().trim();
+		String firstGoodsName = cartItemList.getFirst().getGoodsNm().trim();
 		if (cartItemList.size() < 2) {
 			return firstGoodsName;
 		}
@@ -3329,7 +3327,7 @@ public class OrderService {
 		// 주문 대상 장바구니 목록이 없으면 빈 목록을 반환합니다.
 		List<Long> result = new ArrayList<>();
 		for (ShopCartItemVO cartItem : cartItemList == null ? List.<ShopCartItemVO>of() : cartItemList) {
-			if (cartItem == null || cartItem.getCartId() == null || cartItem.getCartId() < 1L) {
+			if (cartItem.getCartId() == null || cartItem.getCartId() < 1L) {
 				continue;
 			}
 			result.add(cartItem.getCartId());
@@ -3352,7 +3350,7 @@ public class OrderService {
 
 		List<Long> cartIdList = extractShopOrderCartIdListFromSnapshot(payment.getReqRawJson());
 		if (!cartIdList.isEmpty()) {
-			orderMapper.deleteShopCartByCartIdList(custNo, cartIdList);
+			cartMapper.deleteShopCartByCartIdList(custNo, cartIdList);
 		}
 	}
 
@@ -3376,7 +3374,7 @@ public class OrderService {
 			savePO.setExhibitionNo(restoreCartItem.getExhibitionNo());
 			savePO.setRegNo(custNo);
 			savePO.setUdtNo(custNo);
-			goodsMapper.insertShopCart(savePO);
+			cartMapper.insertShopCart(savePO);
 		}
 	}
 
@@ -3949,20 +3947,19 @@ public class OrderService {
 	// 쇼핑몰 장바구니 배송 기준 정보를 조회합니다.
 	ShopCartSiteInfoVO resolveShopCartSiteInfo() {
 		// 사이트 아이디 기준 배송 기준 정보를 조회합니다.
-		ShopCartSiteInfoVO siteInfo = goodsMapper.getShopCartSiteInfo(SHOP_SITE_ID);
-		if (siteInfo != null) {
-			siteInfo.setSiteId(isBlank(siteInfo.getSiteId()) ? SHOP_SITE_ID : siteInfo.getSiteId());
-			siteInfo.setDeliveryFee(siteInfo.getDeliveryFee() == null ? 0 : Math.max(siteInfo.getDeliveryFee(), 0));
-			siteInfo.setDeliveryFeeLimit(siteInfo.getDeliveryFeeLimit() == null ? 0 : Math.max(siteInfo.getDeliveryFeeLimit(), 0));
-			return siteInfo;
-		}
+		return createShopCartSiteInfo(siteInfoMapper.getShopSiteInfo(SHOP_SITE_ID));
+	}
 
-		// 데이터가 없으면 기본값을 반환합니다.
-		ShopCartSiteInfoVO fallback = new ShopCartSiteInfoVO();
-		fallback.setSiteId(SHOP_SITE_ID);
-		fallback.setDeliveryFee(0);
-		fallback.setDeliveryFeeLimit(0);
-		return fallback;
+	// 사이트 배송 기준 정보를 장바구니 응답 형식으로 변환합니다.
+	private ShopCartSiteInfoVO createShopCartSiteInfo(ShopSiteInfoVO siteInfo) {
+		// 조회 결과가 없으면 0원 기본값을 반환합니다.
+		ShopCartSiteInfoVO result = new ShopCartSiteInfoVO();
+		result.setSiteId(isBlank(siteInfo == null ? null : siteInfo.getSiteId()) ? SHOP_SITE_ID : siteInfo.getSiteId());
+		result.setDeliveryFee(siteInfo == null || siteInfo.getDeliveryFee() == null ? 0 : Math.max(siteInfo.getDeliveryFee(), 0));
+		result.setDeliveryFeeLimit(
+			siteInfo == null || siteInfo.getDeliveryFeeLimit() == null ? 0 : Math.max(siteInfo.getDeliveryFeeLimit(), 0)
+		);
+		return result;
 	}
 
 	// 쿠폰 타겟 코드와 상품 비교값 기준으로 적용 가능 여부를 계산합니다.
@@ -4079,5 +4076,4 @@ public class OrderService {
 		}
 		return new HashSet<>(sourceList);
 	}
-
 }

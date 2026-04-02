@@ -32,16 +32,12 @@ import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsVO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryVO;
 import com.xodud1202.springbackend.domain.shop.category.ShopCategoryGoodsItemVO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartCustomerCouponVO;
-import com.xodud1202.springbackend.domain.shop.cart.ShopCartItemVO;
-import com.xodud1202.springbackend.domain.shop.cart.ShopCartSavePO;
-import com.xodud1202.springbackend.domain.shop.cart.ShopCartSiteInfoVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsBasicVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsCouponTargetVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsCouponVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsDescItemVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsGroupItemVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsImageVO;
-import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSiteInfoVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSizeItemVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponUnavailableGoodsVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageDownloadableCouponVO;
@@ -214,8 +210,6 @@ public interface GoodsMapper {
 		@Param("limit") int limit
 	);
 
-	// 쇼핑몰 장바구니 목록을 조회합니다.
-	List<ShopCartItemVO> getShopCartItemList(@Param("custNo") Long custNo);
 	// 배송비 고객쿠폰 1건의 사용 상태를 원복합니다.
 	int restoreShopCustomerCouponUseByCustCpnNo(
 		@Param("custNo") Long custNo,
@@ -227,56 +221,6 @@ public interface GoodsMapper {
 
 	// 쇼핑몰 상품 위시리스트를 삭제합니다.
 	int deleteShopWishList(@Param("custNo") Long custNo, @Param("goodsId") String goodsId);
-
-	// 쇼핑몰 장바구니 등록 여부 건수를 조회합니다.
-	int countShopCart(@Param("custNo") Long custNo, @Param("goodsId") String goodsId, @Param("sizeId") String sizeId);
-
-	// 쇼핑몰 장바구니를 등록합니다.
-	int insertShopCart(ShopCartSavePO param);
-
-	// 쇼핑몰 장바구니 수량을 추가합니다.
-	int addShopCartQty(
-		@Param("custNo") Long custNo,
-		@Param("goodsId") String goodsId,
-		@Param("sizeId") String sizeId,
-		@Param("qty") Integer qty,
-		@Param("exhibitionNo") Integer exhibitionNo,
-		@Param("udtNo") Long udtNo
-	);
-
-	// 쇼핑몰 장바구니 현재 수량을 조회합니다.
-	Integer getShopCartQty(@Param("custNo") Long custNo, @Param("goodsId") String goodsId, @Param("sizeId") String sizeId);
-
-	// 쇼핑몰 장바구니의 상품 옵션(사이즈/수량)을 변경합니다.
-	int updateShopCartOption(
-		@Param("custNo") Long custNo,
-		@Param("goodsId") String goodsId,
-		@Param("sizeId") String sizeId,
-		@Param("targetSizeId") String targetSizeId,
-		@Param("targetQty") Integer targetQty,
-		@Param("udtNo") Long udtNo
-	);
-
-	// 쇼핑몰 장바구니 수량을 수정합니다.
-	int updateShopCartQty(
-		@Param("custNo") Long custNo,
-		@Param("goodsId") String goodsId,
-		@Param("sizeId") String sizeId,
-		@Param("qty") Integer qty,
-		@Param("udtNo") Long udtNo
-	);
-
-	// 쇼핑몰 장바구니 단건을 삭제합니다.
-	int deleteShopCartItem(@Param("custNo") Long custNo, @Param("goodsId") String goodsId, @Param("sizeId") String sizeId);
-
-	// 쇼핑몰 장바구니 전체를 삭제합니다.
-	int deleteShopCartAll(@Param("custNo") Long custNo);
-
-	// 쇼핑몰 장바구니 사이트 배송 기준 정보를 조회합니다.
-	ShopCartSiteInfoVO getShopCartSiteInfo(@Param("siteId") String siteId);
-
-	// 쇼핑몰 상품상세 사이트 배송 기준 정보를 조회합니다.
-	ShopGoodsSiteInfoVO getShopGoodsSiteInfo(@Param("siteId") String siteId);
 
 	// 고객등급별 포인트 적립률을 조회합니다.
 	Integer getShopPointSaveRateByCustGradeCd(@Param("custGradeCd") String custGradeCd);

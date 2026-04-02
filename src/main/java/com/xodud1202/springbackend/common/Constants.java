@@ -51,6 +51,7 @@ public final class Constants {
 		public static final String SHOP_MYPAGE_ORDER_CANCEL_UNAVAILABLE_MESSAGE = "취소 가능한 주문상품 정보를 찾을 수 없습니다.";
 		public static final String SHOP_MYPAGE_ORDER_RETURN_UNAVAILABLE_MESSAGE = "반품 신청 가능한 주문상품 정보를 찾을 수 없습니다.";
 		public static final String SHOP_MYPAGE_ORDER_CANCEL_AMOUNT_MISMATCH_MESSAGE = "환불 금액이 상이합니다.";
+		public static final String SHOP_MYPAGE_ORDER_RETURN_AMOUNT_MISMATCH_MESSAGE = "환불 금액이 상이합니다.";
 		public static final String SHOP_MYPAGE_ORDER_DELIVERY_COMPLETE_UNAVAILABLE_MESSAGE = "배송중 주문상품만 처리할 수 있습니다.";
 		public static final String SHOP_MYPAGE_ORDER_PURCHASE_CONFIRM_UNAVAILABLE_MESSAGE = "배송완료 주문상품만 처리할 수 있습니다.";
 		public static final DateTimeFormatter SHOP_MYPAGE_ORDER_DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -97,9 +98,14 @@ public final class Constants {
 		public static final String SHOP_ORDER_POINT_USE_MEMO = "주문 결제 포인트 사용";
 		public static final String SHOP_ORDER_POINT_RESTORE_MEMO = "주문 결제 포인트 복구";
 		public static final String SHOP_ORDER_CHANGE_GB_CANCEL = "C";
+		public static final String SHOP_ORDER_CHANGE_GB_RETURN = "R";
 		public static final String SHOP_ORDER_CHANGE_STAT_PROGRESS = "CHG_STAT_01";
 		public static final String SHOP_ORDER_CHANGE_DTL_GB_CANCEL = "CHG_DTL_GB_01";
+		public static final String SHOP_ORDER_CHANGE_DTL_GB_RETURN = "CHG_DTL_GB_02";
 		public static final String SHOP_ORDER_CHANGE_DTL_STAT_DONE = "CHG_DTL_STAT_02";
+		public static final String SHOP_ORDER_CHANGE_DTL_STAT_RETURN_APPLY = "CHG_DTL_STAT_11";
+		public static final String SHOP_ORDER_CHANGE_ADDR_GB_RETURN_PICKUP = "CLM_ADDR_GB_01";
+		public static final String SHOP_ORDER_CHANGE_ADDR_GB_RETURN_DESTINATION = "CLM_ADDR_GB_02";
 		public static final String CUST_GRADE_GRP_CD = "CUST_GRADE";
 		public static final String DEFAULT_CUST_STAT_CD = "CUST_STAT_01";
 		public static final String GOOGLE_JOIN_GB = "GOOGLE";

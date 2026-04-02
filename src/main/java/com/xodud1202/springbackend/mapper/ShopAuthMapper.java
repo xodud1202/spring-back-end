@@ -27,9 +27,6 @@ public interface ShopAuthMapper {
 	// 구글 신규 회원 등록 후 REG_NO/UDT_NO를 고객 번호로 갱신합니다.
 	int updateShopGoogleCustomerAuditNo(@Param("custNo") Long custNo, @Param("auditNo") Long auditNo);
 
-	// 사이트 기본 가입 포인트 값을 조회합니다.
-	Integer getShopJoinPoint(@Param("siteId") String siteId);
-
 	// 고객등급별 쿠폰 혜택 정보를 조회합니다.
 	ShopCustomerGradeBenefitVO getCustomerGradeBenefitByCustGradeCd(@Param("custGradeCd") String custGradeCd);
 

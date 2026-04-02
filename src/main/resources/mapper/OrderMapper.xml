@@ -178,22 +178,35 @@
 		     , OD.ORD_DTL_STAT_CD
 		     , FN_GET_CODE_NM('ORD_DTL_STAT', OD.ORD_DTL_STAT_CD) AS ORD_DTL_STAT_NM
 		     , CASE
+		         WHEN ACTIVE_CLAIM.CHG_DTL_STAT_CD IS NOT NULL THEN ACTIVE_CLAIM.CHG_DTL_STAT_CD
+		         ELSE OD.ORD_DTL_STAT_CD
+		       END AS DISPLAY_ORD_DTL_STAT_CD
+		     , CASE
+		         WHEN ACTIVE_CLAIM.CHG_DTL_STAT_NM IS NOT NULL THEN ACTIVE_CLAIM.CHG_DTL_STAT_NM
+		         ELSE FN_GET_CODE_NM('ORD_DTL_STAT', OD.ORD_DTL_STAT_CD)
+		       END AS DISPLAY_ORD_DTL_STAT_NM
+		     , CASE
 		         WHEN OD.ORD_DTL_STAT_CD = 'ORD_DTL_STAT_06'
 		          AND COALESCE(OD.RMN_QTY, OD.ORD_QTY, 0) &gt; 0
-		          AND NOT EXISTS (
-		              SELECT 1
-		                FROM ORDER_CHANGE_DETAIL OCD
-		                JOIN ORDER_CHANGE_BASE OCB
-		                  ON OCB.CLM_NO = OCD.CLM_NO
-		                 AND OCB.ORD_NO = OCD.ORD_NO
-		               WHERE OCD.ORD_NO = OD.ORD_NO
-		                 AND OCD.ORD_DTL_NO = OD.ORD_DTL_NO
-		                 AND COALESCE(OCB.CHG_STAT_CD, '') != 'CHG_STAT_02'
-		                 AND COALESCE(OCD.CHG_DTL_STAT_CD, '') NOT IN ('CHG_DTL_STAT_02', 'CHG_DTL_STAT_14', 'CHG_DTL_STAT_33')
-		          )
+		          AND ACTIVE_CLAIM.CHG_DTL_STAT_CD IS NULL
 		           THEN TRUE
 		         ELSE FALSE
 		       END AS RETURN_APPLYABLE_YN
+		     , CASE
+		         WHEN OD.ORD_DTL_STAT_CD = 'ORD_DTL_STAT_06'
+		          AND COALESCE(OD.RMN_QTY, OD.ORD_QTY, 0) &gt; 0
+		          AND ACTIVE_CLAIM.CHG_DTL_STAT_CD IS NULL
+		           THEN TRUE
+		         ELSE FALSE
+		       END AS EXCHANGE_APPLYABLE_YN
+		     , CASE
+		         WHEN ACTIVE_CLAIM.CHG_GB_CD = 'R' THEN TRUE
+		         ELSE FALSE
+		       END AS ACTIVE_RETURN_CLAIM_YN
+		     , CASE
+		         WHEN ACTIVE_CLAIM.CHG_GB_CD = 'E' THEN TRUE
+		         ELSE FALSE
+		       END AS ACTIVE_EXCHANGE_CLAIM_YN
 		     , OD.GOODS_ID
 		     , GB.GOODS_NM
 		     , OD.SIZE_ID
@@ -214,11 +227,56 @@
 		          ORDER BY GI.DISP_ORD ASC, GI.IMG_NO ASC
 		          LIMIT 1
 		       ) AS IMG_PATH
-		  FROM ORDER_DETAIL OD
-		  JOIN ORDER_BASE OB
-		    ON OB.ORD_NO = OD.ORD_NO
-		  LEFT JOIN GOODS_BASE GB
-		    ON GB.GOODS_ID = OD.GOODS_ID
+ 		  FROM ORDER_DETAIL OD
+ 		  JOIN ORDER_BASE OB
+ 		    ON OB.ORD_NO = OD.ORD_NO
+		  LEFT JOIN (
+		        SELECT OCD.ORD_NO
+		             , OCD.ORD_DTL_NO
+		             , OCB.CHG_GB_CD
+		             , OCD.CHG_DTL_STAT_CD
+		             , FN_GET_CODE_NM('CHG_DTL_STAT', OCD.CHG_DTL_STAT_CD) AS CHG_DTL_STAT_NM
+		          FROM ORDER_CHANGE_DETAIL OCD
+		          JOIN ORDER_CHANGE_BASE OCB
+		            ON OCB.CLM_NO = OCD.CLM_NO
+		           AND OCB.ORD_NO = OCD.ORD_NO
+		         WHERE OCB.CHG_GB_CD IN ('R', 'E')
+		           AND OCD.ORD_NO IN
+		        <foreach collection="ordNoList" item="ordNo" open="(" separator="," close=")">
+		        	#{ordNo}
+		        </foreach>
+		           AND COALESCE(OCB.CHG_STAT_CD, '') != 'CHG_STAT_02'
+		           AND (
+		                 (OCB.CHG_GB_CD = 'R' AND COALESCE(OCD.CHG_DTL_STAT_CD, '') NOT IN ('CHG_DTL_STAT_14', 'CHG_DTL_STAT_19'))
+		              OR (OCB.CHG_GB_CD = 'E' AND COALESCE(OCD.CHG_DTL_STAT_CD, '') NOT IN ('CHG_DTL_STAT_29', 'CHG_DTL_STAT_33', 'CHG_DTL_STAT_39'))
+		           )
+		           AND NOT EXISTS (
+		               SELECT 1
+		                 FROM ORDER_CHANGE_DETAIL NEXT_OCD
+		                 JOIN ORDER_CHANGE_BASE NEXT_OCB
+		                   ON NEXT_OCB.CLM_NO = NEXT_OCD.CLM_NO
+		                  AND NEXT_OCB.ORD_NO = NEXT_OCD.ORD_NO
+		                WHERE NEXT_OCD.ORD_NO = OCD.ORD_NO
+		                  AND NEXT_OCD.ORD_DTL_NO = OCD.ORD_DTL_NO
+		                  AND NEXT_OCB.CHG_GB_CD IN ('R', 'E')
+		                  AND COALESCE(NEXT_OCB.CHG_STAT_CD, '') != 'CHG_STAT_02'
+		                  AND (
+		                        (NEXT_OCB.CHG_GB_CD = 'R' AND COALESCE(NEXT_OCD.CHG_DTL_STAT_CD, '') NOT IN ('CHG_DTL_STAT_14', 'CHG_DTL_STAT_19'))
+		                     OR (NEXT_OCB.CHG_GB_CD = 'E' AND COALESCE(NEXT_OCD.CHG_DTL_STAT_CD, '') NOT IN ('CHG_DTL_STAT_29', 'CHG_DTL_STAT_33', 'CHG_DTL_STAT_39'))
+		                  )
+		                  AND (
+		                        COALESCE(NEXT_OCB.CHG_DT, '') &gt; COALESCE(OCB.CHG_DT, '')
+		                     OR (
+		                           COALESCE(NEXT_OCB.CHG_DT, '') = COALESCE(OCB.CHG_DT, '')
+		                       AND NEXT_OCD.CLM_NO &gt; OCD.CLM_NO
+		                     )
+		                  )
+		           )
+		   ) ACTIVE_CLAIM
+		    ON ACTIVE_CLAIM.ORD_NO = OD.ORD_NO
+		   AND ACTIVE_CLAIM.ORD_DTL_NO = OD.ORD_DTL_NO
+ 		  LEFT JOIN GOODS_BASE GB
+ 		    ON GB.GOODS_ID = OD.GOODS_ID
 		 WHERE OD.ORD_NO IN
 		<foreach collection="ordNoList" item="ordNo" open="(" separator="," close=")">
 			#{ordNo}
@@ -308,45 +366,6 @@
 		        WHERE ACTIVE_OD.ORD_NO = OB.ORD_NO
 		          AND ACTIVE_OD.ORD_DTL_STAT_CD NOT IN ('ORD_DTL_STAT_00', 'ORD_DTL_STAT_99')
 		   )
-	</select>
-
-	<select id="getShopOrderCartItemList" resultType="com.xodud1202.springbackend.domain.shop.cart.ShopCartItemVO">
-		/* OrderMapper.getShopOrderCartItemList: 쇼핑몰 주문서 대상 장바구니 목록 조회 */
-		SELECT C.CART_ID
-		     , C.CART_GB_CD
-		     , C.CUST_NO
-		     , C.GOODS_ID
-		     , GB.BRAND_NO
-		     , BB.BRAND_NM
-		     , GB.GOODS_NM
-		     , C.SIZE_ID
-		     , C.QTY
-		     , GB.SUPPLY_AMT
-		     , GB.SALE_AMT
-		     , GS.ADD_AMT
-		     , C.EXHIBITION_NO
-		     , (
-		         SELECT GI.IMG_PATH
-		           FROM GOODS_IMG GI
-		          WHERE GI.GOODS_ID = C.GOODS_ID
-		          ORDER BY GI.DISP_ORD ASC, GI.IMG_NO ASC
-		          LIMIT 1
-		       ) AS IMG_PATH
-		  FROM CART C
-		  JOIN GOODS_BASE GB
-		    ON GB.GOODS_ID = C.GOODS_ID
-		  JOIN GOODS_SIZE GS
-		    ON GS.GOODS_ID = C.GOODS_ID
-		   AND GS.SIZE_ID = C.SIZE_ID
-		  LEFT JOIN BRAND_BASE BB
-		    ON BB.BRAND_NO = GB.BRAND_NO
-		 WHERE C.CUST_NO = #{custNo}
-		   AND C.CART_ID IN
-		<foreach collection="cartIdList" item="cartId" open="(" separator="," close=")">
-			#{cartId}
-		</foreach>
-		   AND C.CART_GB_CD IN ('C', 'O')
-		 ORDER BY C.REG_DT DESC, C.CART_ID DESC
 	</select>
 
 	<select id="getShopOrderAddressList" resultType="com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressVO">
@@ -816,6 +835,29 @@
 		)
 	</insert>
 
+	<insert id="insertShopOrderChangeExchangeAddress">
+		/* OrderMapper.insertShopOrderChangeExchangeAddress: 주문변경 회수지/도착지 주소 등록 */
+		INSERT INTO ORDER_CHANGE_EXCHANGE_ADDRESS (
+		       CLM_NO
+		     , CLM_ADDR_GB_CD
+		     , ADDR_NAME
+		     , ADDR_POST_NO
+		     , ADDR_BASE
+		     , ADDR_DTL
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{clmNo}
+		     , #{clmAddrGbCd}
+		     , #{addrName}
+		     , #{addrPostNo}
+		     , #{addrBase}
+		     , #{addrDtl}
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+
 	<update id="updateShopOrderBaseStatus">
 		/* OrderMapper.updateShopOrderBaseStatus: 쇼핑몰 주문 마스터 상태 변경 */
 		UPDATE ORDER_BASE
@@ -1189,17 +1231,6 @@
 		 ORDER BY PNT_NO ASC
 	</select>
 
-	<delete id="deleteShopCartByCartIdList">
-		/* OrderMapper.deleteShopCartByCartIdList: 선택 장바구니 번호 목록 삭제 */
-		DELETE
-		  FROM CART
-		 WHERE CUST_NO = #{custNo}
-		   AND CART_ID IN
-		<foreach collection="cartIdList" item="cartId" open="(" separator="," close=")">
-			#{cartId}
-		</foreach>
-	</delete>
-
 	<select id="getShopOrderRestoreCartItemList" resultType="com.xodud1202.springbackend.domain.shop.order.ShopOrderRestoreCartItemVO">
 		/* OrderMapper.getShopOrderRestoreCartItemList: 주문번호 기준 장바구니 복구 대상 목록 조회 */
 		SELECT CUST_NO
@@ -1481,42 +1512,78 @@
 
 	<select id="getAdminOrderClaimList" resultType="com.xodud1202.springbackend.domain.admin.order.AdminOrderClaimRowVO">
 		/* OrderMapper.getAdminOrderClaimList: 관리자 주문 상세 하단 클레임 목록 조회 */
-		SELECT OCD.CLM_NO
-		     , OCD.CHG_DTL_GB_CD
-		     , FN_GET_CODE_NM('CHG_DTL_GB', OCD.CHG_DTL_GB_CD) AS CHG_DTL_GB_NM
-		     , OCD.ORD_NO
-		     , OCD.ORD_DTL_NO
-		     , OCD.CHG_DTL_STAT_CD
-		     , FN_GET_CODE_NM('CHG_DTL_STAT', OCD.CHG_DTL_STAT_CD) AS CHG_DTL_STAT_NM
-		     , OCD.GOODS_ID
-		     , OCD.SIZE_ID
-		     , OCD.CHG_REASON_CD
-		     , FN_GET_CODE_NM('CHG_REASON', OCD.CHG_REASON_CD) AS CHG_REASON_NM
-		     , OCD.CHG_REASON_DTL
-		     , GB.GOODS_NM
-		     , OCD.QTY
-		     , (COALESCE(OD.SALE_AMT, 0) + COALESCE(OCD.ADD_AMT, OD.ADD_AMT, 0)) AS SALE_AMT
-		     , COALESCE(OCD.GOODS_CPN_DC_AMT, 0) AS GOODS_CPN_DC_AMT
-		     , COALESCE(OCD.CART_CPN_DC_AMT, 0) AS CART_CPN_DC_AMT
-		     , COALESCE(OCD.POINT_DC_AMT, 0) AS POINT_DC_AMT
-		     , GREATEST(
-		           ((COALESCE(OD.SALE_AMT, 0) + COALESCE(OCD.ADD_AMT, OD.ADD_AMT, 0)) * COALESCE(OCD.QTY, 0))
-		           - COALESCE(OCD.GOODS_CPN_DC_AMT, 0)
-		           - COALESCE(OCD.CART_CPN_DC_AMT, 0)
-		           - COALESCE(OCD.POINT_DC_AMT, 0),
-		           0
-		       ) AS EXPECTED_REFUND_AMT
-		  FROM ORDER_CHANGE_DETAIL OCD
-		  JOIN ORDER_CHANGE_BASE OCB
-		    ON OCB.CLM_NO = OCD.CLM_NO
-		   AND OCB.ORD_NO = OCD.ORD_NO
-		  LEFT JOIN ORDER_DETAIL OD
-		    ON OD.ORD_NO = OCD.ORD_NO
-		   AND OD.ORD_DTL_NO = OCD.ORD_DTL_NO
-		  LEFT JOIN GOODS_BASE GB
-		    ON GB.GOODS_ID = OCD.GOODS_ID
-		 WHERE OCD.ORD_NO = #{ordNo}
-		 ORDER BY OCB.CHG_DT DESC, OCD.CLM_NO DESC, OCD.ORD_DTL_NO ASC
+		SELECT CLAIM_ROW.CLM_NO
+		     , CLAIM_ROW.CHG_DTL_GB_CD
+		     , CLAIM_ROW.CHG_DTL_GB_NM
+		     , CLAIM_ROW.ORD_NO
+		     , CLAIM_ROW.ORD_DTL_NO
+		     , CLAIM_ROW.CHG_DTL_STAT_CD
+		     , CLAIM_ROW.CHG_DTL_STAT_NM
+		     , CLAIM_ROW.GOODS_ID
+		     , CLAIM_ROW.SIZE_ID
+		     , CLAIM_ROW.CHG_REASON_CD
+		     , CLAIM_ROW.CHG_REASON_NM
+		     , CLAIM_ROW.CHG_REASON_DTL
+		     , CLAIM_ROW.GOODS_NM
+		     , CLAIM_ROW.QTY
+		     , CLAIM_ROW.SALE_AMT
+		     , CLAIM_ROW.GOODS_CPN_DC_AMT
+		     , CLAIM_ROW.CART_CPN_DC_AMT
+		     , CLAIM_ROW.POINT_DC_AMT
+		     , CLAIM_ROW.ITEM_EXPECTED_REFUND_AMT
+		       + CASE
+		           WHEN CLAIM_ROW.CHG_GB_CD = 'R'
+		                    AND CLAIM_ROW.FIRST_CLAIM_ROW_YN = 'Y' THEN COALESCE(CLAIM_ROW.PAY_DELV_AMT, 0)
+		           ELSE 0
+		         END AS EXPECTED_REFUND_AMT
+		  FROM (
+		        SELECT OCD.CLM_NO
+		             , OCD.CHG_DTL_GB_CD
+		             , FN_GET_CODE_NM('CHG_DTL_GB', OCD.CHG_DTL_GB_CD) AS CHG_DTL_GB_NM
+		             , OCD.ORD_NO
+		             , OCD.ORD_DTL_NO
+		             , OCD.CHG_DTL_STAT_CD
+		             , FN_GET_CODE_NM('CHG_DTL_STAT', OCD.CHG_DTL_STAT_CD) AS CHG_DTL_STAT_NM
+		             , OCD.GOODS_ID
+		             , OCD.SIZE_ID
+		             , OCD.CHG_REASON_CD
+		             , FN_GET_CODE_NM('CHG_REASON', OCD.CHG_REASON_CD) AS CHG_REASON_NM
+		             , OCD.CHG_REASON_DTL
+		             , GB.GOODS_NM
+		             , OCD.QTY
+		             , (COALESCE(OD.SALE_AMT, 0) + COALESCE(OCD.ADD_AMT, OD.ADD_AMT, 0)) AS SALE_AMT
+		             , COALESCE(OCD.GOODS_CPN_DC_AMT, 0) AS GOODS_CPN_DC_AMT
+		             , COALESCE(OCD.CART_CPN_DC_AMT, 0) AS CART_CPN_DC_AMT
+		             , COALESCE(OCD.POINT_DC_AMT, 0) AS POINT_DC_AMT
+		             , OCB.CHG_GB_CD
+		             , COALESCE(OCB.PAY_DELV_AMT, 0) AS PAY_DELV_AMT
+		             , CASE
+		                   WHEN OCD.ORD_DTL_NO = (
+		                     SELECT MIN(OCD_FIRST.ORD_DTL_NO)
+		                       FROM ORDER_CHANGE_DETAIL OCD_FIRST
+		                      WHERE OCD_FIRST.CLM_NO = OCD.CLM_NO
+		                   ) THEN 'Y'
+		                   ELSE 'N'
+		               END AS FIRST_CLAIM_ROW_YN
+		             , GREATEST(
+		                   ((COALESCE(OD.SALE_AMT, 0) + COALESCE(OCD.ADD_AMT, OD.ADD_AMT, 0)) * COALESCE(OCD.QTY, 0))
+		                   - COALESCE(OCD.GOODS_CPN_DC_AMT, 0)
+		                   - COALESCE(OCD.CART_CPN_DC_AMT, 0)
+		                   - COALESCE(OCD.POINT_DC_AMT, 0),
+		                   0
+		               ) AS ITEM_EXPECTED_REFUND_AMT
+		          FROM ORDER_CHANGE_DETAIL OCD
+		          JOIN ORDER_CHANGE_BASE OCB
+		            ON OCB.CLM_NO = OCD.CLM_NO
+		           AND OCB.ORD_NO = OCD.ORD_NO
+		          LEFT JOIN ORDER_DETAIL OD
+		            ON OD.ORD_NO = OCD.ORD_NO
+		           AND OD.ORD_DTL_NO = OCD.ORD_DTL_NO
+		          LEFT JOIN GOODS_BASE GB
+		            ON GB.GOODS_ID = OCD.GOODS_ID
+		         WHERE OCD.ORD_NO = #{ordNo}
+		  ) CLAIM_ROW
+		 ORDER BY CLAIM_ROW.CLM_NO DESC, CLAIM_ROW.ORD_DTL_NO ASC
 	</select>
 
 	<select id="getAdminOrderPaymentList" resultType="com.xodud1202.springbackend.domain.admin.order.AdminOrderPaymentRowVO">

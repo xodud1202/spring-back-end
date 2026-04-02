@@ -32,7 +32,9 @@ import com.xodud1202.springbackend.domain.shop.auth.ShopGoogleJoinRequest;
 import com.xodud1202.springbackend.domain.shop.auth.ShopGoogleJoinSavePO;
 import com.xodud1202.springbackend.domain.shop.auth.ShopGoogleLoginRequest;
 import com.xodud1202.springbackend.domain.shop.auth.ShopGoogleLoginResponse;
+import com.xodud1202.springbackend.domain.shop.site.ShopSiteInfoVO;
 import com.xodud1202.springbackend.mapper.ShopAuthMapper;
+import com.xodud1202.springbackend.mapper.SiteInfoMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,6 +56,7 @@ public class ShopAuthService {
 	private static final Pattern PHONE_NUMBER_PATTERN = Pattern.compile("^\\d{3}-\\d{4}-\\d{4}$");
 
 	private final ShopAuthMapper shopAuthMapper;
+	private final SiteInfoMapper siteInfoMapper;
 
 	// 공통코드 코드값으로 코드명을 조회합니다.
 	public String getCommonCodeName(String grpCd, String cd) {
@@ -187,7 +190,7 @@ public class ShopAuthService {
 	// 사이트 기본 가입 포인트를 고객에게 지급합니다.
 	private void grantJoinPointIfNeeded(Long custNo) {
 		// 사이트 기본 회원가입 포인트를 조회합니다.
-		Integer joinPoint = shopAuthMapper.getShopJoinPoint(SHOP_SITE_ID);
+		Integer joinPoint = resolveShopJoinPoint();
 		if (joinPoint == null || joinPoint <= 0) {
 			return;
 		}
@@ -222,6 +225,13 @@ public class ShopAuthService {
 			custNo
 		);
 		shopAuthMapper.insertCustomerPointDetail(pointDetailCommand);
+	}
+
+	// 사이트 설정의 회원가입 포인트 값을 조회합니다.
+	private Integer resolveShopJoinPoint() {
+		// 사이트 통합 정보에서 회원가입 포인트 값을 읽고 null 안전하게 반환합니다.
+		ShopSiteInfoVO siteInfo = siteInfoMapper.getShopSiteInfo(SHOP_SITE_ID);
+		return siteInfo == null ? null : siteInfo.getJoinPoint();
 	}
 
 	// 회원가입 포인트 만료 일시를 계산합니다.

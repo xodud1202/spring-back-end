@@ -25,6 +25,13 @@ public class SiteInfoService {
 		ShopSiteInfoVO fallback = new ShopSiteInfoVO();
 		fallback.setSiteId(SHOP_SITE_ID);
 		fallback.setSiteNm("");
+		fallback.setDeliveryFee(0);
+		fallback.setDeliveryFeeLimit(0);
+		fallback.setJoinPoint(0);
+		fallback.setWhPostNo("");
+		fallback.setWhAddrBase("");
+		fallback.setWhAddrDtl("");
+		fallback.setCsTell("");
 		return fallback;
 	}
 }
