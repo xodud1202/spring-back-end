@@ -17,6 +17,8 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnPO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnResultVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderDetailStatusUpdatePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderDetailStatusUpdateVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnWithdrawPO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnWithdrawResultVO;
 import com.xodud1202.springbackend.service.DeliveryService;
 import com.xodud1202.springbackend.service.GoodsService;
 import com.xodud1202.springbackend.service.OrderCancelService;
@@ -267,6 +269,28 @@ public class ShopMypageController extends ShopControllerSupport {
 		} catch (Exception exception) {
 			log.error("쇼핑몰 마이페이지 반품 신청 처리 실패 message={}", exception.getMessage(), exception);
 			return ResponseEntity.internalServerError().body(Map.of("message", "반품 신청 처리에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 마이페이지 반품 신청 상품 1건을 철회합니다.
+	@PostMapping("/api/shop/mypage/order/return/withdraw")
+	public ResponseEntity<Object> withdrawShopMypageOrderReturn(
+		@RequestBody(required = false) ShopOrderReturnWithdrawPO param,
+		HttpServletRequest request
+	) {
+		try {
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			ShopOrderReturnWithdrawResultVO result = orderReturnService.withdrawShopMypageOrderReturn(param, custNo);
+			return ResponseEntity.ok(result);
+		} catch (IllegalArgumentException exception) {
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			log.error("쇼핑몰 마이페이지 반품 철회 처리 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "반품 철회 처리에 실패했습니다."));
 		}
 	}
 

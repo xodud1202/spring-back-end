@@ -4,6 +4,13 @@
 
 <mapper namespace="com.xodud1202.springbackend.mapper.OrderMapper">
 
+	<sql id="adminOrderStartDeliveryWhere">
+		/* OrderMapper.adminOrderStartDeliveryWhere: 관리자 배송 시작 관리 공통 조회 조건 */
+		WHERE 1=1
+		  AND OD.ORD_DTL_STAT_CD = #{ordDtlStatCd}
+		  AND COALESCE(OD.RMN_QTY, OD.ORD_QTY, 0) &gt; 0
+	</sql>
+	
 	<sql id="adminOrderWhere">
 		/* OrderMapper.adminOrderWhere: 관리자 주문 목록 공통 조회 조건 */
 		WHERE 1 = 1
@@ -49,7 +56,7 @@
 		     , FN_GET_CODE_NM('ORD_DTL_STAT', OD.ORD_DTL_STAT_CD) AS ORD_DTL_STAT_NM
 		     , OD.GOODS_ID
 		     , OD.SIZE_ID
-		     , OD.SUPPLY_AMT * OD.ORD_QTY) AS SUPPLY_AMT
+		     , OD.SUPPLY_AMT * OD.ORD_QTY AS SUPPLY_AMT
 		     , ((OD.SALE_AMT + OD.ADD_AMT) * OD.ORD_QTY) AS SALE_AMT
 		     , GREATEST(
 		           ((OD.SALE_AMT + OD.ADD_AMT) * OD.ORD_QTY)
@@ -78,12 +85,6 @@
 		    ON OB.ORD_NO = OD.ORD_NO
 		<include refid="adminOrderWhere" />
 	</select>
-
-	<sql id="adminOrderStartDeliveryWhere">
-		/* OrderMapper.adminOrderStartDeliveryWhere: 관리자 배송 시작 관리 공통 조회 조건 */
-		WHERE OD.ORD_DTL_STAT_CD = #{ordDtlStatCd}
-		  AND COALESCE(OD.RMN_QTY, OD.ORD_QTY, 0) &gt; 0
-	</sql>
 
 	<select id="getAdminOrderStartDeliveryList" resultType="com.xodud1202.springbackend.domain.admin.order.AdminOrderStartDeliveryListRowVO">
 		/* OrderMapper.getAdminOrderStartDeliveryList: 관리자 배송 시작 관리 목록 조회 */
@@ -1522,6 +1523,64 @@
 		 ORDER BY OCEA.REG_DT DESC
 		 LIMIT 1
 	</select>
+
+	<select id="getShopOrderReturnWithdrawTarget" resultType="com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnWithdrawResultVO">
+		/* OrderMapper.getShopOrderReturnWithdrawTarget: 쇼핑몰 마이페이지 반품 철회 대상 주문상품 1건 조회 */
+		SELECT OCB.CLM_NO
+		     , OCB.ORD_NO
+		     , OCD.ORD_DTL_NO
+		     , OCD.CHG_DTL_STAT_CD
+		  FROM ORDER_CHANGE_BASE OCB
+		  JOIN ORDER_CHANGE_DETAIL OCD
+		    ON OCD.CLM_NO = OCB.CLM_NO
+		   AND OCD.ORD_NO = OCB.ORD_NO
+		 WHERE OCB.REG_NO = #{custNo}
+		   AND OCB.ORD_NO = #{ordNo}
+		   AND OCB.CHG_GB_CD = 'R'
+		   AND COALESCE(OCB.CHG_STAT_CD, '') != 'CHG_STAT_02'
+		   AND OCD.ORD_DTL_NO = #{ordDtlNo}
+		   AND OCD.CHG_DTL_GB_CD = 'CHG_DTL_GB_02'
+		   AND COALESCE(OCD.CHG_DTL_STAT_CD, '') NOT IN ('CHG_DTL_STAT_14', 'CHG_DTL_STAT_19')
+		 ORDER BY COALESCE(OCB.CHG_DT, OCB.REG_DT) DESC
+		        , OCB.CLM_NO DESC
+		        , OCD.REG_DT DESC
+		 LIMIT 1
+	</select>
+
+	<update id="withdrawShopOrderChangeDetail">
+		/* OrderMapper.withdrawShopOrderChangeDetail: 쇼핑몰 마이페이지 반품 상세 1건을 철회 상태로 변경 */
+		UPDATE ORDER_CHANGE_DETAIL
+		   SET CHG_DTL_STAT_CD = #{toChgDtlStatCd}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE CLM_NO = #{clmNo}
+		   AND ORD_NO = #{ordNo}
+		   AND ORD_DTL_NO = #{ordDtlNo}
+		   AND CHG_DTL_GB_CD = 'CHG_DTL_GB_02'
+		   AND CHG_DTL_STAT_CD = #{fromChgDtlStatCd}
+	</update>
+
+	<select id="countShopOrderRemainingReturnDetailByClaim" resultType="Integer">
+		/* OrderMapper.countShopOrderRemainingReturnDetailByClaim: 같은 클레임에 남아 있는 반품 상세 건수 조회 */
+		SELECT COUNT(*)
+		  FROM ORDER_CHANGE_DETAIL
+		 WHERE CLM_NO = #{clmNo}
+		   AND ORD_NO = #{ordNo}
+		   AND CHG_DTL_GB_CD = 'CHG_DTL_GB_02'
+		   AND COALESCE(CHG_DTL_STAT_CD, '') != 'CHG_DTL_STAT_19'
+	</select>
+
+	<update id="withdrawShopOrderChangeBase">
+		/* OrderMapper.withdrawShopOrderChangeBase: 쇼핑몰 마이페이지 반품 클레임 마스터를 철회 상태로 변경 */
+		UPDATE ORDER_CHANGE_BASE
+		   SET CHG_STAT_CD = #{toChgStatCd}
+		     , CHG_COMPLETE_DT = NOW()
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE CLM_NO = #{clmNo}
+		   AND ORD_NO = #{ordNo}
+		   AND COALESCE(CHG_STAT_CD, '') != 'CHG_STAT_02'
+	</update>
 
 	<select id="getShopMypagePointItemList" resultType="com.xodud1202.springbackend.domain.shop.mypage.ShopMypagePointItemVO">
 		/* OrderMapper.getShopMypagePointItemList: 마이페이지 포인트 적립/차감 내역 목록 페이징 조회 */

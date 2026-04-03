@@ -74,6 +74,7 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderPointBaseVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPointDetailSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPointDetailVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderRestoreCartItemVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnWithdrawResultVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -457,6 +458,37 @@ public interface OrderMapper {
 
 	// 쇼핑몰 마이페이지 반품상세 회수지 1건을 조회합니다.
 	ShopMypageReturnPickupAddressVO getShopMypageReturnPickupAddress(@Param("clmNo") String clmNo);
+
+	// 쇼핑몰 마이페이지 반품 철회 대상 주문상품 1건을 조회합니다.
+	ShopOrderReturnWithdrawResultVO getShopOrderReturnWithdrawTarget(
+		@Param("custNo") Long custNo,
+		@Param("ordNo") String ordNo,
+		@Param("ordDtlNo") Integer ordDtlNo
+	);
+
+	// 쇼핑몰 마이페이지 반품 상세 1건을 철회 상태로 변경합니다.
+	int withdrawShopOrderChangeDetail(
+		@Param("clmNo") String clmNo,
+		@Param("ordNo") String ordNo,
+		@Param("ordDtlNo") Integer ordDtlNo,
+		@Param("fromChgDtlStatCd") String fromChgDtlStatCd,
+		@Param("toChgDtlStatCd") String toChgDtlStatCd,
+		@Param("udtNo") Long udtNo
+	);
+
+	// 같은 클레임에 남아 있는 반품 상세 건수를 조회합니다.
+	int countShopOrderRemainingReturnDetailByClaim(
+		@Param("clmNo") String clmNo,
+		@Param("ordNo") String ordNo
+	);
+
+	// 쇼핑몰 마이페이지 반품 클레임 마스터를 철회 상태로 변경합니다.
+	int withdrawShopOrderChangeBase(
+		@Param("clmNo") String clmNo,
+		@Param("ordNo") String ordNo,
+		@Param("toChgStatCd") String toChgStatCd,
+		@Param("udtNo") Long udtNo
+	);
 
 	// 마이페이지 포인트 내역 목록을 페이징 조회합니다.
 	List<ShopMypagePointItemVO> getShopMypagePointItemList(

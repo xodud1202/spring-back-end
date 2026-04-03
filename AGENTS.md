@@ -21,9 +21,15 @@
 - 배송비 계산 로직을 추가, 수정, 검토할 때는 반드시 `../AGENTS/references/DELIVERY_FEE.md`를 먼저 읽는다.
 
 ### 4) 기본 검증
+- `spring-back-end`의 운영 업무 JDK 1.8 유지 여부와 무관하게, Gradle 검증은 항상 `D:\react_project\bin\jdk-21.0.9+10`을 사용한다.
+- 검증 시 시스템 기본 `JAVA_HOME`, `Get-Command java`, `where java`, 설치 경로 탐색 결과를 기준으로 JDK를 판단하지 않는다.
+- PowerShell에서는 아래 순서로 고정 JDK를 먼저 적용한 뒤 검증 명령을 실행한다.
+- `$env:JAVA_HOME='D:\react_project\bin\jdk-21.0.9+10'`
+- `$env:Path="$env:JAVA_HOME\bin;$env:Path"`
 - `.\gradlew.bat compileJava`
+- `.\gradlew.bat processResources`
+- `.\gradlew.bat build`
 - `.\gradlew.bat test`
-- JDK 경로는 `D:\react_project\bin\jdk-21.0.9+10`을 기준으로 사용한다.
 - 백엔드 API 변경 체크는 공통 체크리스트 `../AGENTS/harness/checklists/backend-api-change.md`를 따른다.
 
 ### 5) 금지 및 주의사항

@@ -27,6 +27,8 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnPO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnPickupAddressPO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnPreviewAmountPO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnResultVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnWithdrawPO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnWithdrawResultVO;
 import com.xodud1202.springbackend.domain.shop.site.ShopSiteInfoVO;
 import com.xodud1202.springbackend.mapper.OrderMapper;
 import com.xodud1202.springbackend.mapper.SiteInfoMapper;
@@ -336,6 +338,73 @@ public class OrderReturnService {
 			throw new IllegalArgumentException("로그인이 필요합니다.");
 		}
 		return applyShopOrderReturn(param, custNo);
+	}
+
+	// 쇼핑몰 마이페이지 반품 신청 상품 1건을 철회합니다.
+	@Transactional
+	public ShopOrderReturnWithdrawResultVO withdrawShopMypageOrderReturn(ShopOrderReturnWithdrawPO param, Long custNo) {
+		// 로그인 고객번호와 요청 본문 기본값을 먼저 검증합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+		if (param == null) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_RETURN_WITHDRAW_UNAVAILABLE_MESSAGE);
+		}
+
+		String ordNo = trimToNull(param.getOrdNo());
+		Integer ordDtlNo = param.getOrdDtlNo();
+		if (ordNo == null || ordDtlNo == null || ordDtlNo < 1) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_RETURN_WITHDRAW_UNAVAILABLE_MESSAGE);
+		}
+
+		// 현재 로그인 고객이 철회할 수 있는 최신 반품 신청 이력 1건을 조회합니다.
+		ShopOrderReturnWithdrawResultVO withdrawTarget = orderMapper.getShopOrderReturnWithdrawTarget(custNo, ordNo, ordDtlNo);
+		if (withdrawTarget == null
+			|| !SHOP_ORDER_CHANGE_DTL_STAT_RETURN_APPLY.equals(trimToNull(withdrawTarget.getChgDtlStatCd()))) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_RETURN_WITHDRAW_UNAVAILABLE_MESSAGE);
+		}
+
+		// 반품 신청 상태인 상세 1건만 반품 철회 상태로 변경합니다.
+		int detailUpdatedCount = orderMapper.withdrawShopOrderChangeDetail(
+			withdrawTarget.getClmNo(),
+			withdrawTarget.getOrdNo(),
+			withdrawTarget.getOrdDtlNo(),
+			SHOP_ORDER_CHANGE_DTL_STAT_RETURN_APPLY,
+			SHOP_ORDER_CHANGE_DTL_STAT_RETURN_WITHDRAW,
+			custNo
+		);
+		if (detailUpdatedCount != 1) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_RETURN_WITHDRAW_UNAVAILABLE_MESSAGE);
+		}
+
+		// 같은 클레임에 남아 있는 반품 상세가 없으면 클레임 마스터도 철회 상태로 닫습니다.
+		int remainingReturnDetailCount = orderMapper.countShopOrderRemainingReturnDetailByClaim(
+			withdrawTarget.getClmNo(),
+			withdrawTarget.getOrdNo()
+		);
+		boolean claimClosedYn = remainingReturnDetailCount < 1;
+		int claimUpdatedCount = 0;
+		if (claimClosedYn) {
+			claimUpdatedCount = orderMapper.withdrawShopOrderChangeBase(
+				withdrawTarget.getClmNo(),
+				withdrawTarget.getOrdNo(),
+				SHOP_ORDER_CHANGE_STAT_WITHDRAW,
+				custNo
+			);
+			if (claimUpdatedCount != 1) {
+				throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_RETURN_WITHDRAW_UNAVAILABLE_MESSAGE);
+			}
+		}
+
+		// 프론트 새로고침 분기용 응답 객체를 구성합니다.
+		ShopOrderReturnWithdrawResultVO result = new ShopOrderReturnWithdrawResultVO();
+		result.setClmNo(withdrawTarget.getClmNo());
+		result.setOrdNo(withdrawTarget.getOrdNo());
+		result.setOrdDtlNo(withdrawTarget.getOrdDtlNo());
+		result.setChgDtlStatCd(SHOP_ORDER_CHANGE_DTL_STAT_RETURN_WITHDRAW);
+		result.setClaimClosedYn(claimClosedYn);
+		result.setUpdatedCount(detailUpdatedCount + claimUpdatedCount);
+		return result;
 	}
 
 	// 관리자 주문반품 신청을 저장합니다.
