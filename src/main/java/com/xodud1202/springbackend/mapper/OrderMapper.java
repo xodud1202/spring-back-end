@@ -55,6 +55,9 @@ import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderStatusSumma
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishGoodsItemVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCancelHistoryVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCancelHistoryDetailVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageReturnPickupAddressVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageReturnHistoryVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageReturnHistoryDetailVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypagePointItemVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderAddressVO;
@@ -424,6 +427,36 @@ public interface OrderMapper {
 		@Param("custNo") Long custNo,
 		@Param("clmNo") String clmNo
 	);
+
+	// 쇼핑몰 마이페이지 반품내역 클레임 전체 건수를 조회합니다.
+	int countShopMypageReturnHistory(
+		@Param("custNo") Long custNo,
+		@Param("startDate") String startDate,
+		@Param("endDate") String endDate
+	);
+
+	// 쇼핑몰 마이페이지 반품내역 클레임 목록을 페이징 조회합니다.
+	List<ShopMypageReturnHistoryVO> getShopMypageReturnHistoryList(
+		@Param("custNo") Long custNo,
+		@Param("startDate") String startDate,
+		@Param("endDate") String endDate,
+		@Param("offset") int offset,
+		@Param("pageSize") int pageSize
+	);
+
+	// 쇼핑몰 마이페이지 반품내역 상품 상세 목록을 클레임번호 기준으로 조회합니다.
+	List<ShopMypageReturnHistoryDetailVO> getShopMypageReturnHistoryDetailList(
+		@Param("clmNoList") List<String> clmNoList
+	);
+
+	// 쇼핑몰 마이페이지 반품상세 클레임을 단건 조회합니다.
+	ShopMypageReturnHistoryVO getShopMypageReturnHistoryItemByClmNo(
+		@Param("custNo") Long custNo,
+		@Param("clmNo") String clmNo
+	);
+
+	// 쇼핑몰 마이페이지 반품상세 회수지 1건을 조회합니다.
+	ShopMypageReturnPickupAddressVO getShopMypageReturnPickupAddress(@Param("clmNo") String clmNo);
 
 	// 마이페이지 포인트 내역 목록을 페이징 조회합니다.
 	List<ShopMypagePointItemVO> getShopMypagePointItemList(

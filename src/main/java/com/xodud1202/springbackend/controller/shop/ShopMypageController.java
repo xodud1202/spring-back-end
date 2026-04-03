@@ -9,6 +9,8 @@ import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderDetailPageV
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderPageVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderReturnPageVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypagePointPageVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageReturnDetailPageVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageReturnHistoryPageVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageWishPageVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderCancelPO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnPO;
@@ -311,6 +313,52 @@ public class ShopMypageController extends ShopControllerSupport {
 		} catch (Exception exception) {
 			log.error("쇼핑몰 마이페이지 취소상세 조회 실패 clmNo={} message={}", clmNo, exception.getMessage(), exception);
 			return ResponseEntity.internalServerError().body(Map.of("message", "취소상세 조회에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 마이페이지 반품내역 페이지 데이터를 조회합니다.
+	@GetMapping("/api/shop/mypage/order/return/history")
+	public ResponseEntity<Object> getShopMypageReturnHistoryPage(
+		@RequestParam(value = "pageNo", required = false) Integer pageNo,
+		@RequestParam(value = "startDate", required = false) String startDate,
+		@RequestParam(value = "endDate", required = false) String endDate,
+		HttpServletRequest request
+	) {
+		try {
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			ShopMypageReturnHistoryPageVO result = orderReturnService.getShopMypageReturnHistoryPage(custNo, pageNo, startDate, endDate);
+			return ResponseEntity.ok(result);
+		} catch (IllegalArgumentException exception) {
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			log.error("쇼핑몰 마이페이지 반품내역 조회 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "반품내역 조회에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 마이페이지 반품상세 단건을 조회합니다.
+	@GetMapping("/api/shop/mypage/order/return/detail")
+	public ResponseEntity<Object> getShopMypageReturnHistoryDetail(
+		@RequestParam(required = false) String clmNo,
+		HttpServletRequest request
+	) {
+		try {
+			Long custNo = parseCustNoCookie(request);
+			if (custNo == null) {
+				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
+			}
+
+			ShopMypageReturnDetailPageVO result = orderReturnService.getShopMypageReturnHistoryDetail(custNo, clmNo);
+			return ResponseEntity.ok(result);
+		} catch (IllegalArgumentException exception) {
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			log.error("쇼핑몰 마이페이지 반품상세 조회 실패 clmNo={} message={}", clmNo, exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "반품상세 조회에 실패했습니다."));
 		}
 	}
 

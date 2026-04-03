@@ -9,11 +9,18 @@ import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderCancelReaso
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderDetailItemVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderGroupVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderReturnFeeContextVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageReturnDetailPageVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderReturnPageVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageReturnHistoryDetailVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageReturnHistoryPageVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageReturnHistoryVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageReturnPickupAddressVO;
+import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageReturnPreviewAmountVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderCancelOrderBaseVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderChangeBaseSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderChangeDetailSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderChangeExchangeAddressSavePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderCustomerInfoVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnDestinationAddressVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnItemPO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnPO;
@@ -23,6 +30,7 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnResultVO;
 import com.xodud1202.springbackend.domain.shop.site.ShopSiteInfoVO;
 import com.xodud1202.springbackend.mapper.OrderMapper;
 import com.xodud1202.springbackend.mapper.SiteInfoMapper;
+import com.xodud1202.springbackend.service.order.support.ShopMypageOrderDateRange;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,6 +53,7 @@ public class OrderReturnService {
 	private static final int ORDER_CHANGE_ADDRESS_BASE_MAX_LENGTH = 100;
 	private static final int ORDER_CHANGE_ADDRESS_DETAIL_MAX_LENGTH = 100;
 	private static final String COMPANY_FAULT_REASON_PREFIX = "R_2";
+	private static final String RETURN_COMPLETE_DETAIL_STATUS_CODE = "CHG_DTL_STAT_14";
 
 	private final OrderService orderService;
 	private final OrderMapper orderMapper;
@@ -75,6 +84,248 @@ public class OrderReturnService {
 	// 관리자 주문반품 신청 화면 데이터를 조회합니다.
 	public AdminOrderReturnPageVO getAdminOrderReturnPage(String ordNo) {
 		return orderService.getAdminOrderReturnPage(ordNo);
+	}
+
+	// 쇼핑몰 마이페이지 반품내역 페이지 데이터를 조회합니다.
+	public ShopMypageReturnHistoryPageVO getShopMypageReturnHistoryPage(
+		Long custNo,
+		Integer requestedPageNo,
+		String requestedStartDate,
+		String requestedEndDate
+	) {
+		// 고객번호가 없으면 로그인 예외를 반환합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+
+		// 요청 페이지 번호와 조회 기간을 각각 보정합니다.
+		int resolvedRequestedPageNo = orderService.resolveRequestedPageNo(requestedPageNo);
+		ShopMypageOrderDateRange dateRange = orderService.resolveShopMypageOrderDateRange(
+			requestedStartDate,
+			requestedEndDate
+		);
+
+		// 반품 클레임 전체 건수와 전체 페이지 수를 계산합니다.
+		int returnCount = orderMapper.countShopMypageReturnHistory(
+			custNo,
+			dateRange.getStartDate(),
+			dateRange.getEndDate()
+		);
+		int totalPageCount = orderService.calculateTotalPageCount(returnCount, SHOP_MYPAGE_RETURN_PAGE_SIZE);
+		int resolvedPageNo = orderService.resolvePageNoWithinRange(resolvedRequestedPageNo, totalPageCount);
+		int offset = orderService.calculateOffset(resolvedPageNo, SHOP_MYPAGE_RETURN_PAGE_SIZE);
+
+		// 현재 페이지의 반품 클레임 목록을 조회합니다.
+		List<ShopMypageReturnHistoryVO> returnList = orderMapper.getShopMypageReturnHistoryList(
+			custNo,
+			dateRange.getStartDate(),
+			dateRange.getEndDate(),
+			offset,
+			SHOP_MYPAGE_RETURN_PAGE_SIZE
+		);
+
+		// 클레임번호 목록 기준으로 반품 상품 상세를 조회해 각 클레임에 매핑합니다.
+		if (!returnList.isEmpty()) {
+			List<String> clmNoList = returnList.stream()
+				.map(ShopMypageReturnHistoryVO::getClmNo)
+				.filter(clmNo -> clmNo != null && !clmNo.isBlank())
+				.distinct()
+				.collect(java.util.stream.Collectors.toList());
+			List<ShopMypageReturnHistoryDetailVO> detailList = orderMapper.getShopMypageReturnHistoryDetailList(clmNoList);
+			Map<String, List<ShopMypageReturnHistoryDetailVO>> detailByClmNo = detailList.stream()
+				.filter(detail -> detail != null && detail.getClmNo() != null)
+				.collect(java.util.stream.Collectors.groupingBy(ShopMypageReturnHistoryDetailVO::getClmNo));
+			for (ShopMypageReturnHistoryVO returnItem : returnList) {
+				returnItem.setDetailList(detailByClmNo.getOrDefault(returnItem.getClmNo(), java.util.Collections.emptyList()));
+			}
+		}
+
+		// 반품내역 페이지 응답 객체를 구성합니다.
+		ShopMypageReturnHistoryPageVO result = new ShopMypageReturnHistoryPageVO();
+		result.setReturnList(returnList);
+		result.setReturnCount(returnCount);
+		result.setPageNo(resolvedPageNo);
+		result.setPageSize(SHOP_MYPAGE_RETURN_PAGE_SIZE);
+		result.setTotalPageCount(totalPageCount);
+		result.setStartDate(dateRange.getStartDate());
+		result.setEndDate(dateRange.getEndDate());
+		return result;
+	}
+
+	// 쇼핑몰 마이페이지 반품상세 화면 데이터를 조회합니다.
+	public ShopMypageReturnDetailPageVO getShopMypageReturnHistoryDetail(Long custNo, String clmNo) {
+		// 고객번호가 없으면 로그인 예외를 반환합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+		if (clmNo == null || clmNo.isBlank()) {
+			throw new IllegalArgumentException("클레임번호가 필요합니다.");
+		}
+
+		// 클레임 단건을 조회합니다.
+		ShopMypageReturnHistoryVO returnItem = orderMapper.getShopMypageReturnHistoryItemByClmNo(custNo, clmNo);
+		if (returnItem == null) {
+			return null;
+		}
+
+		// 반품 상품 상세 목록을 조회해 클레임에 매핑합니다.
+		List<ShopMypageReturnHistoryDetailVO> detailList = orderMapper.getShopMypageReturnHistoryDetailList(
+			java.util.Collections.singletonList(clmNo)
+		);
+		returnItem.setDetailList(detailList != null ? detailList : java.util.Collections.emptyList());
+
+		// 화면 구성에 필요한 주문/고객/회수지/환불 예정 금액을 함께 조합합니다.
+		ShopOrderCancelOrderBaseVO orderBase = orderService.resolveShopOrderCancelOrderBase(custNo, returnItem.getOrdNo());
+		ShopMypageOrderGroupVO orderGroup = orderService.getShopMypageOrderGroupWithDetail(custNo, returnItem.getOrdNo());
+		ShopOrderCustomerInfoVO customerInfo = orderMapper.getShopOrderCustomerInfo(custNo);
+		ShopMypageReturnPickupAddressVO pickupAddress = orderMapper.getShopMypageReturnPickupAddress(clmNo);
+		if (pickupAddress == null) {
+			pickupAddress = buildShopMypageReturnFallbackPickupAddress(orderBase);
+		}
+
+		// 상세 화면 응답 객체를 구성합니다.
+		ShopMypageReturnDetailPageVO result = new ShopMypageReturnDetailPageVO();
+		result.setReturnItem(returnItem);
+		result.setPreviewAmount(buildShopMypageReturnPreviewAmount(returnItem, orderGroup, orderBase));
+		result.setPickupAddress(pickupAddress);
+		result.setCustomerPhoneNumber(trimToNull(customerInfo == null ? null : customerInfo.getPhoneNumber()));
+		return result;
+	}
+
+	// 반품상세 화면에 노출할 환불 예정 금액 요약을 계산합니다.
+	private ShopMypageReturnPreviewAmountVO buildShopMypageReturnPreviewAmount(
+		ShopMypageReturnHistoryVO returnItem,
+		ShopMypageOrderGroupVO orderGroup,
+		ShopOrderCancelOrderBaseVO orderBase
+	) {
+		// 상세 행 목록을 기준으로 상품금액과 환급 할인금액을 합산합니다.
+		long totalSupplyAmt = 0L;
+		long totalOrderAmt = 0L;
+		long totalGoodsCouponDiscountAmt = 0L;
+		long totalCartCouponDiscountAmt = 0L;
+		long totalPointRefundAmt = 0L;
+		for (ShopMypageReturnHistoryDetailVO detailItem : returnItem == null ? List.<ShopMypageReturnHistoryDetailVO>of() : returnItem.getDetailList()) {
+			int qty = normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getQty());
+			long unitSupplyAmt = normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getSupplyAmt());
+			long unitOrderAmt =
+				(long) normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getSaleAmt())
+					+ normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getAddAmt());
+			totalSupplyAmt += unitSupplyAmt * qty;
+			totalOrderAmt += unitOrderAmt * qty;
+			totalGoodsCouponDiscountAmt += normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getGoodsCouponDiscountAmt());
+			totalCartCouponDiscountAmt += normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getCartCouponDiscountAmt());
+			totalPointRefundAmt += normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getPointDcAmt());
+		}
+
+		// 전체 반품 여부에 따라 배송비 환급/쿠폰 환급 금액을 계산합니다.
+		boolean fullReturnYn = resolveShopMypageReturnFullReturnYn(returnItem, orderGroup);
+		long paidDeliveryFeeRefundAmt = fullReturnYn
+			? Math.max(
+				(long) normalizeNonNegativeNumber(orderBase == null ? null : orderBase.getOrdDelvAmt())
+					- normalizeNonNegativeNumber(orderBase == null ? null : orderBase.getDelvCpnDcAmt()),
+				0L
+			)
+			: 0L;
+		long deliveryCouponRefundAmt = fullReturnYn
+			? normalizeNonNegativeNumber(orderBase == null ? null : orderBase.getDelvCpnDcAmt())
+			: 0L;
+		long benefitAmt = totalGoodsCouponDiscountAmt + totalCartCouponDiscountAmt + totalPointRefundAmt;
+		long shippingAdjustmentAmt = paidDeliveryFeeRefundAmt + resolveSignedLong(returnItem == null ? null : returnItem.getPayDelvAmt());
+		long expectedRefundAmt = totalOrderAmt - benefitAmt + shippingAdjustmentAmt;
+
+		// 프론트 금액 표 렌더링에 필요한 요약 값을 구성합니다.
+		ShopMypageReturnPreviewAmountVO result = new ShopMypageReturnPreviewAmountVO();
+		result.setTotalSupplyAmt(totalSupplyAmt);
+		result.setTotalGoodsDiscountAmt(Math.max(totalOrderAmt - totalSupplyAmt, 0L));
+		result.setTotalGoodsCouponDiscountAmt(totalGoodsCouponDiscountAmt);
+		result.setTotalCartCouponDiscountAmt(totalCartCouponDiscountAmt);
+		result.setDeliveryCouponRefundAmt(deliveryCouponRefundAmt);
+		result.setTotalPointRefundAmt(totalPointRefundAmt);
+		result.setPaidGoodsAmt(totalOrderAmt);
+		result.setBenefitAmt(benefitAmt);
+		result.setShippingAdjustmentAmt(shippingAdjustmentAmt);
+		result.setExpectedRefundAmt(expectedRefundAmt);
+		return result;
+	}
+
+	// 현재 주문 기준으로 이번 반품이 전체 반품인지 계산합니다.
+	private boolean resolveShopMypageReturnFullReturnYn(
+		ShopMypageReturnHistoryVO returnItem,
+		ShopMypageOrderGroupVO orderGroup
+	) {
+		// 반품 상세 행의 주문상세별 반품 수량을 먼저 합산합니다.
+		Map<Integer, Integer> returnQtyByOrdDtlNo = buildShopMypageReturnQtyMap(returnItem);
+		Map<Integer, Boolean> completedReturnOrdDtlNoMap = buildShopMypageReturnCompletedOrdDtlNoMap(returnItem);
+		int activeItemCount = 0;
+		int selectedItemCount = 0;
+		int fullyReturnedItemCount = 0;
+
+		// 현재 주문에 남아 있는 주문상세와 현재 반품 수량을 비교합니다.
+		for (ShopMypageOrderDetailItemVO detailItem : orderGroup == null ? List.<ShopMypageOrderDetailItemVO>of() : orderGroup.getDetailList()) {
+			Integer ordDtlNo = detailItem == null ? null : detailItem.getOrdDtlNo();
+			if (ordDtlNo == null) {
+				continue;
+			}
+
+			int currentRemainingQty = resolveShopOrderRemainingQty(detailItem);
+			int currentClaimQty = returnQtyByOrdDtlNo.getOrDefault(ordDtlNo, 0);
+			boolean currentClaimCompletedYn = Boolean.TRUE.equals(completedReturnOrdDtlNoMap.get(ordDtlNo));
+			int remainingQtyBeforeCurrentClaim = currentRemainingQty + (currentClaimCompletedYn ? currentClaimQty : 0);
+			if (remainingQtyBeforeCurrentClaim < 1) {
+				continue;
+			}
+			activeItemCount += 1;
+
+			if (currentClaimQty < 1) {
+				continue;
+			}
+			selectedItemCount += 1;
+			if (currentClaimQty >= remainingQtyBeforeCurrentClaim) {
+				fullyReturnedItemCount += 1;
+			}
+		}
+		return activeItemCount > 0 && selectedItemCount > 0 && fullyReturnedItemCount == activeItemCount;
+	}
+
+	// 반품 상세 행 목록을 주문상세번호별 반품 수량 맵으로 변환합니다.
+	private Map<Integer, Integer> buildShopMypageReturnQtyMap(ShopMypageReturnHistoryVO returnItem) {
+		// 중복 주문상세번호가 있으면 수량을 누적합니다.
+		Map<Integer, Integer> result = new LinkedHashMap<>();
+		for (ShopMypageReturnHistoryDetailVO detailItem : returnItem == null ? List.<ShopMypageReturnHistoryDetailVO>of() : returnItem.getDetailList()) {
+			Integer ordDtlNo = detailItem == null ? null : detailItem.getOrdDtlNo();
+			if (ordDtlNo == null) {
+				continue;
+			}
+			int qty = normalizeNonNegativeNumber(detailItem.getQty());
+			result.merge(ordDtlNo, qty, Integer::sum);
+		}
+		return result;
+	}
+
+	// 반품 상세 행 목록에서 완료 처리된 주문상세번호 여부를 맵으로 변환합니다.
+	private Map<Integer, Boolean> buildShopMypageReturnCompletedOrdDtlNoMap(ShopMypageReturnHistoryVO returnItem) {
+		// 같은 주문상세번호에 완료 상태가 하나라도 있으면 완료로 간주합니다.
+		Map<Integer, Boolean> result = new LinkedHashMap<>();
+		for (ShopMypageReturnHistoryDetailVO detailItem : returnItem == null ? List.<ShopMypageReturnHistoryDetailVO>of() : returnItem.getDetailList()) {
+			Integer ordDtlNo = detailItem == null ? null : detailItem.getOrdDtlNo();
+			if (ordDtlNo == null) {
+				continue;
+			}
+			boolean completedYn = RETURN_COMPLETE_DETAIL_STATUS_CODE.equals(trimToNull(detailItem.getChgDtlStatCd()));
+			result.merge(ordDtlNo, completedYn, (previousValue, currentValue) -> previousValue || currentValue);
+		}
+		return result;
+	}
+
+	// 저장된 반품 회수지가 없을 때 주문 배송지 기준 기본 회수지를 구성합니다.
+	private ShopMypageReturnPickupAddressVO buildShopMypageReturnFallbackPickupAddress(ShopOrderCancelOrderBaseVO orderBase) {
+		// 주문서 배송지 정보가 있으면 동일한 주소를 기본 회수지로 사용합니다.
+		ShopMypageReturnPickupAddressVO result = new ShopMypageReturnPickupAddressVO();
+		result.setRsvNm(trimToNull(orderBase == null ? null : orderBase.getRcvNm()));
+		result.setPostNo(trimToNull(orderBase == null ? null : orderBase.getRcvPostNo()));
+		result.setBaseAddress(trimToNull(orderBase == null ? null : orderBase.getRcvAddrBase()));
+		result.setDetailAddress(trimToNull(orderBase == null ? null : orderBase.getRcvAddrDtl()));
+		return result;
 	}
 
 	// 쇼핑몰 마이페이지 반품 신청을 저장합니다.
@@ -619,6 +870,11 @@ public class OrderReturnService {
 	// Long 값을 0 이상의 안전한 숫자로 보정합니다.
 	private long resolveNonNegativeLong(Long value) {
 		return orderService.resolveNonNegativeLong(value);
+	}
+
+	// Integer 값을 부호 유지 long 값으로 안전하게 변환합니다.
+	private long resolveSignedLong(Integer value) {
+		return value == null ? 0L : value.longValue();
 	}
 
 	// 주문상세의 현재 남은 수량을 반환합니다.
