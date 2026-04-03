@@ -3,6 +3,10 @@ package com.xodud1202.springbackend.service;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnItemPO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnPO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnPageVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnWithdrawItemPO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnWithdrawPO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnWithdrawVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderClaimRowVO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartSiteInfoVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderAmountSummaryVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderCancelReasonVO;
@@ -30,10 +34,13 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnResultVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnWithdrawPO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnWithdrawResultVO;
 import com.xodud1202.springbackend.domain.shop.site.ShopSiteInfoVO;
+import com.xodud1202.springbackend.entity.UserBaseEntity;
 import com.xodud1202.springbackend.mapper.OrderMapper;
 import com.xodud1202.springbackend.mapper.SiteInfoMapper;
 import com.xodud1202.springbackend.service.order.support.ShopMypageOrderDateRange;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,6 +63,9 @@ public class OrderReturnService {
 	private static final int ORDER_CHANGE_ADDRESS_DETAIL_MAX_LENGTH = 100;
 	private static final String COMPANY_FAULT_REASON_PREFIX = "R_2";
 	private static final String RETURN_COMPLETE_DETAIL_STATUS_CODE = "CHG_DTL_STAT_14";
+	private static final String ADMIN_ORDER_RETURN_WITHDRAW_EMPTY_MESSAGE = "철회할 반품건을 선택해주세요.";
+	private static final String ADMIN_ORDER_RETURN_WITHDRAW_INVALID_MESSAGE = "반품 신청건만 철회가 가능합니다.";
+	private static final String ADMIN_LOGIN_INVALID_MESSAGE = "관리자 로그인 정보를 확인해주세요.";
 
 	private final OrderService orderService;
 	private final OrderMapper orderMapper;
@@ -407,6 +417,88 @@ public class OrderReturnService {
 		return result;
 	}
 
+	// 관리자 주문반품 신청 상품 여러 건을 철회합니다.
+	@Transactional
+	public AdminOrderReturnWithdrawVO withdrawAdminOrderReturn(AdminOrderReturnWithdrawPO param) {
+		// 관리자 로그인 번호와 요청 본문을 먼저 검증합니다.
+		Long udtNo = resolveCurrentAdminUserNo();
+		if (udtNo == null || udtNo < 1L) {
+			throw new IllegalArgumentException(ADMIN_LOGIN_INVALID_MESSAGE);
+		}
+		if (param == null) {
+			throw new IllegalArgumentException(ADMIN_ORDER_RETURN_WITHDRAW_EMPTY_MESSAGE);
+		}
+
+		String ordNo = trimToNull(param.getOrdNo());
+		if (ordNo == null) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_NO_INVALID_MESSAGE);
+		}
+
+		// 중복을 제거한 철회 대상 목록과 현재 주문의 클레임 목록을 각각 준비합니다.
+		List<AdminOrderReturnWithdrawItemPO> claimItemList = normalizeAdminOrderReturnWithdrawItemList(param.getClaimItemList());
+		if (claimItemList.isEmpty()) {
+			throw new IllegalArgumentException(ADMIN_ORDER_RETURN_WITHDRAW_EMPTY_MESSAGE);
+		}
+		Map<String, AdminOrderClaimRowVO> claimRowMap = buildAdminOrderClaimRowMap(orderMapper.getAdminOrderClaimList(ordNo));
+
+		// 선택된 모든 행이 반품 신청 반품건인지 먼저 검증합니다.
+		List<AdminOrderClaimRowVO> validatedClaimRowList = new ArrayList<>();
+		for (AdminOrderReturnWithdrawItemPO claimItem : claimItemList) {
+			String claimItemKey = buildAdminOrderReturnWithdrawItemKey(claimItem.getClmNo(), claimItem.getOrdDtlNo());
+			AdminOrderClaimRowVO claimRow = claimRowMap.get(claimItemKey);
+			if (!isAdminOrderReturnWithdrawableClaimRow(claimRow)) {
+				throw new IllegalArgumentException(ADMIN_ORDER_RETURN_WITHDRAW_INVALID_MESSAGE);
+			}
+			validatedClaimRowList.add(claimRow);
+		}
+
+		// 검증을 모두 통과한 상세 행만 반품 철회 상태로 일괄 반영합니다.
+		int updatedCount = 0;
+		Map<String, Boolean> selectedClaimNoMap = new LinkedHashMap<>();
+		for (AdminOrderClaimRowVO claimRow : validatedClaimRowList) {
+			int detailUpdatedCount = orderMapper.withdrawShopOrderChangeDetail(
+				claimRow.getClmNo(),
+				ordNo,
+				claimRow.getOrdDtlNo(),
+				SHOP_ORDER_CHANGE_DTL_STAT_RETURN_APPLY,
+				SHOP_ORDER_CHANGE_DTL_STAT_RETURN_WITHDRAW,
+				udtNo
+			);
+			if (detailUpdatedCount != 1) {
+				throw new IllegalArgumentException(ADMIN_ORDER_RETURN_WITHDRAW_INVALID_MESSAGE);
+			}
+			updatedCount += detailUpdatedCount;
+			selectedClaimNoMap.put(claimRow.getClmNo(), Boolean.TRUE);
+		}
+
+		// 철회로 남은 반품 상세가 없어진 클레임 마스터만 종료 상태로 닫습니다.
+		int closedClaimCount = 0;
+		for (String clmNo : selectedClaimNoMap.keySet()) {
+			int remainingReturnDetailCount = orderMapper.countShopOrderRemainingReturnDetailByClaim(clmNo, ordNo);
+			if (remainingReturnDetailCount > 0) {
+				continue;
+			}
+
+			int claimUpdatedCount = orderMapper.withdrawShopOrderChangeBase(
+				clmNo,
+				ordNo,
+				SHOP_ORDER_CHANGE_STAT_WITHDRAW,
+				udtNo
+			);
+			if (claimUpdatedCount != 1) {
+				throw new IllegalArgumentException(ADMIN_ORDER_RETURN_WITHDRAW_INVALID_MESSAGE);
+			}
+			closedClaimCount += claimUpdatedCount;
+		}
+
+		// 관리자 화면 재조회에 사용할 결과 객체를 구성합니다.
+		AdminOrderReturnWithdrawVO result = new AdminOrderReturnWithdrawVO();
+		result.setOrdNo(ordNo);
+		result.setUpdatedCount(updatedCount);
+		result.setClosedClaimCount(closedClaimCount);
+		return result;
+	}
+
 	// 관리자 주문반품 신청을 저장합니다.
 	@Transactional
 	public ShopOrderReturnResultVO returnAdminOrder(AdminOrderReturnPO param) {
@@ -425,6 +517,62 @@ public class OrderReturnService {
 			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_NO_INVALID_MESSAGE);
 		}
 		return applyShopOrderReturn(createShopOrderReturnPOFromAdmin(param), custNo);
+	}
+
+	// 관리자 반품 철회 요청 목록을 정규화하고 중복을 제거합니다.
+	private List<AdminOrderReturnWithdrawItemPO> normalizeAdminOrderReturnWithdrawItemList(
+		List<AdminOrderReturnWithdrawItemPO> claimItemList
+	) {
+		// 요청 목록이 없으면 빈 목록을 반환합니다.
+		if (claimItemList == null || claimItemList.isEmpty()) {
+			return List.of();
+		}
+
+		// 클레임번호와 주문상세번호가 유효한 행만 중복 없이 유지합니다.
+		Map<String, AdminOrderReturnWithdrawItemPO> normalizedItemMap = new LinkedHashMap<>();
+		for (AdminOrderReturnWithdrawItemPO claimItem : claimItemList) {
+			String clmNo = trimToNull(claimItem == null ? null : claimItem.getClmNo());
+			Integer ordDtlNo = claimItem == null ? null : claimItem.getOrdDtlNo();
+			if (clmNo == null || ordDtlNo == null || ordDtlNo < 1) {
+				throw new IllegalArgumentException(ADMIN_ORDER_RETURN_WITHDRAW_INVALID_MESSAGE);
+			}
+
+			AdminOrderReturnWithdrawItemPO normalizedItem = new AdminOrderReturnWithdrawItemPO();
+			normalizedItem.setClmNo(clmNo);
+			normalizedItem.setOrdDtlNo(ordDtlNo);
+			normalizedItemMap.putIfAbsent(buildAdminOrderReturnWithdrawItemKey(clmNo, ordDtlNo), normalizedItem);
+		}
+		return List.copyOf(normalizedItemMap.values());
+	}
+
+	// 관리자 주문 클레임 목록을 철회 검증용 맵으로 변환합니다.
+	private Map<String, AdminOrderClaimRowVO> buildAdminOrderClaimRowMap(List<AdminOrderClaimRowVO> claimList) {
+		// 클레임번호와 주문상세번호 조합을 키로 사용해 빠르게 찾을 수 있게 구성합니다.
+		Map<String, AdminOrderClaimRowVO> claimRowMap = new LinkedHashMap<>();
+		for (AdminOrderClaimRowVO claimRow : claimList == null ? List.<AdminOrderClaimRowVO>of() : claimList) {
+			String clmNo = trimToNull(claimRow == null ? null : claimRow.getClmNo());
+			Integer ordDtlNo = claimRow == null ? null : claimRow.getOrdDtlNo();
+			if (clmNo == null || ordDtlNo == null || ordDtlNo < 1) {
+				continue;
+			}
+			claimRowMap.putIfAbsent(buildAdminOrderReturnWithdrawItemKey(clmNo, ordDtlNo), claimRow);
+		}
+		return claimRowMap;
+	}
+
+	// 관리자 주문 클레임 행이 반품 철회 가능한 상태인지 반환합니다.
+	private boolean isAdminOrderReturnWithdrawableClaimRow(AdminOrderClaimRowVO claimRow) {
+		// 반품 클레임이면서 현재 반품 신청 상태인 행만 철회할 수 있습니다.
+		if (claimRow == null) {
+			return false;
+		}
+		return SHOP_ORDER_CHANGE_DTL_GB_RETURN.equals(trimToNull(claimRow.getChgDtlGbCd()))
+			&& SHOP_ORDER_CHANGE_DTL_STAT_RETURN_APPLY.equals(trimToNull(claimRow.getChgDtlStatCd()));
+	}
+
+	// 관리자 반품 철회 요청 항목의 복합키 문자열을 생성합니다.
+	private String buildAdminOrderReturnWithdrawItemKey(String clmNo, Integer ordDtlNo) {
+		return clmNo + ":" + ordDtlNo;
 	}
 
 	// 관리자 반품 요청을 쇼핑몰 반품 공통 요청 형식으로 변환합니다.
@@ -924,6 +1072,20 @@ public class OrderReturnService {
 	private long resolvePreviewAmountValue(Long value) {
 		// null 값은 0으로 보고 음수/양수 부호는 그대로 유지합니다.
 		return value == null ? 0L : value;
+	}
+
+	// 현재 로그인한 관리자 번호를 조회합니다.
+	private Long resolveCurrentAdminUserNo() {
+		// 스프링 시큐리티 인증정보에서 관리자 사용자번호를 추출합니다.
+		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+		if (authentication == null) {
+			return null;
+		}
+		Object principal = authentication.getPrincipal();
+		if (principal instanceof UserBaseEntity userBaseEntity) {
+			return userBaseEntity.getUsrNo();
+		}
+		return null;
 	}
 
 	// 문자열의 공백을 제거하고 빈 값이면 null을 반환합니다.

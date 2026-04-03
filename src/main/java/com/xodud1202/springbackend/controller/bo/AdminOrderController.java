@@ -3,6 +3,8 @@ package com.xodud1202.springbackend.controller.bo;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderDetailStatusUpdatePO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnPageVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnPO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnWithdrawPO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnWithdrawVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderStartDeliveryPreparePO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderStartDeliveryStatusPO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderCancelPO;
@@ -107,6 +109,24 @@ public class AdminOrderController {
 		} catch (Exception exception) {
 			// 예상치 못한 오류는 500 응답으로 반환합니다.
 			return ResponseEntity.internalServerError().body(Map.of("message", "반품 신청 처리 중 오류가 발생했습니다."));
+		}
+	}
+
+	// 관리자 주문반품 철회를 저장합니다.
+	@PostMapping("/api/admin/order/return/withdraw")
+	public ResponseEntity<Object> withdrawAdminOrderReturn(
+		@RequestBody(required = false) AdminOrderReturnWithdrawPO param
+	) {
+		try {
+			// 반품 철회 요청을 처리하고 결과를 반환합니다.
+			AdminOrderReturnWithdrawVO result = orderReturnService.withdrawAdminOrderReturn(param);
+			return ResponseEntity.ok(result);
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 예상치 못한 오류는 500 응답으로 반환합니다.
+			return ResponseEntity.internalServerError().body(Map.of("message", "반품 철회 처리 중 오류가 발생했습니다."));
 		}
 	}
 
