@@ -17,6 +17,10 @@ import com.xodud1202.springbackend.domain.admin.order.AdminOrderListRowVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderMasterVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderPO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderPaymentRowVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManageClaimSummaryVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManageListRowVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupItemPO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderStartDeliveryKeyItemPO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderStartDeliveryListRowVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderStartDeliveryPO;
@@ -95,6 +99,15 @@ public interface OrderMapper {
 
 	// 관리자 배송 시작 관리 목록 건수를 조회합니다.
 	int getAdminOrderStartDeliveryCount(AdminOrderStartDeliveryPO param);
+
+	// 관리자 반품 회수 관리 목록을 조회합니다.
+	List<AdminOrderReturnManageListRowVO> getAdminOrderReturnManageList(AdminOrderReturnManagePO param);
+
+	// 관리자 반품 회수 관리 목록 건수를 조회합니다.
+	int getAdminOrderReturnManageCount(AdminOrderReturnManagePO param);
+
+	// 관리자 반품 회수 관리 대상 클레임 요약을 조회합니다.
+	List<AdminOrderReturnManageClaimSummaryVO> getAdminOrderReturnManageClaimSummaryList(@Param("clmNoList") List<String> clmNoList);
 
 	// 관리자 주문 상세 하단 결제 목록을 조회합니다.
 	List<AdminOrderPaymentRowVO> getAdminOrderPaymentList(@Param("ordNo") String ordNo);
@@ -239,6 +252,26 @@ public interface OrderMapper {
 		@Param("toOrdDtlStatCd") String toOrdDtlStatCd,
 		@Param("udtNo") Long udtNo,
 		@Param("updateDelvCompleteDt") boolean updateDelvCompleteDt
+	);
+
+	// 관리자 반품 회수 관리 반품 상세 상태를 클레임번호 기준으로 일괄 변경합니다.
+	int updateAdminOrderReturnManageStatusByClaimNoList(
+		@Param("clmNoList") List<String> clmNoList,
+		@Param("fromChgDtlStatCd") String fromChgDtlStatCd,
+		@Param("toChgDtlStatCd") String toChgDtlStatCd,
+		@Param("udtNo") Long udtNo
+	);
+
+	// 관리자 반품 회수 관리 회수지 택배사와 송장번호를 일괄 저장합니다.
+	int updateAdminOrderReturnManagePickupAddressList(
+		@Param("itemList") List<AdminOrderReturnManagePickupItemPO> itemList,
+		@Param("udtNo") Long udtNo
+	);
+
+	// 관리자 반품 회수 관리 회수 시작 일시를 일괄 저장합니다.
+	int updateAdminOrderReturnManagePickupStartAddressList(
+		@Param("clmNoList") List<String> clmNoList,
+		@Param("udtNo") Long udtNo
 	);
 
 	// 카드/계좌이체 승인 성공 결과로 결제 정보를 갱신합니다.

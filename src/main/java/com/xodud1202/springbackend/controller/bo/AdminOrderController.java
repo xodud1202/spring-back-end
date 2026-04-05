@@ -1,6 +1,9 @@
 package com.xodud1202.springbackend.controller.bo;
 
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderDetailStatusUpdatePO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManageListResponseVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupRequestPO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupStartPO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnPageVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnPO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnWithdrawPO;
@@ -131,6 +134,59 @@ public class AdminOrderController {
 	}
 
 	// 관리자 주문 반품 회수지 우편번호 검색 결과를 조회합니다.
+	// 관리자 반품 회수 관리 목록을 조회합니다.
+	// 愿由ъ옄 諛섑뭹 ?뚯닔 愿由?紐⑸줉??議고쉶?⑸땲??
+	@GetMapping("/api/admin/order/return/manage/list")
+	public ResponseEntity<Object> getAdminOrderReturnManageList(
+		@RequestParam(required = false) Integer page,
+		@RequestParam(required = false) Integer pageSize,
+		@RequestParam(required = false) String chgDtlStatCd
+	) {
+		try {
+			// 조회 조건으로 관리자 반품 회수 관리 목록을 반환합니다.
+			AdminOrderReturnManageListResponseVO result = orderReturnService.getAdminOrderReturnManageList(page, pageSize, chgDtlStatCd);
+			return ResponseEntity.ok(result);
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		}
+	}
+
+	// 관리자 반품 회수 신청을 저장합니다.
+	@PostMapping("/api/admin/order/return/manage/pickup/request")
+	public ResponseEntity<Object> requestAdminOrderReturnPickup(
+		@RequestBody(required = false) AdminOrderReturnManagePickupRequestPO param
+	) {
+		try {
+			// 선택한 반품 클레임을 반품 회수 신청 상태로 변경합니다.
+			return ResponseEntity.ok(orderReturnService.requestAdminOrderReturnPickup(param));
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 예상치 못한 오류는 500 응답으로 반환합니다.
+			return ResponseEntity.internalServerError().body(Map.of("message", "송장저장 처리 중 오류가 발생했습니다."));
+		}
+	}
+
+	// 관리자 반품 회수 신청 클레임을 회수중 상태로 변경합니다.
+	@PostMapping("/api/admin/order/return/manage/pickup/start")
+	public ResponseEntity<Object> startAdminOrderReturnPickup(
+		@RequestBody(required = false) AdminOrderReturnManagePickupStartPO param
+	) {
+		try {
+			// 선택한 반품 클레임을 반품 회수중 상태로 변경합니다.
+			return ResponseEntity.ok(orderReturnService.startAdminOrderReturnPickup(param));
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 예상치 못한 오류는 500 응답으로 반환합니다.
+			return ResponseEntity.internalServerError().body(Map.of("message", "회수중 처리 중 오류가 발생했습니다."));
+		}
+	}
+
+	// 愿由ъ옄 二쇰Ц 諛섑뭹 ?뚯닔吏 ?고렪踰덊샇 寃??寃곌낵瑜?議고쉶?⑸땲??
 	@GetMapping("/api/admin/order/address/search")
 	public ResponseEntity<Object> searchAdminOrderAddress(
 		@RequestParam(value = "keyword", required = false) String keyword,

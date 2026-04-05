@@ -11,6 +11,15 @@
 		  AND COALESCE(OD.RMN_QTY, OD.ORD_QTY, 0) &gt; 0
 	</sql>
 	
+	<sql id="adminOrderReturnManageWhere">
+		/* OrderMapper.adminOrderReturnManageWhere: 관리자 반품 회수 관리 공통 조회 조건 */
+		WHERE 1 = 1
+		  AND OCB.CHG_GB_CD = 'R'
+		  AND COALESCE(OCB.CHG_STAT_CD, '') != 'CHG_STAT_02'
+		  AND OCD.CHG_DTL_GB_CD = 'CHG_DTL_GB_02'
+		  AND OCD.CHG_DTL_STAT_CD = #{chgDtlStatCd}
+	</sql>
+
 	<sql id="adminOrderWhere">
 		/* OrderMapper.adminOrderWhere: 관리자 주문 목록 공통 조회 조건 */
 		WHERE 1 = 1
@@ -118,6 +127,83 @@
 		  LEFT JOIN GOODS_BASE GB
 		    ON GB.GOODS_ID = OD.GOODS_ID
 		<include refid="adminOrderStartDeliveryWhere" />
+	</select>
+
+	<select id="getAdminOrderReturnManageList" resultType="com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManageListRowVO">
+		/* OrderMapper.getAdminOrderReturnManageList: 관리자 반품 회수 관리 목록 조회 */
+		SELECT PAGE_CLAIM.CLM_NO
+		     , PAGE_CLAIM.ORD_NO
+		     , OCD.ORD_DTL_NO
+		     , OCD.GOODS_ID
+		     , OCD.SIZE_ID
+		     , OCD.QTY
+		     , COALESCE(GB.GOODS_NM, '') AS GOODS_NM
+		     , OCEA.DELV_COMP_CD
+		     , FN_GET_CODE_NM('DELV_COMP', OCEA.DELV_COMP_CD) AS DELV_COMP_NM
+		     , OCEA.INVOICE_NO
+		     , DATE_FORMAT(PAGE_CLAIM.SORT_CHG_DT, '%Y-%m-%d %H:%i:%s') AS CHG_DT
+		     , OCD.CHG_DTL_STAT_CD
+		     , FN_GET_CODE_NM('CHG_DTL_STAT', OCD.CHG_DTL_STAT_CD) AS CHG_DTL_STAT_NM
+		  FROM (
+		        SELECT OCB.CLM_NO
+		             , OCB.ORD_NO
+		             , COALESCE(OCB.CHG_DT, OCB.REG_DT) AS SORT_CHG_DT
+		          FROM ORDER_CHANGE_BASE OCB
+		          JOIN ORDER_CHANGE_DETAIL OCD
+		            ON OCD.CLM_NO = OCB.CLM_NO
+		           AND OCD.ORD_NO = OCB.ORD_NO
+		        <include refid="adminOrderReturnManageWhere" />
+		         GROUP BY OCB.CLM_NO, OCB.ORD_NO, COALESCE(OCB.CHG_DT, OCB.REG_DT)
+		         ORDER BY SORT_CHG_DT DESC, OCB.CLM_NO DESC
+		         LIMIT #{pageSize} OFFSET #{offset}
+		  ) PAGE_CLAIM
+		  JOIN ORDER_CHANGE_BASE OCB
+		    ON OCB.CLM_NO = PAGE_CLAIM.CLM_NO
+		   AND OCB.ORD_NO = PAGE_CLAIM.ORD_NO
+		  JOIN ORDER_CHANGE_DETAIL OCD
+		    ON OCD.CLM_NO = OCB.CLM_NO
+		   AND OCD.ORD_NO = OCB.ORD_NO
+		  LEFT JOIN ORDER_CHANGE_EXCHANGE_ADDRESS OCEA
+		    ON OCEA.CLM_NO = OCB.CLM_NO
+		   AND OCEA.CLM_ADDR_GB_CD = 'CLM_ADDR_GB_01'
+		  LEFT JOIN GOODS_BASE GB
+		    ON GB.GOODS_ID = OCD.GOODS_ID
+		 WHERE OCD.CHG_DTL_GB_CD = 'CHG_DTL_GB_02'
+		   AND OCD.CHG_DTL_STAT_CD = #{chgDtlStatCd}
+		 ORDER BY PAGE_CLAIM.SORT_CHG_DT DESC, PAGE_CLAIM.CLM_NO DESC, OCD.ORD_DTL_NO ASC
+	</select>
+
+	<select id="getAdminOrderReturnManageCount" resultType="int">
+		/* OrderMapper.getAdminOrderReturnManageCount: 관리자 반품 회수 관리 목록 건수 조회 */
+		SELECT COUNT(DISTINCT OCB.CLM_NO)
+		  FROM ORDER_CHANGE_BASE OCB
+		  JOIN ORDER_CHANGE_DETAIL OCD
+		    ON OCD.CLM_NO = OCB.CLM_NO
+		   AND OCD.ORD_NO = OCB.ORD_NO
+		<include refid="adminOrderReturnManageWhere" />
+	</select>
+
+	<select id="getAdminOrderReturnManageClaimSummaryList" resultType="com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManageClaimSummaryVO">
+		/* OrderMapper.getAdminOrderReturnManageClaimSummaryList: 관리자 반품 회수 관리 대상 클레임 검증 요약 조회 */
+		SELECT OCB.CLM_NO
+		     , COUNT(1) AS DETAIL_COUNT
+		     , MIN(OCD.CHG_DTL_STAT_CD) AS MIN_CHG_DTL_STAT_CD
+		     , MAX(OCD.CHG_DTL_STAT_CD) AS MAX_CHG_DTL_STAT_CD
+		     , COUNT(DISTINCT OCEA.CLM_NO) AS PICKUP_ADDRESS_COUNT
+		  FROM ORDER_CHANGE_BASE OCB
+		  JOIN ORDER_CHANGE_DETAIL OCD
+		    ON OCD.CLM_NO = OCB.CLM_NO
+		   AND OCD.ORD_NO = OCB.ORD_NO
+		  LEFT JOIN ORDER_CHANGE_EXCHANGE_ADDRESS OCEA
+		    ON OCEA.CLM_NO = OCB.CLM_NO
+		   AND OCEA.CLM_ADDR_GB_CD = 'CLM_ADDR_GB_01'
+		 WHERE OCB.CHG_GB_CD = 'R'
+		   AND OCD.CHG_DTL_GB_CD = 'CHG_DTL_GB_02'
+		   AND OCB.CLM_NO IN
+		<foreach item="clmNo" collection="clmNoList" open="(" separator="," close=")">
+			#{clmNo}
+		</foreach>
+		 GROUP BY OCB.CLM_NO
 	</select>
 
 	<select id="countShopMypageOrderGroup" resultType="int">
@@ -960,6 +1046,51 @@
 		     , OD.UDT_DT = NOW()
 		 WHERE OD.ORD_DTL_STAT_CD = #{fromOrdDtlStatCd}
 		   AND COALESCE(OD.RMN_QTY, OD.ORD_QTY, 0) &gt; 0
+	</update>
+
+	<update id="updateAdminOrderReturnManageStatusByClaimNoList">
+		/* OrderMapper.updateAdminOrderReturnManageStatusByClaimNoList: 관리자 반품 회수 관리 반품 상세 상태 일괄 변경 */
+		UPDATE ORDER_CHANGE_DETAIL
+		   SET CHG_DTL_STAT_CD = #{toChgDtlStatCd}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE CHG_DTL_GB_CD = 'CHG_DTL_GB_02'
+		   AND CHG_DTL_STAT_CD = #{fromChgDtlStatCd}
+		   AND CLM_NO IN
+		<foreach item="clmNo" collection="clmNoList" open="(" separator="," close=")">
+			#{clmNo}
+		</foreach>
+	</update>
+
+	<update id="updateAdminOrderReturnManagePickupAddressList">
+		/* OrderMapper.updateAdminOrderReturnManagePickupAddressList: 관리자 반품 회수 관리 택배사/송장번호 일괄 저장 */
+		UPDATE ORDER_CHANGE_EXCHANGE_ADDRESS OCEA
+		  JOIN (
+			<foreach item="item" collection="itemList" separator=" UNION ALL ">
+				SELECT #{item.clmNo} AS CLM_NO
+				     , #{item.delvCompCd} AS DELV_COMP_CD
+				     , #{item.invoiceNo} AS INVOICE_NO
+			</foreach>
+		  ) REQ
+		    ON REQ.CLM_NO = OCEA.CLM_NO
+		   SET OCEA.DELV_COMP_CD = REQ.DELV_COMP_CD
+		     , OCEA.INVOICE_NO = REQ.INVOICE_NO
+		     , OCEA.UDT_NO = #{udtNo}
+		     , OCEA.UDT_DT = NOW()
+		 WHERE OCEA.CLM_ADDR_GB_CD = 'CLM_ADDR_GB_01'
+	</update>
+
+	<update id="updateAdminOrderReturnManagePickupStartAddressList">
+		/* OrderMapper.updateAdminOrderReturnManagePickupStartAddressList: 관리자 반품 회수 관리 회수 시작 일시 저장 */
+		UPDATE ORDER_CHANGE_EXCHANGE_ADDRESS
+		   SET DELV_START_DT = NOW()
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE CLM_ADDR_GB_CD = 'CLM_ADDR_GB_01'
+		   AND CLM_NO IN
+		<foreach item="clmNo" collection="clmNoList" open="(" separator="," close=")">
+			#{clmNo}
+		</foreach>
 	</update>
 
 	<update id="updateShopOrderDetailCancelQuantity">

@@ -1,5 +1,14 @@
 package com.xodud1202.springbackend.service;
 
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManageClaimItemPO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManageClaimSummaryVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManageListResponseVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManageListRowVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupItemPO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupRequestPO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupStartPO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManageStatusUpdateVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnItemPO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnPO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnPageVO;
@@ -7,6 +16,7 @@ import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnWithdrawIt
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnWithdrawPO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnWithdrawVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderClaimRowVO;
+import com.xodud1202.springbackend.domain.common.CommonCodeVO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartSiteInfoVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderAmountSummaryVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderCancelReasonVO;
@@ -35,6 +45,7 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnWithdrawPO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnWithdrawResultVO;
 import com.xodud1202.springbackend.domain.shop.site.ShopSiteInfoVO;
 import com.xodud1202.springbackend.entity.UserBaseEntity;
+import com.xodud1202.springbackend.mapper.CommonMapper;
 import com.xodud1202.springbackend.mapper.OrderMapper;
 import com.xodud1202.springbackend.mapper.SiteInfoMapper;
 import com.xodud1202.springbackend.service.order.support.ShopMypageOrderDateRange;
@@ -47,9 +58,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static com.xodud1202.springbackend.common.Constants.Shop.*;
 
@@ -61,8 +74,29 @@ public class OrderReturnService {
 	private static final int ORDER_CHANGE_ADDRESS_POST_NO_MAX_LENGTH = 10;
 	private static final int ORDER_CHANGE_ADDRESS_BASE_MAX_LENGTH = 100;
 	private static final int ORDER_CHANGE_ADDRESS_DETAIL_MAX_LENGTH = 100;
+	private static final int ADMIN_ORDER_DEFAULT_PAGE = 1;
+	private static final int ADMIN_ORDER_DEFAULT_PAGE_SIZE = 20;
+	private static final int ADMIN_ORDER_MAX_PAGE_SIZE = 200;
+	private static final String ADMIN_ORDER_RETURN_MANAGE_DELIVERY_COMPANY_GRP_CD = "DELV_COMP";
+	private static final int ADMIN_ORDER_RETURN_MANAGE_INVOICE_NO_MAX_LENGTH = 20;
 	private static final String COMPANY_FAULT_REASON_PREFIX = "R_2";
+	private static final String RETURN_APPLY_DETAIL_STATUS_CODE = SHOP_ORDER_CHANGE_DTL_STAT_RETURN_APPLY;
+	private static final String RETURN_PICKUP_REQUEST_DETAIL_STATUS_CODE = "CHG_DTL_STAT_12";
+	private static final String RETURN_PICKUP_IN_PROGRESS_DETAIL_STATUS_CODE = "CHG_DTL_STAT_13";
 	private static final String RETURN_COMPLETE_DETAIL_STATUS_CODE = "CHG_DTL_STAT_14";
+	private static final Set<String> ADMIN_ORDER_RETURN_MANAGE_STATUS_SET = Set.of(
+		RETURN_APPLY_DETAIL_STATUS_CODE,
+		RETURN_PICKUP_REQUEST_DETAIL_STATUS_CODE,
+		RETURN_PICKUP_IN_PROGRESS_DETAIL_STATUS_CODE
+	);
+	private static final String ADMIN_ORDER_RETURN_MANAGE_STATUS_INVALID_MESSAGE = "반품 상태를 확인해주세요.";
+	private static final String ADMIN_ORDER_RETURN_PICKUP_REQUEST_EMPTY_MESSAGE = "반품 신청건을 선택해주세요.";
+	private static final String ADMIN_ORDER_RETURN_PICKUP_REQUEST_INVALID_MESSAGE = "반품 신청건만 송장저장이 가능합니다.";
+	private static final String ADMIN_ORDER_RETURN_PICKUP_START_EMPTY_MESSAGE = "반품 회수 신청건을 선택해주세요.";
+	private static final String ADMIN_ORDER_RETURN_PICKUP_START_INVALID_MESSAGE = "반품 회수 신청건만 회수중 처리가 가능합니다.";
+	private static final String ADMIN_ORDER_RETURN_PICKUP_COMPANY_REQUIRED_MESSAGE = "택배사를 선택해주세요.";
+	private static final String ADMIN_ORDER_RETURN_PICKUP_INVOICE_REQUIRED_MESSAGE = "송장번호를 입력해주세요.";
+	private static final String ADMIN_ORDER_RETURN_PICKUP_INVOICE_INVALID_MESSAGE = "송장번호는 숫자 20자리 이하로 입력해주세요.";
 	private static final String ADMIN_ORDER_RETURN_WITHDRAW_EMPTY_MESSAGE = "철회할 반품건을 선택해주세요.";
 	private static final String ADMIN_ORDER_RETURN_WITHDRAW_INVALID_MESSAGE = "반품 신청건만 철회가 가능합니다.";
 	private static final String ADMIN_LOGIN_INVALID_MESSAGE = "관리자 로그인 정보를 확인해주세요.";
@@ -70,6 +104,7 @@ public class OrderReturnService {
 	private final OrderService orderService;
 	private final OrderMapper orderMapper;
 	private final SiteInfoMapper siteInfoMapper;
+	private final CommonMapper commonMapper;
 
 	// 반품 신청 선택 상품 계산 결과를 전달합니다.
 	private record ShopOrderReturnSelectedItem(
@@ -96,6 +131,149 @@ public class OrderReturnService {
 	// 관리자 주문반품 신청 화면 데이터를 조회합니다.
 	public AdminOrderReturnPageVO getAdminOrderReturnPage(String ordNo) {
 		return orderService.getAdminOrderReturnPage(ordNo);
+	}
+
+	// 관리자 반품 회수 관리 목록을 조회합니다.
+	public AdminOrderReturnManageListResponseVO getAdminOrderReturnManageList(
+		Integer page,
+		Integer pageSize,
+		String chgDtlStatCd
+	) {
+		// 페이지 기본값과 오프셋을 계산합니다.
+		int resolvedPage = page == null || page < 1 ? ADMIN_ORDER_DEFAULT_PAGE : page;
+		int resolvedPageSize = pageSize == null || pageSize < 1
+			? ADMIN_ORDER_DEFAULT_PAGE_SIZE
+			: Math.min(pageSize, ADMIN_ORDER_MAX_PAGE_SIZE);
+		int offset = (resolvedPage - 1) * resolvedPageSize;
+
+		// 허용된 반품 상태만 조회 조건으로 사용합니다.
+		String normalizedChgDtlStatCd = normalizeAdminOrderReturnManageStatus(chgDtlStatCd);
+
+		// 매퍼 조회용 파라미터를 구성합니다.
+		AdminOrderReturnManagePO param = new AdminOrderReturnManagePO();
+		param.setPage(resolvedPage);
+		param.setPageSize(resolvedPageSize);
+		param.setOffset(offset);
+		param.setChgDtlStatCd(normalizedChgDtlStatCd);
+
+		// 목록과 건수를 조회합니다.
+		List<AdminOrderReturnManageListRowVO> list = orderMapper.getAdminOrderReturnManageList(param);
+		int totalCount = orderMapper.getAdminOrderReturnManageCount(param);
+
+		// 목록 응답 객체를 구성합니다.
+		AdminOrderReturnManageListResponseVO result = new AdminOrderReturnManageListResponseVO();
+		result.setList(list == null ? List.of() : list);
+		result.setTotalCount(totalCount);
+		result.setPage(resolvedPage);
+		result.setPageSize(resolvedPageSize);
+		return result;
+	}
+
+	// 관리자 반품 클레임을 반품 회수 신청 상태로 변경합니다.
+	@Transactional
+	public AdminOrderReturnManageStatusUpdateVO requestAdminOrderReturnPickup(AdminOrderReturnManagePickupRequestPO param) {
+		// 요청 데이터와 택배사 공통코드를 검증 준비합니다.
+		if (param == null) {
+			throw new IllegalArgumentException(ADMIN_ORDER_RETURN_PICKUP_REQUEST_EMPTY_MESSAGE);
+		}
+		Set<String> deliveryCompanyCodeSet = getAdminOrderReturnManageDeliveryCompanyCodeSet();
+
+		// 요청 클레임 목록을 정규화하고 택배사/송장번호를 검증합니다.
+		List<AdminOrderReturnManagePickupItemPO> itemList = normalizeAdminOrderReturnManagePickupItemList(
+			param.getItemList(),
+			deliveryCompanyCodeSet
+		);
+		if (itemList.isEmpty()) {
+			throw new IllegalArgumentException(ADMIN_ORDER_RETURN_PICKUP_REQUEST_EMPTY_MESSAGE);
+		}
+
+		// 현재 로그인한 관리자 번호를 감사 컬럼 값으로 사용합니다.
+		Long udtNo = resolveCurrentAdminUserNo();
+		if (udtNo == null || udtNo < 1L) {
+			throw new IllegalArgumentException(ADMIN_LOGIN_INVALID_MESSAGE);
+		}
+
+		// 대상 클레임의 현재 상태와 회수지 행 존재 여부를 먼저 검증합니다.
+		List<String> clmNoList = itemList.stream()
+			.map(AdminOrderReturnManagePickupItemPO::getClmNo)
+			.toList();
+		int totalDetailCount = validateAdminOrderReturnManageClaimState(
+			clmNoList,
+			RETURN_APPLY_DETAIL_STATUS_CODE,
+			ADMIN_ORDER_RETURN_PICKUP_REQUEST_INVALID_MESSAGE
+		);
+
+		// 반품 상세 상태를 반품 회수 신청으로 변경합니다.
+		int updatedDetailCount = orderMapper.updateAdminOrderReturnManageStatusByClaimNoList(
+			clmNoList,
+			RETURN_APPLY_DETAIL_STATUS_CODE,
+			RETURN_PICKUP_REQUEST_DETAIL_STATUS_CODE,
+			udtNo
+		);
+		if (updatedDetailCount != totalDetailCount) {
+			throw new IllegalArgumentException(ADMIN_ORDER_RETURN_PICKUP_REQUEST_INVALID_MESSAGE);
+		}
+
+		// 회수지 행의 택배사와 송장번호를 클레임 단위로 저장합니다.
+		int updatedPickupAddressCount = orderMapper.updateAdminOrderReturnManagePickupAddressList(itemList, udtNo);
+		if (updatedPickupAddressCount != clmNoList.size()) {
+			throw new IllegalArgumentException(ADMIN_ORDER_RETURN_PICKUP_REQUEST_INVALID_MESSAGE);
+		}
+
+		// 변경된 클레임 건수를 응답 객체에 담아 반환합니다.
+		AdminOrderReturnManageStatusUpdateVO result = new AdminOrderReturnManageStatusUpdateVO();
+		result.setUpdatedCount(clmNoList.size());
+		return result;
+	}
+
+	// 관리자 반품 회수 신청 클레임을 반품 회수중 상태로 변경합니다.
+	@Transactional
+	public AdminOrderReturnManageStatusUpdateVO startAdminOrderReturnPickup(AdminOrderReturnManagePickupStartPO param) {
+		// 요청 클레임 목록을 정규화합니다.
+		List<AdminOrderReturnManageClaimItemPO> itemList = normalizeAdminOrderReturnManageClaimItemList(
+			param == null ? null : param.getItemList()
+		);
+		if (itemList.isEmpty()) {
+			throw new IllegalArgumentException(ADMIN_ORDER_RETURN_PICKUP_START_EMPTY_MESSAGE);
+		}
+
+		// 현재 로그인한 관리자 번호를 감사 컬럼 값으로 사용합니다.
+		Long udtNo = resolveCurrentAdminUserNo();
+		if (udtNo == null || udtNo < 1L) {
+			throw new IllegalArgumentException(ADMIN_LOGIN_INVALID_MESSAGE);
+		}
+
+		// 대상 클레임의 현재 상태와 회수지 행 존재 여부를 먼저 검증합니다.
+		List<String> clmNoList = itemList.stream()
+			.map(AdminOrderReturnManageClaimItemPO::getClmNo)
+			.toList();
+		int totalDetailCount = validateAdminOrderReturnManageClaimState(
+			clmNoList,
+			RETURN_PICKUP_REQUEST_DETAIL_STATUS_CODE,
+			ADMIN_ORDER_RETURN_PICKUP_START_INVALID_MESSAGE
+		);
+
+		// 반품 상세 상태를 반품 회수중으로 변경합니다.
+		int updatedDetailCount = orderMapper.updateAdminOrderReturnManageStatusByClaimNoList(
+			clmNoList,
+			RETURN_PICKUP_REQUEST_DETAIL_STATUS_CODE,
+			RETURN_PICKUP_IN_PROGRESS_DETAIL_STATUS_CODE,
+			udtNo
+		);
+		if (updatedDetailCount != totalDetailCount) {
+			throw new IllegalArgumentException(ADMIN_ORDER_RETURN_PICKUP_START_INVALID_MESSAGE);
+		}
+
+		// 회수지 행에 회수 시작 일시를 저장합니다.
+		int updatedPickupAddressCount = orderMapper.updateAdminOrderReturnManagePickupStartAddressList(clmNoList, udtNo);
+		if (updatedPickupAddressCount != clmNoList.size()) {
+			throw new IllegalArgumentException(ADMIN_ORDER_RETURN_PICKUP_START_INVALID_MESSAGE);
+		}
+
+		// 변경된 클레임 건수를 응답 객체에 담아 반환합니다.
+		AdminOrderReturnManageStatusUpdateVO result = new AdminOrderReturnManageStatusUpdateVO();
+		result.setUpdatedCount(clmNoList.size());
+		return result;
 	}
 
 	// 쇼핑몰 마이페이지 반품내역 페이지 데이터를 조회합니다.
@@ -905,6 +1083,152 @@ public class OrderReturnService {
 	}
 
 	// 반품 신청 회수지 입력값을 정규화하고 길이를 검증합니다.
+	// 관리자 반품 회수 관리 조회 상태값을 허용 범위로 보정합니다.
+	private String normalizeAdminOrderReturnManageStatus(String chgDtlStatCd) {
+		// 값이 비어 있으면 기본 조회 상태를 반품 신청으로 고정합니다.
+		String normalizedChgDtlStatCd = trimToNull(chgDtlStatCd);
+		if (normalizedChgDtlStatCd == null) {
+			return RETURN_APPLY_DETAIL_STATUS_CODE;
+		}
+		if (!ADMIN_ORDER_RETURN_MANAGE_STATUS_SET.contains(normalizedChgDtlStatCd)) {
+			throw new IllegalArgumentException(ADMIN_ORDER_RETURN_MANAGE_STATUS_INVALID_MESSAGE);
+		}
+		return normalizedChgDtlStatCd;
+	}
+
+	// 관리자 반품 회수 관리 택배사 공통코드 목록을 조회해 코드 집합으로 반환합니다.
+	private Set<String> getAdminOrderReturnManageDeliveryCompanyCodeSet() {
+		// 공통코드 조회 결과에서 실제 사용 가능한 택배사 코드만 추출합니다.
+		Set<String> result = new LinkedHashSet<>();
+		for (CommonCodeVO item : commonMapper.getCommonCodeList(ADMIN_ORDER_RETURN_MANAGE_DELIVERY_COMPANY_GRP_CD)) {
+			String code = trimToNull(item == null ? null : item.getCd());
+			if (code != null) {
+				result.add(code);
+			}
+		}
+		return Set.copyOf(result);
+	}
+
+	// 관리자 반품 회수 신청 저장 대상 목록을 정규화합니다.
+	private List<AdminOrderReturnManagePickupItemPO> normalizeAdminOrderReturnManagePickupItemList(
+		List<AdminOrderReturnManagePickupItemPO> itemList,
+		Set<String> deliveryCompanyCodeSet
+	) {
+		// null 또는 빈 목록이면 빈 결과를 반환합니다.
+		if (itemList == null || itemList.isEmpty()) {
+			return List.of();
+		}
+
+		Map<String, AdminOrderReturnManagePickupItemPO> normalizedMap = new LinkedHashMap<>();
+		for (AdminOrderReturnManagePickupItemPO item : itemList) {
+			String clmNo = trimToNull(item == null ? null : item.getClmNo());
+			String delvCompCd = trimToNull(item == null ? null : item.getDelvCompCd());
+			String invoiceNo = normalizeAdminOrderReturnManageInvoiceNo(item == null ? null : item.getInvoiceNo());
+
+			// 클레임번호, 택배사, 송장번호의 기본 형식을 검증합니다.
+			if (clmNo == null) {
+				throw new IllegalArgumentException(ADMIN_ORDER_RETURN_PICKUP_REQUEST_EMPTY_MESSAGE);
+			}
+			if (delvCompCd == null || !deliveryCompanyCodeSet.contains(delvCompCd)) {
+				throw new IllegalArgumentException(ADMIN_ORDER_RETURN_PICKUP_COMPANY_REQUIRED_MESSAGE);
+			}
+			if (invoiceNo == null) {
+				throw new IllegalArgumentException(ADMIN_ORDER_RETURN_PICKUP_INVOICE_REQUIRED_MESSAGE);
+			}
+			if (!isValidAdminOrderReturnManageInvoiceNo(invoiceNo)) {
+				throw new IllegalArgumentException(ADMIN_ORDER_RETURN_PICKUP_INVOICE_INVALID_MESSAGE);
+			}
+
+			// 검증한 값만 새 객체로 복사해 이후 로직에서 사용합니다.
+			AdminOrderReturnManagePickupItemPO normalizedItem = new AdminOrderReturnManagePickupItemPO();
+			normalizedItem.setClmNo(clmNo);
+			normalizedItem.setDelvCompCd(delvCompCd);
+			normalizedItem.setInvoiceNo(invoiceNo);
+			normalizedMap.putIfAbsent(clmNo, normalizedItem);
+		}
+		return List.copyOf(normalizedMap.values());
+	}
+
+	// 관리자 반품 회수 관리 클레임 목록을 정규화합니다.
+	private List<AdminOrderReturnManageClaimItemPO> normalizeAdminOrderReturnManageClaimItemList(
+		List<AdminOrderReturnManageClaimItemPO> itemList
+	) {
+		// null 또는 빈 목록이면 빈 결과를 반환합니다.
+		if (itemList == null || itemList.isEmpty()) {
+			return List.of();
+		}
+
+		Map<String, AdminOrderReturnManageClaimItemPO> normalizedMap = new LinkedHashMap<>();
+		for (AdminOrderReturnManageClaimItemPO item : itemList) {
+			String clmNo = trimToNull(item == null ? null : item.getClmNo());
+			if (clmNo == null) {
+				throw new IllegalArgumentException(ADMIN_ORDER_RETURN_PICKUP_START_EMPTY_MESSAGE);
+			}
+
+			// 검증한 클레임번호만 새 객체로 복사해 이후 로직에서 사용합니다.
+			AdminOrderReturnManageClaimItemPO normalizedItem = new AdminOrderReturnManageClaimItemPO();
+			normalizedItem.setClmNo(clmNo);
+			normalizedMap.putIfAbsent(clmNo, normalizedItem);
+		}
+		return List.copyOf(normalizedMap.values());
+	}
+
+	// 관리자 반품 회수 관리 대상 클레임의 현재 상태와 회수지 행 존재 여부를 검증합니다.
+	private int validateAdminOrderReturnManageClaimState(
+		List<String> clmNoList,
+		String expectedChgDtlStatCd,
+		String invalidMessage
+	) {
+		// 선택한 클레임 요약을 조회해 현재 상태와 회수지 존재 여부를 함께 확인합니다.
+		List<AdminOrderReturnManageClaimSummaryVO> summaryList = orderMapper.getAdminOrderReturnManageClaimSummaryList(clmNoList);
+		Map<String, AdminOrderReturnManageClaimSummaryVO> summaryMap = new LinkedHashMap<>();
+		for (AdminOrderReturnManageClaimSummaryVO summary : summaryList) {
+			String clmNo = trimToNull(summary == null ? null : summary.getClmNo());
+			if (clmNo != null) {
+				summaryMap.putIfAbsent(clmNo, summary);
+			}
+		}
+
+		int totalDetailCount = 0;
+		for (String clmNo : clmNoList) {
+			AdminOrderReturnManageClaimSummaryVO summary = summaryMap.get(clmNo);
+			if (summary == null) {
+				throw new IllegalArgumentException(invalidMessage);
+			}
+
+			// 클레임 상세 상태가 모두 기대 상태인지와 회수지 행이 1건 존재하는지 검증합니다.
+			int detailCount = normalizeNonNegativeNumber(summary.getDetailCount());
+			int pickupAddressCount = normalizeNonNegativeNumber(summary.getPickupAddressCount());
+			String minChgDtlStatCd = trimToNull(summary.getMinChgDtlStatCd());
+			String maxChgDtlStatCd = trimToNull(summary.getMaxChgDtlStatCd());
+			if (detailCount < 1 || pickupAddressCount != 1) {
+				throw new IllegalArgumentException(invalidMessage);
+			}
+			if (!expectedChgDtlStatCd.equals(minChgDtlStatCd) || !expectedChgDtlStatCd.equals(maxChgDtlStatCd)) {
+				throw new IllegalArgumentException(invalidMessage);
+			}
+
+			// 후속 update 결과 검증을 위해 전체 상세 건수를 누적합니다.
+			totalDetailCount += detailCount;
+		}
+		return totalDetailCount;
+	}
+
+	// 관리자 반품 회수 관리 송장번호를 정규화합니다.
+	private String normalizeAdminOrderReturnManageInvoiceNo(String invoiceNo) {
+		// 공백만 제거하고 숫자 형식 검증은 별도 메서드에서 수행합니다.
+		return trimToNull(invoiceNo);
+	}
+
+	// 관리자 반품 회수 관리 송장번호 형식을 검증합니다.
+	private boolean isValidAdminOrderReturnManageInvoiceNo(String invoiceNo) {
+		// 숫자만 허용하고 DB 컬럼 길이 20자를 초과하지 않아야 합니다.
+		return invoiceNo != null
+			&& invoiceNo.length() <= ADMIN_ORDER_RETURN_MANAGE_INVOICE_NO_MAX_LENGTH
+			&& invoiceNo.chars().allMatch(Character::isDigit);
+	}
+
+	// 諛섑뭹 ?좎껌 ?뚯닔吏 ?낅젰媛믪쓣 ?뺢퇋?뷀븯怨?湲몄씠瑜?寃利앺빀?덈떎.
 	private ShopOrderReturnPickupAddressPO normalizeShopOrderReturnPickupAddress(ShopOrderReturnPickupAddressPO pickupAddress) {
 		// 회수지 정보가 없거나 필수값이 비어 있으면 진행하지 않습니다.
 		String receiverName = trimToNull(pickupAddress == null ? null : pickupAddress.getRsvNm());
