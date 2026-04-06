@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+		"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.xodud1202.springbackend.mapper.CompanyWorkMapper">
+
+	<sql id="adminCompanyWorkWhere">
+		/* CompanyWorkMapper.adminCompanyWorkWhere: 관리자 회사 업무 공통 조회 조건 */
+		WHERE J.DEL_YN = 'N'
+		  AND J.WORK_COMPANY_SEQ = #{workCompanySeq}
+		  AND J.WORK_COMPANY_PROJECT_SEQ = #{workCompanyProjectSeq}
+		<if test="title != null and title != ''">
+		   AND J.TITLE LIKE CONCAT('%', #{title}, '%')
+		</if>
+	</sql>
+
+	<select id="getAdminCompanyWorkCompanyList" resultType="com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkCompanyVO">
+		/* CompanyWorkMapper.getAdminCompanyWorkCompanyList: 관리자 회사 업무 회사 목록 조회 */
+		SELECT WORK_COMPANY_SEQ
+		     , WORK_COMPANY_NM
+		     , WORK_PLATFORM_NM
+		     , DISP_ORD
+		  FROM WORK_COMPANY_INFO
+		 ORDER BY DISP_ORD ASC, WORK_COMPANY_SEQ ASC
+	</select>
+
+	<select id="getAdminCompanyWorkProjectList" resultType="com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkProjectVO">
+		/* CompanyWorkMapper.getAdminCompanyWorkProjectList: 관리자 회사 업무 프로젝트 목록 조회 */
+		SELECT WORK_COMPANY_PROJECT_SEQ
+		     , WORK_COMPANY_SEQ
+		     , WORK_COMPANY_PROJECT_NM
+		     , DISP_ORD
+		  FROM WORK_COMPANY_PROJECT_INFO
+		 WHERE WORK_COMPANY_SEQ = #{workCompanySeq}
+		 ORDER BY DISP_ORD ASC, WORK_COMPANY_PROJECT_SEQ ASC
+	</select>
+
+	<select id="getAdminCompanyWorkImportCompanyInfo" resultType="com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportCompanyInfoVO">
+		/* CompanyWorkMapper.getAdminCompanyWorkImportCompanyInfo: 관리자 회사 업무 가져오기 대상 회사 정보 조회 */
+		SELECT WORK_COMPANY_SEQ
+		     , WORK_COMPANY_NM
+		     , WORK_PLATFORM_NM
+		     , API_URL
+		  FROM WORK_COMPANY_INFO
+		 WHERE WORK_COMPANY_SEQ = #{workCompanySeq}
+	</select>
+
+	<select id="countAdminCompanyWorkProjectMatch" resultType="int">
+		/* CompanyWorkMapper.countAdminCompanyWorkProjectMatch: 관리자 회사/프로젝트 매칭 건수 조회 */
+		SELECT COUNT(1)
+		  FROM WORK_COMPANY_PROJECT_INFO
+		 WHERE WORK_COMPANY_SEQ = #{workCompanySeq}
+		   AND WORK_COMPANY_PROJECT_SEQ = #{workCompanyProjectSeq}
+	</select>
+
+	<select id="countAdminCompanyWorkDuplicateKey" resultType="int">
+		/* CompanyWorkMapper.countAdminCompanyWorkDuplicateKey: 관리자 회사 업무키 중복 건수 조회 */
+		SELECT COUNT(1)
+		  FROM WORK_COMPANY_PROJECT_JOB
+		 WHERE WORK_COMPANY_SEQ = #{workCompanySeq}
+		   AND WORK_COMPANY_PROJECT_SEQ = #{workCompanyProjectSeq}
+		   AND WORK_KEY = #{workKey}
+	</select>
+
+	<select id="getAdminCompanyWorkStatusList" resultType="com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkListRowVO">
+		/* CompanyWorkMapper.getAdminCompanyWorkStatusList: 관리자 회사 업무 비완료 상태 목록 조회 */
+		SELECT J.WORK_SEQ
+		     , J.WORK_COMPANY_SEQ
+		     , J.WORK_COMPANY_PROJECT_SEQ
+		     , J.WORK_STAT_CD
+		     , J.WORK_KEY
+		     , J.TITLE
+		     , DATE_FORMAT(J.WORK_CREATE_DT, '%Y-%m-%d %H:%i:%s') AS WORK_CREATE_DT
+		     , DATE_FORMAT(J.WORK_START_DT, '%Y-%m-%d %H:%i:%s') AS WORK_START_DT
+		     , DATE_FORMAT(J.WORK_END_DT, '%Y-%m-%d %H:%i:%s') AS WORK_END_DT
+		     , J.WORK_PRIOR_CD
+		     , FN_GET_CODE_NM('WORK_PRIOR', J.WORK_PRIOR_CD) AS WORK_PRIOR_NM
+		     , J.IT_MANAGER
+		     , J.CO_MANAGER
+		     , DATE_FORMAT(J.REG_DT, '%Y-%m-%d %H:%i:%s') AS REG_DT
+		     , DATE_FORMAT(J.UDT_DT, '%Y-%m-%d %H:%i:%s') AS UDT_DT
+		  FROM WORK_COMPANY_PROJECT_JOB J
+		  JOIN COMMON_CODE WORK_STAT_CODE
+		    ON WORK_STAT_CODE.GRP_CD = 'WORK_STAT'
+		   AND WORK_STAT_CODE.CD = J.WORK_STAT_CD
+		   AND WORK_STAT_CODE.USE_YN = 'Y'
+		<include refid="adminCompanyWorkWhere" />
+		   AND J.WORK_STAT_CD != 'WORK_STAT_05'
+		 ORDER BY WORK_STAT_CODE.DISP_ORD ASC, J.WORK_CREATE_DT DESC, J.WORK_SEQ DESC
+	</select>
+
+	<select id="getAdminCompanyWorkCompletedList" resultType="com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkListRowVO">
+		/* CompanyWorkMapper.getAdminCompanyWorkCompletedList: 관리자 회사 업무 완료 목록 조회 */
+		SELECT J.WORK_SEQ
+		     , J.WORK_COMPANY_SEQ
+		     , J.WORK_COMPANY_PROJECT_SEQ
+		     , J.WORK_STAT_CD
+		     , J.WORK_KEY
+		     , J.TITLE
+		     , DATE_FORMAT(J.WORK_CREATE_DT, '%Y-%m-%d %H:%i:%s') AS WORK_CREATE_DT
+		     , DATE_FORMAT(J.WORK_START_DT, '%Y-%m-%d %H:%i:%s') AS WORK_START_DT
+		     , DATE_FORMAT(J.WORK_END_DT, '%Y-%m-%d %H:%i:%s') AS WORK_END_DT
+		     , J.WORK_PRIOR_CD
+		     , FN_GET_CODE_NM('WORK_PRIOR', J.WORK_PRIOR_CD) AS WORK_PRIOR_NM
+		     , J.IT_MANAGER
+		     , J.CO_MANAGER
+		     , DATE_FORMAT(J.REG_DT, '%Y-%m-%d %H:%i:%s') AS REG_DT
+		     , DATE_FORMAT(J.UDT_DT, '%Y-%m-%d %H:%i:%s') AS UDT_DT
+		  FROM WORK_COMPANY_PROJECT_JOB J
+		<include refid="adminCompanyWorkWhere" />
+		   AND J.WORK_STAT_CD = 'WORK_STAT_05'
+		 ORDER BY J.WORK_CREATE_DT DESC, J.WORK_SEQ DESC
+		 LIMIT #{pageSize} OFFSET #{offset}
+	</select>
+
+	<select id="getAdminCompanyWorkCompletedCount" resultType="int">
+		/* CompanyWorkMapper.getAdminCompanyWorkCompletedCount: 관리자 회사 업무 완료 목록 건수 조회 */
+		SELECT COUNT(1)
+		  FROM WORK_COMPANY_PROJECT_JOB J
+		<include refid="adminCompanyWorkWhere" />
+		   AND J.WORK_STAT_CD = 'WORK_STAT_05'
+	</select>
+
+	<insert id="insertAdminCompanyWorkImportJob" useGeneratedKeys="true" keyProperty="workSeq" keyColumn="WORK_SEQ">
+		/* CompanyWorkMapper.insertAdminCompanyWorkImportJob: 관리자 회사 업무 기본정보 저장 */
+		INSERT INTO WORK_COMPANY_PROJECT_JOB (
+		       WORK_COMPANY_SEQ
+		     , WORK_COMPANY_PROJECT_SEQ
+		     , WORK_STAT_CD
+		     , WORK_PRIOR_CD
+		     , WORK_KEY
+		     , TITLE
+		     , CONTENT
+		     , WORK_CREATE_DT
+		     , CO_MANAGER
+		     , DEL_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{workCompanySeq}
+		     , #{workCompanyProjectSeq}
+		     , #{workStatCd}
+		     , #{workPriorCd}
+		     , #{workKey}
+		     , #{title}
+		     , #{content}
+		     , #{workCreateDt}
+		     , #{coManager}
+		     , 'N'
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+
+	<insert id="insertAdminCompanyWorkImportFile">
+		/* CompanyWorkMapper.insertAdminCompanyWorkImportFile: 관리자 회사 업무 첨부파일 저장 */
+		INSERT INTO WORK_COMPANY_PROJECT_JOB_FILE (
+		       WORK_SEQ
+		     , WORK_JOB_FILE_NM
+		     , WORK_JOB_FILE_URL
+		     , DEL_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{workSeq}
+		     , #{workJobFileNm}
+		     , #{workJobFileUrl}
+		     , 'N'
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+</mapper>
