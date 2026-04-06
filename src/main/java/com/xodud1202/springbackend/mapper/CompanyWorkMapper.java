@@ -3,6 +3,7 @@ package com.xodud1202.springbackend.mapper;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportCompanyInfoVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportFileSavePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportJobSavePO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkUpdatePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkCompanyVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkListRowVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkProjectVO;
@@ -30,6 +31,9 @@ public interface CompanyWorkMapper {
 	// 관리자 회사 업무 완료 목록 건수를 조회합니다.
 	int getAdminCompanyWorkCompletedCount(AdminCompanyWorkSearchPO param);
 
+	// 관리자 회사 업무 단건 행 정보를 조회합니다.
+	AdminCompanyWorkListRowVO getAdminCompanyWorkRow(@Param("workSeq") Long workSeq);
+
 	// 관리자 회사 업무 가져오기 대상 회사 정보를 조회합니다.
 	AdminCompanyWorkImportCompanyInfoVO getAdminCompanyWorkImportCompanyInfo(@Param("workCompanySeq") Integer workCompanySeq);
 
@@ -51,4 +55,7 @@ public interface CompanyWorkMapper {
 
 	// 관리자 회사 업무 첨부파일 정보를 저장합니다.
 	int insertAdminCompanyWorkImportFile(AdminCompanyWorkImportFileSavePO param);
+
+	// 관리자 회사 업무 즉시 수정 가능 항목을 저장합니다.
+	int updateAdminCompanyWorkEditableFields(AdminCompanyWorkUpdatePO param);
 }

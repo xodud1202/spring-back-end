@@ -4,7 +4,9 @@ import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkComp
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkCompletedListResponseVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportPO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportResponseVO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkListRowVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkProjectVO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkUpdatePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkStatusListResponseVO;
 import com.xodud1202.springbackend.service.CompanyWorkService;
 import lombok.RequiredArgsConstructor;
@@ -106,6 +108,22 @@ public class AdminCompanyWorkController {
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
 		} catch (IllegalStateException exception) {
 			// 설정 누락이나 외부 시스템 오류는 500으로 반환합니다.
+			return ResponseEntity.internalServerError().body(Map.of("message", exception.getMessage()));
+		}
+	}
+
+	// 관리자 회사 업무 그리드 즉시 수정 항목을 저장합니다.
+	@PostMapping("/api/admin/company/work/update")
+	public ResponseEntity<Object> updateAdminCompanyWork(@RequestBody AdminCompanyWorkUpdatePO param) {
+		try {
+			// 수정 요청을 처리하고 최신 업무 행 정보를 반환합니다.
+			AdminCompanyWorkListRowVO response = companyWorkService.updateAdminCompanyWork(param);
+			return ResponseEntity.ok(response);
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (IllegalStateException exception) {
+			// 내부 상태 오류는 500 응답으로 반환합니다.
 			return ResponseEntity.internalServerError().body(Map.of("message", exception.getMessage()));
 		}
 	}

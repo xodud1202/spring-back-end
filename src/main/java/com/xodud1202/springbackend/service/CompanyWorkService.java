@@ -6,6 +6,7 @@ import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImpo
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportJobSavePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportPO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportResponseVO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkUpdatePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkCompanyVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkCompletedListResponseVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkListRowVO;
@@ -20,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
@@ -50,6 +52,7 @@ public class CompanyWorkService {
 	private static final String DINING_BRANDS_GROUP_COMPANY_NAME = "다이닝 브랜즈 그룹";
 	private static final String JIRA_PLATFORM_NAME = "JIRA";
 	private static final DateTimeFormatter ADMIN_COMPANY_WORK_DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+	private static final DateTimeFormatter ADMIN_COMPANY_WORK_DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
 	private static final DateTimeFormatter JIRA_OFFSET_DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSZ");
 	private static final DateTimeFormatter JIRA_OFFSET_DATE_TIME_WITHOUT_MILLIS_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssZ");
 
@@ -137,6 +140,27 @@ public class CompanyWorkService {
 	}
 
 	@Transactional
+	// 관리자 회사 업무 그리드 즉시 수정 항목을 저장합니다.
+	public AdminCompanyWorkListRowVO updateAdminCompanyWork(AdminCompanyWorkUpdatePO param) {
+		// 요청값을 정규화하고 필수값을 검증합니다.
+		AdminCompanyWorkUpdatePO normalizedParam = normalizeUpdateParam(param);
+		validateWorkStatusCode(normalizedParam.getWorkStatCd());
+
+		// 실제 업무 수정이 반영되지 않으면 요청 오류로 처리합니다.
+		int updatedCount = companyWorkMapper.updateAdminCompanyWorkEditableFields(normalizedParam);
+		if (updatedCount < 1) {
+			throw new IllegalArgumentException("업무 정보를 확인해주세요.");
+		}
+
+		// 최신 행 정보를 다시 조회해 프런트 즉시 반영용으로 반환합니다.
+		AdminCompanyWorkListRowVO updatedRow = companyWorkMapper.getAdminCompanyWorkRow(normalizedParam.getWorkSeq());
+		if (updatedRow == null) {
+			throw new IllegalStateException("수정된 업무 정보를 확인할 수 없습니다.");
+		}
+		return updatedRow;
+	}
+
+	@Transactional
 	// 관리자 회사 업무 Jira 이슈를 가져와 업무와 첨부파일을 저장합니다.
 	public AdminCompanyWorkImportResponseVO importAdminCompanyWork(AdminCompanyWorkImportPO param) {
 		// 요청값을 정규화하고 필수값을 검증합니다.
@@ -201,6 +225,34 @@ public class CompanyWorkService {
 		return param;
 	}
 
+	// 관리자 회사 업무 즉시 수정 요청값을 정규화합니다.
+	private AdminCompanyWorkUpdatePO normalizeUpdateParam(AdminCompanyWorkUpdatePO param) {
+		// 요청 객체와 필수 업무 번호를 먼저 검증합니다.
+		if (param == null) {
+			throw new IllegalArgumentException("수정 요청 정보를 확인해주세요.");
+		}
+
+		long resolvedWorkSeq = normalizeRequiredWorkSequence(param.getWorkSeq(), "업무 정보를 확인해주세요.");
+		String normalizedWorkStatCd = trimToNull(param.getWorkStatCd());
+		if (normalizedWorkStatCd == null) {
+			throw new IllegalArgumentException("업무 상태를 확인해주세요.");
+		}
+		String normalizedWorkStartDt = normalizeOptionalDate(param.getWorkStartDt(), "시작일시를 확인해주세요.");
+		String normalizedWorkEndDt = normalizeOptionalDate(param.getWorkEndDt(), "종료일시를 확인해주세요.");
+		String normalizedItManager = trimToNull(limitLength(trimToNull(param.getItManager()), ADMIN_COMPANY_WORK_MAX_MANAGER_NAME_LENGTH));
+		long resolvedUdtNo = normalizeRequiredUserNo(param.getUdtNo(), "로그인 사용자 정보를 확인해주세요.");
+
+		// 정규화된 수정 요청값을 새 객체에 반영합니다.
+		AdminCompanyWorkUpdatePO normalizedParam = new AdminCompanyWorkUpdatePO();
+		normalizedParam.setWorkSeq(resolvedWorkSeq);
+		normalizedParam.setWorkStatCd(normalizedWorkStatCd);
+		normalizedParam.setWorkStartDt(normalizedWorkStartDt);
+		normalizedParam.setWorkEndDt(normalizedWorkEndDt);
+		normalizedParam.setItManager(normalizedItManager);
+		normalizedParam.setUdtNo(resolvedUdtNo);
+		return normalizedParam;
+	}
+
 	// 관리자 회사 업무 가져오기 요청값을 정규화합니다.
 	private AdminCompanyWorkImportPO normalizeImportParam(AdminCompanyWorkImportPO param) {
 		// 요청 객체와 필수값을 먼저 검증합니다.
@@ -254,6 +306,18 @@ public class CompanyWorkService {
 		if (!DINING_BRANDS_GROUP_COMPANY_NAME.equals(companyName) || platformName == null || !JIRA_PLATFORM_NAME.equalsIgnoreCase(platformName)) {
 			throw new IllegalArgumentException("아직 지원하지 않는 회사 업무 플랫폼입니다.");
 		}
+	}
+
+	// 업무 상태 코드가 사용 가능한 공통코드인지 확인합니다.
+	private void validateWorkStatusCode(String workStatCd) {
+		// 사용 가능한 상태 코드 목록에 존재하지 않으면 요청 오류로 처리합니다.
+		List<CommonCodeVO> workStatusCodeList = commonMapper.getCommonCodeList(WORK_STATUS_GROUP_CODE);
+		for (CommonCodeVO workStatusCodeItem : workStatusCodeList == null ? List.<CommonCodeVO>of() : workStatusCodeList) {
+			if (workStatusCodeItem != null && workStatCd.equals(trimToNull(workStatusCodeItem.getCd()))) {
+				return;
+			}
+		}
+		throw new IllegalArgumentException("업무 상태를 확인해주세요.");
 	}
 
 	// Jira 이슈 응답을 회사 업무 저장 파라미터로 변환합니다.
@@ -380,6 +444,22 @@ public class CompanyWorkService {
 		return OffsetDateTime.parse(jiraCreatedDateTime, JIRA_OFFSET_DATE_TIME_WITHOUT_MILLIS_FORMATTER).toLocalDateTime();
 	}
 
+	// 날짜 문자열을 yyyy-MM-dd 형식으로 정규화합니다.
+	private String normalizeOptionalDate(String value, String invalidMessage) {
+		// 빈 값은 null로 저장 가능하도록 그대로 반환합니다.
+		String normalizedValue = trimToNull(value);
+		if (normalizedValue == null) {
+			return null;
+		}
+
+		try {
+			LocalDate localDate = LocalDate.parse(normalizedValue, ADMIN_COMPANY_WORK_DATE_FORMATTER);
+			return localDate.format(ADMIN_COMPANY_WORK_DATE_FORMATTER);
+		} catch (DateTimeParseException exception) {
+			throw new IllegalArgumentException(invalidMessage);
+		}
+	}
+
 	// Jira ADF 본문을 여러 줄 plain text로 변환합니다.
 	private String extractJiraDescriptionText(JsonNode descriptionNode) {
 		// 본문이 없으면 빈 문자열을 반환합니다.
@@ -490,6 +570,15 @@ public class CompanyWorkService {
 			throw new IllegalArgumentException(invalidMessage);
 		}
 		return sequenceValue;
+	}
+
+	// 필수 업무 시퀀스를 1 이상 long 값으로 검증합니다.
+	private long normalizeRequiredWorkSequence(Long workSeq, String invalidMessage) {
+		// 값이 없거나 0 이하이면 요청 오류로 처리합니다.
+		if (workSeq == null || workSeq < 1) {
+			throw new IllegalArgumentException(invalidMessage);
+		}
+		return workSeq;
 	}
 
 	// 필수 사용자 번호를 1 이상 long 값으로 검증합니다.

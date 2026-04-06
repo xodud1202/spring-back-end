@@ -62,6 +62,28 @@
 		   AND WORK_KEY = #{workKey}
 	</select>
 
+	<select id="getAdminCompanyWorkRow" resultType="com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkListRowVO">
+		/* CompanyWorkMapper.getAdminCompanyWorkRow: 관리자 회사 업무 단건 행 정보 조회 */
+		SELECT J.WORK_SEQ
+		     , J.WORK_COMPANY_SEQ
+		     , J.WORK_COMPANY_PROJECT_SEQ
+		     , J.WORK_STAT_CD
+		     , J.WORK_KEY
+		     , J.TITLE
+		     , DATE_FORMAT(J.WORK_CREATE_DT, '%Y-%m-%d %H:%i:%s') AS WORK_CREATE_DT
+		     , DATE_FORMAT(J.WORK_START_DT, '%Y-%m-%d') AS WORK_START_DT
+		     , DATE_FORMAT(J.WORK_END_DT, '%Y-%m-%d') AS WORK_END_DT
+		     , J.WORK_PRIOR_CD
+		     , FN_GET_CODE_NM('WORK_PRIOR', J.WORK_PRIOR_CD) AS WORK_PRIOR_NM
+		     , J.IT_MANAGER
+		     , J.CO_MANAGER
+		     , DATE_FORMAT(J.REG_DT, '%Y-%m-%d %H:%i:%s') AS REG_DT
+		     , DATE_FORMAT(J.UDT_DT, '%Y-%m-%d %H:%i:%s') AS UDT_DT
+		  FROM WORK_COMPANY_PROJECT_JOB J
+		 WHERE J.WORK_SEQ = #{workSeq}
+		   AND J.DEL_YN = 'N'
+	</select>
+
 	<select id="getAdminCompanyWorkStatusList" resultType="com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkListRowVO">
 		/* CompanyWorkMapper.getAdminCompanyWorkStatusList: 관리자 회사 업무 비완료 상태 목록 조회 */
 		SELECT J.WORK_SEQ
@@ -71,8 +93,8 @@
 		     , J.WORK_KEY
 		     , J.TITLE
 		     , DATE_FORMAT(J.WORK_CREATE_DT, '%Y-%m-%d %H:%i:%s') AS WORK_CREATE_DT
-		     , DATE_FORMAT(J.WORK_START_DT, '%Y-%m-%d %H:%i:%s') AS WORK_START_DT
-		     , DATE_FORMAT(J.WORK_END_DT, '%Y-%m-%d %H:%i:%s') AS WORK_END_DT
+		     , DATE_FORMAT(J.WORK_START_DT, '%Y-%m-%d') AS WORK_START_DT
+		     , DATE_FORMAT(J.WORK_END_DT, '%Y-%m-%d') AS WORK_END_DT
 		     , J.WORK_PRIOR_CD
 		     , FN_GET_CODE_NM('WORK_PRIOR', J.WORK_PRIOR_CD) AS WORK_PRIOR_NM
 		     , J.IT_MANAGER
@@ -98,8 +120,8 @@
 		     , J.WORK_KEY
 		     , J.TITLE
 		     , DATE_FORMAT(J.WORK_CREATE_DT, '%Y-%m-%d %H:%i:%s') AS WORK_CREATE_DT
-		     , DATE_FORMAT(J.WORK_START_DT, '%Y-%m-%d %H:%i:%s') AS WORK_START_DT
-		     , DATE_FORMAT(J.WORK_END_DT, '%Y-%m-%d %H:%i:%s') AS WORK_END_DT
+		     , DATE_FORMAT(J.WORK_START_DT, '%Y-%m-%d') AS WORK_START_DT
+		     , DATE_FORMAT(J.WORK_END_DT, '%Y-%m-%d') AS WORK_END_DT
 		     , J.WORK_PRIOR_CD
 		     , FN_GET_CODE_NM('WORK_PRIOR', J.WORK_PRIOR_CD) AS WORK_PRIOR_NM
 		     , J.IT_MANAGER
@@ -170,4 +192,34 @@
 		     , #{udtNo}
 		)
 	</insert>
+
+	<update id="updateAdminCompanyWorkEditableFields">
+		/* CompanyWorkMapper.updateAdminCompanyWorkEditableFields: 관리자 회사 업무 즉시 수정 가능 항목 저장 */
+		UPDATE WORK_COMPANY_PROJECT_JOB
+		   SET WORK_CREATE_DT = WORK_CREATE_DT
+		     , WORK_STAT_CD = #{workStatCd}
+		     , WORK_START_DT =
+		       <choose>
+		         <when test="workStartDt != null and workStartDt != ''">
+		           STR_TO_DATE(#{workStartDt}, '%Y-%m-%d')
+		         </when>
+		         <otherwise>
+		           NULL
+		         </otherwise>
+		       </choose>
+		     , WORK_END_DT =
+		       <choose>
+		         <when test="workEndDt != null and workEndDt != ''">
+		           STR_TO_DATE(#{workEndDt}, '%Y-%m-%d')
+		         </when>
+		         <otherwise>
+		           NULL
+		         </otherwise>
+		       </choose>
+		     , IT_MANAGER = #{itManager}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE WORK_SEQ = #{workSeq}
+		   AND DEL_YN = 'N'
+	</update>
 </mapper>
