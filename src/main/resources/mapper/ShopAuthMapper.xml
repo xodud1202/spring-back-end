@@ -148,6 +148,7 @@
 		     , SAVE_AMT
 		     , USE_AMT
 		     , RMN_AMT
+		     , ORD_NO
 		     , EXPIRE_DT
 		     , REG_NO
 		     , UDT_NO
@@ -158,6 +159,7 @@
 		     , #{command.saveAmt}
 		     , 0
 		     , #{command.saveAmt}
+		     , #{command.ordNo}
 		     , #{command.expireDt}
 		     , #{command.regNo}
 		     , #{command.udtNo}
@@ -169,11 +171,13 @@
 		INSERT INTO CUSTOMER_POINT_DETAIL (
 		       PNT_NO
 		     , PNT_AMT
+		     , ORD_NO
 		     , BIGO
 		     , REG_NO
 		) VALUES (
 		       #{command.pntNo}
 		     , #{command.pntAmt}
+		     , #{command.ordNo}
 		     , #{command.bigo}
 		     , #{command.regNo}
 		)

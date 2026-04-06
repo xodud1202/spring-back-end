@@ -8,6 +8,7 @@ public record ShopCustomerPointSavePO(
 	String pntGiveGbCd,
 	String pntGiveMemo,
 	Integer saveAmt,
+	String ordNo,
 	LocalDateTime expireDt,
 	Long regNo,
 	Long udtNo

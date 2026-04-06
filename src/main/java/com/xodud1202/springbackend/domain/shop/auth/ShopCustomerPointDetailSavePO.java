@@ -4,6 +4,7 @@ package com.xodud1202.springbackend.domain.shop.auth;
 public record ShopCustomerPointDetailSavePO(
 	Long pntNo,
 	Integer pntAmt,
+	String ordNo,
 	String bigo,
 	Long regNo
 ) {

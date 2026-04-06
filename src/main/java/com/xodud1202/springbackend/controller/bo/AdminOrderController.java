@@ -3,6 +3,8 @@ package com.xodud1202.springbackend.controller.bo;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderDetailStatusUpdatePO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManageListResponseVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupCompletePageVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupCompleteResultVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupCompleteSavePO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupRequestPO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupStartPO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnPageVO;
@@ -202,6 +204,24 @@ public class AdminOrderController {
 		} catch (Exception exception) {
 			// 예상치 못한 오류는 500 응답으로 반환합니다.
 			return ResponseEntity.internalServerError().body(Map.of("message", "회수완료 검수 화면 조회 중 오류가 발생했습니다."));
+		}
+	}
+
+	// 관리자 반품 회수완료를 저장합니다.
+	@PostMapping("/api/admin/order/return/manage/pickup/complete")
+	public ResponseEntity<Object> completeAdminOrderReturnPickup(
+		@RequestBody(required = false) AdminOrderReturnManagePickupCompleteSavePO param
+	) {
+		try {
+			// 공통 반품 사유와 반품 예정 금액 기준으로 반품 회수완료를 확정합니다.
+			AdminOrderReturnManagePickupCompleteResultVO result = orderReturnService.completeAdminOrderReturnPickup(param);
+			return ResponseEntity.ok(result);
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 예상치 못한 오류는 500 응답으로 반환합니다.
+			return ResponseEntity.internalServerError().body(Map.of("message", "반품완료 처리 중 오류가 발생했습니다."));
 		}
 	}
 

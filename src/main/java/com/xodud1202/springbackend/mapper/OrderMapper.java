@@ -117,6 +117,34 @@ public interface OrderMapper {
 	// 관리자 반품 회수완료 검수 팝업의 상품 상세 목록을 조회합니다.
 	List<AdminOrderReturnManagePickupCompleteDetailVO> getAdminOrderReturnManagePickupCompleteDetailList(@Param("clmNo") String clmNo);
 
+	// 관리자 반품 회수완료 상세 상태와 사유를 저장합니다.
+	int updateAdminOrderReturnManagePickupCompleteDetail(
+		@Param("clmNo") String clmNo,
+		@Param("ordNo") String ordNo,
+		@Param("fromChgDtlStatCd") String fromChgDtlStatCd,
+		@Param("toChgDtlStatCd") String toChgDtlStatCd,
+		@Param("reasonCd") String reasonCd,
+		@Param("reasonDetail") String reasonDetail,
+		@Param("udtNo") Long udtNo
+	);
+
+	// 관리자 반품 회수완료 클레임 마스터를 저장합니다.
+	int updateAdminOrderReturnManagePickupCompleteBase(
+		@Param("clmNo") String clmNo,
+		@Param("ordNo") String ordNo,
+		@Param("chgStatCd") String chgStatCd,
+		@Param("chgCompleteDt") String chgCompleteDt,
+		@Param("payDelvAmt") Integer payDelvAmt,
+		@Param("udtNo") Long udtNo
+	);
+
+	// 관리자 반품 회수완료 회수지 배송완료 일시를 저장합니다.
+	int updateAdminOrderReturnManagePickupCompleteAddress(
+		@Param("clmNo") String clmNo,
+		@Param("delvCompleteDt") String delvCompleteDt,
+		@Param("udtNo") Long udtNo
+	);
+
 	// 관리자 주문 상세 하단 결제 목록을 조회합니다.
 	List<AdminOrderPaymentRowVO> getAdminOrderPaymentList(@Param("ordNo") String ordNo);
 
@@ -380,6 +408,16 @@ public interface OrderMapper {
 		@Param("custNo") Long custNo,
 		@Param("ordNo") String ordNo,
 		@Param("custCpnNoList") List<Long> custCpnNoList,
+		@Param("udtNo") Long udtNo
+	);
+
+	// 반품 완료 시 고객쿠폰번호 목록 기준으로 사용 상태를 원복합니다.
+	int restoreAdminOrderReturnCustomerCouponUseByCustCpnNoList(
+		@Param("custNo") Long custNo,
+		@Param("ordNo") String ordNo,
+		@Param("custCpnNoList") List<Long> custCpnNoList,
+		@Param("extendUsableEndDt") boolean extendUsableEndDt,
+		@Param("minimumUsableEndDt") String minimumUsableEndDt,
 		@Param("udtNo") Long udtNo
 	);
 

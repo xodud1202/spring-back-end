@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.xodud1202.springbackend.common.mybatis.GeneratedLongKey;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManageClaimItemPO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManageClaimSummaryVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManageListResponseVO;
@@ -8,6 +10,8 @@ import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePick
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupCompleteDetailVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupCompletePageVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupCompletePreviewAmountVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupCompleteResultVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupCompleteSavePO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupItemPO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupRequestPO;
@@ -22,6 +26,8 @@ import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnWithdrawVO
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderClaimRowVO;
 import com.xodud1202.springbackend.domain.common.CommonCodeVO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartSiteInfoVO;
+import com.xodud1202.springbackend.domain.shop.auth.ShopCustomerPointDetailSavePO;
+import com.xodud1202.springbackend.domain.shop.auth.ShopCustomerPointSavePO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderAmountSummaryVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderCancelReasonVO;
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageOrderDetailItemVO;
@@ -39,6 +45,11 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderChangeBaseSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderChangeDetailSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderChangeExchangeAddressSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderCustomerInfoVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentSavePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPointDetailSavePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderPointDetailVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderRestoreCartItemVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnDestinationAddressVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnItemPO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnPO;
@@ -51,22 +62,27 @@ import com.xodud1202.springbackend.domain.shop.site.ShopSiteInfoVO;
 import com.xodud1202.springbackend.entity.UserBaseEntity;
 import com.xodud1202.springbackend.mapper.CommonMapper;
 import com.xodud1202.springbackend.mapper.OrderMapper;
+import com.xodud1202.springbackend.mapper.ShopAuthMapper;
 import com.xodud1202.springbackend.mapper.SiteInfoMapper;
 import com.xodud1202.springbackend.service.order.support.ShopMypageOrderDateRange;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import static com.xodud1202.springbackend.common.Constants.Shop.*;
 
@@ -100,17 +116,27 @@ public class OrderReturnService {
 	private static final String ADMIN_ORDER_RETURN_PICKUP_START_INVALID_MESSAGE = "반품 회수 신청건만 회수중 처리가 가능합니다.";
 	private static final String ADMIN_ORDER_RETURN_PICKUP_COMPLETE_PAGE_EMPTY_MESSAGE = "클레임번호를 확인해주세요.";
 	private static final String ADMIN_ORDER_RETURN_PICKUP_COMPLETE_PAGE_INVALID_MESSAGE = "반품 회수중 건만 조회할 수 있습니다.";
+	private static final String ADMIN_ORDER_RETURN_PICKUP_COMPLETE_SAVE_EMPTY_MESSAGE = "반품 정보를 확인해주세요.";
+	private static final String ADMIN_ORDER_RETURN_PICKUP_COMPLETE_SAVE_INVALID_MESSAGE = "반품 회수중 건만 반품완료 처리할 수 있습니다.";
+	private static final String ADMIN_ORDER_RETURN_PICKUP_COMPLETE_NEGATIVE_MESSAGE = "배송비 차감 후 반품 예정 금액이 0원 미만이라 신청할 수 없습니다.";
 	private static final String ADMIN_ORDER_RETURN_PICKUP_COMPANY_REQUIRED_MESSAGE = "택배사를 선택해주세요.";
 	private static final String ADMIN_ORDER_RETURN_PICKUP_INVOICE_REQUIRED_MESSAGE = "송장번호를 입력해주세요.";
 	private static final String ADMIN_ORDER_RETURN_PICKUP_INVOICE_INVALID_MESSAGE = "송장번호는 숫자 20자리 이하로 입력해주세요.";
 	private static final String ADMIN_ORDER_RETURN_WITHDRAW_EMPTY_MESSAGE = "철회할 반품건을 선택해주세요.";
 	private static final String ADMIN_ORDER_RETURN_WITHDRAW_INVALID_MESSAGE = "반품 신청건만 철회가 가능합니다.";
 	private static final String ADMIN_LOGIN_INVALID_MESSAGE = "관리자 로그인 정보를 확인해주세요.";
+	private static final int ADMIN_ORDER_RETURN_COMPANY_FAULT_COUPON_EXTEND_DAYS = 3;
+	private static final int ADMIN_ORDER_RETURN_COMPANY_FAULT_POINT_EXPIRE_DAYS = 30;
+	private static final String ADMIN_ORDER_RETURN_COMPANY_FAULT_POINT_GIVE_GB_CD = "RETURN_COMP_REASON";
+	private static final String ADMIN_ORDER_RETURN_POINT_RESTORE_MEMO = "반품 완료 포인트 복구";
 
 	private final OrderService orderService;
 	private final OrderMapper orderMapper;
 	private final SiteInfoMapper siteInfoMapper;
 	private final CommonMapper commonMapper;
+	private final ShopAuthMapper shopAuthMapper;
+	private final TossPaymentsClient tossPaymentsClient;
+	private final PlatformTransactionManager transactionManager;
 
 	// 반품 신청 선택 상품 계산 결과를 전달합니다.
 	private record ShopOrderReturnSelectedItem(
@@ -126,6 +152,44 @@ public class OrderReturnService {
 		List<ShopOrderReturnSelectedItem> selectedItemList,
 		ShopOrderReturnPreviewAmountPO previewAmount,
 		long shippingDeductionAmt
+	) {
+	}
+
+	// 관리자 반품 회수완료 저장 대상 주문상세 1건을 전달합니다.
+	private record AdminOrderReturnManagePickupCompleteSelectedItem(
+		ShopMypageOrderDetailItemVO detailItem,
+		AdminOrderReturnManagePickupCompleteDetailVO claimDetail,
+		int remainingAfterReturnQty
+	) {
+	}
+
+	// 관리자 반품 회수완료 계산 결과를 전달합니다.
+	private record AdminOrderReturnManagePickupCompleteComputation(
+		AdminOrderReturnManagePickupCompleteClaimVO claim,
+		Long custNo,
+		ShopMypageOrderGroupVO orderGroup,
+		ShopOrderCancelOrderBaseVO orderBase,
+		List<AdminOrderReturnManagePickupCompleteSelectedItem> selectedItemList,
+		ShopOrderReturnPreviewAmountPO previewAmount,
+		String reasonCd,
+		String reasonDetail,
+		String reasonName,
+		boolean companyFaultReasonYn,
+		boolean fullReturnYn,
+		long refundedCashAmt,
+		long restoredPointAmt,
+		long reissuedPointAmt
+	) {
+	}
+
+	// 관리자 반품 회수완료 PG 취소 결과를 전달합니다.
+	private record AdminOrderReturnManagePickupCompletePgResult(
+		String rawResponse,
+		String rspCode,
+		String rspMsg,
+		String tradeNo,
+		String approvedDt,
+		long canceledAmount
 	) {
 	}
 
@@ -343,6 +407,714 @@ public class OrderReturnService {
 		result.setCompanyFaultShippingAdjustmentAmt(paidDeliveryFeeRefundAmt);
 		result.setCustomerFaultShippingAdjustmentAmt(customerFaultShippingAdjustmentAmt);
 		return result;
+	}
+
+	// 관리자 반품 회수완료를 저장합니다.
+	@Transactional
+	public AdminOrderReturnManagePickupCompleteResultVO completeAdminOrderReturnPickup(
+		AdminOrderReturnManagePickupCompleteSavePO param
+	) {
+		// 관리자 로그인 번호와 저장 계산 결과를 먼저 준비합니다.
+		Long udtNo = resolveCurrentAdminUserNo();
+		if (udtNo == null || udtNo < 1L) {
+			throw new IllegalArgumentException(ADMIN_LOGIN_INVALID_MESSAGE);
+		}
+		AdminOrderReturnManagePickupCompleteComputation computation = buildAdminOrderReturnManagePickupCompleteComputation(param);
+
+		// 현금 환불이 있으면 환불 PAYMENT row를 선등록하고 원결제 정보를 준비합니다.
+		ShopOrderPaymentVO originalPayment = null;
+		ShopOrderPaymentSavePO refundPaymentSavePO = null;
+		if (computation.refundedCashAmt() > 0L) {
+			originalPayment = resolveShopOrderPaymentForReturnComplete(computation.claim().getOrdNo());
+			refundPaymentSavePO = createAdminOrderReturnRefundPayment(computation, originalPayment, udtNo);
+		}
+
+		// 주문/클레임 반영과 PG 환불까지 모두 처리한 뒤 응답 객체를 구성합니다.
+		try {
+			applyAdminOrderReturnPickupCompleteSuccess(computation, originalPayment, refundPaymentSavePO, udtNo);
+		} catch (TossPaymentClientException exception) {
+			handleAdminOrderReturnPickupCompletePaymentFailure(
+				refundPaymentSavePO == null ? null : refundPaymentSavePO.getPayNo(),
+				exception,
+				udtNo
+			);
+			throw new IllegalArgumentException(resolveAdminOrderReturnPickupCompletePgErrorMessage(exception));
+		} catch (RuntimeException exception) {
+			handleAdminOrderReturnPickupCompletePaymentFailure(
+				refundPaymentSavePO == null ? null : refundPaymentSavePO.getPayNo(),
+				"RETURN_COMPLETE_ERROR",
+				firstNonBlank(exception.getMessage(), "반품완료 처리에 실패했습니다."),
+				null,
+				udtNo
+			);
+			throw exception;
+		}
+
+		AdminOrderReturnManagePickupCompleteResultVO result = new AdminOrderReturnManagePickupCompleteResultVO();
+		result.setClmNo(computation.claim().getClmNo());
+		result.setOrdNo(computation.claim().getOrdNo());
+		result.setRefundPayNo(refundPaymentSavePO == null ? null : refundPaymentSavePO.getPayNo());
+		result.setRefundedCashAmt(computation.refundedCashAmt());
+		result.setRestoredPointAmt(computation.restoredPointAmt());
+		result.setReissuedPointAmt(computation.reissuedPointAmt());
+		return result;
+	}
+
+	// 관리자 반품 회수완료 저장 전 검증과 금액 재계산을 수행합니다.
+	private AdminOrderReturnManagePickupCompleteComputation buildAdminOrderReturnManagePickupCompleteComputation(
+		AdminOrderReturnManagePickupCompleteSavePO param
+	) {
+		// 요청 클레임과 현재 상태와 조회 대상 기본 데이터를 먼저 검증합니다.
+		String clmNo = trimToNull(param == null ? null : param.getClmNo());
+		if (clmNo == null) {
+			throw new IllegalArgumentException(ADMIN_ORDER_RETURN_PICKUP_COMPLETE_SAVE_EMPTY_MESSAGE);
+		}
+		validateAdminOrderReturnManageClaimState(
+			List.of(clmNo),
+			RETURN_PICKUP_IN_PROGRESS_DETAIL_STATUS_CODE,
+			ADMIN_ORDER_RETURN_PICKUP_COMPLETE_SAVE_INVALID_MESSAGE
+		);
+		AdminOrderReturnManagePickupCompleteClaimVO claim = orderMapper.getAdminOrderReturnManagePickupCompleteClaim(clmNo);
+		List<AdminOrderReturnManagePickupCompleteDetailVO> detailList =
+			orderMapper.getAdminOrderReturnManagePickupCompleteDetailList(clmNo);
+		if (claim == null || trimToNull(claim.getOrdNo()) == null || detailList == null || detailList.isEmpty()) {
+			throw new IllegalArgumentException(ADMIN_ORDER_RETURN_PICKUP_COMPLETE_SAVE_INVALID_MESSAGE);
+		}
+
+		// 주문 기준 조회 데이터와 공통 반품 사유를 함께 검증합니다.
+		Long custNo = orderMapper.getOrderCustNo(claim.getOrdNo());
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException(ADMIN_ORDER_RETURN_PICKUP_COMPLETE_SAVE_INVALID_MESSAGE);
+		}
+		AdminOrderReturnPageVO adminOrderReturnPage = orderService.getAdminOrderReturnPage(claim.getOrdNo());
+		ShopMypageOrderGroupVO orderGroup = adminOrderReturnPage == null ? null : adminOrderReturnPage.getOrder();
+		ShopOrderCancelOrderBaseVO orderBase = orderService.resolveShopOrderCancelOrderBase(custNo, claim.getOrdNo());
+		if (orderGroup == null || orderBase == null) {
+			throw new IllegalArgumentException(ADMIN_ORDER_RETURN_PICKUP_COMPLETE_SAVE_INVALID_MESSAGE);
+		}
+
+		String reasonCd = trimToNull(param == null ? null : param.getReasonCd());
+		String reasonDetail = trimToNull(param == null ? null : param.getReasonDetail());
+		ShopOrderReturnItemPO reasonValidationItem = new ShopOrderReturnItemPO();
+		reasonValidationItem.setReasonCd(reasonCd);
+		reasonValidationItem.setReasonDetail(reasonDetail);
+		validateShopOrderReturnReason(reasonValidationItem, adminOrderReturnPage.getReasonList());
+
+		// 공통 사유 기준으로 화면 금액을 다시 계산하고 위변조를 검증합니다.
+		ShopMypageOrderCancelReasonVO matchedReason = findShopOrderReturnReason(adminOrderReturnPage.getReasonList(), reasonCd);
+		String reasonName = firstNonBlank(trimToNull(matchedReason == null ? null : matchedReason.getCdNm()), reasonCd);
+		boolean companyFaultReasonYn = reasonCd != null && reasonCd.startsWith(COMPANY_FAULT_REASON_PREFIX);
+		ShopMypageReturnHistoryVO returnItem = buildAdminOrderReturnManagePickupCompleteReturnItem(claim, detailList);
+		applyAdminOrderReturnManagePickupCompleteReason(returnItem, reasonCd, reasonDetail);
+		boolean fullReturnYn = resolveShopMypageReturnFullReturnYn(returnItem, orderGroup);
+		AdminOrderReturnManagePickupCompletePreviewAmountVO fixedPreviewAmount =
+			buildAdminOrderReturnManagePickupCompletePreviewAmount(returnItem, orderGroup, orderBase);
+		long beforeShippingExpectedRefundAmt =
+			resolveNonNegativeLong(fixedPreviewAmount.getPaidGoodsAmt()) - resolveNonNegativeLong(fixedPreviewAmount.getBenefitAmt());
+		long paidDeliveryFeeRefundAmt = fullReturnYn
+			? resolveNonNegativeLong(
+				adminOrderReturnPage.getReturnFeeContext() == null
+					? null
+					: (long) normalizeNonNegativeNumber(adminOrderReturnPage.getReturnFeeContext().getOriginalPaidDeliveryAmt())
+			)
+			: 0L;
+		long shippingDeductionAmt = resolveShopOrderReturnShippingDeductionAmt(
+			adminOrderReturnPage.getSiteInfo(),
+			adminOrderReturnPage.getReturnFeeContext(),
+			beforeShippingExpectedRefundAmt,
+			companyFaultReasonYn
+		);
+		long shippingAdjustmentAmt = paidDeliveryFeeRefundAmt - shippingDeductionAmt;
+		long expectedRefundAmt =
+			resolveNonNegativeLong(fixedPreviewAmount.getPaidGoodsAmt())
+				- resolveNonNegativeLong(fixedPreviewAmount.getBenefitAmt())
+				+ shippingAdjustmentAmt;
+		if (expectedRefundAmt < 0L) {
+			throw new IllegalArgumentException(ADMIN_ORDER_RETURN_PICKUP_COMPLETE_NEGATIVE_MESSAGE);
+		}
+
+		ShopOrderReturnPreviewAmountPO serverPreviewAmount = new ShopOrderReturnPreviewAmountPO();
+		serverPreviewAmount.setExpectedRefundAmt(expectedRefundAmt);
+		serverPreviewAmount.setPaidGoodsAmt(resolveNonNegativeLong(fixedPreviewAmount.getPaidGoodsAmt()));
+		serverPreviewAmount.setBenefitAmt(resolveNonNegativeLong(fixedPreviewAmount.getBenefitAmt()));
+		serverPreviewAmount.setShippingAdjustmentAmt(shippingAdjustmentAmt);
+		serverPreviewAmount.setTotalPointRefundAmt(resolveNonNegativeLong(fixedPreviewAmount.getTotalPointRefundAmt()));
+		serverPreviewAmount.setDeliveryCouponRefundAmt(resolveNonNegativeLong(fixedPreviewAmount.getDeliveryCouponRefundAmt()));
+		validateShopOrderReturnPreviewAmount(param == null ? null : param.getPreviewAmount(), serverPreviewAmount);
+
+		// 주문상세 반영용 선택 상품 목록과 포인트 환급 금액 분기를 구성합니다.
+		List<AdminOrderReturnManagePickupCompleteSelectedItem> selectedItemList =
+			buildAdminOrderReturnManagePickupCompleteSelectedItemList(orderGroup, detailList);
+		long pointRefundAmt = resolveNonNegativeLong(serverPreviewAmount.getTotalPointRefundAmt());
+		return new AdminOrderReturnManagePickupCompleteComputation(
+			claim,
+			custNo,
+			orderGroup,
+			orderBase,
+			selectedItemList,
+			serverPreviewAmount,
+			reasonCd,
+			reasonDetail,
+			reasonName,
+			companyFaultReasonYn,
+			fullReturnYn,
+			expectedRefundAmt,
+			companyFaultReasonYn ? 0L : pointRefundAmt,
+			companyFaultReasonYn ? pointRefundAmt : 0L
+		);
+	}
+
+	// 관리자 반품 회수완료 계산용 반품 이력에 공통 사유를 덮어씁니다.
+	private void applyAdminOrderReturnManagePickupCompleteReason(
+		ShopMypageReturnHistoryVO returnItem,
+		String reasonCd,
+		String reasonDetail
+	) {
+		// 반품 상세 전체를 클레임 공통 사유 1개로 통일합니다.
+		for (ShopMypageReturnHistoryDetailVO detailItem : returnItem == null ? List.<ShopMypageReturnHistoryDetailVO>of() : returnItem.getDetailList()) {
+			if (detailItem == null) {
+				continue;
+			}
+			detailItem.setChgReasonCd(reasonCd);
+			detailItem.setChgReasonDtl(reasonDetail);
+		}
+	}
+
+	// 관리자 반품 회수완료 저장용 주문상세 목록을 구성합니다.
+	private List<AdminOrderReturnManagePickupCompleteSelectedItem> buildAdminOrderReturnManagePickupCompleteSelectedItemList(
+		ShopMypageOrderGroupVO orderGroup,
+		List<AdminOrderReturnManagePickupCompleteDetailVO> detailList
+	) {
+		// 현재 주문상세를 주문상세번호 기준 맵으로 구성합니다.
+		Map<Integer, ShopMypageOrderDetailItemVO> detailItemMap = new LinkedHashMap<>();
+		for (ShopMypageOrderDetailItemVO detailItem : orderGroup == null ? List.<ShopMypageOrderDetailItemVO>of() : orderGroup.getDetailList()) {
+			if (detailItem == null || detailItem.getOrdDtlNo() == null) {
+				continue;
+			}
+			detailItemMap.put(detailItem.getOrdDtlNo(), detailItem);
+		}
+
+		// 클레임 상세 전체가 현재 주문상세와 정확히 매칭되는지 검증합니다.
+		List<AdminOrderReturnManagePickupCompleteSelectedItem> result = new ArrayList<>();
+		for (AdminOrderReturnManagePickupCompleteDetailVO claimDetail : detailList == null ? List.<AdminOrderReturnManagePickupCompleteDetailVO>of() : detailList) {
+			Integer ordDtlNo = claimDetail == null ? null : claimDetail.getOrdDtlNo();
+			ShopMypageOrderDetailItemVO detailItem = ordDtlNo == null ? null : detailItemMap.get(ordDtlNo);
+			int returnQty = normalizeNonNegativeNumber(claimDetail == null ? null : claimDetail.getQty());
+			int currentRemainingQty = resolveShopOrderRemainingQty(detailItem);
+			String currentOrdDtlStatCd = trimToNull(detailItem == null ? null : detailItem.getOrdDtlStatCd());
+			if (ordDtlNo == null
+				|| detailItem == null
+				|| currentOrdDtlStatCd == null
+				|| returnQty < 1
+				|| currentRemainingQty < returnQty) {
+				throw new IllegalArgumentException(ADMIN_ORDER_RETURN_PICKUP_COMPLETE_SAVE_INVALID_MESSAGE);
+			}
+			result.add(new AdminOrderReturnManagePickupCompleteSelectedItem(
+				detailItem,
+				claimDetail,
+				Math.max(currentRemainingQty - returnQty, 0)
+			));
+		}
+		if (result.isEmpty()) {
+			throw new IllegalArgumentException(ADMIN_ORDER_RETURN_PICKUP_COMPLETE_SAVE_INVALID_MESSAGE);
+		}
+		return List.copyOf(result);
+	}
+
+	// 관리자 반품 회수완료 성공 시 주문과 클레임과 쿠폰과 포인트와 환불을 함께 반영합니다.
+	private void applyAdminOrderReturnPickupCompleteSuccess(
+		AdminOrderReturnManagePickupCompleteComputation computation,
+		ShopOrderPaymentVO originalPayment,
+		ShopOrderPaymentSavePO refundPaymentSavePO,
+		Long auditNo
+	) {
+		// 완료 일시를 고정해 클레임과 쿠폰과 포인트 만료 계산에 공통으로 사용합니다.
+		LocalDateTime completedAt = LocalDateTime.now().withNano(0);
+		String completedAtText = completedAt.format(SHOP_MYPAGE_ORDER_DATE_TIME_FORMATTER);
+
+		// 클레임 상세와 마스터와 회수지 완료 일시를 함께 반영합니다.
+		int updatedDetailCount = orderMapper.updateAdminOrderReturnManagePickupCompleteDetail(
+			computation.claim().getClmNo(),
+			computation.claim().getOrdNo(),
+			RETURN_PICKUP_IN_PROGRESS_DETAIL_STATUS_CODE,
+			RETURN_COMPLETE_DETAIL_STATUS_CODE,
+			computation.reasonCd(),
+			computation.reasonDetail(),
+			auditNo
+		);
+		if (updatedDetailCount != computation.selectedItemList().size()) {
+			throw new IllegalArgumentException(ADMIN_ORDER_RETURN_PICKUP_COMPLETE_SAVE_INVALID_MESSAGE);
+		}
+		int updatedBaseCount = orderMapper.updateAdminOrderReturnManagePickupCompleteBase(
+			computation.claim().getClmNo(),
+			computation.claim().getOrdNo(),
+			SHOP_ORDER_CHANGE_STAT_PROGRESS,
+			completedAtText,
+			(int) Math.clamp(resolvePreviewAmountValue(computation.previewAmount().getShippingAdjustmentAmt()), (long) Integer.MIN_VALUE, (long) Integer.MAX_VALUE),
+			auditNo
+		);
+		int updatedAddressCount = orderMapper.updateAdminOrderReturnManagePickupCompleteAddress(
+			computation.claim().getClmNo(),
+			completedAtText,
+			auditNo
+		);
+		if (updatedBaseCount != 1 || updatedAddressCount != 1) {
+			throw new IllegalArgumentException(ADMIN_ORDER_RETURN_PICKUP_COMPLETE_SAVE_INVALID_MESSAGE);
+		}
+
+		// 주문상세 수량과 할인 금액을 반품 완료 기준으로 차감합니다.
+		for (AdminOrderReturnManagePickupCompleteSelectedItem selectedItem : computation.selectedItemList()) {
+			int returnQty = normalizeNonNegativeNumber(selectedItem.claimDetail().getQty());
+			String nextOrdDtlStatCd = selectedItem.remainingAfterReturnQty() < 1
+				? SHOP_ORDER_DTL_STAT_CANCEL
+				: selectedItem.detailItem().getOrdDtlStatCd();
+			int updatedCount = orderMapper.updateShopOrderDetailCancelQuantity(
+				computation.claim().getOrdNo(),
+				selectedItem.detailItem().getOrdDtlNo(),
+				returnQty,
+				nextOrdDtlStatCd,
+				normalizeNonNegativeNumber(selectedItem.claimDetail().getGoodsCouponDiscountAmt()),
+				normalizeNonNegativeNumber(selectedItem.claimDetail().getCartCouponDiscountAmt()),
+				normalizeNonNegativeNumber(selectedItem.claimDetail().getPointDcAmt()),
+				auditNo
+			);
+			if (updatedCount != 1) {
+				throw new IllegalArgumentException(ADMIN_ORDER_RETURN_PICKUP_COMPLETE_SAVE_INVALID_MESSAGE);
+			}
+		}
+
+		// 반품 완료로 더 이상 사용 중이 아닌 쿠폰과 포인트를 귀책 기준에 맞춰 복구합니다.
+		restoreAdminOrderReturnCouponUse(computation, completedAt, auditNo);
+		if (computation.companyFaultReasonYn()) {
+			issueAdminOrderReturnCompanyFaultPoint(computation, completedAt, auditNo);
+		} else {
+			restoreAdminOrderReturnPointByAmount(auditNo, computation.claim().getOrdNo(), computation.restoredPointAmt());
+		}
+
+		// 주문 전체가 모두 소진되면 주문 마스터도 환불 완료 상태로 닫습니다.
+		if (computation.fullReturnYn()) {
+			int updatedOrderBaseCount = orderMapper.updateShopOrderBaseFullCancel(
+				computation.claim().getOrdNo(),
+				SHOP_ORDER_STAT_CANCEL,
+				auditNo
+			);
+			if (updatedOrderBaseCount != 1) {
+				throw new IllegalStateException("주문 상태 반영에 실패했습니다.");
+			}
+		}
+
+		// 현금 환불이 있으면 Toss 환불을 호출하고 환불 결제 row를 성공 상태로 마무리합니다.
+		if (refundPaymentSavePO != null && originalPayment != null) {
+			AdminOrderReturnManagePickupCompletePgResult cancelPgResult = cancelAdminOrderReturnPaymentWithPg(
+				originalPayment,
+				computation.orderBase(),
+				computation
+			);
+			orderMapper.updateShopPaymentCancelSuccess(
+				refundPaymentSavePO.getPayNo(),
+				SHOP_ORDER_PAY_STAT_CANCEL,
+				cancelPgResult.canceledAmount(),
+				cancelPgResult.tradeNo(),
+				cancelPgResult.rspCode(),
+				cancelPgResult.rspMsg(),
+				cancelPgResult.rawResponse(),
+				cancelPgResult.approvedDt(),
+				auditNo
+			);
+		}
+	}
+
+	// 관리자 반품 회수완료 후 고객쿠폰 사용 상태를 원복합니다.
+	private void restoreAdminOrderReturnCouponUse(
+		AdminOrderReturnManagePickupCompleteComputation computation,
+		LocalDateTime completedAt,
+		Long auditNo
+	) {
+		// 원복 대상 고객쿠폰번호가 없으면 쿠폰 처리를 생략합니다.
+		List<Long> restorableCustCpnNoList = resolveRestorableAdminOrderReturnCouponNoList(
+			computation.orderBase(),
+			computation.orderGroup(),
+			computation.selectedItemList(),
+			computation.fullReturnYn()
+		);
+		if (restorableCustCpnNoList.isEmpty()) {
+			return;
+		}
+
+		// 회사 귀책이면 사용 가능 종료일을 반품완료 시점+3일과 비교해 연장합니다.
+		String minimumUsableEndDt = computation.companyFaultReasonYn()
+			? completedAt.plusDays(ADMIN_ORDER_RETURN_COMPANY_FAULT_COUPON_EXTEND_DAYS).format(SHOP_MYPAGE_ORDER_DATE_TIME_FORMATTER)
+			: null;
+		int updatedCount = orderMapper.restoreAdminOrderReturnCustomerCouponUseByCustCpnNoList(
+			computation.custNo(),
+			computation.claim().getOrdNo(),
+			restorableCustCpnNoList,
+			computation.companyFaultReasonYn(),
+			minimumUsableEndDt,
+			auditNo
+		);
+		if (updatedCount != restorableCustCpnNoList.size()) {
+			throw new IllegalStateException("쿠폰 복구 처리에 실패했습니다.");
+		}
+	}
+
+	// 관리자 반품 회수완료 후 원복 가능한 고객쿠폰번호 목록을 계산합니다.
+	private List<Long> resolveRestorableAdminOrderReturnCouponNoList(
+		ShopOrderCancelOrderBaseVO orderBase,
+		ShopMypageOrderGroupVO orderGroup,
+		List<AdminOrderReturnManagePickupCompleteSelectedItem> selectedItemList,
+		boolean fullReturnYn
+	) {
+		// 선택 주문상세가 없으면 원복 대상도 없습니다.
+		if (selectedItemList == null || selectedItemList.isEmpty()) {
+			return List.of();
+		}
+
+		// 반품 완료 후에도 남아 있는 장바구니쿠폰 집합을 계산합니다.
+		Map<Integer, AdminOrderReturnManagePickupCompleteSelectedItem> selectedItemMap = new LinkedHashMap<>();
+		for (AdminOrderReturnManagePickupCompleteSelectedItem selectedItem : selectedItemList) {
+			if (selectedItem == null || selectedItem.detailItem() == null || selectedItem.detailItem().getOrdDtlNo() == null) {
+				continue;
+			}
+			selectedItemMap.put(selectedItem.detailItem().getOrdDtlNo(), selectedItem);
+		}
+		Set<Long> activeCartCouponNoSet = new HashSet<>();
+		for (ShopMypageOrderDetailItemVO detailItem : orderGroup == null ? List.<ShopMypageOrderDetailItemVO>of() : orderGroup.getDetailList()) {
+			if (detailItem == null) {
+				continue;
+			}
+			AdminOrderReturnManagePickupCompleteSelectedItem selectedItem =
+				detailItem.getOrdDtlNo() == null ? null : selectedItemMap.get(detailItem.getOrdDtlNo());
+			int remainingAfterReturnQty = selectedItem == null
+				? resolveShopOrderRemainingQty(detailItem)
+				: Math.max(selectedItem.remainingAfterReturnQty(), 0);
+			if (remainingAfterReturnQty < 1 || detailItem.getCartCpnNo() == null || detailItem.getCartCpnNo() < 1L) {
+				continue;
+			}
+			activeCartCouponNoSet.add(detailItem.getCartCpnNo());
+		}
+
+		// 상품쿠폰/장바구니쿠폰/배송비쿠폰 중 완전히 해제되는 고객쿠폰번호만 유지합니다.
+		Set<Long> restorableCustCpnNoSet = new LinkedHashSet<>();
+		for (AdminOrderReturnManagePickupCompleteSelectedItem selectedItem : selectedItemList) {
+			if (selectedItem == null || selectedItem.detailItem() == null || selectedItem.remainingAfterReturnQty() > 0) {
+				continue;
+			}
+			Long goodsCpnNo = selectedItem.detailItem().getGoodsCpnNo();
+			if (goodsCpnNo != null && goodsCpnNo > 0L) {
+				restorableCustCpnNoSet.add(goodsCpnNo);
+			}
+
+			Long cartCpnNo = selectedItem.detailItem().getCartCpnNo();
+			if (cartCpnNo != null && cartCpnNo > 0L && !activeCartCouponNoSet.contains(cartCpnNo)) {
+				restorableCustCpnNoSet.add(cartCpnNo);
+			}
+		}
+		Long deliveryCpnNo = orderBase == null ? null : orderBase.getDelvCpnNo();
+		if (fullReturnYn && deliveryCpnNo != null && deliveryCpnNo > 0L) {
+			restorableCustCpnNoSet.add(deliveryCpnNo);
+		}
+		return new ArrayList<>(restorableCustCpnNoSet);
+	}
+
+	// 관리자 반품 회수완료 후 기존 사용 포인트를 복구합니다.
+	private void restoreAdminOrderReturnPointByAmount(Long auditNo, String ordNo, long restoreAmt) {
+		// 복구할 포인트가 없으면 처리하지 않습니다.
+		int remainingRestoreAmt = (int) Math.clamp(restoreAmt, 0L, (long) Integer.MAX_VALUE);
+		if (remainingRestoreAmt < 1) {
+			return;
+		}
+
+		// 아직 복구되지 않은 사용 포인트 이력 순서대로 포인트를 되돌립니다.
+		for (ShopOrderPointDetailVO pointDetail : orderMapper.getShopOrderPointDetailBalanceList(ordNo)) {
+			if (pointDetail == null || pointDetail.getPntNo() == null || remainingRestoreAmt < 1) {
+				continue;
+			}
+			int restorableAmt = normalizeNonNegativeNumber(pointDetail.getPntAmt());
+			if (restorableAmt < 1) {
+				continue;
+			}
+			int appliedRestoreAmt = Math.min(restorableAmt, remainingRestoreAmt);
+			orderMapper.restoreShopCustomerPointUseAmt(pointDetail.getPntNo(), appliedRestoreAmt, auditNo);
+			ShopOrderPointDetailSavePO restoreDetail = new ShopOrderPointDetailSavePO();
+			restoreDetail.setPntNo(pointDetail.getPntNo());
+			restoreDetail.setPntAmt(appliedRestoreAmt);
+			restoreDetail.setOrdNo(ordNo);
+			restoreDetail.setBigo(ADMIN_ORDER_RETURN_POINT_RESTORE_MEMO);
+			restoreDetail.setRegNo(auditNo);
+			orderMapper.insertShopOrderPointDetail(restoreDetail);
+			remainingRestoreAmt -= appliedRestoreAmt;
+		}
+		if (remainingRestoreAmt > 0) {
+			throw new IllegalStateException("포인트 복구 처리에 실패했습니다.");
+		}
+	}
+
+	// 관리자 반품 회수완료 회사 귀책 포인트를 신규 지급합니다.
+	private void issueAdminOrderReturnCompanyFaultPoint(
+		AdminOrderReturnManagePickupCompleteComputation computation,
+		LocalDateTime completedAt,
+		Long auditNo
+	) {
+		// 재지급할 포인트가 없으면 신규 지급을 생략합니다.
+		int pointAmt = (int) Math.clamp(computation.reissuedPointAmt(), 0L, (long) Integer.MAX_VALUE);
+		if (pointAmt < 1) {
+			return;
+		}
+
+		// 회사 귀책 반품완료 포인트 마스터와 상세 이력을 함께 등록합니다.
+		String pointMemo = computation.claim().getClmNo() + " " + firstNonBlank(computation.reasonName(), computation.reasonCd());
+		ShopCustomerPointSavePO pointSaveCommand = new ShopCustomerPointSavePO(
+			computation.custNo(),
+			ADMIN_ORDER_RETURN_COMPANY_FAULT_POINT_GIVE_GB_CD,
+			pointMemo,
+			pointAmt,
+			computation.claim().getOrdNo(),
+			completedAt.plusDays(ADMIN_ORDER_RETURN_COMPANY_FAULT_POINT_EXPIRE_DAYS),
+			auditNo,
+			auditNo
+		);
+		GeneratedLongKey generatedKey = new GeneratedLongKey();
+		shopAuthMapper.insertCustomerPointBase(pointSaveCommand, generatedKey);
+		if (generatedKey.getValue() == null || generatedKey.getValue() < 1L) {
+			throw new IllegalStateException("포인트 재지급 처리에 실패했습니다.");
+		}
+
+		ShopCustomerPointDetailSavePO pointDetailCommand = new ShopCustomerPointDetailSavePO(
+			generatedKey.getValue(),
+			pointAmt,
+			computation.claim().getOrdNo(),
+			pointMemo,
+			auditNo
+		);
+		shopAuthMapper.insertCustomerPointDetail(pointDetailCommand);
+	}
+
+	// 관리자 반품 회수완료 대상 원결제 정보를 조회합니다.
+	private ShopOrderPaymentVO resolveShopOrderPaymentForReturnComplete(String ordNo) {
+		// 현재 주문의 승인 결제가 없으면 반품 환불을 진행할 수 없습니다.
+		ShopOrderPaymentVO payment = orderMapper.getShopOrderPaymentForCancel(ordNo);
+		if (payment == null || payment.getPayNo() == null || trimToNull(payment.getPayMethodCd()) == null) {
+			throw new IllegalArgumentException("환불 가능한 결제 정보를 찾을 수 없습니다.");
+		}
+		return payment;
+	}
+
+	// 관리자 반품 회수완료 환불 PAYMENT row를 선등록합니다.
+	private ShopOrderPaymentSavePO createAdminOrderReturnRefundPayment(
+		AdminOrderReturnManagePickupCompleteComputation computation,
+		ShopOrderPaymentVO originalPayment,
+		Long auditNo
+	) {
+		// PG 실패 시에도 추적할 수 있도록 요청 스냅샷을 환불 PAYMENT row에 함께 저장합니다.
+		Map<String, Object> refundSnapshot = new LinkedHashMap<>();
+		refundSnapshot.put("ordNo", computation.claim().getOrdNo());
+		refundSnapshot.put("clmNo", computation.claim().getClmNo());
+		refundSnapshot.put("reasonCd", computation.reasonCd());
+		refundSnapshot.put("reasonDetail", computation.reasonDetail());
+		refundSnapshot.put("previewAmount", computation.previewAmount());
+		refundSnapshot.put("refundedCashAmt", computation.refundedCashAmt());
+		refundSnapshot.put("refundReceiveAccount", buildRefundReceiveAccountSnapshot(computation.orderBase()));
+
+		return executeInNewShopOrderTransaction(() -> {
+			ShopOrderPaymentSavePO refundPaymentSavePO = new ShopOrderPaymentSavePO();
+			refundPaymentSavePO.setOrdNo(computation.claim().getOrdNo());
+			refundPaymentSavePO.setCustNo(computation.custNo());
+			refundPaymentSavePO.setPayStatCd(SHOP_ORDER_PAY_STAT_READY);
+			refundPaymentSavePO.setPayGbCd(SHOP_ORDER_PAY_GB_REFUND);
+			refundPaymentSavePO.setPayMethodCd(originalPayment == null ? null : originalPayment.getPayMethodCd());
+			refundPaymentSavePO.setOrdGbCd(SHOP_ORDER_ORD_GB_ORDER);
+			refundPaymentSavePO.setPgGbCd(originalPayment == null ? SHOP_ORDER_PG_GB_TOSS : originalPayment.getPgGbCd());
+			refundPaymentSavePO.setOrgPayNo(originalPayment == null ? null : originalPayment.getPayNo());
+			refundPaymentSavePO.setClmNo(computation.claim().getClmNo());
+			refundPaymentSavePO.setPayAmt(resolveRefundPaymentAmt(computation.refundedCashAmt()));
+			refundPaymentSavePO.setDeviceGbCd(firstNonBlank(trimToNull(computation.orderBase().getDeviceGbCd()), "PC"));
+			refundPaymentSavePO.setReqRawJson(orderService.writeShopOrderJson(refundSnapshot));
+			refundPaymentSavePO.setRegNo(auditNo);
+			refundPaymentSavePO.setUdtNo(auditNo);
+			orderMapper.insertShopPayment(refundPaymentSavePO);
+			if (refundPaymentSavePO.getPayNo() == null || refundPaymentSavePO.getPayNo() < 1L) {
+				throw new IllegalStateException("환불 결제 준비에 실패했습니다.");
+			}
+			return refundPaymentSavePO;
+		});
+	}
+
+	// 환불 PAYMENT 요청 스냅샷에 저장할 환불 수취 계좌 정보를 구성합니다.
+	private Map<String, Object> buildRefundReceiveAccountSnapshot(ShopOrderCancelOrderBaseVO orderBase) {
+		// 주문 마스터 환불계좌 정보가 없으면 null을 반환합니다.
+		String refundBankCd = trimToNull(orderBase == null ? null : orderBase.getRefundBankCd());
+		String refundBankNo = trimToNull(orderBase == null ? null : orderBase.getRefundBankNo());
+		String refundHolderNm = trimToNull(orderBase == null ? null : orderBase.getRefundHolderNm());
+		if (refundBankCd == null && refundBankNo == null && refundHolderNm == null) {
+			return null;
+		}
+
+		Map<String, Object> result = new LinkedHashMap<>();
+		result.put("bank", refundBankCd);
+		result.put("accountNumber", refundBankNo);
+		result.put("holderName", refundHolderNm);
+		return result;
+	}
+
+	// 별도 커밋이 필요한 반품완료 보조 트랜잭션을 실행합니다.
+	private <T> T executeInNewShopOrderTransaction(Supplier<T> action) {
+		// 환불 PAYMENT 선등록과 PG 실패 반영처럼 독립 커밋이 필요한 작업을 REQUIRES_NEW로 실행합니다.
+		TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+		transactionTemplate.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+		return transactionTemplate.execute(status -> action.get());
+	}
+
+	// 관리자 반품 회수완료용 PG 환불 API를 호출하고 성공 응답을 해석합니다.
+	private AdminOrderReturnManagePickupCompletePgResult cancelAdminOrderReturnPaymentWithPg(
+		ShopOrderPaymentVO originalPayment,
+		ShopOrderCancelOrderBaseVO orderBase,
+		AdminOrderReturnManagePickupCompleteComputation computation
+	) {
+		// Toss 결제키가 없으면 PG 환불을 진행할 수 없습니다.
+		if (originalPayment == null || trimToNull(originalPayment.getTossPaymentKey()) == null) {
+			throw new IllegalArgumentException("환불 가능한 결제 정보를 찾을 수 없습니다.");
+		}
+
+		// 무통장입금 취소는 금액 없이, 일반 결제취소는 현금 환불액 기준으로 PG를 호출합니다.
+		Long cancelAmount =
+			SHOP_ORDER_PAY_STAT_WAITING_DEPOSIT.equals(originalPayment.getPayStatCd())
+				? null
+				: computation.refundedCashAmt() > 0L
+					? computation.refundedCashAmt()
+					: null;
+		TossPaymentRefundReceiveAccount refundReceiveAccount =
+			SHOP_ORDER_PAYMENT_METHOD_VIRTUAL_ACCOUNT.equals(originalPayment.getPayMethodCd())
+				&& !SHOP_ORDER_PAY_STAT_WAITING_DEPOSIT.equals(originalPayment.getPayStatCd())
+				? buildTossPaymentRefundReceiveAccount(orderBase)
+				: null;
+		String rawResponse = refundReceiveAccount == null
+			? tossPaymentsClient.cancelPayment(
+				originalPayment.getTossPaymentKey().trim(),
+				resolveAdminOrderReturnPickupCompletePgReason(computation),
+				cancelAmount
+			)
+			: tossPaymentsClient.cancelPayment(
+				originalPayment.getTossPaymentKey().trim(),
+				resolveAdminOrderReturnPickupCompletePgReason(computation),
+				cancelAmount,
+				refundReceiveAccount
+			);
+		JsonNode responseNode = orderService.readShopOrderJsonNode(rawResponse);
+		String paymentStatus = firstNonBlank(orderService.resolveJsonText(responseNode, "status"), "");
+		if (!"CANCELED".equals(paymentStatus) && !"PARTIAL_CANCELED".equals(paymentStatus)) {
+			throw new IllegalArgumentException("반품완료 처리에 실패했습니다.");
+		}
+
+		// Toss 취소 응답에서 거래키와 취소일시와 실제 취소금액을 추출합니다.
+		JsonNode cancelNode = responseNode.path("cancels").isArray() && !responseNode.path("cancels").isEmpty()
+			? responseNode.path("cancels").get(responseNode.path("cancels").size() - 1)
+			: responseNode;
+		long canceledAmount = resolveJsonLong(cancelNode, "cancelAmount");
+		if (canceledAmount < 1L && cancelAmount != null) {
+			canceledAmount = cancelAmount;
+		}
+		String approvedDt = orderService.normalizeShopOrderDateTime(
+			firstNonBlank(
+				orderService.resolveJsonText(cancelNode, "canceledAt"),
+				orderService.resolveJsonText(responseNode, "approvedAt")
+			)
+		);
+		String tradeNo = firstNonBlank(
+			orderService.resolveJsonText(cancelNode, "transactionKey"),
+			firstNonBlank(orderService.resolveJsonText(responseNode, "lastTransactionKey"), originalPayment.getTradeNo())
+		);
+		return new AdminOrderReturnManagePickupCompletePgResult(
+			rawResponse,
+			paymentStatus,
+			"취소 완료",
+			tradeNo,
+			approvedDt,
+			canceledAmount
+		);
+	}
+
+	// 무통장입금 결제 환불 시 Toss 환불 수취 계좌 파라미터를 구성합니다.
+	private TossPaymentRefundReceiveAccount buildTossPaymentRefundReceiveAccount(ShopOrderCancelOrderBaseVO orderBase) {
+		// 주문 마스터에 저장된 환불계좌 3개 필드가 모두 있어야 Toss 취소 API를 호출합니다.
+		String refundBankCd = trimToNull(orderBase == null ? null : orderBase.getRefundBankCd());
+		String refundBankNo = trimToNull(orderBase == null ? null : orderBase.getRefundBankNo());
+		String refundHolderNm = trimToNull(orderBase == null ? null : orderBase.getRefundHolderNm());
+		if (refundBankCd == null || refundBankNo == null || refundHolderNm == null) {
+			throw new IllegalArgumentException("무통장입금 환불 계좌 정보를 확인해주세요.");
+		}
+		if (!refundBankNo.matches("\\d+")) {
+			throw new IllegalArgumentException("무통장입금 환불 계좌 정보를 확인해주세요.");
+		}
+		orderService.validateShopOrderRefundBankCode(refundBankCd);
+		return new TossPaymentRefundReceiveAccount(refundBankCd, refundBankNo, refundHolderNm);
+	}
+
+	// 관리자 반품 회수완료 PG 오류 시 환불 PAYMENT row만 실패 상태로 남깁니다.
+	private void handleAdminOrderReturnPickupCompletePaymentFailure(
+		Long refundPayNo,
+		TossPaymentClientException exception,
+		Long auditNo
+	) {
+		// 환불 결제번호가 없으면 별도 실패 반영을 진행하지 않습니다.
+		if (refundPayNo == null || refundPayNo < 1L) {
+			return;
+		}
+
+		// Toss 오류 응답을 저장해 실패 원인을 확인할 수 있게 합니다.
+		JsonNode errorNode = orderService.readShopOrderJsonNode(exception.getResponseBody());
+		handleAdminOrderReturnPickupCompletePaymentFailure(
+			refundPayNo,
+			firstNonBlank(orderService.resolveJsonText(errorNode, "code"), "TOSS_CANCEL_ERROR"),
+			firstNonBlank(orderService.resolveJsonText(errorNode, "message"), "반품완료 처리에 실패했습니다."),
+			exception.getResponseBody(),
+			auditNo
+		);
+	}
+
+	// 관리자 반품 회수완료 환불 PAYMENT row를 실패 상태로 저장합니다.
+	private void handleAdminOrderReturnPickupCompletePaymentFailure(
+		Long refundPayNo,
+		String rspCode,
+		String rspMsg,
+		String rspRawJson,
+		Long auditNo
+	) {
+		// 환불 결제번호가 없으면 별도 실패 반영을 진행하지 않습니다.
+		if (refundPayNo == null || refundPayNo < 1L) {
+			return;
+		}
+
+		// 실패 코드와 메시지와 응답 원문을 함께 저장합니다.
+		executeInNewShopOrderTransaction(() -> {
+			orderMapper.updateShopPaymentCancelFailure(
+				refundPayNo,
+				SHOP_ORDER_PAY_STAT_FAIL,
+				firstNonBlank(rspCode, "RETURN_COMPLETE_ERROR"),
+				firstNonBlank(rspMsg, "반품완료 처리에 실패했습니다."),
+				rspRawJson,
+				auditNo
+			);
+			return null;
+		});
+	}
+
+	// 관리자 반품 회수완료 PG 오류 응답에서 사용자 표시 메시지를 추출합니다.
+	private String resolveAdminOrderReturnPickupCompletePgErrorMessage(TossPaymentClientException exception) {
+		// Toss 오류 메시지가 있으면 우선 사용하고 없으면 기본 문구를 반환합니다.
+		JsonNode errorNode = orderService.readShopOrderJsonNode(exception == null ? null : exception.getResponseBody());
+		return firstNonBlank(orderService.resolveJsonText(errorNode, "message"), "반품완료 처리에 실패했습니다.");
+	}
+
+	// 관리자 반품 회수완료 PG 취소 사유 문자열을 Toss 전송용 텍스트로 구성합니다.
+	private String resolveAdminOrderReturnPickupCompletePgReason(AdminOrderReturnManagePickupCompleteComputation computation) {
+		// 공통 반품 사유명과 상세 입력값을 결합해 PG 취소 사유를 구성합니다.
+		String reasonText = firstNonBlank(computation == null ? null : computation.reasonName(), computation == null ? null : computation.reasonCd());
+		String reasonDetail = trimToNull(computation == null ? null : computation.reasonDetail());
+		if (reasonText == null) {
+			return "반품 완료";
+		}
+		return reasonDetail == null ? reasonText : reasonText + " - " + reasonDetail;
 	}
 
 	// 쇼핑몰 마이페이지 반품내역 페이지 데이터를 조회합니다.
@@ -1586,6 +2358,43 @@ public class OrderReturnService {
 	private long resolvePreviewAmountValue(Long value) {
 		// null 값은 0으로 보고 음수/양수 부호는 그대로 유지합니다.
 		return value == null ? 0L : value;
+	}
+
+	// 환불 PAYMENT 저장금액을 음수 기준으로 변환합니다.
+	private long resolveRefundPaymentAmt(Long refundedCashAmt) {
+		// 환불 저장금액은 절댓값 기준으로 음수화합니다.
+		long normalizedRefundedCashAmt = Math.abs(refundedCashAmt == null ? 0L : refundedCashAmt.longValue());
+		return normalizedRefundedCashAmt * -1L;
+	}
+
+	// JsonNode의 숫자 필드를 long 값으로 안전하게 반환합니다.
+	private long resolveJsonLong(JsonNode node, String fieldName) {
+		// 숫자 노드가 아니면 텍스트 값을 long으로 다시 파싱합니다.
+		if (node == null || trimToNull(fieldName) == null) {
+			return 0L;
+		}
+		JsonNode valueNode = node.path(fieldName);
+		if (valueNode.isNumber()) {
+			return valueNode.longValue();
+		}
+		String valueText = trimToNull(valueNode.asText(null));
+		if (valueText == null) {
+			return 0L;
+		}
+		try {
+			return Long.parseLong(valueText);
+		} catch (NumberFormatException exception) {
+			return 0L;
+		}
+	}
+
+	// 첫 번째 문자열이 비어 있으면 두 번째 문자열을 대신 반환합니다.
+	private String firstNonBlank(String first, String second) {
+		String normalizedFirst = trimToNull(first);
+		if (normalizedFirst != null) {
+			return normalizedFirst;
+		}
+		return trimToNull(second);
 	}
 
 	// 현재 로그인한 관리자 번호를 조회합니다.

@@ -244,6 +244,43 @@
 		 ORDER BY OCD.ORD_DTL_NO ASC
 	</select>
 
+	<update id="updateAdminOrderReturnManagePickupCompleteDetail">
+		/* OrderMapper.updateAdminOrderReturnManagePickupCompleteDetail: 관리자 반품 회수완료 상세 상태와 사유 저장 */
+		UPDATE ORDER_CHANGE_DETAIL
+		   SET CHG_DTL_STAT_CD = #{toChgDtlStatCd}
+		     , CHG_REASON_CD = #{reasonCd}
+		     , CHG_REASON_DTL = #{reasonDetail}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE CLM_NO = #{clmNo}
+		   AND ORD_NO = #{ordNo}
+		   AND CHG_DTL_GB_CD = 'CHG_DTL_GB_02'
+		   AND CHG_DTL_STAT_CD = #{fromChgDtlStatCd}
+	</update>
+
+	<update id="updateAdminOrderReturnManagePickupCompleteBase">
+		/* OrderMapper.updateAdminOrderReturnManagePickupCompleteBase: 관리자 반품 회수완료 클레임 마스터 저장 */
+		UPDATE ORDER_CHANGE_BASE
+		   SET CHG_STAT_CD = #{chgStatCd}
+		     , CHG_COMPLETE_DT = #{chgCompleteDt}
+		     , PAY_DELV_AMT = #{payDelvAmt}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE CLM_NO = #{clmNo}
+		   AND ORD_NO = #{ordNo}
+		   AND CHG_GB_CD = 'R'
+	</update>
+
+	<update id="updateAdminOrderReturnManagePickupCompleteAddress">
+		/* OrderMapper.updateAdminOrderReturnManagePickupCompleteAddress: 관리자 반품 회수완료 회수지 배송완료 일시 저장 */
+		UPDATE ORDER_CHANGE_EXCHANGE_ADDRESS
+		   SET DELV_COMPLETE_DT = #{delvCompleteDt}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE CLM_NO = #{clmNo}
+		   AND CLM_ADDR_GB_CD = 'CLM_ADDR_GB_01'
+	</update>
+
 	<select id="countShopMypageOrderGroup" resultType="int">
 		/* OrderMapper.countShopMypageOrderGroup: 쇼핑몰 마이페이지 주문내역 주문번호 건수 조회 */
 		SELECT COUNT(*)
@@ -1303,6 +1340,31 @@
 		<if test="ordNo != null and ordNo != ''">
 		   AND ORD_NO = #{ordNo}
 		</if>
+	</update>
+
+	<update id="restoreAdminOrderReturnCustomerCouponUseByCustCpnNoList">
+		/* OrderMapper.restoreAdminOrderReturnCustomerCouponUseByCustCpnNoList: 반품 완료 시 고객쿠폰번호 목록 기준 고객쿠폰 사용 처리 원복 */
+		UPDATE CUSTOMER_COUPON
+		   SET CPN_USE_YN = 'N'
+		     , ORD_NO = NULL
+		     , CPN_USABLE_START_DT = CPN_USABLE_START_DT
+		     , CPN_USABLE_END_DT = CASE
+		         WHEN #{extendUsableEndDt}
+		           THEN CASE
+		                  WHEN CPN_USABLE_END_DT IS NULL OR CPN_USABLE_END_DT = '0000-00-00 00:00:00'
+		                    THEN CPN_USABLE_END_DT
+		                  ELSE GREATEST(CPN_USABLE_END_DT, #{minimumUsableEndDt})
+		                END
+		         ELSE CPN_USABLE_END_DT
+		       END
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE CUST_NO = #{custNo}
+		   AND ORD_NO = #{ordNo}
+		   AND CUST_CPN_NO IN
+		<foreach collection="custCpnNoList" item="custCpnNo" open="(" separator="," close=")">
+			#{custCpnNo}
+		</foreach>
 	</update>
 
 	<select id="getShopAvailablePointBaseList" resultType="com.xodud1202.springbackend.domain.shop.order.ShopOrderPointBaseVO">

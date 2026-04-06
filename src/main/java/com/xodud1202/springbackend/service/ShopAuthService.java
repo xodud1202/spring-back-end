@@ -204,6 +204,7 @@ public class ShopAuthService {
 			JOIN_POINT_GIVE_GB_CD,
 			JOIN_POINT_GIVE_MEMO,
 			joinPoint,
+			null,
 			joinPointExpireDt,
 			custNo,
 			custNo
@@ -221,6 +222,7 @@ public class ShopAuthService {
 		ShopCustomerPointDetailSavePO pointDetailCommand = new ShopCustomerPointDetailSavePO(
 			createdPointNo,
 			joinPoint,
+			null,
 			JOIN_POINT_GIVE_MEMO,
 			custNo
 		);
