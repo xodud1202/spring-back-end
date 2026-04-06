@@ -4,6 +4,10 @@ import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManageClai
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManageClaimSummaryVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManageListResponseVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManageListRowVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupCompleteClaimVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupCompleteDetailVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupCompletePageVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupCompletePreviewAmountVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupItemPO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupRequestPO;
@@ -94,6 +98,8 @@ public class OrderReturnService {
 	private static final String ADMIN_ORDER_RETURN_PICKUP_REQUEST_INVALID_MESSAGE = "반품 신청건만 송장저장이 가능합니다.";
 	private static final String ADMIN_ORDER_RETURN_PICKUP_START_EMPTY_MESSAGE = "반품 회수 신청건을 선택해주세요.";
 	private static final String ADMIN_ORDER_RETURN_PICKUP_START_INVALID_MESSAGE = "반품 회수 신청건만 회수중 처리가 가능합니다.";
+	private static final String ADMIN_ORDER_RETURN_PICKUP_COMPLETE_PAGE_EMPTY_MESSAGE = "클레임번호를 확인해주세요.";
+	private static final String ADMIN_ORDER_RETURN_PICKUP_COMPLETE_PAGE_INVALID_MESSAGE = "반품 회수중 건만 조회할 수 있습니다.";
 	private static final String ADMIN_ORDER_RETURN_PICKUP_COMPANY_REQUIRED_MESSAGE = "택배사를 선택해주세요.";
 	private static final String ADMIN_ORDER_RETURN_PICKUP_INVOICE_REQUIRED_MESSAGE = "송장번호를 입력해주세요.";
 	private static final String ADMIN_ORDER_RETURN_PICKUP_INVOICE_INVALID_MESSAGE = "송장번호는 숫자 20자리 이하로 입력해주세요.";
@@ -276,6 +282,69 @@ public class OrderReturnService {
 		return result;
 	}
 
+	// 관리자 반품 회수완료 검수 팝업 화면 데이터를 조회합니다.
+	public AdminOrderReturnManagePickupCompletePageVO getAdminOrderReturnManagePickupCompletePage(String clmNo) {
+		// 클레임번호 기본 형식을 검증하고 회수중 상태인지 먼저 확인합니다.
+		String normalizedClmNo = trimToNull(clmNo);
+		if (normalizedClmNo == null) {
+			throw new IllegalArgumentException(ADMIN_ORDER_RETURN_PICKUP_COMPLETE_PAGE_EMPTY_MESSAGE);
+		}
+		validateAdminOrderReturnManageClaimState(
+			List.of(normalizedClmNo),
+			RETURN_PICKUP_IN_PROGRESS_DETAIL_STATUS_CODE,
+			ADMIN_ORDER_RETURN_PICKUP_COMPLETE_PAGE_INVALID_MESSAGE
+		);
+
+		// 팝업 상단에 표시할 클레임 기본 정보와 상세 목록을 조회합니다.
+		AdminOrderReturnManagePickupCompleteClaimVO claim = orderMapper.getAdminOrderReturnManagePickupCompleteClaim(normalizedClmNo);
+		List<AdminOrderReturnManagePickupCompleteDetailVO> detailList =
+			orderMapper.getAdminOrderReturnManagePickupCompleteDetailList(normalizedClmNo);
+		if (claim == null || trimToNull(claim.getOrdNo()) == null || detailList == null || detailList.isEmpty()) {
+			throw new IllegalArgumentException(ADMIN_ORDER_RETURN_PICKUP_COMPLETE_PAGE_INVALID_MESSAGE);
+		}
+
+		// 금액 계산과 사유 목록 구성을 위해 주문 기준 보조 정보를 함께 조회합니다.
+		Long custNo = orderMapper.getOrderCustNo(claim.getOrdNo());
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException(ADMIN_ORDER_RETURN_PICKUP_COMPLETE_PAGE_INVALID_MESSAGE);
+		}
+		AdminOrderReturnPageVO adminOrderReturnPage = orderService.getAdminOrderReturnPage(claim.getOrdNo());
+		ShopOrderCancelOrderBaseVO orderBase = orderService.resolveShopOrderCancelOrderBase(custNo, claim.getOrdNo());
+		ShopMypageReturnHistoryVO returnItem = buildAdminOrderReturnManagePickupCompleteReturnItem(claim, detailList);
+
+		// 고정 금액 요약과 귀책별 배송비 조정 금액을 계산합니다.
+		boolean fullReturnYn = resolveShopMypageReturnFullReturnYn(returnItem, adminOrderReturnPage.getOrder());
+		AdminOrderReturnManagePickupCompletePreviewAmountVO previewAmount =
+			buildAdminOrderReturnManagePickupCompletePreviewAmount(returnItem, adminOrderReturnPage.getOrder(), orderBase);
+		long paidDeliveryFeeRefundAmt = fullReturnYn
+			? resolveNonNegativeLong(
+				adminOrderReturnPage.getReturnFeeContext() == null
+					? null
+					: (long) normalizeNonNegativeNumber(adminOrderReturnPage.getReturnFeeContext().getOriginalPaidDeliveryAmt())
+			)
+			: 0L;
+		long beforeShippingExpectedRefundAmt =
+			resolveNonNegativeLong(previewAmount.getPaidGoodsAmt()) - resolveNonNegativeLong(previewAmount.getBenefitAmt());
+		long customerFaultShippingAdjustmentAmt =
+			paidDeliveryFeeRefundAmt - resolveShopOrderReturnShippingDeductionAmt(
+				adminOrderReturnPage.getSiteInfo(),
+				adminOrderReturnPage.getReturnFeeContext(),
+				beforeShippingExpectedRefundAmt,
+				false
+			);
+
+		// 화면 응답 객체를 구성합니다.
+		AdminOrderReturnManagePickupCompletePageVO result = new AdminOrderReturnManagePickupCompletePageVO();
+		result.setClaim(claim);
+		result.setDetailList(detailList);
+		result.setReasonList(adminOrderReturnPage.getReasonList() == null ? List.of() : adminOrderReturnPage.getReasonList());
+		applyAdminOrderReturnManagePickupCompleteDefaultReason(result, detailList);
+		result.setPreviewAmount(previewAmount);
+		result.setCompanyFaultShippingAdjustmentAmt(paidDeliveryFeeRefundAmt);
+		result.setCustomerFaultShippingAdjustmentAmt(customerFaultShippingAdjustmentAmt);
+		return result;
+	}
+
 	// 쇼핑몰 마이페이지 반품내역 페이지 데이터를 조회합니다.
 	public ShopMypageReturnHistoryPageVO getShopMypageReturnHistoryPage(
 		Long custNo,
@@ -436,6 +505,127 @@ public class OrderReturnService {
 		result.setShippingAdjustmentAmt(shippingAdjustmentAmt);
 		result.setExpectedRefundAmt(expectedRefundAmt);
 		return result;
+	}
+
+	// 관리자 반품 회수완료 검수 팝업용 클레임 상세 이력을 공통 반품 이력 형식으로 변환합니다.
+	private ShopMypageReturnHistoryVO buildAdminOrderReturnManagePickupCompleteReturnItem(
+		AdminOrderReturnManagePickupCompleteClaimVO claim,
+		List<AdminOrderReturnManagePickupCompleteDetailVO> detailList
+	) {
+		// 기존 반품 상세 금액 계산 로직을 재사용할 수 있도록 공통 형식으로 매핑합니다.
+		ShopMypageReturnHistoryVO result = new ShopMypageReturnHistoryVO();
+		result.setClmNo(trimToNull(claim == null ? null : claim.getClmNo()));
+		result.setOrdNo(trimToNull(claim == null ? null : claim.getOrdNo()));
+
+		List<ShopMypageReturnHistoryDetailVO> mappedDetailList = new ArrayList<>();
+		for (AdminOrderReturnManagePickupCompleteDetailVO detail : detailList == null ? List.<AdminOrderReturnManagePickupCompleteDetailVO>of() : detailList) {
+			ShopMypageReturnHistoryDetailVO mappedDetail = new ShopMypageReturnHistoryDetailVO();
+			mappedDetail.setClmNo(trimToNull(claim == null ? null : claim.getClmNo()));
+			mappedDetail.setOrdDtlNo(detail == null ? null : detail.getOrdDtlNo());
+			mappedDetail.setGoodsId(trimToNull(detail == null ? null : detail.getGoodsId()));
+			mappedDetail.setGoodsNm(trimToNull(detail == null ? null : detail.getGoodsNm()));
+			mappedDetail.setSizeId(trimToNull(detail == null ? null : detail.getSizeId()));
+			mappedDetail.setQty(detail == null ? null : detail.getQty());
+			mappedDetail.setSaleAmt(detail == null ? null : detail.getSaleAmt());
+			mappedDetail.setAddAmt(detail == null ? null : detail.getAddAmt());
+			mappedDetail.setSupplyAmt(detail == null ? null : detail.getSupplyAmt());
+			mappedDetail.setGoodsCouponDiscountAmt(detail == null ? null : detail.getGoodsCouponDiscountAmt());
+			mappedDetail.setCartCouponDiscountAmt(detail == null ? null : detail.getCartCouponDiscountAmt());
+			mappedDetail.setPointDcAmt(detail == null ? null : detail.getPointDcAmt());
+			mappedDetail.setChgReasonCd(trimToNull(detail == null ? null : detail.getChgReasonCd()));
+			mappedDetail.setChgReasonDtl(trimToNull(detail == null ? null : detail.getChgReasonDtl()));
+			mappedDetail.setChgDtlStatCd(trimToNull(detail == null ? null : detail.getChgDtlStatCd()));
+			mappedDetailList.add(mappedDetail);
+		}
+		result.setDetailList(mappedDetailList);
+		return result;
+	}
+
+	// 관리자 반품 회수완료 검수 팝업의 고정 금액 요약을 계산합니다.
+	private AdminOrderReturnManagePickupCompletePreviewAmountVO buildAdminOrderReturnManagePickupCompletePreviewAmount(
+		ShopMypageReturnHistoryVO returnItem,
+		ShopMypageOrderGroupVO orderGroup,
+		ShopOrderCancelOrderBaseVO orderBase
+	) {
+		// 상세 행 목록 기준으로 고정 상품/쿠폰/포인트 합계를 계산합니다.
+		long totalSupplyAmt = 0L;
+		long totalOrderAmt = 0L;
+		long totalGoodsCouponDiscountAmt = 0L;
+		long totalCartCouponDiscountAmt = 0L;
+		long totalPointRefundAmt = 0L;
+		for (ShopMypageReturnHistoryDetailVO detailItem : returnItem == null ? List.<ShopMypageReturnHistoryDetailVO>of() : returnItem.getDetailList()) {
+			int qty = normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getQty());
+			long unitSupplyAmt = normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getSupplyAmt());
+			long unitOrderAmt =
+				(long) normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getSaleAmt())
+					+ normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getAddAmt());
+			totalSupplyAmt += unitSupplyAmt * qty;
+			totalOrderAmt += unitOrderAmt * qty;
+			totalGoodsCouponDiscountAmt += normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getGoodsCouponDiscountAmt());
+			totalCartCouponDiscountAmt += normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getCartCouponDiscountAmt());
+			totalPointRefundAmt += normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getPointDcAmt());
+		}
+
+		// 전체 반품 여부에 따라 배송비쿠폰 환급 금액만 고정값으로 계산합니다.
+		boolean fullReturnYn = resolveShopMypageReturnFullReturnYn(returnItem, orderGroup);
+		long deliveryCouponRefundAmt = fullReturnYn
+			? normalizeNonNegativeNumber(orderBase == null ? null : orderBase.getDelvCpnDcAmt())
+			: 0L;
+		long benefitAmt = totalGoodsCouponDiscountAmt + totalCartCouponDiscountAmt + totalPointRefundAmt;
+
+		// 프론트 재계산에 필요한 고정 금액 필드만 응답 객체에 담습니다.
+		AdminOrderReturnManagePickupCompletePreviewAmountVO result = new AdminOrderReturnManagePickupCompletePreviewAmountVO();
+		result.setTotalSupplyAmt(totalSupplyAmt);
+		result.setTotalGoodsDiscountAmt(Math.max(totalOrderAmt - totalSupplyAmt, 0L));
+		result.setTotalGoodsCouponDiscountAmt(totalGoodsCouponDiscountAmt);
+		result.setTotalCartCouponDiscountAmt(totalCartCouponDiscountAmt);
+		result.setDeliveryCouponRefundAmt(deliveryCouponRefundAmt);
+		result.setTotalPointRefundAmt(totalPointRefundAmt);
+		result.setPaidGoodsAmt(totalOrderAmt);
+		result.setBenefitAmt(benefitAmt);
+		return result;
+	}
+
+	// 관리자 반품 회수완료 검수 팝업의 공통 기본 반품 사유를 계산합니다.
+	private void applyAdminOrderReturnManagePickupCompleteDefaultReason(
+		AdminOrderReturnManagePickupCompletePageVO result,
+		List<AdminOrderReturnManagePickupCompleteDetailVO> detailList
+	) {
+		// 첫 상세 행을 기준으로 같은 사유인지 비교하고, 다르면 공통 기본값을 비웁니다.
+		String defaultReasonCd = null;
+		String defaultReasonDetail = null;
+		boolean initialized = false;
+		boolean mixedReasonYn = false;
+		for (AdminOrderReturnManagePickupCompleteDetailVO detail : detailList == null ? List.<AdminOrderReturnManagePickupCompleteDetailVO>of() : detailList) {
+			String currentReasonCd = trimToNull(detail == null ? null : detail.getChgReasonCd());
+			String currentReasonDetail = trimToNull(detail == null ? null : detail.getChgReasonDtl());
+			if (!initialized) {
+				defaultReasonCd = currentReasonCd;
+				defaultReasonDetail = currentReasonDetail;
+				initialized = true;
+				continue;
+			}
+			if (!isSameAdminOrderReturnManagePickupCompleteReasonValue(defaultReasonCd, currentReasonCd)
+				|| !isSameAdminOrderReturnManagePickupCompleteReasonValue(defaultReasonDetail, currentReasonDetail)) {
+				mixedReasonYn = true;
+				break;
+			}
+		}
+
+		result.setMixedReasonYn(mixedReasonYn);
+		result.setDefaultReasonCd(mixedReasonYn ? null : defaultReasonCd);
+		result.setDefaultReasonDetail(mixedReasonYn ? null : defaultReasonDetail);
+	}
+
+	// 관리자 반품 회수완료 검수 팝업의 사유 문자열 2개가 같은지 비교합니다.
+	private boolean isSameAdminOrderReturnManagePickupCompleteReasonValue(String leftValue, String rightValue) {
+		// 공백과 null을 동일 규칙으로 정규화한 뒤 비교합니다.
+		String normalizedLeftValue = trimToNull(leftValue);
+		String normalizedRightValue = trimToNull(rightValue);
+		if (normalizedLeftValue == null || normalizedRightValue == null) {
+			return normalizedLeftValue == normalizedRightValue;
+		}
+		return normalizedLeftValue.equals(normalizedRightValue);
 	}
 
 	// 현재 주문 기준으로 이번 반품이 전체 반품인지 계산합니다.

@@ -19,6 +19,8 @@ import com.xodud1202.springbackend.domain.admin.order.AdminOrderPO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderPaymentRowVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManageClaimSummaryVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManageListRowVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupCompleteClaimVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupCompleteDetailVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupItemPO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderStartDeliveryKeyItemPO;
@@ -108,6 +110,12 @@ public interface OrderMapper {
 
 	// 관리자 반품 회수 관리 대상 클레임 요약을 조회합니다.
 	List<AdminOrderReturnManageClaimSummaryVO> getAdminOrderReturnManageClaimSummaryList(@Param("clmNoList") List<String> clmNoList);
+
+	// 관리자 반품 회수완료 검수 팝업의 클레임 기본 정보를 조회합니다.
+	AdminOrderReturnManagePickupCompleteClaimVO getAdminOrderReturnManagePickupCompleteClaim(@Param("clmNo") String clmNo);
+
+	// 관리자 반품 회수완료 검수 팝업의 상품 상세 목록을 조회합니다.
+	List<AdminOrderReturnManagePickupCompleteDetailVO> getAdminOrderReturnManagePickupCompleteDetailList(@Param("clmNo") String clmNo);
 
 	// 관리자 주문 상세 하단 결제 목록을 조회합니다.
 	List<AdminOrderPaymentRowVO> getAdminOrderPaymentList(@Param("ordNo") String ordNo);

@@ -206,6 +206,44 @@
 		 GROUP BY OCB.CLM_NO
 	</select>
 
+	<select id="getAdminOrderReturnManagePickupCompleteClaim" resultType="com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupCompleteClaimVO">
+		/* OrderMapper.getAdminOrderReturnManagePickupCompleteClaim: 관리자 반품 회수완료 검수 팝업의 클레임 기본 정보 조회 */
+		SELECT OCB.CLM_NO
+		     , OCB.ORD_NO
+		     , DATE_FORMAT(COALESCE(OCB.CHG_DT, OCB.REG_DT), '%Y-%m-%d %H:%i:%s') AS CHG_DT
+		  FROM ORDER_CHANGE_BASE OCB
+		 WHERE OCB.CHG_GB_CD = 'R'
+		   AND OCB.CLM_NO = #{clmNo}
+		 LIMIT 1
+	</select>
+
+	<select id="getAdminOrderReturnManagePickupCompleteDetailList" resultType="com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupCompleteDetailVO">
+		/* OrderMapper.getAdminOrderReturnManagePickupCompleteDetailList: 관리자 반품 회수완료 검수 팝업의 상품 상세 목록 조회 */
+		SELECT OCD.ORD_DTL_NO
+		     , OCD.GOODS_ID
+		     , COALESCE(GB.GOODS_NM, '') AS GOODS_NM
+		     , OCD.SIZE_ID
+		     , OCD.QTY
+		     , COALESCE(OD.SALE_AMT, 0) AS SALE_AMT
+		     , COALESCE(OCD.ADD_AMT, OD.ADD_AMT, 0) AS ADD_AMT
+		     , COALESCE(OD.SUPPLY_AMT, 0) AS SUPPLY_AMT
+		     , COALESCE(OCD.GOODS_CPN_DC_AMT, 0) AS GOODS_COUPON_DISCOUNT_AMT
+		     , COALESCE(OCD.CART_CPN_DC_AMT, 0) AS CART_COUPON_DISCOUNT_AMT
+		     , COALESCE(OCD.POINT_DC_AMT, 0) AS POINT_DC_AMT
+		     , OCD.CHG_REASON_CD
+		     , OCD.CHG_REASON_DTL
+		     , OCD.CHG_DTL_STAT_CD
+		  FROM ORDER_CHANGE_DETAIL OCD
+		  LEFT JOIN ORDER_DETAIL OD
+		    ON OD.ORD_NO = OCD.ORD_NO
+		   AND OD.ORD_DTL_NO = OCD.ORD_DTL_NO
+		  LEFT JOIN GOODS_BASE GB
+		    ON GB.GOODS_ID = OCD.GOODS_ID
+		 WHERE OCD.CLM_NO = #{clmNo}
+		   AND OCD.CHG_DTL_GB_CD = 'CHG_DTL_GB_02'
+		 ORDER BY OCD.ORD_DTL_NO ASC
+	</select>
+
 	<select id="countShopMypageOrderGroup" resultType="int">
 		/* OrderMapper.countShopMypageOrderGroup: 쇼핑몰 마이페이지 주문내역 주문번호 건수 조회 */
 		SELECT COUNT(*)
