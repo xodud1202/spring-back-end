@@ -13,6 +13,8 @@ public class AdminCompanyWorkUpdatePO {
 	private String workStartDt;
 	// 변경할 업무 종료일입니다.
 	private String workEndDt;
+	// 변경할 업무 공수시간입니다.
+	private Integer workTime;
 	// 변경할 IT 담당자명입니다.
 	private String itManager;
 	// 수정자 번호입니다.

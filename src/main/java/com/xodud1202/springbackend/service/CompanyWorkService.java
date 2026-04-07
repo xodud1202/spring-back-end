@@ -2,10 +2,16 @@ package com.xodud1202.springbackend.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportCompanyInfoVO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkDetailResponseVO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkDetailUpdatePO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkDetailVO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkFileVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportFileSavePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportJobSavePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportPO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportResponseVO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplySavePO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkUpdatePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkCompanyVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkCompletedListResponseVO;
@@ -43,6 +49,7 @@ public class CompanyWorkService {
 	private static final int ADMIN_COMPANY_WORK_MAX_MANAGER_NAME_LENGTH = 50;
 	private static final int ADMIN_COMPANY_WORK_MAX_FILE_NAME_LENGTH = 255;
 	private static final int ADMIN_COMPANY_WORK_MAX_FILE_URL_LENGTH = 255;
+	private static final int ADMIN_COMPANY_WORK_MAX_REPLY_LENGTH = 65535;
 	private static final String WORK_STATUS_GROUP_CODE = "WORK_STAT";
 	private static final String WORK_COMPLETED_STATUS_CODE = "WORK_STAT_05";
 	private static final String WORK_WAIT_STATUS_CODE = "WORK_STAT_01";
@@ -139,6 +146,22 @@ public class CompanyWorkService {
 		return response;
 	}
 
+	// 관리자 회사 업무 상세 팝업 정보를 조회합니다.
+	public AdminCompanyWorkDetailResponseVO getAdminCompanyWorkDetail(Long workSeq) {
+		// 선택 업무 번호를 검증한 뒤 상세/첨부/댓글 정보를 함께 조회합니다.
+		long resolvedWorkSeq = normalizeRequiredWorkSequence(workSeq, "업무 정보를 확인해주세요.");
+		AdminCompanyWorkDetailVO detail = getRequiredAdminCompanyWorkDetail(resolvedWorkSeq);
+		List<AdminCompanyWorkFileVO> fileList = companyWorkMapper.getAdminCompanyWorkFileList(resolvedWorkSeq);
+		List<AdminCompanyWorkReplyVO> replyList = companyWorkMapper.getAdminCompanyWorkReplyList(resolvedWorkSeq);
+
+		// 상세 팝업 응답 구조로 묶어서 반환합니다.
+		AdminCompanyWorkDetailResponseVO response = new AdminCompanyWorkDetailResponseVO();
+		response.setDetail(detail);
+		response.setFileList(fileList == null ? List.of() : fileList);
+		response.setReplyList(replyList == null ? List.of() : replyList);
+		return response;
+	}
+
 	@Transactional
 	// 관리자 회사 업무 그리드 즉시 수정 항목을 저장합니다.
 	public AdminCompanyWorkListRowVO updateAdminCompanyWork(AdminCompanyWorkUpdatePO param) {
@@ -158,6 +181,23 @@ public class CompanyWorkService {
 			throw new IllegalStateException("수정된 업무 정보를 확인할 수 없습니다.");
 		}
 		return updatedRow;
+	}
+
+	@Transactional
+	// 관리자 회사 업무 상세 수정 항목을 저장합니다.
+	public AdminCompanyWorkDetailVO updateAdminCompanyWorkDetail(AdminCompanyWorkDetailUpdatePO param) {
+		// 요청값을 정규화하고 필수값을 검증합니다.
+		AdminCompanyWorkDetailUpdatePO normalizedParam = normalizeDetailUpdateParam(param);
+		validateWorkStatusCode(normalizedParam.getWorkStatCd());
+
+		// 실제 업무 수정이 반영되지 않으면 요청 오류로 처리합니다.
+		int updatedCount = companyWorkMapper.updateAdminCompanyWorkDetailFields(normalizedParam);
+		if (updatedCount < 1) {
+			throw new IllegalArgumentException("업무 정보를 확인해주세요.");
+		}
+
+		// 저장 후 최신 상세 정보를 반환합니다.
+		return getRequiredAdminCompanyWorkDetail(normalizedParam.getWorkSeq());
 	}
 
 	@Transactional
@@ -197,6 +237,22 @@ public class CompanyWorkService {
 		return response;
 	}
 
+	@Transactional
+	// 관리자 회사 업무 댓글을 저장합니다.
+	public AdminCompanyWorkReplyVO saveAdminCompanyWorkReply(AdminCompanyWorkReplySavePO param) {
+		// 요청값을 정규화하고 업무 존재 여부를 확인합니다.
+		AdminCompanyWorkReplySavePO normalizedParam = normalizeReplySaveParam(param);
+		getRequiredAdminCompanyWorkDetail(normalizedParam.getWorkSeq());
+
+		// 댓글 저장 후 최신 댓글 정보를 조회해 반환합니다.
+		companyWorkMapper.insertAdminCompanyWorkReply(normalizedParam);
+		AdminCompanyWorkReplyVO savedReply = companyWorkMapper.getAdminCompanyWorkReply(normalizedParam.getReplySeq());
+		if (savedReply == null) {
+			throw new IllegalStateException("저장된 댓글 정보를 확인할 수 없습니다.");
+		}
+		return savedReply;
+	}
+
 	// 관리자 회사 업무 공통 조회 파라미터를 생성합니다.
 	private AdminCompanyWorkSearchPO createSearchParam(
 		Integer workCompanySeq,
@@ -225,6 +281,34 @@ public class CompanyWorkService {
 		return param;
 	}
 
+	// 관리자 회사 업무 상세 수정 요청값을 정규화합니다.
+	private AdminCompanyWorkDetailUpdatePO normalizeDetailUpdateParam(AdminCompanyWorkDetailUpdatePO param) {
+		// 요청 객체와 필수 업무 번호를 먼저 검증합니다.
+		if (param == null) {
+			throw new IllegalArgumentException("상세 저장 요청 정보를 확인해주세요.");
+		}
+
+		long resolvedWorkSeq = normalizeRequiredWorkSequence(param.getWorkSeq(), "업무 정보를 확인해주세요.");
+		String normalizedWorkStatCd = trimToNull(param.getWorkStatCd());
+		if (normalizedWorkStatCd == null) {
+			throw new IllegalArgumentException("업무 상태를 확인해주세요.");
+		}
+		String normalizedWorkStartDt = normalizeOptionalDate(param.getWorkStartDt(), "시작일시를 확인해주세요.");
+		String normalizedWorkEndDt = normalizeOptionalDate(param.getWorkEndDt(), "종료일시를 확인해주세요.");
+		Integer normalizedWorkTime = normalizeOptionalWorkTime(param.getWorkTime());
+		long resolvedUdtNo = normalizeRequiredUserNo(param.getUdtNo(), "로그인 사용자 정보를 확인해주세요.");
+
+		// 정규화된 상세 저장 요청값을 새 객체에 반영합니다.
+		AdminCompanyWorkDetailUpdatePO normalizedParam = new AdminCompanyWorkDetailUpdatePO();
+		normalizedParam.setWorkSeq(resolvedWorkSeq);
+		normalizedParam.setWorkStatCd(normalizedWorkStatCd);
+		normalizedParam.setWorkStartDt(normalizedWorkStartDt);
+		normalizedParam.setWorkEndDt(normalizedWorkEndDt);
+		normalizedParam.setWorkTime(normalizedWorkTime);
+		normalizedParam.setUdtNo(resolvedUdtNo);
+		return normalizedParam;
+	}
+
 	// 관리자 회사 업무 즉시 수정 요청값을 정규화합니다.
 	private AdminCompanyWorkUpdatePO normalizeUpdateParam(AdminCompanyWorkUpdatePO param) {
 		// 요청 객체와 필수 업무 번호를 먼저 검증합니다.
@@ -239,6 +323,7 @@ public class CompanyWorkService {
 		}
 		String normalizedWorkStartDt = normalizeOptionalDate(param.getWorkStartDt(), "시작일시를 확인해주세요.");
 		String normalizedWorkEndDt = normalizeOptionalDate(param.getWorkEndDt(), "종료일시를 확인해주세요.");
+		Integer normalizedWorkTime = normalizeOptionalWorkTime(param.getWorkTime());
 		String normalizedItManager = trimToNull(limitLength(trimToNull(param.getItManager()), ADMIN_COMPANY_WORK_MAX_MANAGER_NAME_LENGTH));
 		long resolvedUdtNo = normalizeRequiredUserNo(param.getUdtNo(), "로그인 사용자 정보를 확인해주세요.");
 
@@ -248,7 +333,29 @@ public class CompanyWorkService {
 		normalizedParam.setWorkStatCd(normalizedWorkStatCd);
 		normalizedParam.setWorkStartDt(normalizedWorkStartDt);
 		normalizedParam.setWorkEndDt(normalizedWorkEndDt);
+		normalizedParam.setWorkTime(normalizedWorkTime);
 		normalizedParam.setItManager(normalizedItManager);
+		normalizedParam.setUdtNo(resolvedUdtNo);
+		return normalizedParam;
+	}
+
+	// 관리자 회사 업무 댓글 등록 요청값을 정규화합니다.
+	private AdminCompanyWorkReplySavePO normalizeReplySaveParam(AdminCompanyWorkReplySavePO param) {
+		// 요청 객체와 필수값을 먼저 검증합니다.
+		if (param == null) {
+			throw new IllegalArgumentException("댓글 등록 요청 정보를 확인해주세요.");
+		}
+
+		long resolvedWorkSeq = normalizeRequiredWorkSequence(param.getWorkSeq(), "업무 정보를 확인해주세요.");
+		String normalizedReplyComment = normalizeRequiredReplyComment(param.getReplyComment());
+		long resolvedRegNo = normalizeRequiredUserNo(param.getRegNo(), "로그인 사용자 정보를 확인해주세요.");
+		long resolvedUdtNo = normalizeRequiredUserNo(param.getUdtNo(), "로그인 사용자 정보를 확인해주세요.");
+
+		// 정규화된 댓글 저장 요청값을 새 객체에 반영합니다.
+		AdminCompanyWorkReplySavePO normalizedParam = new AdminCompanyWorkReplySavePO();
+		normalizedParam.setWorkSeq(resolvedWorkSeq);
+		normalizedParam.setReplyComment(normalizedReplyComment);
+		normalizedParam.setRegNo(resolvedRegNo);
 		normalizedParam.setUdtNo(resolvedUdtNo);
 		return normalizedParam;
 	}
@@ -296,6 +403,16 @@ public class CompanyWorkService {
 			throw new IllegalArgumentException("프로젝트 정보를 확인해주세요.");
 		}
 		return companyInfo;
+	}
+
+	// 관리자 회사 업무 상세 정보를 조회하고 없으면 예외를 발생시킵니다.
+	private AdminCompanyWorkDetailVO getRequiredAdminCompanyWorkDetail(Long workSeq) {
+		// 삭제되지 않은 업무 상세가 없으면 요청 오류로 처리합니다.
+		AdminCompanyWorkDetailVO detail = companyWorkMapper.getAdminCompanyWorkDetail(workSeq);
+		if (detail == null) {
+			throw new IllegalArgumentException("업무 정보를 확인해주세요.");
+		}
+		return detail;
 	}
 
 	// 현재 구현이 지원하는 회사/플랫폼인지 확인합니다.
@@ -458,6 +575,37 @@ public class CompanyWorkService {
 		} catch (DateTimeParseException exception) {
 			throw new IllegalArgumentException(invalidMessage);
 		}
+	}
+
+	// 업무 공수시간 값을 저장 가능한 정수로 정규화합니다.
+	private Integer normalizeOptionalWorkTime(Integer workTime) {
+		// 빈 값은 null 저장을 허용하고 음수만 차단합니다.
+		if (workTime == null) {
+			return null;
+		}
+		if (workTime < 0) {
+			throw new IllegalArgumentException("업무 공수시간을 확인해주세요.");
+		}
+		return workTime;
+	}
+
+	// 댓글 HTML 문자열에서 실제 표시 텍스트가 있는지 확인한 뒤 저장값을 정규화합니다.
+	private String normalizeRequiredReplyComment(String replyComment) {
+		// Quill 빈 본문을 포함한 공백 댓글은 저장하지 않습니다.
+		String normalizedReplyComment = trimToNull(replyComment);
+		if (normalizedReplyComment == null) {
+			throw new IllegalArgumentException("댓글 내용을 입력해주세요.");
+		}
+
+		String visibleText = normalizedReplyComment
+			.replace("&nbsp;", " ")
+			.replaceAll("<[^>]*>", " ")
+			.replaceAll("\\s+", " ")
+			.trim();
+		if (visibleText.isEmpty()) {
+			throw new IllegalArgumentException("댓글 내용을 입력해주세요.");
+		}
+		return limitLength(normalizedReplyComment, ADMIN_COMPANY_WORK_MAX_REPLY_LENGTH);
 	}
 
 	// Jira ADF 본문을 여러 줄 plain text로 변환합니다.

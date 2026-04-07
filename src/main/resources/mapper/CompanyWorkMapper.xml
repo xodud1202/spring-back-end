@@ -73,6 +73,7 @@
 		     , DATE_FORMAT(J.WORK_CREATE_DT, '%Y-%m-%d %H:%i:%s') AS WORK_CREATE_DT
 		     , DATE_FORMAT(J.WORK_START_DT, '%Y-%m-%d') AS WORK_START_DT
 		     , DATE_FORMAT(J.WORK_END_DT, '%Y-%m-%d') AS WORK_END_DT
+		     , J.WORK_TIME
 		     , J.WORK_PRIOR_CD
 		     , FN_GET_CODE_NM('WORK_PRIOR', J.WORK_PRIOR_CD) AS WORK_PRIOR_NM
 		     , J.IT_MANAGER
@@ -82,6 +83,78 @@
 		  FROM WORK_COMPANY_PROJECT_JOB J
 		 WHERE J.WORK_SEQ = #{workSeq}
 		   AND J.DEL_YN = 'N'
+	</select>
+
+	<select id="getAdminCompanyWorkDetail" resultType="com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkDetailVO">
+		/* CompanyWorkMapper.getAdminCompanyWorkDetail: 관리자 회사 업무 상세 정보 조회 */
+		SELECT J.WORK_SEQ
+		     , J.WORK_COMPANY_SEQ
+		     , J.WORK_COMPANY_PROJECT_SEQ
+		     , C.WORK_COMPANY_NM
+		     , P.WORK_COMPANY_PROJECT_NM
+		     , J.WORK_STAT_CD
+		     , J.WORK_KEY
+		     , J.TITLE
+		     , J.CONTENT
+		     , DATE_FORMAT(J.WORK_CREATE_DT, '%Y-%m-%d %H:%i:%s') AS WORK_CREATE_DT
+		     , DATE_FORMAT(J.WORK_START_DT, '%Y-%m-%d') AS WORK_START_DT
+		     , DATE_FORMAT(J.WORK_END_DT, '%Y-%m-%d') AS WORK_END_DT
+		     , J.WORK_TIME
+		     , J.WORK_PRIOR_CD
+		     , FN_GET_CODE_NM('WORK_PRIOR', J.WORK_PRIOR_CD) AS WORK_PRIOR_NM
+		     , J.IT_MANAGER
+		     , J.CO_MANAGER
+		     , DATE_FORMAT(J.REG_DT, '%Y-%m-%d %H:%i:%s') AS REG_DT
+		     , DATE_FORMAT(J.UDT_DT, '%Y-%m-%d %H:%i:%s') AS UDT_DT
+		  FROM WORK_COMPANY_PROJECT_JOB J
+		  JOIN WORK_COMPANY_INFO C
+		    ON C.WORK_COMPANY_SEQ = J.WORK_COMPANY_SEQ
+		  JOIN WORK_COMPANY_PROJECT_INFO P
+		    ON P.WORK_COMPANY_PROJECT_SEQ = J.WORK_COMPANY_PROJECT_SEQ
+		   AND P.WORK_COMPANY_SEQ = J.WORK_COMPANY_SEQ
+		 WHERE J.WORK_SEQ = #{workSeq}
+		   AND J.DEL_YN = 'N'
+	</select>
+
+	<select id="getAdminCompanyWorkFileList" resultType="com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkFileVO">
+		/* CompanyWorkMapper.getAdminCompanyWorkFileList: 관리자 회사 업무 첨부파일 목록 조회 */
+		SELECT WORK_JOB_FILE_SEQ
+		     , WORK_SEQ
+		     , WORK_JOB_FILE_NM
+		     , WORK_JOB_FILE_URL
+		     , DATE_FORMAT(REG_DT, '%Y-%m-%d %H:%i:%s') AS REG_DT
+		     , DATE_FORMAT(UDT_DT, '%Y-%m-%d %H:%i:%s') AS UDT_DT
+		  FROM WORK_COMPANY_PROJECT_JOB_FILE
+		 WHERE WORK_SEQ = #{workSeq}
+		   AND DEL_YN = 'N'
+		 ORDER BY WORK_JOB_FILE_SEQ ASC
+	</select>
+
+	<select id="getAdminCompanyWorkReplyList" resultType="com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyVO">
+		/* CompanyWorkMapper.getAdminCompanyWorkReplyList: 관리자 회사 업무 댓글 목록 조회 */
+		SELECT REPLY_SEQ
+		     , WORK_SEQ
+		     , REPLY_COMMENT
+		     , REG_NO
+		     , DATE_FORMAT(REG_DT, '%Y-%m-%d %H:%i:%s') AS REG_DT
+		     , DATE_FORMAT(UDT_DT, '%Y-%m-%d %H:%i:%s') AS UDT_DT
+		  FROM WORK_COMPANY_PROJECT_JOB_REPLY
+		 WHERE WORK_SEQ = #{workSeq}
+		   AND DEL_YN = 'N'
+		 ORDER BY REG_DT DESC, REPLY_SEQ DESC
+	</select>
+
+	<select id="getAdminCompanyWorkReply" resultType="com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyVO">
+		/* CompanyWorkMapper.getAdminCompanyWorkReply: 관리자 회사 업무 댓글 단건 조회 */
+		SELECT REPLY_SEQ
+		     , WORK_SEQ
+		     , REPLY_COMMENT
+		     , REG_NO
+		     , DATE_FORMAT(REG_DT, '%Y-%m-%d %H:%i:%s') AS REG_DT
+		     , DATE_FORMAT(UDT_DT, '%Y-%m-%d %H:%i:%s') AS UDT_DT
+		  FROM WORK_COMPANY_PROJECT_JOB_REPLY
+		 WHERE REPLY_SEQ = #{replySeq}
+		   AND DEL_YN = 'N'
 	</select>
 
 	<select id="getAdminCompanyWorkStatusList" resultType="com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkListRowVO">
@@ -95,6 +168,7 @@
 		     , DATE_FORMAT(J.WORK_CREATE_DT, '%Y-%m-%d %H:%i:%s') AS WORK_CREATE_DT
 		     , DATE_FORMAT(J.WORK_START_DT, '%Y-%m-%d') AS WORK_START_DT
 		     , DATE_FORMAT(J.WORK_END_DT, '%Y-%m-%d') AS WORK_END_DT
+		     , J.WORK_TIME
 		     , J.WORK_PRIOR_CD
 		     , FN_GET_CODE_NM('WORK_PRIOR', J.WORK_PRIOR_CD) AS WORK_PRIOR_NM
 		     , J.IT_MANAGER
@@ -122,6 +196,7 @@
 		     , DATE_FORMAT(J.WORK_CREATE_DT, '%Y-%m-%d %H:%i:%s') AS WORK_CREATE_DT
 		     , DATE_FORMAT(J.WORK_START_DT, '%Y-%m-%d') AS WORK_START_DT
 		     , DATE_FORMAT(J.WORK_END_DT, '%Y-%m-%d') AS WORK_END_DT
+		     , J.WORK_TIME
 		     , J.WORK_PRIOR_CD
 		     , FN_GET_CODE_NM('WORK_PRIOR', J.WORK_PRIOR_CD) AS WORK_PRIOR_NM
 		     , J.IT_MANAGER
@@ -216,10 +291,74 @@
 		           NULL
 		         </otherwise>
 		       </choose>
+		     , WORK_TIME =
+		       <choose>
+		         <when test="workTime != null">
+		           #{workTime}
+		         </when>
+		         <otherwise>
+		           NULL
+		         </otherwise>
+		       </choose>
 		     , IT_MANAGER = #{itManager}
 		     , UDT_NO = #{udtNo}
 		     , UDT_DT = NOW()
 		 WHERE WORK_SEQ = #{workSeq}
 		   AND DEL_YN = 'N'
 	</update>
+
+	<update id="updateAdminCompanyWorkDetailFields">
+		/* CompanyWorkMapper.updateAdminCompanyWorkDetailFields: 관리자 회사 업무 상세 수정 항목 저장 */
+		UPDATE WORK_COMPANY_PROJECT_JOB
+		   SET WORK_CREATE_DT = WORK_CREATE_DT
+		     , WORK_STAT_CD = #{workStatCd}
+		     , WORK_START_DT =
+		       <choose>
+		         <when test="workStartDt != null and workStartDt != ''">
+		           STR_TO_DATE(#{workStartDt}, '%Y-%m-%d')
+		         </when>
+		         <otherwise>
+		           NULL
+		         </otherwise>
+		       </choose>
+		     , WORK_END_DT =
+		       <choose>
+		         <when test="workEndDt != null and workEndDt != ''">
+		           STR_TO_DATE(#{workEndDt}, '%Y-%m-%d')
+		         </when>
+		         <otherwise>
+		           NULL
+		         </otherwise>
+		       </choose>
+		     , WORK_TIME =
+		       <choose>
+		         <when test="workTime != null">
+		           #{workTime}
+		         </when>
+		         <otherwise>
+		           NULL
+		         </otherwise>
+		       </choose>
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE WORK_SEQ = #{workSeq}
+		   AND DEL_YN = 'N'
+	</update>
+
+	<insert id="insertAdminCompanyWorkReply" useGeneratedKeys="true" keyProperty="replySeq" keyColumn="REPLY_SEQ">
+		/* CompanyWorkMapper.insertAdminCompanyWorkReply: 관리자 회사 업무 댓글 저장 */
+		INSERT INTO WORK_COMPANY_PROJECT_JOB_REPLY (
+		       WORK_SEQ
+		     , REPLY_COMMENT
+		     , DEL_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{workSeq}
+		     , #{replyComment}
+		     , 'N'
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
 </mapper>

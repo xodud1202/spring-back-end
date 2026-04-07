@@ -3,6 +3,11 @@ package com.xodud1202.springbackend.mapper;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportCompanyInfoVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportFileSavePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportJobSavePO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkDetailUpdatePO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkDetailVO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkFileVO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplySavePO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkUpdatePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkCompanyVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkListRowVO;
@@ -34,6 +39,18 @@ public interface CompanyWorkMapper {
 	// 관리자 회사 업무 단건 행 정보를 조회합니다.
 	AdminCompanyWorkListRowVO getAdminCompanyWorkRow(@Param("workSeq") Long workSeq);
 
+	// 관리자 회사 업무 상세 정보를 조회합니다.
+	AdminCompanyWorkDetailVO getAdminCompanyWorkDetail(@Param("workSeq") Long workSeq);
+
+	// 관리자 회사 업무 첨부파일 목록을 조회합니다.
+	List<AdminCompanyWorkFileVO> getAdminCompanyWorkFileList(@Param("workSeq") Long workSeq);
+
+	// 관리자 회사 업무 댓글 목록을 조회합니다.
+	List<AdminCompanyWorkReplyVO> getAdminCompanyWorkReplyList(@Param("workSeq") Long workSeq);
+
+	// 관리자 회사 업무 댓글 단건을 조회합니다.
+	AdminCompanyWorkReplyVO getAdminCompanyWorkReply(@Param("replySeq") Long replySeq);
+
 	// 관리자 회사 업무 가져오기 대상 회사 정보를 조회합니다.
 	AdminCompanyWorkImportCompanyInfoVO getAdminCompanyWorkImportCompanyInfo(@Param("workCompanySeq") Integer workCompanySeq);
 
@@ -58,4 +75,10 @@ public interface CompanyWorkMapper {
 
 	// 관리자 회사 업무 즉시 수정 가능 항목을 저장합니다.
 	int updateAdminCompanyWorkEditableFields(AdminCompanyWorkUpdatePO param);
+
+	// 관리자 회사 업무 상세 수정 항목을 저장합니다.
+	int updateAdminCompanyWorkDetailFields(AdminCompanyWorkDetailUpdatePO param);
+
+	// 관리자 회사 업무 댓글을 저장합니다.
+	int insertAdminCompanyWorkReply(AdminCompanyWorkReplySavePO param);
 }
