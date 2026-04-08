@@ -14,6 +14,16 @@
 		</if>
 	</sql>
 
+	<sql id="adminCompanyWorkReplyCountColumn">
+		/* CompanyWorkMapper.adminCompanyWorkReplyCountColumn: 관리자 회사 업무 댓글 건수 컬럼 */
+		(
+			SELECT COUNT(1)
+			  FROM WORK_COMPANY_PROJECT_JOB_REPLY R
+			 WHERE R.WORK_SEQ = J.WORK_SEQ
+			   AND R.DEL_YN = 'N'
+		) AS REPLY_COUNT
+	</sql>
+
 	<select id="getAdminCompanyWorkCompanyList" resultType="com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkCompanyVO">
 		/* CompanyWorkMapper.getAdminCompanyWorkCompanyList: 관리자 회사 업무 회사 목록 조회 */
 		SELECT WORK_COMPANY_SEQ
@@ -70,6 +80,7 @@
 		     , J.WORK_STAT_CD
 		     , J.WORK_KEY
 		     , J.TITLE
+		     , <include refid="adminCompanyWorkReplyCountColumn" />
 		     , DATE_FORMAT(J.WORK_CREATE_DT, '%Y-%m-%d %H:%i:%s') AS WORK_CREATE_DT
 		     , DATE_FORMAT(J.WORK_START_DT, '%Y-%m-%d') AS WORK_START_DT
 		     , DATE_FORMAT(J.WORK_END_DT, '%Y-%m-%d') AS WORK_END_DT
@@ -95,6 +106,7 @@
 		     , J.WORK_STAT_CD
 		     , J.WORK_KEY
 		     , J.TITLE
+		     , <include refid="adminCompanyWorkReplyCountColumn" />
 		     , J.CONTENT
 		     , DATE_FORMAT(J.WORK_CREATE_DT, '%Y-%m-%d %H:%i:%s') AS WORK_CREATE_DT
 		     , DATE_FORMAT(J.WORK_START_DT, '%Y-%m-%d') AS WORK_START_DT
@@ -212,6 +224,7 @@
 		     , J.WORK_STAT_CD
 		     , J.WORK_KEY
 		     , J.TITLE
+		     , <include refid="adminCompanyWorkReplyCountColumn" />
 		     , DATE_FORMAT(J.WORK_CREATE_DT, '%Y-%m-%d %H:%i:%s') AS WORK_CREATE_DT
 		     , DATE_FORMAT(J.WORK_START_DT, '%Y-%m-%d') AS WORK_START_DT
 		     , DATE_FORMAT(J.WORK_END_DT, '%Y-%m-%d') AS WORK_END_DT
@@ -240,6 +253,7 @@
 		     , J.WORK_STAT_CD
 		     , J.WORK_KEY
 		     , J.TITLE
+		     , <include refid="adminCompanyWorkReplyCountColumn" />
 		     , DATE_FORMAT(J.WORK_CREATE_DT, '%Y-%m-%d %H:%i:%s') AS WORK_CREATE_DT
 		     , DATE_FORMAT(J.WORK_START_DT, '%Y-%m-%d') AS WORK_START_DT
 		     , DATE_FORMAT(J.WORK_END_DT, '%Y-%m-%d') AS WORK_END_DT

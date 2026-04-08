@@ -131,6 +131,21 @@ public class AdminCompanyWorkController {
 		}
 	}
 
+	// 관리자 회사 업무 댓글 전용 목록을 조회합니다.
+	@GetMapping("/api/admin/company/work/reply/list")
+	public ResponseEntity<Object> getAdminCompanyWorkReplyList(
+		@RequestParam(required = false) Long workSeq
+	) {
+		try {
+			// 선택 업무 기준 댓글 목록만 조회해 반환합니다.
+			List<AdminCompanyWorkReplyVO> response = companyWorkService.getAdminCompanyWorkReplyList(workSeq);
+			return ResponseEntity.ok(response);
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		}
+	}
+
 	// 관리자 회사 업무 Jira 이슈를 가져와 저장합니다.
 	@PostMapping("/api/admin/company/work/import")
 	public ResponseEntity<Object> importAdminCompanyWork(@RequestBody AdminCompanyWorkImportPO param) {

@@ -57,7 +57,7 @@ import java.util.Map;
 // 관리자 회사 업무 조회 비즈니스 로직을 처리합니다.
 public class CompanyWorkService {
 	private static final int ADMIN_COMPANY_WORK_DEFAULT_PAGE = 1;
-	private static final int ADMIN_COMPANY_WORK_DEFAULT_PAGE_SIZE = 20;
+	private static final int ADMIN_COMPANY_WORK_DEFAULT_PAGE_SIZE = 10;
 	private static final int ADMIN_COMPANY_WORK_MAX_PAGE_SIZE = 200;
 	private static final int ADMIN_COMPANY_WORK_MAX_WORK_KEY_LENGTH = 50;
 	private static final int ADMIN_COMPANY_WORK_MAX_TITLE_LENGTH = 255;
@@ -178,6 +178,18 @@ public class CompanyWorkService {
 		response.setFileList(fileList == null ? List.of() : fileList);
 		response.setReplyList(applyReplyFileList(replyList, replyFileList));
 		return response;
+	}
+
+	// 관리자 회사 업무 댓글 전용 목록을 조회합니다.
+	public List<AdminCompanyWorkReplyVO> getAdminCompanyWorkReplyList(Long workSeq) {
+		// 선택 업무 번호를 검증하고 대상 업무 존재 여부를 먼저 확인합니다.
+		long resolvedWorkSeq = normalizeRequiredWorkSequence(workSeq, "업무 정보를 확인해주세요.");
+		getRequiredAdminCompanyWorkDetail(resolvedWorkSeq);
+
+		// 댓글 목록과 댓글 첨부파일 목록을 함께 조회해 댓글별 첨부를 매핑합니다.
+		List<AdminCompanyWorkReplyVO> replyList = companyWorkMapper.getAdminCompanyWorkReplyList(resolvedWorkSeq);
+		List<AdminCompanyWorkReplyFileVO> replyFileList = companyWorkMapper.getAdminCompanyWorkReplyFileList(resolvedWorkSeq);
+		return applyReplyFileList(replyList, replyFileList);
 	}
 
 	@Transactional

@@ -21,6 +21,8 @@ public class AdminCompanyWorkDetailVO {
 	private String workKey;
 	// 업무 타이틀입니다.
 	private String title;
+	// 댓글 개수입니다.
+	private Integer replyCount;
 	// 업무 본문입니다.
 	private String content;
 	// 업무 생성 일시입니다.
