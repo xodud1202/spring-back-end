@@ -657,6 +657,7 @@ public class CompanyWorkService {
 					),
 					ADMIN_COMPANY_WORK_MAX_FILE_URL_LENGTH
 				);
+				uploadedFileUrlList.add(uploadedFileUrl);
 
 				AdminCompanyWorkReplyFileSavePO fileSaveParam = new AdminCompanyWorkReplyFileSavePO();
 				fileSaveParam.setReplySeq(replySeq);
@@ -667,7 +668,6 @@ public class CompanyWorkService {
 				fileSaveParam.setRegNo(regNo);
 				fileSaveParam.setUdtNo(udtNo);
 				companyWorkMapper.insertAdminCompanyWorkReplyFile(fileSaveParam);
-				uploadedFileUrlList.add(uploadedFileUrl);
 			}
 		} catch (IllegalArgumentException exception) {
 			// 사용자 교정이 가능한 오류가 나면 업로드된 파일만 정리하고 그대로 전달합니다.

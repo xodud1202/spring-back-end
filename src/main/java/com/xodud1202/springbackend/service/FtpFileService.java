@@ -462,8 +462,8 @@ public class FtpFileService {
 			ftpClient.enterLocalPassiveMode();
 			ftpClient.setFileType(FTP.BINARY_FILE_TYPE);
 
-			// 업로드 경로 이동
-			ftpClient.changeWorkingDirectory(targetPath);
+			// 업로드 기본 경로가 없으면 생성하고, 있으면 해당 경로로 이동합니다.
+			changeOrCreateDirectories(ftpClient, targetPath);
 
 			// 하위 폴더 생성/이동
 			for (String subDir : subDirs) {
