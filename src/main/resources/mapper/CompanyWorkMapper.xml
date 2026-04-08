@@ -144,6 +144,22 @@
 		 ORDER BY REG_DT DESC, REPLY_SEQ DESC
 	</select>
 
+	<select id="getAdminCompanyWorkReplyFileList" resultType="com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyFileVO">
+		/* CompanyWorkMapper.getAdminCompanyWorkReplyFileList: 관리자 회사 업무 댓글 첨부파일 목록 조회 */
+		SELECT REPLY_FILE_SEQ
+		     , REPLY_SEQ
+		     , WORK_SEQ
+		     , REPLY_FILE_NM
+		     , REPLY_FILE_URL
+		     , REPLY_FILE_SIZE
+		     , DATE_FORMAT(REG_DT, '%Y-%m-%d %H:%i:%s') AS REG_DT
+		     , DATE_FORMAT(UDT_DT, '%Y-%m-%d %H:%i:%s') AS UDT_DT
+		  FROM WORK_COMPANY_PROJECT_JOB_REPLY_FILE
+		 WHERE WORK_SEQ = #{workSeq}
+		   AND DEL_YN = 'N'
+		 ORDER BY REPLY_SEQ DESC, REPLY_FILE_SEQ ASC
+	</select>
+
 	<select id="getAdminCompanyWorkReply" resultType="com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyVO">
 		/* CompanyWorkMapper.getAdminCompanyWorkReply: 관리자 회사 업무 댓글 단건 조회 */
 		SELECT REPLY_SEQ
@@ -154,6 +170,37 @@
 		     , DATE_FORMAT(UDT_DT, '%Y-%m-%d %H:%i:%s') AS UDT_DT
 		  FROM WORK_COMPANY_PROJECT_JOB_REPLY
 		 WHERE REPLY_SEQ = #{replySeq}
+		   AND DEL_YN = 'N'
+	</select>
+
+	<select id="getAdminCompanyWorkReplyFileListByReplySeq" resultType="com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyFileVO">
+		/* CompanyWorkMapper.getAdminCompanyWorkReplyFileListByReplySeq: 관리자 회사 업무 댓글 첨부파일 목록 조회 */
+		SELECT REPLY_FILE_SEQ
+		     , REPLY_SEQ
+		     , WORK_SEQ
+		     , REPLY_FILE_NM
+		     , REPLY_FILE_URL
+		     , REPLY_FILE_SIZE
+		     , DATE_FORMAT(REG_DT, '%Y-%m-%d %H:%i:%s') AS REG_DT
+		     , DATE_FORMAT(UDT_DT, '%Y-%m-%d %H:%i:%s') AS UDT_DT
+		  FROM WORK_COMPANY_PROJECT_JOB_REPLY_FILE
+		 WHERE REPLY_SEQ = #{replySeq}
+		   AND DEL_YN = 'N'
+		 ORDER BY REPLY_FILE_SEQ ASC
+	</select>
+
+	<select id="getAdminCompanyWorkReplyFile" resultType="com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyFileVO">
+		/* CompanyWorkMapper.getAdminCompanyWorkReplyFile: 관리자 회사 업무 댓글 첨부파일 단건 조회 */
+		SELECT REPLY_FILE_SEQ
+		     , REPLY_SEQ
+		     , WORK_SEQ
+		     , REPLY_FILE_NM
+		     , REPLY_FILE_URL
+		     , REPLY_FILE_SIZE
+		     , DATE_FORMAT(REG_DT, '%Y-%m-%d %H:%i:%s') AS REG_DT
+		     , DATE_FORMAT(UDT_DT, '%Y-%m-%d %H:%i:%s') AS UDT_DT
+		  FROM WORK_COMPANY_PROJECT_JOB_REPLY_FILE
+		 WHERE REPLY_FILE_SEQ = #{replyFileSeq}
 		   AND DEL_YN = 'N'
 	</select>
 
@@ -361,4 +408,75 @@
 		     , #{udtNo}
 		)
 	</insert>
+
+	<update id="updateAdminCompanyWorkReply">
+		/* CompanyWorkMapper.updateAdminCompanyWorkReply: 관리자 회사 업무 댓글 수정 */
+		UPDATE WORK_COMPANY_PROJECT_JOB_REPLY
+		   SET REPLY_COMMENT = #{replyComment}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE REPLY_SEQ = #{replySeq}
+		   AND WORK_SEQ = #{workSeq}
+		   AND DEL_YN = 'N'
+	</update>
+
+	<update id="softDeleteAdminCompanyWorkReply">
+		/* CompanyWorkMapper.softDeleteAdminCompanyWorkReply: 관리자 회사 업무 댓글 삭제 처리 */
+		UPDATE WORK_COMPANY_PROJECT_JOB_REPLY
+		   SET DEL_YN = 'Y'
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE REPLY_SEQ = #{replySeq}
+		   AND WORK_SEQ = #{workSeq}
+		   AND DEL_YN = 'N'
+	</update>
+
+	<insert id="insertAdminCompanyWorkReplyFile" useGeneratedKeys="true" keyProperty="replyFileSeq" keyColumn="REPLY_FILE_SEQ">
+		/* CompanyWorkMapper.insertAdminCompanyWorkReplyFile: 관리자 회사 업무 댓글 첨부파일 저장 */
+		INSERT INTO WORK_COMPANY_PROJECT_JOB_REPLY_FILE (
+		       REPLY_SEQ
+		     , WORK_SEQ
+		     , REPLY_FILE_NM
+		     , REPLY_FILE_URL
+		     , REPLY_FILE_SIZE
+		     , DEL_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{replySeq}
+		     , #{workSeq}
+		     , #{replyFileNm}
+		     , #{replyFileUrl}
+		     , #{replyFileSize}
+		     , 'N'
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+
+	<update id="softDeleteAdminCompanyWorkReplyFiles">
+		/* CompanyWorkMapper.softDeleteAdminCompanyWorkReplyFiles: 관리자 회사 업무 댓글 첨부파일 선택 삭제 처리 */
+		UPDATE WORK_COMPANY_PROJECT_JOB_REPLY_FILE
+		   SET DEL_YN = 'Y'
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE REPLY_SEQ = #{replySeq}
+		   AND WORK_SEQ = #{workSeq}
+		   AND DEL_YN = 'N'
+		   AND REPLY_FILE_SEQ IN
+		   <foreach collection="replyFileSeqList" item="replyFileSeq" open="(" separator="," close=")">
+		     #{replyFileSeq}
+		   </foreach>
+	</update>
+
+	<update id="softDeleteAdminCompanyWorkReplyFileList">
+		/* CompanyWorkMapper.softDeleteAdminCompanyWorkReplyFileList: 관리자 회사 업무 댓글 첨부파일 전체 삭제 처리 */
+		UPDATE WORK_COMPANY_PROJECT_JOB_REPLY_FILE
+		   SET DEL_YN = 'Y'
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE REPLY_SEQ = #{replySeq}
+		   AND WORK_SEQ = #{workSeq}
+		   AND DEL_YN = 'N'
+	</update>
 </mapper>

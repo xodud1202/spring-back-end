@@ -10,7 +10,12 @@ import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImpo
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportJobSavePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportPO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportResponseVO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyFileDownloadVO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyFileSavePO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyFileVO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyDeletePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplySavePO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyUpdatePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkUpdatePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkCompanyVO;
@@ -21,11 +26,18 @@ import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkSear
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkStatusListResponseVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkStatusSectionVO;
 import com.xodud1202.springbackend.domain.common.CommonCodeVO;
+import com.xodud1202.springbackend.domain.common.FtpProperties;
+import com.xodud1202.springbackend.entity.UserBaseEntity;
 import com.xodud1202.springbackend.mapper.CommonMapper;
 import com.xodud1202.springbackend.mapper.CompanyWorkMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -33,10 +45,13 @@ import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 // 관리자 회사 업무 조회 비즈니스 로직을 처리합니다.
@@ -66,6 +81,8 @@ public class CompanyWorkService {
 	private final CompanyWorkMapper companyWorkMapper;
 	private final CommonMapper commonMapper;
 	private final DiningBrandsGroupJiraApiClient diningBrandsGroupJiraApiClient;
+	private final FtpFileService ftpFileService;
+	private final FtpProperties ftpProperties;
 
 	// 관리자 회사 업무 회사 목록을 조회합니다.
 	public List<AdminCompanyWorkCompanyVO> getAdminCompanyWorkCompanyList() {
@@ -153,12 +170,13 @@ public class CompanyWorkService {
 		AdminCompanyWorkDetailVO detail = getRequiredAdminCompanyWorkDetail(resolvedWorkSeq);
 		List<AdminCompanyWorkFileVO> fileList = companyWorkMapper.getAdminCompanyWorkFileList(resolvedWorkSeq);
 		List<AdminCompanyWorkReplyVO> replyList = companyWorkMapper.getAdminCompanyWorkReplyList(resolvedWorkSeq);
+		List<AdminCompanyWorkReplyFileVO> replyFileList = companyWorkMapper.getAdminCompanyWorkReplyFileList(resolvedWorkSeq);
 
 		// 상세 팝업 응답 구조로 묶어서 반환합니다.
 		AdminCompanyWorkDetailResponseVO response = new AdminCompanyWorkDetailResponseVO();
 		response.setDetail(detail);
 		response.setFileList(fileList == null ? List.of() : fileList);
-		response.setReplyList(replyList == null ? List.of() : replyList);
+		response.setReplyList(applyReplyFileList(replyList, replyFileList));
 		return response;
 	}
 
@@ -240,17 +258,131 @@ public class CompanyWorkService {
 	@Transactional
 	// 관리자 회사 업무 댓글을 저장합니다.
 	public AdminCompanyWorkReplyVO saveAdminCompanyWorkReply(AdminCompanyWorkReplySavePO param) {
+		// 기존 JSON 저장 경로도 멀티파트 저장 로직을 재사용합니다.
+		return saveAdminCompanyWorkReply(param, null);
+	}
+
+	@Transactional
+	// 관리자 회사 업무 댓글과 첨부파일을 함께 저장합니다.
+	public AdminCompanyWorkReplyVO saveAdminCompanyWorkReply(
+		AdminCompanyWorkReplySavePO param,
+		List<MultipartFile> files
+	) {
 		// 요청값을 정규화하고 업무 존재 여부를 확인합니다.
 		AdminCompanyWorkReplySavePO normalizedParam = normalizeReplySaveParam(param);
+		validateReplySaveRequester(normalizedParam.getRegNo(), normalizedParam.getUdtNo());
+		List<MultipartFile> normalizedFileList = normalizeReplyFileList(files);
+		validateReplySaveContent(normalizedParam.getReplyComment(), normalizedFileList);
 		getRequiredAdminCompanyWorkDetail(normalizedParam.getWorkSeq());
 
-		// 댓글 저장 후 최신 댓글 정보를 조회해 반환합니다.
+		// 댓글 저장 후 첨부파일 메타까지 저장하고 최신 댓글 정보를 조회해 반환합니다.
 		companyWorkMapper.insertAdminCompanyWorkReply(normalizedParam);
-		AdminCompanyWorkReplyVO savedReply = companyWorkMapper.getAdminCompanyWorkReply(normalizedParam.getReplySeq());
-		if (savedReply == null) {
-			throw new IllegalStateException("저장된 댓글 정보를 확인할 수 없습니다.");
+		saveReplyFileList(
+			normalizedParam.getWorkSeq(),
+			normalizedParam.getReplySeq(),
+			normalizedParam.getRegNo(),
+			normalizedParam.getUdtNo(),
+			normalizedFileList
+		);
+		return getRequiredAdminCompanyWorkReply(normalizedParam.getReplySeq());
+	}
+
+	@Transactional
+	// 관리자 회사 업무 댓글과 첨부파일을 함께 수정합니다.
+	public AdminCompanyWorkReplyVO updateAdminCompanyWorkReply(
+		AdminCompanyWorkReplyUpdatePO param,
+		List<MultipartFile> files
+	) {
+		// 요청값과 작성자 권한과 첨부 삭제 대상을 함께 검증합니다.
+		AdminCompanyWorkReplyUpdatePO normalizedParam = normalizeReplyUpdateParam(param);
+		validateReplyUpdateRequester(normalizedParam.getUdtNo());
+		getRequiredAdminCompanyWorkDetail(normalizedParam.getWorkSeq());
+		AdminCompanyWorkReplyVO currentReply = getAuthorizedAdminCompanyWorkReply(
+			normalizedParam.getReplySeq(),
+			normalizedParam.getWorkSeq()
+		);
+		List<MultipartFile> normalizedFileList = normalizeReplyFileList(files);
+		List<AdminCompanyWorkReplyFileVO> currentReplyFileList = companyWorkMapper.getAdminCompanyWorkReplyFileListByReplySeq(normalizedParam.getReplySeq());
+		List<Integer> deleteReplyFileSeqList = normalizeDeleteReplyFileSeqList(
+			normalizedParam.getDeleteReplyFileSeqList(),
+			currentReplyFileList
+		);
+		validateReplyUpdateContent(
+			normalizedParam.getReplyComment(),
+			(currentReplyFileList == null ? 0 : currentReplyFileList.size()) - deleteReplyFileSeqList.size(),
+			normalizedFileList
+		);
+		normalizedParam.setDeleteReplyFileSeqList(deleteReplyFileSeqList);
+
+		// 댓글 본문과 삭제 대상 첨부를 반영한 뒤 신규 첨부를 저장합니다.
+		int updatedCount = companyWorkMapper.updateAdminCompanyWorkReply(normalizedParam);
+		if (updatedCount < 1) {
+			throw new IllegalStateException("댓글 수정 중 오류가 발생했습니다.");
 		}
-		return savedReply;
+		if (!deleteReplyFileSeqList.isEmpty()) {
+			companyWorkMapper.softDeleteAdminCompanyWorkReplyFiles(
+				normalizedParam.getReplySeq(),
+				normalizedParam.getWorkSeq(),
+				deleteReplyFileSeqList,
+				normalizedParam.getUdtNo()
+			);
+		}
+		saveReplyFileList(
+			normalizedParam.getWorkSeq(),
+			normalizedParam.getReplySeq(),
+			currentReply.getRegNo(),
+			normalizedParam.getUdtNo(),
+			normalizedFileList
+		);
+		return getRequiredAdminCompanyWorkReply(normalizedParam.getReplySeq());
+	}
+
+	@Transactional
+	// 관리자 회사 업무 댓글을 삭제 처리합니다.
+	public void deleteAdminCompanyWorkReply(AdminCompanyWorkReplyDeletePO param) {
+		// 요청값과 작성자 권한을 검증한 뒤 댓글과 첨부를 함께 숨김 처리합니다.
+		AdminCompanyWorkReplyDeletePO normalizedParam = normalizeReplyDeleteParam(param);
+		validateReplyUpdateRequester(normalizedParam.getUdtNo());
+		getRequiredAdminCompanyWorkDetail(normalizedParam.getWorkSeq());
+		getAuthorizedAdminCompanyWorkReply(normalizedParam.getReplySeq(), normalizedParam.getWorkSeq());
+
+		int deletedReplyCount = companyWorkMapper.softDeleteAdminCompanyWorkReply(normalizedParam);
+		if (deletedReplyCount < 1) {
+			throw new IllegalStateException("댓글 삭제 중 오류가 발생했습니다.");
+		}
+		companyWorkMapper.softDeleteAdminCompanyWorkReplyFileList(
+			normalizedParam.getReplySeq(),
+			normalizedParam.getWorkSeq(),
+			normalizedParam.getUdtNo()
+		);
+	}
+
+	// 관리자 회사 업무 댓글 첨부파일을 다운로드합니다.
+	public AdminCompanyWorkReplyFileDownloadVO downloadAdminCompanyWorkReplyFile(Integer replyFileSeq) {
+		// 요청 댓글 첨부파일 번호를 검증하고 메타를 조회합니다.
+		int resolvedReplyFileSeq = normalizeRequiredSequence(replyFileSeq, "댓글 첨부파일 정보를 확인해주세요.");
+		AdminCompanyWorkReplyFileVO replyFile = companyWorkMapper.getAdminCompanyWorkReplyFile(resolvedReplyFileSeq);
+		if (replyFile == null) {
+			throw new IllegalArgumentException("댓글 첨부파일 정보를 확인해주세요.");
+		}
+
+		// 저장 URL을 기준으로 공개 파일을 다운로드하고 응답 구조로 반환합니다.
+		try {
+			String replyFileUrl = trimToNull(replyFile.getReplyFileUrl());
+			String replyFileViewBase = trimToNull(ftpProperties.getUploadCompanyWorkReplyView());
+			if (replyFileViewBase == null || replyFileUrl == null || !replyFileUrl.startsWith(replyFileViewBase)) {
+				throw new IllegalStateException("댓글 첨부파일 URL을 확인할 수 없습니다.");
+			}
+
+			AdminCompanyWorkReplyFileDownloadVO response = new AdminCompanyWorkReplyFileDownloadVO();
+			response.setReplyFileNm(safeValue(replyFile.getReplyFileNm()));
+			response.setFileData(ftpFileService.downloadFileFromUrl(replyFileUrl));
+			return response;
+		} catch (IllegalStateException exception) {
+			throw exception;
+		} catch (Exception exception) {
+			throw new IllegalStateException("댓글 첨부파일 다운로드 중 오류가 발생했습니다.", exception);
+		}
 	}
 
 	// 관리자 회사 업무 공통 조회 파라미터를 생성합니다.
@@ -347,7 +479,7 @@ public class CompanyWorkService {
 		}
 
 		long resolvedWorkSeq = normalizeRequiredWorkSequence(param.getWorkSeq(), "업무 정보를 확인해주세요.");
-		String normalizedReplyComment = normalizeRequiredReplyComment(param.getReplyComment());
+		String normalizedReplyComment = normalizeOptionalReplyComment(param.getReplyComment());
 		long resolvedRegNo = normalizeRequiredUserNo(param.getRegNo(), "로그인 사용자 정보를 확인해주세요.");
 		long resolvedUdtNo = normalizeRequiredUserNo(param.getUdtNo(), "로그인 사용자 정보를 확인해주세요.");
 
@@ -358,6 +490,235 @@ public class CompanyWorkService {
 		normalizedParam.setRegNo(resolvedRegNo);
 		normalizedParam.setUdtNo(resolvedUdtNo);
 		return normalizedParam;
+	}
+
+	// 관리자 회사 업무 댓글 수정 요청값을 정규화합니다.
+	private AdminCompanyWorkReplyUpdatePO normalizeReplyUpdateParam(AdminCompanyWorkReplyUpdatePO param) {
+		// 요청 객체와 필수값을 먼저 검증합니다.
+		if (param == null) {
+			throw new IllegalArgumentException("댓글 수정 요청 정보를 확인해주세요.");
+		}
+
+		long resolvedReplySeq = normalizeRequiredWorkSequence(param.getReplySeq(), "댓글 정보를 확인해주세요.");
+		long resolvedWorkSeq = normalizeRequiredWorkSequence(param.getWorkSeq(), "업무 정보를 확인해주세요.");
+		String normalizedReplyComment = normalizeOptionalReplyComment(param.getReplyComment());
+		long resolvedUdtNo = normalizeRequiredUserNo(param.getUdtNo(), "로그인 사용자 정보를 확인해주세요.");
+
+		// 정규화된 댓글 수정 요청값을 새 객체에 반영합니다.
+		AdminCompanyWorkReplyUpdatePO normalizedParam = new AdminCompanyWorkReplyUpdatePO();
+		normalizedParam.setReplySeq(resolvedReplySeq);
+		normalizedParam.setWorkSeq(resolvedWorkSeq);
+		normalizedParam.setReplyComment(normalizedReplyComment);
+		normalizedParam.setDeleteReplyFileSeqList(
+			param.getDeleteReplyFileSeqList() == null ? List.of() : new ArrayList<>(param.getDeleteReplyFileSeqList())
+		);
+		normalizedParam.setUdtNo(resolvedUdtNo);
+		return normalizedParam;
+	}
+
+	// 관리자 회사 업무 댓글 삭제 요청값을 정규화합니다.
+	private AdminCompanyWorkReplyDeletePO normalizeReplyDeleteParam(AdminCompanyWorkReplyDeletePO param) {
+		// 요청 객체와 필수값을 먼저 검증합니다.
+		if (param == null) {
+			throw new IllegalArgumentException("댓글 삭제 요청 정보를 확인해주세요.");
+		}
+
+		long resolvedReplySeq = normalizeRequiredWorkSequence(param.getReplySeq(), "댓글 정보를 확인해주세요.");
+		long resolvedWorkSeq = normalizeRequiredWorkSequence(param.getWorkSeq(), "업무 정보를 확인해주세요.");
+		long resolvedUdtNo = normalizeRequiredUserNo(param.getUdtNo(), "로그인 사용자 정보를 확인해주세요.");
+
+		// 정규화된 댓글 삭제 요청값을 새 객체에 반영합니다.
+		AdminCompanyWorkReplyDeletePO normalizedParam = new AdminCompanyWorkReplyDeletePO();
+		normalizedParam.setReplySeq(resolvedReplySeq);
+		normalizedParam.setWorkSeq(resolvedWorkSeq);
+		normalizedParam.setUdtNo(resolvedUdtNo);
+		return normalizedParam;
+	}
+
+	// 현재 로그인 사용자와 댓글 등록 요청 사용자가 일치하는지 확인합니다.
+	private void validateReplySaveRequester(Long regNo, Long udtNo) {
+		// 등록자와 수정자 번호는 모두 현재 로그인 사용자와 같아야 합니다.
+		Long currentAdminUserNo = resolveRequiredCurrentAdminUserNo();
+		if (!currentAdminUserNo.equals(regNo) || !currentAdminUserNo.equals(udtNo)) {
+			throw new AccessDeniedException("본인 사용자 정보로만 댓글을 등록할 수 있습니다.");
+		}
+	}
+
+	// 현재 로그인 사용자와 댓글 수정/삭제 요청 사용자가 일치하는지 확인합니다.
+	private void validateReplyUpdateRequester(Long udtNo) {
+		// 수정자 번호는 현재 로그인 사용자와 같아야 합니다.
+		Long currentAdminUserNo = resolveRequiredCurrentAdminUserNo();
+		if (!currentAdminUserNo.equals(udtNo)) {
+			throw new AccessDeniedException("본인 사용자 정보로만 댓글을 수정 또는 삭제할 수 있습니다.");
+		}
+	}
+
+	// 댓글 저장 시 본문 또는 첨부파일이 하나 이상 존재하는지 확인합니다.
+	private void validateReplySaveContent(String replyComment, List<MultipartFile> fileList) {
+		// 본문과 첨부파일이 모두 비어 있으면 저장을 차단합니다.
+		if (trimToNull(replyComment) == null && (fileList == null || fileList.isEmpty())) {
+			throw new IllegalArgumentException("댓글 내용 또는 첨부파일을 등록해주세요.");
+		}
+	}
+
+	// 댓글 수정 시 본문 또는 활성 첨부파일이 하나 이상 존재하는지 확인합니다.
+	private void validateReplyUpdateContent(String replyComment, int remainingFileCount, List<MultipartFile> fileList) {
+		// 수정 후 본문과 활성 첨부파일이 모두 비어 있으면 저장을 차단합니다.
+		if (trimToNull(replyComment) == null && remainingFileCount < 1 && (fileList == null || fileList.isEmpty())) {
+			throw new IllegalArgumentException("댓글 내용 또는 첨부파일을 등록해주세요.");
+		}
+	}
+
+	// 멀티파트 댓글 첨부파일 목록을 정규화하고 개별 파일을 검증합니다.
+	private List<MultipartFile> normalizeReplyFileList(List<MultipartFile> files) {
+		List<MultipartFile> normalizedFileList = new ArrayList<>();
+		for (MultipartFile fileItem : files == null ? List.<MultipartFile>of() : files) {
+			if (fileItem == null || fileItem.isEmpty()) {
+				continue;
+			}
+
+			// 실제 업로드 대상 파일만 남기고 개별 유효성을 확인합니다.
+			validateReplyAttachmentFile(fileItem);
+			normalizedFileList.add(fileItem);
+		}
+		return normalizedFileList;
+	}
+
+	// 댓글 첨부파일 개별 유효성을 검증합니다.
+	private void validateReplyAttachmentFile(MultipartFile file) {
+		// 업로드 설정과 파일명과 용량과 확장자를 순서대로 확인합니다.
+		if (ftpProperties.getUploadCompanyWorkReplyMaxSize() <= 0) {
+			throw new IllegalStateException("댓글 첨부파일 업로드 설정을 확인해주세요.");
+		}
+		if (trimToNull(ftpProperties.getUploadCompanyWorkReplyAllowExtension()) == null) {
+			throw new IllegalStateException("댓글 첨부파일 허용 확장자 설정을 확인해주세요.");
+		}
+
+		String originalFileName = extractOriginalFileName(file);
+		long maxSizeInBytes = (long) ftpProperties.getUploadCompanyWorkReplyMaxSize() * 1024 * 1024;
+		if (file.getSize() > maxSizeInBytes) {
+			throw new IllegalArgumentException("댓글 첨부파일 크기가 " + ftpProperties.getUploadCompanyWorkReplyMaxSize() + "MB를 초과합니다.");
+		}
+
+		String extension = extractFileExtension(originalFileName);
+		if (extension == null || !isAllowedFileExtension(ftpProperties.getUploadCompanyWorkReplyAllowExtension(), extension)) {
+			throw new IllegalArgumentException("허용되지 않는 댓글 첨부파일 형식입니다. 허용 형식: " + ftpProperties.getUploadCompanyWorkReplyAllowExtension());
+		}
+	}
+
+	// 삭제 요청된 댓글 첨부파일 목록을 현재 댓글 범위 안에서 정규화합니다.
+	private List<Integer> normalizeDeleteReplyFileSeqList(
+		List<Integer> deleteReplyFileSeqList,
+		List<AdminCompanyWorkReplyFileVO> currentReplyFileList
+	) {
+		LinkedHashSet<Integer> validReplyFileSeqSet = new LinkedHashSet<>();
+		for (AdminCompanyWorkReplyFileVO currentReplyFileItem : currentReplyFileList == null ? List.<AdminCompanyWorkReplyFileVO>of() : currentReplyFileList) {
+			if (currentReplyFileItem != null && currentReplyFileItem.getReplyFileSeq() != null) {
+				validReplyFileSeqSet.add(currentReplyFileItem.getReplyFileSeq());
+			}
+		}
+
+		LinkedHashSet<Integer> normalizedDeleteReplyFileSeqSet = new LinkedHashSet<>();
+		for (Integer deleteReplyFileSeq : deleteReplyFileSeqList == null ? List.<Integer>of() : deleteReplyFileSeqList) {
+			int resolvedReplyFileSeq = normalizeRequiredSequence(deleteReplyFileSeq, "삭제할 댓글 첨부파일 정보를 확인해주세요.");
+			if (!validReplyFileSeqSet.contains(resolvedReplyFileSeq)) {
+				throw new IllegalArgumentException("삭제할 댓글 첨부파일 정보를 확인해주세요.");
+			}
+			normalizedDeleteReplyFileSeqSet.add(resolvedReplyFileSeq);
+		}
+		return new ArrayList<>(normalizedDeleteReplyFileSeqSet);
+	}
+
+	// 댓글 첨부파일을 FTP와 DB에 함께 저장합니다.
+	private void saveReplyFileList(
+		Long workSeq,
+		Long replySeq,
+		Long regNo,
+		Long udtNo,
+		List<MultipartFile> fileList
+	) {
+		// 저장할 첨부파일이 없으면 바로 종료합니다.
+		if (fileList == null || fileList.isEmpty()) {
+			return;
+		}
+
+		List<String> uploadedFileUrlList = new ArrayList<>();
+
+		try {
+			// 업로드 성공 URL을 누적해 두었다가 실패 시 정리할 수 있게 합니다.
+			for (MultipartFile fileItem : fileList) {
+				String originalFileName = extractOriginalFileName(fileItem);
+				String uploadedFileUrl = limitLength(
+					ftpFileService.uploadCompanyWorkReplyFile(
+						fileItem,
+						workSeq,
+						replySeq,
+						String.valueOf(regNo)
+					),
+					ADMIN_COMPANY_WORK_MAX_FILE_URL_LENGTH
+				);
+
+				AdminCompanyWorkReplyFileSavePO fileSaveParam = new AdminCompanyWorkReplyFileSavePO();
+				fileSaveParam.setReplySeq(replySeq);
+				fileSaveParam.setWorkSeq(workSeq);
+				fileSaveParam.setReplyFileNm(limitLength(originalFileName, ADMIN_COMPANY_WORK_MAX_FILE_NAME_LENGTH));
+				fileSaveParam.setReplyFileUrl(uploadedFileUrl);
+				fileSaveParam.setReplyFileSize(fileItem.getSize());
+				fileSaveParam.setRegNo(regNo);
+				fileSaveParam.setUdtNo(udtNo);
+				companyWorkMapper.insertAdminCompanyWorkReplyFile(fileSaveParam);
+				uploadedFileUrlList.add(uploadedFileUrl);
+			}
+		} catch (IllegalArgumentException exception) {
+			// 사용자 교정이 가능한 오류가 나면 업로드된 파일만 정리하고 그대로 전달합니다.
+			cleanupUploadedReplyFiles(uploadedFileUrlList);
+			throw exception;
+		} catch (Exception exception) {
+			// 저장 중 예기치 않은 오류가 나면 업로드된 파일을 정리한 뒤 서버 오류로 변환합니다.
+			cleanupUploadedReplyFiles(uploadedFileUrlList);
+			throw new IllegalStateException("댓글 첨부파일 저장 중 오류가 발생했습니다.", exception);
+		}
+	}
+
+	// 댓글 첨부파일 업로드 후 실패한 경우 이미 올라간 FTP 파일을 정리합니다.
+	private void cleanupUploadedReplyFiles(List<String> uploadedFileUrlList) {
+		for (String uploadedFileUrl : uploadedFileUrlList == null ? List.<String>of() : uploadedFileUrlList) {
+			try {
+				// 정리 실패는 원래 예외를 덮지 않도록 로그만 남깁니다.
+				ftpFileService.deleteCompanyWorkReplyFile(uploadedFileUrl);
+			} catch (Exception cleanupException) {
+				log.warn("회사 업무 댓글 첨부파일 정리에 실패했습니다. fileUrl={}", uploadedFileUrl, cleanupException);
+			}
+		}
+	}
+
+	// 댓글 목록에 댓글 첨부파일 목록을 replySeq 기준으로 주입합니다.
+	private List<AdminCompanyWorkReplyVO> applyReplyFileList(
+		List<AdminCompanyWorkReplyVO> replyList,
+		List<AdminCompanyWorkReplyFileVO> replyFileList
+	) {
+		Map<Long, List<AdminCompanyWorkReplyFileVO>> replyFileMap = new HashMap<>();
+		for (AdminCompanyWorkReplyFileVO replyFileItem : replyFileList == null ? List.<AdminCompanyWorkReplyFileVO>of() : replyFileList) {
+			Long replySeq = replyFileItem == null ? null : replyFileItem.getReplySeq();
+			if (replySeq == null) {
+				continue;
+			}
+
+			// 댓글 번호 기준으로 첨부파일 목록을 누적합니다.
+			replyFileMap.computeIfAbsent(replySeq, ignoredKey -> new ArrayList<>()).add(replyFileItem);
+		}
+
+		List<AdminCompanyWorkReplyVO> normalizedReplyList = new ArrayList<>();
+		for (AdminCompanyWorkReplyVO replyItem : replyList == null ? List.<AdminCompanyWorkReplyVO>of() : replyList) {
+			if (replyItem == null) {
+				continue;
+			}
+
+			// 댓글이 첨부가 없더라도 빈 목록을 유지하도록 반영합니다.
+			replyItem.setReplyFileList(replyFileMap.getOrDefault(replyItem.getReplySeq(), List.of()));
+			normalizedReplyList.add(replyItem);
+		}
+		return normalizedReplyList;
 	}
 
 	// 관리자 회사 업무 가져오기 요청값을 정규화합니다.
@@ -413,6 +774,60 @@ public class CompanyWorkService {
 			throw new IllegalArgumentException("업무 정보를 확인해주세요.");
 		}
 		return detail;
+	}
+
+	// 관리자 회사 업무 댓글 정보를 조회하고 첨부파일 목록까지 함께 반환합니다.
+	private AdminCompanyWorkReplyVO getRequiredAdminCompanyWorkReply(Long replySeq) {
+		// 댓글이 없으면 서버 상태 오류로 처리합니다.
+		AdminCompanyWorkReplyVO reply = companyWorkMapper.getAdminCompanyWorkReply(replySeq);
+		if (reply == null) {
+			throw new IllegalStateException("저장된 댓글 정보를 확인할 수 없습니다.");
+		}
+
+		// 댓글 첨부파일 목록을 함께 주입해 반환합니다.
+		List<AdminCompanyWorkReplyFileVO> replyFileList = companyWorkMapper.getAdminCompanyWorkReplyFileListByReplySeq(replySeq);
+		reply.setReplyFileList(replyFileList == null ? List.of() : replyFileList);
+		return reply;
+	}
+
+	// 수정 또는 삭제 가능한 댓글인지 확인하고 현재 댓글 정보를 반환합니다.
+	private AdminCompanyWorkReplyVO getAuthorizedAdminCompanyWorkReply(Long replySeq, Long workSeq) {
+		// 댓글 존재 여부와 업무 매칭 여부를 먼저 확인합니다.
+		AdminCompanyWorkReplyVO reply = companyWorkMapper.getAdminCompanyWorkReply(replySeq);
+		if (reply == null || reply.getWorkSeq() == null || !reply.getWorkSeq().equals(workSeq)) {
+			throw new IllegalArgumentException("댓글 정보를 확인해주세요.");
+		}
+
+		// 현재 로그인 사용자가 작성자가 아니면 수정/삭제를 허용하지 않습니다.
+		Long currentAdminUserNo = resolveRequiredCurrentAdminUserNo();
+		if (reply.getRegNo() == null || !reply.getRegNo().equals(currentAdminUserNo)) {
+			throw new AccessDeniedException("본인이 작성한 댓글만 수정 또는 삭제할 수 있습니다.");
+		}
+		return reply;
+	}
+
+	// 현재 로그인한 관리자 사용자번호를 조회합니다.
+	private Long resolveCurrentAdminUserNo() {
+		// 스프링 시큐리티 인증정보에서 관리자 사용자번호를 추출합니다.
+		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+		if (authentication == null) {
+			return null;
+		}
+		Object principal = authentication.getPrincipal();
+		if (principal instanceof UserBaseEntity userBaseEntity) {
+			return userBaseEntity.getUsrNo();
+		}
+		return null;
+	}
+
+	// 현재 로그인한 관리자 사용자번호를 필수값으로 조회합니다.
+	private Long resolveRequiredCurrentAdminUserNo() {
+		// 로그인 정보가 없으면 권한 오류로 처리합니다.
+		Long currentAdminUserNo = resolveCurrentAdminUserNo();
+		if (currentAdminUserNo == null || currentAdminUserNo < 1) {
+			throw new AccessDeniedException("로그인 사용자 정보를 확인해주세요.");
+		}
+		return currentAdminUserNo;
 	}
 
 	// 현재 구현이 지원하는 회사/플랫폼인지 확인합니다.
@@ -589,12 +1004,12 @@ public class CompanyWorkService {
 		return workTime;
 	}
 
-	// 댓글 HTML 문자열에서 실제 표시 텍스트가 있는지 확인한 뒤 저장값을 정규화합니다.
-	private String normalizeRequiredReplyComment(String replyComment) {
-		// Quill 빈 본문을 포함한 공백 댓글은 저장하지 않습니다.
+	// 댓글 HTML 문자열을 저장 가능한 값으로 정규화합니다.
+	private String normalizeOptionalReplyComment(String replyComment) {
+		// Quill 빈 본문을 포함한 공백 댓글은 null로 정리합니다.
 		String normalizedReplyComment = trimToNull(replyComment);
 		if (normalizedReplyComment == null) {
-			throw new IllegalArgumentException("댓글 내용을 입력해주세요.");
+			return null;
 		}
 
 		String visibleText = normalizedReplyComment
@@ -603,9 +1018,59 @@ public class CompanyWorkService {
 			.replaceAll("\\s+", " ")
 			.trim();
 		if (visibleText.isEmpty()) {
-			throw new IllegalArgumentException("댓글 내용을 입력해주세요.");
+			return null;
 		}
 		return limitLength(normalizedReplyComment, ADMIN_COMPANY_WORK_MAX_REPLY_LENGTH);
+	}
+
+	// 멀티파트 파일에서 원본 파일명을 추출하고 저장 가능한 값으로 정규화합니다.
+	private String extractOriginalFileName(MultipartFile file) {
+		// 브라우저별 경로 포함 파일명은 마지막 파일명만 남기고 검증합니다.
+		String originalFileName = trimToNull(file == null ? null : file.getOriginalFilename());
+		if (originalFileName == null) {
+			throw new IllegalArgumentException("댓글 첨부파일명을 확인해주세요.");
+		}
+
+		String normalizedFileName = originalFileName
+			.replace("\\", "/");
+		int lastSlashIndex = normalizedFileName.lastIndexOf('/');
+		String baseFileName = lastSlashIndex >= 0 ? normalizedFileName.substring(lastSlashIndex + 1) : normalizedFileName;
+		if (trimToNull(baseFileName) == null) {
+			throw new IllegalArgumentException("댓글 첨부파일명을 확인해주세요.");
+		}
+		return baseFileName;
+	}
+
+	// 파일명에서 확장자를 추출합니다.
+	private String extractFileExtension(String fileName) {
+		// 마지막 점 뒤 문자열만 확장자로 해석합니다.
+		String normalizedFileName = trimToNull(fileName);
+		if (normalizedFileName == null) {
+			return null;
+		}
+
+		int extensionIndex = normalizedFileName.lastIndexOf('.');
+		if (extensionIndex < 0 || extensionIndex == normalizedFileName.length() - 1) {
+			return null;
+		}
+		return normalizedFileName.substring(extensionIndex + 1).toLowerCase();
+	}
+
+	// 허용 확장자 목록에 현재 파일 확장자가 포함되는지 확인합니다.
+	private boolean isAllowedFileExtension(String allowedExtensions, String extension) {
+		// 콤마 기준으로 분리한 뒤 정확히 일치하는 확장자만 허용합니다.
+		String normalizedExtension = trimToNull(extension);
+		if (normalizedExtension == null) {
+			return false;
+		}
+
+		for (String allowedExtensionItem : safeValue(allowedExtensions).split(",")) {
+			String normalizedAllowedExtension = trimToNull(allowedExtensionItem);
+			if (normalizedAllowedExtension != null && normalizedExtension.equalsIgnoreCase(normalizedAllowedExtension)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	// Jira ADF 본문을 여러 줄 plain text로 변환합니다.

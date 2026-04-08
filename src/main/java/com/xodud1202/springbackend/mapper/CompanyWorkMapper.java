@@ -6,7 +6,11 @@ import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImpo
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkDetailUpdatePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkDetailVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkFileVO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyFileSavePO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyFileVO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyDeletePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplySavePO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyUpdatePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkUpdatePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkCompanyVO;
@@ -48,8 +52,17 @@ public interface CompanyWorkMapper {
 	// 관리자 회사 업무 댓글 목록을 조회합니다.
 	List<AdminCompanyWorkReplyVO> getAdminCompanyWorkReplyList(@Param("workSeq") Long workSeq);
 
+	// 관리자 회사 업무 댓글 첨부파일 목록을 조회합니다.
+	List<AdminCompanyWorkReplyFileVO> getAdminCompanyWorkReplyFileList(@Param("workSeq") Long workSeq);
+
 	// 관리자 회사 업무 댓글 단건을 조회합니다.
 	AdminCompanyWorkReplyVO getAdminCompanyWorkReply(@Param("replySeq") Long replySeq);
+
+	// 관리자 회사 업무 댓글 첨부파일 목록을 댓글 번호 기준으로 조회합니다.
+	List<AdminCompanyWorkReplyFileVO> getAdminCompanyWorkReplyFileListByReplySeq(@Param("replySeq") Long replySeq);
+
+	// 관리자 회사 업무 댓글 첨부파일 단건을 조회합니다.
+	AdminCompanyWorkReplyFileVO getAdminCompanyWorkReplyFile(@Param("replyFileSeq") Integer replyFileSeq);
 
 	// 관리자 회사 업무 가져오기 대상 회사 정보를 조회합니다.
 	AdminCompanyWorkImportCompanyInfoVO getAdminCompanyWorkImportCompanyInfo(@Param("workCompanySeq") Integer workCompanySeq);
@@ -81,4 +94,28 @@ public interface CompanyWorkMapper {
 
 	// 관리자 회사 업무 댓글을 저장합니다.
 	int insertAdminCompanyWorkReply(AdminCompanyWorkReplySavePO param);
+
+	// 관리자 회사 업무 댓글을 수정합니다.
+	int updateAdminCompanyWorkReply(AdminCompanyWorkReplyUpdatePO param);
+
+	// 관리자 회사 업무 댓글을 삭제 처리합니다.
+	int softDeleteAdminCompanyWorkReply(AdminCompanyWorkReplyDeletePO param);
+
+	// 관리자 회사 업무 댓글 첨부파일을 저장합니다.
+	int insertAdminCompanyWorkReplyFile(AdminCompanyWorkReplyFileSavePO param);
+
+	// 관리자 회사 업무 댓글 첨부파일을 선택 삭제 처리합니다.
+	int softDeleteAdminCompanyWorkReplyFiles(
+		@Param("replySeq") Long replySeq,
+		@Param("workSeq") Long workSeq,
+		@Param("replyFileSeqList") List<Integer> replyFileSeqList,
+		@Param("udtNo") Long udtNo
+	);
+
+	// 관리자 회사 업무 댓글 첨부파일 전체를 삭제 처리합니다.
+	int softDeleteAdminCompanyWorkReplyFileList(
+		@Param("replySeq") Long replySeq,
+		@Param("workSeq") Long workSeq,
+		@Param("udtNo") Long udtNo
+	);
 }

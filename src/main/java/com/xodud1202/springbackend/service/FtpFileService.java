@@ -10,6 +10,8 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -24,6 +26,8 @@ public class FtpFileService {
 	private static final int ATOMIC_TEXT_UPLOAD_CONNECT_TIMEOUT_MILLIS = 10000;
 	private static final int ATOMIC_TEXT_UPLOAD_SOCKET_TIMEOUT_MILLIS = 30000;
 	private static final int ATOMIC_TEXT_UPLOAD_DATA_TIMEOUT_MILLIS = 30000;
+	private static final int PUBLIC_FILE_DOWNLOAD_CONNECT_TIMEOUT_MILLIS = 10000;
+	private static final int PUBLIC_FILE_DOWNLOAD_READ_TIMEOUT_MILLIS = 30000;
 	
 	private final FtpProperties ftpProperties;
 
@@ -105,6 +109,29 @@ public class FtpFileService {
 				ftpProperties.getUploadEditorView(),
 				new String[] { dateFolder },
 				"editor"
+		);
+	}
+
+	/**
+	 * 회사 업무 댓글 첨부파일을 FTP 서버에 업로드하고 접근 가능한 URL을 반환합니다.
+	 * @param file 업로드할 첨부파일
+	 * @param workSeq 업무 번호
+	 * @param replySeq 댓글 번호
+	 * @param regNo 등록자 번호
+	 * @return 업로드된 첨부파일의 접근 URL
+	 */
+	public String uploadCompanyWorkReplyFile(MultipartFile file, Long workSeq, Long replySeq, String regNo) throws IOException {
+		String[] subDirs = {
+				String.valueOf(workSeq),
+				String.valueOf(replySeq)
+		};
+		String fileKeyPrefix = "reply_" + safePathSegment(regNo) + "_" + replySeq;
+		return uploadFileToFtp(
+				file,
+				ftpProperties.getUploadCompanyWorkReplyTargetPath(),
+				ftpProperties.getUploadCompanyWorkReplyView(),
+				subDirs,
+				fileKeyPrefix
 		);
 	}
 
@@ -233,6 +260,64 @@ public class FtpFileService {
 	}
 
 	/**
+	 * 회사 업무 댓글 첨부파일 URL을 기준으로 FTP 파일을 삭제합니다.
+	 * @param fileUrl 삭제할 첨부파일 URL
+	 */
+	public void deleteCompanyWorkReplyFile(String fileUrl) throws IOException {
+		String normalizedFileUrl = safeTrim(fileUrl);
+		if (normalizedFileUrl == null) {
+			return;
+		}
+
+		// 저장 URL에서 댓글 첨부 하위 경로와 파일명을 복원합니다.
+		String[] pathSegments = resolvePathSegmentsFromPublicUrl(
+				normalizedFileUrl,
+				ftpProperties.getUploadCompanyWorkReplyView()
+		);
+		if (pathSegments.length < 3) {
+			return;
+		}
+
+		// 마지막 세그먼트는 파일명이고 앞부분은 하위 디렉토리입니다.
+		String fileName = pathSegments[pathSegments.length - 1];
+		String[] subDirs = new String[pathSegments.length - 1];
+		System.arraycopy(pathSegments, 0, subDirs, 0, pathSegments.length - 1);
+		deleteFileFromFtp(ftpProperties.getUploadCompanyWorkReplyTargetPath(), subDirs, fileName);
+	}
+
+	/**
+	 * 공개 URL의 파일을 다운로드해 바이트 배열로 반환합니다.
+	 * @param fileUrl 다운로드할 파일 URL
+	 * @return 다운로드한 파일 바이트 배열
+	 */
+	public byte[] downloadFileFromUrl(String fileUrl) throws IOException {
+		HttpURLConnection connection = null;
+
+		try {
+			// 공개 URL 연결을 열고 응답 상태를 확인합니다.
+			connection = (HttpURLConnection) URI.create(fileUrl).toURL().openConnection();
+			connection.setInstanceFollowRedirects(true);
+			connection.setConnectTimeout(PUBLIC_FILE_DOWNLOAD_CONNECT_TIMEOUT_MILLIS);
+			connection.setReadTimeout(PUBLIC_FILE_DOWNLOAD_READ_TIMEOUT_MILLIS);
+			connection.setRequestMethod("GET");
+
+			int responseCode = connection.getResponseCode();
+			if (responseCode < 200 || responseCode >= 300) {
+				throw new IOException("공개 파일 다운로드 실패: " + responseCode);
+			}
+
+			// 정상 응답 바디를 모두 읽어 반환합니다.
+			try (InputStream inputStream = connection.getInputStream()) {
+				return inputStream.readAllBytes();
+			}
+		} finally {
+			if (connection != null) {
+				connection.disconnect();
+			}
+		}
+	}
+
+	/**
 	 * UTF-8 텍스트 파일을 FTP에 임시파일 업로드 후 rename으로 원자적으로 교체합니다.
 	 * @param targetPath 업로드 대상 디렉토리 경로
 	 * @param finalFileName 최종 파일명
@@ -343,6 +428,25 @@ public class FtpFileService {
 			String[] subDirs,
 			String fileKeyPrefix
 	) throws IOException {
+		return uploadFileToFtp(file, targetPath, viewBase, subDirs, fileKeyPrefix);
+	}
+
+	/**
+	 * FTP에 일반 파일을 업로드하고 접근 가능한 URL을 반환합니다.
+	 * @param file 업로드할 파일
+	 * @param targetPath 업로드 대상 기본 경로
+	 * @param viewBase 웹 접근 기본 URL
+	 * @param subDirs 추가로 생성할 하위 폴더 목록
+	 * @param fileKeyPrefix 파일명 생성에 사용할 키
+	 * @return 업로드된 파일의 접근 URL
+	 */
+	private String uploadFileToFtp(
+			MultipartFile file,
+			String targetPath,
+			String viewBase,
+			String[] subDirs,
+			String fileKeyPrefix
+	) throws IOException {
 		FTPClient ftpClient = new FTPClient();
 
 		try {
@@ -379,7 +483,7 @@ public class FtpFileService {
 			}
 
 			// 웹에서 접근 가능한 URL 반환
-			return viewBase + "/" + String.join("/", subDirs) + "/" + fileName;
+			return buildPublicFileUrl(viewBase, subDirs, fileName);
 		} finally {
 			if (ftpClient.isConnected()) {
 				ftpClient.logout();
@@ -522,5 +626,72 @@ public class FtpFileService {
 		String normalizedViewBase = viewBase.endsWith("/") ? viewBase.substring(0, viewBase.length() - 1) : viewBase;
 		String normalizedTargetPath = targetPath.startsWith("/") ? targetPath : "/" + targetPath;
 		return normalizedViewBase + normalizedTargetPath + "/" + fileName;
+	}
+
+	/**
+	 * 공개 URL 기본 경로와 하위 경로와 파일명으로 최종 URL을 생성합니다.
+	 * @param viewBase 공개 URL 기본 경로
+	 * @param subDirs 하위 디렉토리 목록
+	 * @param fileName 파일명
+	 * @return 최종 공개 URL
+	 */
+	private String buildPublicFileUrl(String viewBase, String[] subDirs, String fileName) {
+		String normalizedViewBase = trimTrailingSlash(viewBase);
+		String joinedSubDirs = subDirs == null || subDirs.length == 0 ? "" : "/" + String.join("/", subDirs);
+		return normalizedViewBase + joinedSubDirs + "/" + fileName;
+	}
+
+	/**
+	 * 공개 URL에서 기준 view 경로 이후의 세그먼트 목록을 복원합니다.
+	 * @param fileUrl 첨부파일 URL
+	 * @param viewBase 기준 공개 URL
+	 * @return 하위 경로 세그먼트 목록
+	 */
+	private String[] resolvePathSegmentsFromPublicUrl(String fileUrl, String viewBase) {
+		String normalizedFileUrl = safeTrim(fileUrl);
+		String normalizedViewBase = trimTrailingSlash(viewBase);
+		if (normalizedFileUrl == null || normalizedViewBase == null || !normalizedFileUrl.startsWith(normalizedViewBase + "/")) {
+			return new String[0];
+		}
+
+		// 공개 URL 기준 경로를 제거한 뒤 세그먼트를 분리합니다.
+		String relativePath = normalizedFileUrl.substring(normalizedViewBase.length() + 1);
+		return relativePath.split("/");
+	}
+
+	/**
+	 * 경로 세그먼트로 사용할 문자열을 안전하게 정리합니다.
+	 * @param value 정리할 문자열
+	 * @return 정리된 경로 세그먼트
+	 */
+	private String safePathSegment(String value) {
+		String normalizedValue = safeTrim(value);
+		return normalizedValue == null ? "anonymous" : normalizedValue;
+	}
+
+	/**
+	 * 문자열 양끝 공백을 제거하고 빈 값은 null로 변환합니다.
+	 * @param value 정리할 문자열
+	 * @return 정리된 문자열
+	 */
+	private String safeTrim(String value) {
+		if (value == null) {
+			return null;
+		}
+		String trimmedValue = value.trim();
+		return trimmedValue.isEmpty() ? null : trimmedValue;
+	}
+
+	/**
+	 * URL 끝의 슬래시를 제거합니다.
+	 * @param value 정리할 URL 문자열
+	 * @return 끝 슬래시가 제거된 URL
+	 */
+	private String trimTrailingSlash(String value) {
+		String normalizedValue = safeTrim(value);
+		if (normalizedValue == null) {
+			return null;
+		}
+		return normalizedValue.endsWith("/") ? normalizedValue.substring(0, normalizedValue.length() - 1) : normalizedValue;
 	}
 }

@@ -2,6 +2,8 @@ package com.xodud1202.springbackend.domain.admin.companywork;
 
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 // 관리자 회사 업무 댓글 정보를 정의합니다.
 public class AdminCompanyWorkReplyVO {
@@ -17,4 +19,6 @@ public class AdminCompanyWorkReplyVO {
 	private String regDt;
 	// 수정 일시입니다.
 	private String udtDt;
+	// 댓글 첨부파일 목록입니다.
+	private List<AdminCompanyWorkReplyFileVO> replyFileList;
 }
