@@ -329,6 +329,37 @@
 		)
 	</insert>
 
+	<insert id="insertAdminCompanyWorkManualJob" useGeneratedKeys="true" keyProperty="workSeq" keyColumn="WORK_SEQ">
+		/* CompanyWorkMapper.insertAdminCompanyWorkManualJob: 관리자 회사 업무 수기 등록 기본정보 저장 */
+		INSERT INTO WORK_COMPANY_PROJECT_JOB (
+		       WORK_COMPANY_SEQ
+		     , WORK_COMPANY_PROJECT_SEQ
+		     , WORK_STAT_CD
+		     , WORK_PRIOR_CD
+		     , WORK_KEY
+		     , TITLE
+		     , CONTENT
+		     , WORK_CREATE_DT
+		     , CO_MANAGER
+		     , DEL_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{workCompanySeq}
+		     , #{workCompanyProjectSeq}
+		     , #{workStatCd}
+		     , #{workPriorCd}
+		     , #{workKey}
+		     , #{title}
+		     , #{content}
+		     , NOW()
+		     , #{coManager}
+		     , 'N'
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+
 	<update id="updateAdminCompanyWorkEditableFields">
 		/* CompanyWorkMapper.updateAdminCompanyWorkEditableFields: 관리자 회사 업무 즉시 수정 가능 항목 저장 */
 		UPDATE WORK_COMPANY_PROJECT_JOB

@@ -8,6 +8,8 @@ import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkDeta
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportPO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportResponseVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkListRowVO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkManualCreatePO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkManualCreateResponseVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkProjectVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyDeletePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyFileDownloadVO;
@@ -158,6 +160,29 @@ public class AdminCompanyWorkController {
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
 		} catch (IllegalStateException exception) {
 			// 설정 누락이나 외부 시스템 오류는 500으로 반환합니다.
+			return ResponseEntity.internalServerError().body(Map.of("message", exception.getMessage()));
+		}
+	}
+
+	// 관리자 회사 업무 수기 등록을 저장합니다.
+	@PostMapping("/api/admin/company/work/manual")
+	public ResponseEntity<Object> createAdminCompanyWorkManual(@RequestBody AdminCompanyWorkManualCreatePO param) {
+		if (!isAuthenticatedRequest()) {
+			return unauthorizedResponse();
+		}
+
+		try {
+			// 수기 등록 요청을 처리하고 저장 결과를 반환합니다.
+			AdminCompanyWorkManualCreateResponseVO response = companyWorkService.createAdminCompanyWorkManual(param);
+			return ResponseEntity.ok(response);
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (AccessDeniedException exception) {
+			// 본인 사용자 정보가 아니면 403 응답으로 반환합니다.
+			return ResponseEntity.status(403).body(Map.of("message", exception.getMessage()));
+		} catch (IllegalStateException exception) {
+			// 내부 상태 오류는 500 응답으로 반환합니다.
 			return ResponseEntity.internalServerError().body(Map.of("message", exception.getMessage()));
 		}
 	}

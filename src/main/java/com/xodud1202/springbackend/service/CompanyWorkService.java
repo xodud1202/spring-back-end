@@ -10,6 +10,9 @@ import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImpo
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportJobSavePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportPO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportResponseVO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkManualCreatePO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkManualCreateResponseVO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkManualSavePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyFileDownloadVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyFileSavePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyFileVO;
@@ -66,6 +69,7 @@ public class CompanyWorkService {
 	private static final int ADMIN_COMPANY_WORK_MAX_FILE_URL_LENGTH = 255;
 	private static final int ADMIN_COMPANY_WORK_MAX_REPLY_LENGTH = 65535;
 	private static final String WORK_STATUS_GROUP_CODE = "WORK_STAT";
+	private static final String WORK_PRIORITY_GROUP_CODE = "WORK_PRIOR";
 	private static final String WORK_COMPLETED_STATUS_CODE = "WORK_STAT_05";
 	private static final String WORK_WAIT_STATUS_CODE = "WORK_STAT_01";
 	private static final String WORK_PRIOR_HIGH_CODE = "WORK_PRIOR_01";
@@ -75,6 +79,7 @@ public class CompanyWorkService {
 	private static final String JIRA_PLATFORM_NAME = "JIRA";
 	private static final DateTimeFormatter ADMIN_COMPANY_WORK_DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 	private static final DateTimeFormatter ADMIN_COMPANY_WORK_DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
+	private static final DateTimeFormatter ADMIN_COMPANY_WORK_MANUAL_KEY_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
 	private static final DateTimeFormatter JIRA_OFFSET_DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSZ");
 	private static final DateTimeFormatter JIRA_OFFSET_DATE_TIME_WITHOUT_MILLIS_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssZ");
 
@@ -264,6 +269,30 @@ public class CompanyWorkService {
 		response.setMessage("업무를 가져왔습니다.");
 		response.setWorkSeq(jobSaveParam.getWorkSeq());
 		response.setWorkKey(jobSaveParam.getWorkKey());
+		return response;
+	}
+
+	@Transactional
+	// 관리자 회사 업무 수기 등록을 저장합니다.
+	public AdminCompanyWorkManualCreateResponseVO createAdminCompanyWorkManual(AdminCompanyWorkManualCreatePO param) {
+		// 요청값을 정규화하고 필수값과 권한을 검증합니다.
+		AdminCompanyWorkManualCreatePO normalizedParam = normalizeManualCreateParam(param);
+		validateManualCreateRequester(normalizedParam.getRegNo(), normalizedParam.getUdtNo());
+		getValidatedImportCompanyInfo(normalizedParam.getWorkCompanySeq(), normalizedParam.getWorkCompanyProjectSeq());
+		validateWorkPriorCode(normalizedParam.getWorkPriorCd());
+
+		// 기본 저장 파라미터를 구성하고 수기 등록 업무를 저장합니다.
+		AdminCompanyWorkManualSavePO saveParam = buildManualCreateSaveParam(normalizedParam);
+		int insertedCount = companyWorkMapper.insertAdminCompanyWorkManualJob(saveParam);
+		if (insertedCount < 1 || saveParam.getWorkSeq() == null) {
+			throw new IllegalStateException("업무 등록 중 오류가 발생했습니다.");
+		}
+
+		// 저장 완료 응답을 구성해 반환합니다.
+		AdminCompanyWorkManualCreateResponseVO response = new AdminCompanyWorkManualCreateResponseVO();
+		response.setMessage("업무를 등록했습니다.");
+		response.setWorkSeq(saveParam.getWorkSeq());
+		response.setWorkKey(saveParam.getWorkKey());
 		return response;
 	}
 
@@ -483,6 +512,44 @@ public class CompanyWorkService {
 		return normalizedParam;
 	}
 
+	// 관리자 회사 업무 수기 등록 요청값을 정규화합니다.
+	private AdminCompanyWorkManualCreatePO normalizeManualCreateParam(AdminCompanyWorkManualCreatePO param) {
+		// 요청 객체와 필수값을 먼저 검증합니다.
+		if (param == null) {
+			throw new IllegalArgumentException("수기 등록 요청 정보를 확인해주세요.");
+		}
+
+		int resolvedWorkCompanySeq = normalizeRequiredSequence(param.getWorkCompanySeq(), "회사를 선택해주세요.");
+		int resolvedWorkCompanyProjectSeq = normalizeRequiredSequence(param.getWorkCompanyProjectSeq(), "프로젝트를 선택해주세요.");
+		String normalizedTitle = trimToNull(param.getTitle());
+		if (normalizedTitle == null) {
+			throw new IllegalArgumentException("타이틀을 입력해주세요.");
+		}
+		if (normalizedTitle.length() > ADMIN_COMPANY_WORK_MAX_TITLE_LENGTH) {
+			throw new IllegalArgumentException("타이틀을 확인해주세요.");
+		}
+		String normalizedWorkPriorCd = trimToNull(param.getWorkPriorCd());
+		if (normalizedWorkPriorCd == null) {
+			throw new IllegalArgumentException("우선순위를 선택해주세요.");
+		}
+		String normalizedContent = normalizeOptionalCompanyWorkContent(param.getContent());
+		String normalizedCoManager = normalizeOptionalManagerName(param.getCoManager(), "업무담당자를 확인해주세요.");
+		long resolvedRegNo = normalizeRequiredUserNo(param.getRegNo(), "로그인 사용자 정보를 확인해주세요.");
+		long resolvedUdtNo = normalizeRequiredUserNo(param.getUdtNo(), "로그인 사용자 정보를 확인해주세요.");
+
+		// 정규화된 수기 등록 요청값을 새 객체에 반영합니다.
+		AdminCompanyWorkManualCreatePO normalizedParam = new AdminCompanyWorkManualCreatePO();
+		normalizedParam.setWorkCompanySeq(resolvedWorkCompanySeq);
+		normalizedParam.setWorkCompanyProjectSeq(resolvedWorkCompanyProjectSeq);
+		normalizedParam.setTitle(normalizedTitle);
+		normalizedParam.setContent(normalizedContent);
+		normalizedParam.setCoManager(normalizedCoManager);
+		normalizedParam.setWorkPriorCd(normalizedWorkPriorCd);
+		normalizedParam.setRegNo(resolvedRegNo);
+		normalizedParam.setUdtNo(resolvedUdtNo);
+		return normalizedParam;
+	}
+
 	// 관리자 회사 업무 댓글 등록 요청값을 정규화합니다.
 	private AdminCompanyWorkReplySavePO normalizeReplySaveParam(AdminCompanyWorkReplySavePO param) {
 		// 요청 객체와 필수값을 먼저 검증합니다.
@@ -553,6 +620,15 @@ public class CompanyWorkService {
 		Long currentAdminUserNo = resolveRequiredCurrentAdminUserNo();
 		if (!currentAdminUserNo.equals(regNo) || !currentAdminUserNo.equals(udtNo)) {
 			throw new AccessDeniedException("본인 사용자 정보로만 댓글을 등록할 수 있습니다.");
+		}
+	}
+
+	// 현재 로그인 사용자와 수기 등록 요청 사용자가 일치하는지 확인합니다.
+	private void validateManualCreateRequester(Long regNo, Long udtNo) {
+		// 등록자와 수정자 번호는 모두 현재 로그인 사용자와 같아야 합니다.
+		Long currentAdminUserNo = resolveRequiredCurrentAdminUserNo();
+		if (!currentAdminUserNo.equals(regNo) || !currentAdminUserNo.equals(udtNo)) {
+			throw new AccessDeniedException("본인 사용자 정보로만 업무를 등록할 수 있습니다.");
 		}
 	}
 
@@ -733,6 +809,45 @@ public class CompanyWorkService {
 		return normalizedReplyList;
 	}
 
+	// 수기 등록 요청을 DB 저장 파라미터로 변환합니다.
+	private AdminCompanyWorkManualSavePO buildManualCreateSaveParam(AdminCompanyWorkManualCreatePO param) {
+		// 기본 상태와 자동 생성 업무키를 포함한 저장 파라미터를 구성합니다.
+		AdminCompanyWorkManualSavePO saveParam = new AdminCompanyWorkManualSavePO();
+		saveParam.setWorkCompanySeq(param.getWorkCompanySeq());
+		saveParam.setWorkCompanyProjectSeq(param.getWorkCompanyProjectSeq());
+		saveParam.setWorkStatCd(WORK_WAIT_STATUS_CODE);
+		saveParam.setWorkPriorCd(param.getWorkPriorCd());
+		saveParam.setWorkKey(generateManualWorkKey(param.getWorkCompanySeq(), param.getWorkCompanyProjectSeq(), param.getRegNo()));
+		saveParam.setTitle(param.getTitle());
+		saveParam.setContent(param.getContent());
+		saveParam.setCoManager(param.getCoManager());
+		saveParam.setRegNo(param.getRegNo());
+		saveParam.setUdtNo(param.getUdtNo());
+		return saveParam;
+	}
+
+	// 수기 등록 업무키를 자동 생성합니다.
+	private String generateManualWorkKey(Integer workCompanySeq, Integer workCompanyProjectSeq, Long regNo) {
+		// 같은 밀리초 충돌을 피하기 위해 짧은 재시도 범위 안에서 고유 키를 생성합니다.
+		for (int attempt = 0; attempt < 100; attempt += 1) {
+			LocalDateTime generatedDateTime = LocalDateTime.now().plusNanos((long) attempt * 1_000_000L);
+			String generatedWorkKey = "MANUAL-" + generatedDateTime.format(ADMIN_COMPANY_WORK_MANUAL_KEY_FORMATTER) + "-" + regNo;
+			if (generatedWorkKey.length() > ADMIN_COMPANY_WORK_MAX_WORK_KEY_LENGTH) {
+				throw new IllegalStateException("수기 업무키를 생성할 수 없습니다.");
+			}
+
+			int duplicateCount = companyWorkMapper.countAdminCompanyWorkDuplicateKey(
+				workCompanySeq,
+				workCompanyProjectSeq,
+				generatedWorkKey
+			);
+			if (duplicateCount < 1) {
+				return generatedWorkKey;
+			}
+		}
+		throw new IllegalStateException("수기 업무키를 생성할 수 없습니다.");
+	}
+
 	// 관리자 회사 업무 가져오기 요청값을 정규화합니다.
 	private AdminCompanyWorkImportPO normalizeImportParam(AdminCompanyWorkImportPO param) {
 		// 요청 객체와 필수값을 먼저 검증합니다.
@@ -850,6 +965,18 @@ public class CompanyWorkService {
 		if (!DINING_BRANDS_GROUP_COMPANY_NAME.equals(companyName) || platformName == null || !JIRA_PLATFORM_NAME.equalsIgnoreCase(platformName)) {
 			throw new IllegalArgumentException("아직 지원하지 않는 회사 업무 플랫폼입니다.");
 		}
+	}
+
+	// 업무 우선순위 코드가 사용 가능한 공통코드인지 확인합니다.
+	private void validateWorkPriorCode(String workPriorCd) {
+		// 사용 가능한 우선순위 코드 목록에 존재하지 않으면 요청 오류로 처리합니다.
+		List<CommonCodeVO> workPriorityCodeList = commonMapper.getCommonCodeList(WORK_PRIORITY_GROUP_CODE);
+		for (CommonCodeVO workPriorityCodeItem : workPriorityCodeList == null ? List.<CommonCodeVO>of() : workPriorityCodeList) {
+			if (workPriorityCodeItem != null && workPriorCd.equals(trimToNull(workPriorityCodeItem.getCd()))) {
+				return;
+			}
+		}
+		throw new IllegalArgumentException("우선순위를 확인해주세요.");
 	}
 
 	// 업무 상태 코드가 사용 가능한 공통코드인지 확인합니다.
@@ -1014,6 +1141,39 @@ public class CompanyWorkService {
 			throw new IllegalArgumentException("업무 공수시간을 확인해주세요.");
 		}
 		return workTime;
+	}
+
+	// 업무 본문 HTML 문자열을 저장 가능한 값으로 정규화합니다.
+	private String normalizeOptionalCompanyWorkContent(String content) {
+		// 본문이 비어 있거나 의미 있는 텍스트/이미지가 없으면 빈 문자열로 저장합니다.
+		String normalizedContent = safeValue(content).trim();
+		if (normalizedContent.isEmpty()) {
+			return "";
+		}
+
+		String visibleText = normalizedContent
+			.replaceAll("(?i)<img\\b[^>]*>", " IMG ")
+			.replace("&nbsp;", " ")
+			.replaceAll("<[^>]*>", " ")
+			.replaceAll("\\s+", " ")
+			.trim();
+		if (visibleText.isEmpty()) {
+			return "";
+		}
+		return normalizedContent;
+	}
+
+	// 업무 담당자명을 저장 가능한 값으로 정규화합니다.
+	private String normalizeOptionalManagerName(String managerName, String invalidMessage) {
+		// 빈 값은 빈 문자열로 저장하고, 길이 초과는 요청 오류로 처리합니다.
+		String normalizedManagerName = trimToNull(managerName);
+		if (normalizedManagerName == null) {
+			return "";
+		}
+		if (normalizedManagerName.length() > ADMIN_COMPANY_WORK_MAX_MANAGER_NAME_LENGTH) {
+			throw new IllegalArgumentException(invalidMessage);
+		}
+		return normalizedManagerName;
 	}
 
 	// 댓글 HTML 문자열을 저장 가능한 값으로 정규화합니다.

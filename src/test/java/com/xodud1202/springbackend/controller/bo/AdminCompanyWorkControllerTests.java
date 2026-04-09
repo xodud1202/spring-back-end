@@ -1,6 +1,7 @@
 package com.xodud1202.springbackend.controller.bo;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkManualCreateResponseVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyFileDownloadVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyFileVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyVO;
@@ -14,6 +15,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -28,6 +30,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -123,6 +126,101 @@ class AdminCompanyWorkControllerTests {
 			.andExpect(jsonPath("$.replySeq").value(7))
 			.andExpect(jsonPath("$.replyFileList[0].replyFileSeq").value(11))
 			.andExpect(jsonPath("$.replyFileList[0].replyFileNm").value("회의록.pdf"));
+	}
+
+	/**
+	 * 인증된 회사 업무 수기 등록 성공 응답을 검증합니다.
+	 */
+	@Test
+	@DisplayName("인증된 회사 업무 수기 등록은 저장 결과를 반환한다")
+	void createAdminCompanyWorkManualReturnsCreatedWork() throws Exception {
+		authenticateAdmin();
+
+		// 저장 완료 응답을 구성합니다.
+		AdminCompanyWorkManualCreateResponseVO response = new AdminCompanyWorkManualCreateResponseVO();
+		response.setMessage("업무를 등록했습니다.");
+		response.setWorkSeq(15L);
+		response.setWorkKey("MANUAL-20260409153045123-101");
+		when(companyWorkService.createAdminCompanyWorkManual(any())).thenReturn(response);
+
+		mockMvc.perform(
+				post("/api/admin/company/work/manual")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{
+						  "workCompanySeq":1,
+						  "workCompanyProjectSeq":2,
+						  "title":"수기 등록 업무",
+						  "content":"<p>본문</p>",
+						  "coManager":"홍길동",
+						  "workPriorCd":"WORK_PRIOR_02",
+						  "regNo":101,
+						  "udtNo":101
+						}
+						""")
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.message").value("업무를 등록했습니다."))
+			.andExpect(jsonPath("$.workSeq").value(15))
+			.andExpect(jsonPath("$.workKey").value("MANUAL-20260409153045123-101"));
+	}
+
+	/**
+	 * 인증되지 않은 회사 업무 수기 등록 차단을 검증합니다.
+	 */
+	@Test
+	@DisplayName("인증되지 않은 회사 업무 수기 등록은 401을 반환한다")
+	void createAdminCompanyWorkManualRejectsUnauthenticatedRequest() throws Exception {
+		mockMvc.perform(
+				post("/api/admin/company/work/manual")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{
+						  "workCompanySeq":1,
+						  "workCompanyProjectSeq":2,
+						  "title":"수기 등록 업무",
+						  "content":"<p>본문</p>",
+						  "coManager":"홍길동",
+						  "workPriorCd":"WORK_PRIOR_02",
+						  "regNo":101,
+						  "udtNo":101
+						}
+						""")
+			)
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
+
+		// 인증 차단 시 서비스는 호출되지 않아야 합니다.
+		verifyNoInteractions(companyWorkService);
+	}
+
+	/**
+	 * 수기 등록 요청값 오류 응답을 검증합니다.
+	 */
+	@Test
+	@DisplayName("회사 업무 수기 등록 요청값 오류는 400을 반환한다")
+	void createAdminCompanyWorkManualReturnsBadRequestOnIllegalArgument() throws Exception {
+		authenticateAdmin();
+		when(companyWorkService.createAdminCompanyWorkManual(any())).thenThrow(new IllegalArgumentException("우선순위를 확인해주세요."));
+
+		mockMvc.perform(
+				post("/api/admin/company/work/manual")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{
+						  "workCompanySeq":1,
+						  "workCompanyProjectSeq":2,
+						  "title":"수기 등록 업무",
+						  "content":"<p>본문</p>",
+						  "coManager":"홍길동",
+						  "workPriorCd":"INVALID",
+						  "regNo":101,
+						  "udtNo":101
+						}
+						""")
+			)
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("우선순위를 확인해주세요."));
 	}
 
 	/**
