@@ -444,7 +444,7 @@
 		SELECT COUNT(*)
 		  FROM snippet.snippet_tag
 		 WHERE SNIPPET_USER_NO = #{snippetUserNo}
-		   AND TAG_NM = #{tagNm}
+		   AND LOWER(TAG_NM) = LOWER(#{tagNm})
 		   AND DEL_YN = 'N'
 		<if test="excludeTagNo != null">
 		  AND TAG_NO != #{excludeTagNo}

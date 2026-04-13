@@ -434,15 +434,27 @@ public class SnippetService {
 
 	// 태그 저장 요청을 정규화합니다.
 	private SnippetTagSavePO normalizeTagCommand(SnippetTagSavePO command) {
-		// 태그명과 색상값의 공백을 제거해 저장 기준을 일관되게 맞춥니다.
+		// 태그명은 # 접두사를 제거하고 색상값은 공백을 제거해 저장 기준을 일관되게 맞춥니다.
 		if (command == null) {
 			throw new IllegalArgumentException("태그 저장 요청이 없습니다.");
 		}
 		return new SnippetTagSavePO(
-			normalizeRequiredText(command.tagNm(), "태그명을 입력해주세요."),
+			normalizeTagName(command.tagNm()),
 			trimToNull(command.colorHex()),
 			command.sortSeq()
 		);
+	}
+
+	// 태그명을 저장 기준에 맞게 정규화합니다.
+	private String normalizeTagName(String value) {
+		// 사용자가 입력한 # 접두사는 제거하고, 실제 저장값은 비어 있지 않은 태그명만 허용합니다.
+		String normalizedValue = normalizeRequiredText(value, "태그명을 입력해주세요.");
+		String removedPrefixValue = normalizedValue.replaceFirst("^#+", "");
+		String resolvedValue = trimToNull(removedPrefixValue);
+		if (resolvedValue == null) {
+			throw new IllegalArgumentException("태그명을 입력해주세요.");
+		}
+		return resolvedValue;
 	}
 
 	// 언어 저장 요청을 정규화합니다.
