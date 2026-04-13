@@ -1,0 +1,620 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+		"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.xodud1202.springbackend.mapper.SnippetMapper">
+	<resultMap id="snippetUserSessionResultMap" type="com.xodud1202.springbackend.domain.snippet.SnippetUserSessionVO">
+		<constructor>
+			<idArg column="SNIPPET_USER_NO" javaType="java.lang.Long"/>
+			<arg column="GOOGLE_SUB" javaType="java.lang.String"/>
+			<arg column="EMAIL" javaType="java.lang.String"/>
+			<arg column="USER_NM" javaType="java.lang.String"/>
+			<arg column="PROFILE_IMG_URL" javaType="java.lang.String"/>
+			<arg column="USE_YN" javaType="java.lang.String"/>
+			<arg column="DEL_YN" javaType="java.lang.String"/>
+		</constructor>
+	</resultMap>
+
+	<resultMap id="snippetLanguageResultMap" type="com.xodud1202.springbackend.domain.snippet.SnippetLanguageVO">
+		<constructor>
+			<idArg column="LANGUAGE_CD" javaType="java.lang.String"/>
+			<arg column="LANGUAGE_NM" javaType="java.lang.String"/>
+			<arg column="EDITOR_MODE" javaType="java.lang.String"/>
+			<arg column="SORT_SEQ" javaType="java.lang.Integer"/>
+		</constructor>
+	</resultMap>
+
+	<resultMap id="snippetFolderResultMap" type="com.xodud1202.springbackend.domain.snippet.SnippetFolderVO">
+		<constructor>
+			<idArg column="FOLDER_NO" javaType="java.lang.Long"/>
+			<arg column="SNIPPET_USER_NO" javaType="java.lang.Long"/>
+			<arg column="FOLDER_NM" javaType="java.lang.String"/>
+			<arg column="COLOR_HEX" javaType="java.lang.String"/>
+			<arg column="SORT_SEQ" javaType="java.lang.Integer"/>
+			<arg column="SNIPPET_COUNT" javaType="java.lang.Long"/>
+		</constructor>
+	</resultMap>
+
+	<resultMap id="snippetTagResultMap" type="com.xodud1202.springbackend.domain.snippet.SnippetTagVO">
+		<constructor>
+			<idArg column="TAG_NO" javaType="java.lang.Long"/>
+			<arg column="SNIPPET_USER_NO" javaType="java.lang.Long"/>
+			<arg column="TAG_NM" javaType="java.lang.String"/>
+			<arg column="COLOR_HEX" javaType="java.lang.String"/>
+			<arg column="SORT_SEQ" javaType="java.lang.Integer"/>
+			<arg column="SNIPPET_COUNT" javaType="java.lang.Long"/>
+		</constructor>
+	</resultMap>
+
+	<resultMap id="snippetSummaryResultMap" type="com.xodud1202.springbackend.domain.snippet.SnippetSummaryVO">
+		<constructor>
+			<idArg column="SNIPPET_NO" javaType="java.lang.Long"/>
+			<arg column="TITLE" javaType="java.lang.String"/>
+			<arg column="SUMMARY" javaType="java.lang.String"/>
+			<arg column="LANGUAGE_CD" javaType="java.lang.String"/>
+			<arg column="LANGUAGE_NM" javaType="java.lang.String"/>
+			<arg column="IS_FAVORITE" javaType="java.lang.String"/>
+			<arg column="FOLDER_NO" javaType="java.lang.Long"/>
+			<arg column="FOLDER_NM" javaType="java.lang.String"/>
+			<arg column="TAG_NAME_TEXT" javaType="java.lang.String"/>
+			<arg column="LAST_COPIED_DT" javaType="java.time.LocalDateTime"/>
+			<arg column="REG_DT" javaType="java.time.LocalDateTime"/>
+			<arg column="UDT_DT" javaType="java.time.LocalDateTime"/>
+		</constructor>
+	</resultMap>
+
+	<resultMap id="snippetDetailRowResultMap" type="com.xodud1202.springbackend.domain.snippet.SnippetDetailRowVO">
+		<constructor>
+			<idArg column="SNIPPET_NO" javaType="java.lang.Long"/>
+			<arg column="FOLDER_NO" javaType="java.lang.Long"/>
+			<arg column="LANGUAGE_CD" javaType="java.lang.String"/>
+			<arg column="TITLE" javaType="java.lang.String"/>
+			<arg column="SUMMARY" javaType="java.lang.String"/>
+			<arg column="SNIPPET_BODY" javaType="java.lang.String"/>
+			<arg column="MEMO" javaType="java.lang.String"/>
+			<arg column="IS_FAVORITE" javaType="java.lang.String"/>
+			<arg column="LAST_COPIED_DT" javaType="java.time.LocalDateTime"/>
+			<arg column="REG_DT" javaType="java.time.LocalDateTime"/>
+			<arg column="UDT_DT" javaType="java.time.LocalDateTime"/>
+		</constructor>
+	</resultMap>
+
+	<sql id="snippetListFilterWhere">
+		WHERE base.SNIPPET_USER_NO = #{snippetUserNo}
+		  AND base.DEL_YN = 'N'
+		<if test="query.q != null and query.q != ''">
+		  AND (
+		       base.TITLE LIKE CONCAT('%', #{query.q}, '%')
+		    OR base.SUMMARY LIKE CONCAT('%', #{query.q}, '%')
+		    OR base.MEMO LIKE CONCAT('%', #{query.q}, '%')
+		  )
+		</if>
+		<if test="query.folderNo != null">
+		  AND base.FOLDER_NO = #{query.folderNo}
+		</if>
+		<if test="query.tagNo != null">
+		  AND EXISTS (
+			  SELECT 1
+			    FROM snippet.snippet_tag_map filter_map
+			   WHERE filter_map.SNIPPET_NO = base.SNIPPET_NO
+			     AND filter_map.TAG_NO = #{query.tagNo}
+		  )
+		</if>
+		<if test="query.languageCd != null and query.languageCd != ''">
+		  AND base.LANGUAGE_CD = #{query.languageCd}
+		</if>
+		<if test="query.favoriteYn != null and query.favoriteYn != ''">
+		  AND base.IS_FAVORITE = #{query.favoriteYn}
+		</if>
+	</sql>
+
+	<select id="getSnippetUserByGoogleSub" resultMap="snippetUserSessionResultMap">
+		/* SnippetMapper.getSnippetUserByGoogleSub: 구글 식별값으로 스니펫 사용자를 조회 */
+		SELECT SNIPPET_USER_NO
+		     , GOOGLE_SUB
+		     , EMAIL
+		     , USER_NM
+		     , PROFILE_IMG_URL
+		     , USE_YN
+		     , DEL_YN
+		  FROM snippet.snippet_user
+		 WHERE GOOGLE_SUB = #{googleSub}
+		   AND USE_YN = 'Y'
+		   AND DEL_YN = 'N'
+		 LIMIT 1
+	</select>
+
+	<select id="getSnippetUserByUserNo" resultMap="snippetUserSessionResultMap">
+		/* SnippetMapper.getSnippetUserByUserNo: 사용자 번호로 스니펫 사용자를 조회 */
+		SELECT SNIPPET_USER_NO
+		     , GOOGLE_SUB
+		     , EMAIL
+		     , USER_NM
+		     , PROFILE_IMG_URL
+		     , USE_YN
+		     , DEL_YN
+		  FROM snippet.snippet_user
+		 WHERE SNIPPET_USER_NO = #{snippetUserNo}
+		   AND USE_YN = 'Y'
+		   AND DEL_YN = 'N'
+		 LIMIT 1
+	</select>
+
+	<insert id="insertSnippetUser" useGeneratedKeys="true" keyProperty="generatedKey.value" keyColumn="SNIPPET_USER_NO">
+		/* SnippetMapper.insertSnippetUser: 신규 스니펫 사용자를 등록 */
+		INSERT INTO snippet.snippet_user (
+		       GOOGLE_SUB
+		     , EMAIL
+		     , USER_NM
+		     , PROFILE_IMG_URL
+		     , LAST_LOGIN_DT
+		     , USE_YN
+		     , DEL_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{command.googleSub}
+		     , #{command.email}
+		     , #{command.userNm}
+		     , #{command.profileImgUrl}
+		     , NOW()
+		     , 'Y'
+		     , 'N'
+		     , #{command.regNo}
+		     , #{command.udtNo}
+		)
+	</insert>
+
+	<update id="updateSnippetUserAuditNo">
+		/* SnippetMapper.updateSnippetUserAuditNo: 신규 사용자 감사 번호를 사용자 번호 기준으로 갱신 */
+		UPDATE snippet.snippet_user
+		   SET REG_NO = #{auditNo}
+		     , UDT_NO = #{auditNo}
+		     , UDT_DT = NOW()
+		 WHERE SNIPPET_USER_NO = #{snippetUserNo}
+	</update>
+
+	<update id="updateSnippetUserLoginInfo">
+		/* SnippetMapper.updateSnippetUserLoginInfo: 로그인 시 사용자 최신 정보를 갱신 */
+		UPDATE snippet.snippet_user
+		   SET EMAIL = #{email}
+		     , USER_NM = #{userNm}
+		     , PROFILE_IMG_URL = #{profileImgUrl}
+		     , LAST_LOGIN_DT = NOW()
+		     , UDT_NO = #{auditNo}
+		     , UDT_DT = NOW()
+		 WHERE SNIPPET_USER_NO = #{snippetUserNo}
+	</update>
+
+	<select id="getSnippetLanguageList" resultMap="snippetLanguageResultMap">
+		/* SnippetMapper.getSnippetLanguageList: 사용 가능한 언어 마스터 목록을 조회 */
+		SELECT LANGUAGE_CD
+		     , LANGUAGE_NM
+		     , EDITOR_MODE
+		     , SORT_SEQ
+		  FROM snippet.snippet_language
+		 WHERE USE_YN = 'Y'
+		 ORDER BY SORT_SEQ ASC, LANGUAGE_CD ASC
+	</select>
+
+	<select id="getSnippetFolderList" resultMap="snippetFolderResultMap">
+		/* SnippetMapper.getSnippetFolderList: 사용자별 폴더 목록과 스니펫 건수를 조회 */
+		SELECT folder.FOLDER_NO
+		     , folder.SNIPPET_USER_NO
+		     , folder.FOLDER_NM
+		     , folder.COLOR_HEX
+		     , folder.SORT_SEQ
+		     , COUNT(base.SNIPPET_NO) AS SNIPPET_COUNT
+		  FROM snippet.snippet_folder folder
+		  LEFT JOIN snippet.snippet_base base
+		    ON base.FOLDER_NO = folder.FOLDER_NO
+		   AND base.DEL_YN = 'N'
+		 WHERE folder.SNIPPET_USER_NO = #{snippetUserNo}
+		   AND folder.DEL_YN = 'N'
+		 GROUP BY folder.FOLDER_NO
+		        , folder.SNIPPET_USER_NO
+		        , folder.FOLDER_NM
+		        , folder.COLOR_HEX
+		        , folder.SORT_SEQ
+		 ORDER BY folder.SORT_SEQ ASC, folder.FOLDER_NO ASC
+	</select>
+
+	<select id="getSnippetTagList" resultMap="snippetTagResultMap">
+		/* SnippetMapper.getSnippetTagList: 사용자별 태그 목록과 스니펫 건수를 조회 */
+		SELECT tag.TAG_NO
+		     , tag.SNIPPET_USER_NO
+		     , tag.TAG_NM
+		     , tag.COLOR_HEX
+		     , tag.SORT_SEQ
+		     , COUNT(DISTINCT base.SNIPPET_NO) AS SNIPPET_COUNT
+		  FROM snippet.snippet_tag tag
+		  LEFT JOIN snippet.snippet_tag_map tag_map
+		    ON tag_map.TAG_NO = tag.TAG_NO
+		  LEFT JOIN snippet.snippet_base base
+		    ON base.SNIPPET_NO = tag_map.SNIPPET_NO
+		   AND base.SNIPPET_USER_NO = tag.SNIPPET_USER_NO
+		   AND base.DEL_YN = 'N'
+		 WHERE tag.SNIPPET_USER_NO = #{snippetUserNo}
+		   AND tag.DEL_YN = 'N'
+		 GROUP BY tag.TAG_NO
+		        , tag.SNIPPET_USER_NO
+		        , tag.TAG_NM
+		        , tag.COLOR_HEX
+		        , tag.SORT_SEQ
+		 ORDER BY tag.SORT_SEQ ASC, tag.TAG_NO ASC
+	</select>
+
+	<select id="countFolderByUserNo" resultType="int">
+		/* SnippetMapper.countFolderByUserNo: 사용자 소유 폴더 존재 여부를 확인 */
+		SELECT COUNT(*)
+		  FROM snippet.snippet_folder
+		 WHERE SNIPPET_USER_NO = #{snippetUserNo}
+		   AND FOLDER_NO = #{folderNo}
+		   AND DEL_YN = 'N'
+	</select>
+
+	<select id="countTagByUserNo" resultType="int">
+		/* SnippetMapper.countTagByUserNo: 사용자 소유 태그 존재 여부를 확인 */
+		SELECT COUNT(*)
+		  FROM snippet.snippet_tag
+		 WHERE SNIPPET_USER_NO = #{snippetUserNo}
+		   AND TAG_NO = #{tagNo}
+		   AND DEL_YN = 'N'
+	</select>
+
+	<select id="countLanguageByLanguageCd" resultType="int">
+		/* SnippetMapper.countLanguageByLanguageCd: 사용 가능한 언어 코드 존재 여부를 확인 */
+		SELECT COUNT(*)
+		  FROM snippet.snippet_language
+		 WHERE LANGUAGE_CD = #{languageCd}
+		   AND USE_YN = 'Y'
+	</select>
+
+	<select id="countOwnedTagList" resultType="int">
+		/* SnippetMapper.countOwnedTagList: 사용자 소유 태그 목록 건수를 확인 */
+		SELECT COUNT(*)
+		  FROM snippet.snippet_tag
+		 WHERE SNIPPET_USER_NO = #{snippetUserNo}
+		   AND DEL_YN = 'N'
+		   AND TAG_NO IN
+		<foreach collection="tagNoList" item="tagNo" open="(" separator="," close=")">
+			#{tagNo}
+		</foreach>
+	</select>
+
+	<select id="getFolderDuplicateCount" resultType="int">
+		/* SnippetMapper.getFolderDuplicateCount: 폴더명 중복 건수를 조회 */
+		SELECT COUNT(*)
+		  FROM snippet.snippet_folder
+		 WHERE SNIPPET_USER_NO = #{snippetUserNo}
+		   AND FOLDER_NM = #{folderNm}
+		   AND DEL_YN = 'N'
+		<if test="excludeFolderNo != null">
+		  AND FOLDER_NO != #{excludeFolderNo}
+		</if>
+	</select>
+
+	<select id="getTagDuplicateCount" resultType="int">
+		/* SnippetMapper.getTagDuplicateCount: 태그명 중복 건수를 조회 */
+		SELECT COUNT(*)
+		  FROM snippet.snippet_tag
+		 WHERE SNIPPET_USER_NO = #{snippetUserNo}
+		   AND TAG_NM = #{tagNm}
+		   AND DEL_YN = 'N'
+		<if test="excludeTagNo != null">
+		  AND TAG_NO != #{excludeTagNo}
+		</if>
+	</select>
+
+	<select id="getMaxFolderSortSeq" resultType="int">
+		/* SnippetMapper.getMaxFolderSortSeq: 폴더 정렬순서 최대값을 조회 */
+		SELECT COALESCE(MAX(SORT_SEQ), 0)
+		  FROM snippet.snippet_folder
+		 WHERE SNIPPET_USER_NO = #{snippetUserNo}
+		   AND DEL_YN = 'N'
+	</select>
+
+	<select id="getMaxTagSortSeq" resultType="int">
+		/* SnippetMapper.getMaxTagSortSeq: 태그 정렬순서 최대값을 조회 */
+		SELECT COALESCE(MAX(SORT_SEQ), 0)
+		  FROM snippet.snippet_tag
+		 WHERE SNIPPET_USER_NO = #{snippetUserNo}
+		   AND DEL_YN = 'N'
+	</select>
+
+	<select id="getSnippetCount" resultType="int">
+		/* SnippetMapper.getSnippetCount: 스니펫 목록 총 건수를 조회 */
+		SELECT COUNT(DISTINCT base.SNIPPET_NO)
+		  FROM snippet.snippet_base base
+		<include refid="snippetListFilterWhere"/>
+	</select>
+
+	<select id="getSnippetList" resultMap="snippetSummaryResultMap">
+		/* SnippetMapper.getSnippetList: 조건에 맞는 스니펫 목록을 조회 */
+		SELECT base.SNIPPET_NO
+		     , base.TITLE
+		     , base.SUMMARY
+		     , base.LANGUAGE_CD
+		     , language.LANGUAGE_NM
+		     , base.IS_FAVORITE
+		     , base.FOLDER_NO
+		     , folder.FOLDER_NM
+		     , GROUP_CONCAT(DISTINCT tag.TAG_NM ORDER BY tag.SORT_SEQ ASC SEPARATOR ', ') AS TAG_NAME_TEXT
+		     , base.LAST_COPIED_DT
+		     , base.REG_DT
+		     , base.UDT_DT
+		  FROM snippet.snippet_base base
+		  INNER JOIN snippet.snippet_language language
+		    ON language.LANGUAGE_CD = base.LANGUAGE_CD
+		  LEFT JOIN snippet.snippet_folder folder
+		    ON folder.FOLDER_NO = base.FOLDER_NO
+		   AND folder.DEL_YN = 'N'
+		  LEFT JOIN snippet.snippet_tag_map tag_map
+		    ON tag_map.SNIPPET_NO = base.SNIPPET_NO
+		  LEFT JOIN snippet.snippet_tag tag
+		    ON tag.TAG_NO = tag_map.TAG_NO
+		   AND tag.DEL_YN = 'N'
+		<include refid="snippetListFilterWhere"/>
+		 GROUP BY base.SNIPPET_NO
+		        , base.TITLE
+		        , base.SUMMARY
+		        , base.LANGUAGE_CD
+		        , language.LANGUAGE_NM
+		        , base.IS_FAVORITE
+		        , base.FOLDER_NO
+		        , folder.FOLDER_NM
+		        , base.LAST_COPIED_DT
+		        , base.REG_DT
+		        , base.UDT_DT
+		 ORDER BY base.UDT_DT DESC, base.SNIPPET_NO DESC
+		 LIMIT #{query.offset}, #{query.size}
+	</select>
+
+	<select id="getSnippetDetail" resultMap="snippetDetailRowResultMap">
+		/* SnippetMapper.getSnippetDetail: 스니펫 상세 본문을 조회 */
+		SELECT SNIPPET_NO
+		     , FOLDER_NO
+		     , LANGUAGE_CD
+		     , TITLE
+		     , SUMMARY
+		     , SNIPPET_BODY
+		     , MEMO
+		     , IS_FAVORITE
+		     , LAST_COPIED_DT
+		     , REG_DT
+		     , UDT_DT
+		  FROM snippet.snippet_base
+		 WHERE SNIPPET_USER_NO = #{snippetUserNo}
+		   AND SNIPPET_NO = #{snippetNo}
+		   AND DEL_YN = 'N'
+		 LIMIT 1
+	</select>
+
+	<select id="getSnippetTagNoList" resultType="long">
+		/* SnippetMapper.getSnippetTagNoList: 스니펫에 연결된 태그 번호 목록을 조회 */
+		SELECT tag_map.TAG_NO
+		  FROM snippet.snippet_tag_map tag_map
+		  INNER JOIN snippet.snippet_tag tag
+		    ON tag.TAG_NO = tag_map.TAG_NO
+		   AND tag.SNIPPET_USER_NO = #{snippetUserNo}
+		   AND tag.DEL_YN = 'N'
+		 WHERE tag_map.SNIPPET_NO = #{snippetNo}
+		 ORDER BY tag.SORT_SEQ ASC, tag_map.TAG_NO ASC
+	</select>
+
+	<insert id="insertSnippetBase" useGeneratedKeys="true" keyProperty="generatedKey.value" keyColumn="SNIPPET_NO">
+		/* SnippetMapper.insertSnippetBase: 신규 스니펫을 등록 */
+		INSERT INTO snippet.snippet_base (
+		       SNIPPET_USER_NO
+		     , FOLDER_NO
+		     , LANGUAGE_CD
+		     , TITLE
+		     , SUMMARY
+		     , SNIPPET_BODY
+		     , MEMO
+		     , IS_FAVORITE
+		     , DEL_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{snippetUserNo}
+		     , #{command.folderNo}
+		     , #{command.languageCd}
+		     , #{command.title}
+		     , #{command.summary}
+		     , #{command.snippetBody}
+		     , #{command.memo}
+		     , #{command.favoriteYn}
+		     , 'N'
+		     , #{auditNo}
+		     , #{auditNo}
+		)
+	</insert>
+
+	<update id="updateSnippetBase">
+		/* SnippetMapper.updateSnippetBase: 기존 스니펫을 수정 */
+		UPDATE snippet.snippet_base
+		   SET FOLDER_NO = #{command.folderNo}
+		     , LANGUAGE_CD = #{command.languageCd}
+		     , TITLE = #{command.title}
+		     , SUMMARY = #{command.summary}
+		     , SNIPPET_BODY = #{command.snippetBody}
+		     , MEMO = #{command.memo}
+		     , IS_FAVORITE = #{command.favoriteYn}
+		     , UDT_NO = #{auditNo}
+		     , UDT_DT = NOW()
+		 WHERE SNIPPET_USER_NO = #{snippetUserNo}
+		   AND SNIPPET_NO = #{snippetNo}
+		   AND DEL_YN = 'N'
+	</update>
+
+	<update id="softDeleteSnippet">
+		/* SnippetMapper.softDeleteSnippet: 스니펫을 소프트 삭제 */
+		UPDATE snippet.snippet_base
+		   SET DEL_YN = 'Y'
+		     , UDT_NO = #{auditNo}
+		     , UDT_DT = NOW()
+		 WHERE SNIPPET_USER_NO = #{snippetUserNo}
+		   AND SNIPPET_NO = #{snippetNo}
+		   AND DEL_YN = 'N'
+	</update>
+
+	<update id="updateSnippetFavorite">
+		/* SnippetMapper.updateSnippetFavorite: 스니펫 즐겨찾기 여부를 갱신 */
+		UPDATE snippet.snippet_base
+		   SET IS_FAVORITE = #{favoriteYn}
+		     , UDT_NO = #{auditNo}
+		     , UDT_DT = NOW()
+		 WHERE SNIPPET_USER_NO = #{snippetUserNo}
+		   AND SNIPPET_NO = #{snippetNo}
+		   AND DEL_YN = 'N'
+	</update>
+
+	<update id="updateSnippetLastCopiedDt">
+		/* SnippetMapper.updateSnippetLastCopiedDt: 스니펫 마지막 복사 일시를 갱신 */
+		UPDATE snippet.snippet_base
+		   SET LAST_COPIED_DT = NOW()
+		     , UDT_NO = #{auditNo}
+		     , UDT_DT = NOW()
+		 WHERE SNIPPET_USER_NO = #{snippetUserNo}
+		   AND SNIPPET_NO = #{snippetNo}
+		   AND DEL_YN = 'N'
+	</update>
+
+	<delete id="deleteSnippetTagMapBySnippetNo">
+		/* SnippetMapper.deleteSnippetTagMapBySnippetNo: 스니펫 태그 매핑을 모두 제거 */
+		DELETE tag_map
+		  FROM snippet.snippet_tag_map tag_map
+		  INNER JOIN snippet.snippet_base base
+		    ON base.SNIPPET_NO = tag_map.SNIPPET_NO
+		 WHERE base.SNIPPET_USER_NO = #{snippetUserNo}
+		   AND tag_map.SNIPPET_NO = #{snippetNo}
+	</delete>
+
+	<insert id="insertSnippetTagMapList">
+		/* SnippetMapper.insertSnippetTagMapList: 스니펫 태그 매핑을 일괄 등록 */
+		INSERT INTO snippet.snippet_tag_map (
+		       SNIPPET_NO
+		     , TAG_NO
+		     , REG_NO
+		) VALUES
+		<foreach collection="tagNoList" item="tagNo" separator=",">
+			(
+				#{snippetNo}
+			  , #{tagNo}
+			  , #{auditNo}
+			)
+		</foreach>
+	</insert>
+
+	<insert id="insertSnippetFolder" useGeneratedKeys="true" keyProperty="generatedKey.value" keyColumn="FOLDER_NO">
+		/* SnippetMapper.insertSnippetFolder: 사용자 폴더를 등록 */
+		INSERT INTO snippet.snippet_folder (
+		       SNIPPET_USER_NO
+		     , FOLDER_NM
+		     , COLOR_HEX
+		     , SORT_SEQ
+		     , DEL_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{snippetUserNo}
+		     , #{command.folderNm}
+		     , #{command.colorHex}
+		     , #{resolvedSortSeq}
+		     , 'N'
+		     , #{auditNo}
+		     , #{auditNo}
+		)
+	</insert>
+
+	<update id="updateSnippetFolder">
+		/* SnippetMapper.updateSnippetFolder: 사용자 폴더를 수정 */
+		UPDATE snippet.snippet_folder
+		   SET FOLDER_NM = #{command.folderNm}
+		     , COLOR_HEX = #{command.colorHex}
+		     , SORT_SEQ = #{resolvedSortSeq}
+		     , UDT_NO = #{auditNo}
+		     , UDT_DT = NOW()
+		 WHERE SNIPPET_USER_NO = #{snippetUserNo}
+		   AND FOLDER_NO = #{folderNo}
+		   AND DEL_YN = 'N'
+	</update>
+
+	<update id="softDeleteSnippetFolder">
+		/* SnippetMapper.softDeleteSnippetFolder: 사용자 폴더를 소프트 삭제 */
+		UPDATE snippet.snippet_folder
+		   SET DEL_YN = 'Y'
+		     , UDT_NO = #{auditNo}
+		     , UDT_DT = NOW()
+		 WHERE SNIPPET_USER_NO = #{snippetUserNo}
+		   AND FOLDER_NO = #{folderNo}
+		   AND DEL_YN = 'N'
+	</update>
+
+	<update id="clearSnippetFolder">
+		/* SnippetMapper.clearSnippetFolder: 폴더 삭제 전 연결 스니펫의 폴더를 해제 */
+		UPDATE snippet.snippet_base
+		   SET FOLDER_NO = NULL
+		     , UDT_NO = #{auditNo}
+		     , UDT_DT = NOW()
+		 WHERE SNIPPET_USER_NO = #{snippetUserNo}
+		   AND FOLDER_NO = #{folderNo}
+		   AND DEL_YN = 'N'
+	</update>
+
+	<insert id="insertSnippetTag" useGeneratedKeys="true" keyProperty="generatedKey.value" keyColumn="TAG_NO">
+		/* SnippetMapper.insertSnippetTag: 사용자 태그를 등록 */
+		INSERT INTO snippet.snippet_tag (
+		       SNIPPET_USER_NO
+		     , TAG_NM
+		     , COLOR_HEX
+		     , SORT_SEQ
+		     , DEL_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{snippetUserNo}
+		     , #{command.tagNm}
+		     , #{command.colorHex}
+		     , #{resolvedSortSeq}
+		     , 'N'
+		     , #{auditNo}
+		     , #{auditNo}
+		)
+	</insert>
+
+	<update id="updateSnippetTag">
+		/* SnippetMapper.updateSnippetTag: 사용자 태그를 수정 */
+		UPDATE snippet.snippet_tag
+		   SET TAG_NM = #{command.tagNm}
+		     , COLOR_HEX = #{command.colorHex}
+		     , SORT_SEQ = #{resolvedSortSeq}
+		     , UDT_NO = #{auditNo}
+		     , UDT_DT = NOW()
+		 WHERE SNIPPET_USER_NO = #{snippetUserNo}
+		   AND TAG_NO = #{tagNo}
+		   AND DEL_YN = 'N'
+	</update>
+
+	<update id="softDeleteSnippetTag">
+		/* SnippetMapper.softDeleteSnippetTag: 사용자 태그를 소프트 삭제 */
+		UPDATE snippet.snippet_tag
+		   SET DEL_YN = 'Y'
+		     , UDT_NO = #{auditNo}
+		     , UDT_DT = NOW()
+		 WHERE SNIPPET_USER_NO = #{snippetUserNo}
+		   AND TAG_NO = #{tagNo}
+		   AND DEL_YN = 'N'
+	</update>
+
+	<delete id="deleteSnippetTagMapByTagNo">
+		/* SnippetMapper.deleteSnippetTagMapByTagNo: 태그 삭제 전 관련 태그 매핑을 제거 */
+		DELETE tag_map
+		  FROM snippet.snippet_tag_map tag_map
+		  INNER JOIN snippet.snippet_tag tag
+		    ON tag.TAG_NO = tag_map.TAG_NO
+		 WHERE tag.SNIPPET_USER_NO = #{snippetUserNo}
+		   AND tag.TAG_NO = #{tagNo}
+	</delete>
+</mapper>

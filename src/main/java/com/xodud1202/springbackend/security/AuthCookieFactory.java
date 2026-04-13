@@ -12,6 +12,7 @@ import java.time.Duration;
 // 인증 관련 httpOnly 쿠키 생성 규칙을 중앙화합니다.
 public class AuthCookieFactory {
 	private static final Duration SHOP_SESSION_COOKIE_MAX_AGE = Duration.ofHours(1);
+	private static final Duration SNIPPET_SESSION_COOKIE_MAX_AGE = Duration.ofHours(1);
 
 	private final JwtProperties jwtProperties;
 
@@ -50,6 +51,28 @@ public class AuthCookieFactory {
 
 	// 쇼핑몰 로그인 만료 쿠키를 생성합니다.
 	public ResponseCookie createExpiredShopLoginCookie(String name) {
+		return ResponseCookie.from(name, "")
+			.httpOnly(true)
+			.secure(jwtProperties.cookieSecure())
+			.path("/")
+			.maxAge(Duration.ZERO)
+			.sameSite("Lax")
+			.build();
+	}
+
+	// 스니펫 로그인 쿠키를 생성합니다.
+	public ResponseCookie createSnippetLoginCookie(String name, String value) {
+		return ResponseCookie.from(name, value)
+			.httpOnly(true)
+			.secure(jwtProperties.cookieSecure())
+			.path("/")
+			.maxAge(SNIPPET_SESSION_COOKIE_MAX_AGE)
+			.sameSite("Lax")
+			.build();
+	}
+
+	// 스니펫 로그인 만료 쿠키를 생성합니다.
+	public ResponseCookie createExpiredSnippetLoginCookie(String name) {
 		return ResponseCookie.from(name, "")
 			.httpOnly(true)
 			.secure(jwtProperties.cookieSecure())
