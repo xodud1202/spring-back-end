@@ -13,7 +13,11 @@ public record SnippetDetailVO(
 	String snippetBody,
 	String memo,
 	String favoriteYn,
+	Integer viewCnt,
+	Integer copyCnt,
+	LocalDateTime lastViewedDt,
 	LocalDateTime lastCopiedDt,
+	String duplicateYn,
 	LocalDateTime regDt,
 	LocalDateTime udtDt,
 	List<Long> tagNoList

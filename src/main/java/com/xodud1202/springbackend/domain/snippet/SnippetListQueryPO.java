@@ -7,6 +7,9 @@ public record SnippetListQueryPO(
 	Long tagNo,
 	String languageCd,
 	String favoriteYn,
+	String includeBodyYn,
+	String sortBy,
+	String quickFilter,
 	Integer page,
 	Integer size,
 	Integer offset

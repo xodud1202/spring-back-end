@@ -51,6 +51,12 @@ public interface SnippetMapper {
 	// 사용자별 태그 목록과 스니펫 건수를 조회합니다.
 	List<SnippetTagVO> getSnippetTagList(@Param("snippetUserNo") Long snippetUserNo);
 
+	// 최근 조회한 스니펫 목록을 조회합니다.
+	List<SnippetSummaryVO> getRecentViewedSnippetList(@Param("snippetUserNo") Long snippetUserNo, @Param("limit") int limit);
+
+	// 최근 복사한 스니펫 목록을 조회합니다.
+	List<SnippetSummaryVO> getRecentCopiedSnippetList(@Param("snippetUserNo") Long snippetUserNo, @Param("limit") int limit);
+
 	// 사용자 소유 폴더 존재 여부를 확인합니다.
 	int countFolderByUserNo(@Param("snippetUserNo") Long snippetUserNo, @Param("folderNo") Long folderNo);
 
@@ -99,6 +105,7 @@ public interface SnippetMapper {
 	int insertSnippetBase(
 		@Param("snippetUserNo") Long snippetUserNo,
 		@Param("command") SnippetSavePO command,
+		@Param("bodyHash") String bodyHash,
 		@Param("auditNo") Long auditNo,
 		@Param("generatedKey") GeneratedLongKey generatedKey
 	);
@@ -108,6 +115,7 @@ public interface SnippetMapper {
 		@Param("snippetUserNo") Long snippetUserNo,
 		@Param("snippetNo") Long snippetNo,
 		@Param("command") SnippetSavePO command,
+		@Param("bodyHash") String bodyHash,
 		@Param("auditNo") Long auditNo
 	);
 
@@ -128,6 +136,13 @@ public interface SnippetMapper {
 
 	// 스니펫 마지막 복사 일시를 갱신합니다.
 	int updateSnippetLastCopiedDt(
+		@Param("snippetUserNo") Long snippetUserNo,
+		@Param("snippetNo") Long snippetNo,
+		@Param("auditNo") Long auditNo
+	);
+
+	// 스니펫 마지막 조회 일시와 조회 수를 갱신합니다.
+	int updateSnippetLastViewedDt(
 		@Param("snippetUserNo") Long snippetUserNo,
 		@Param("snippetNo") Long snippetNo,
 		@Param("auditNo") Long auditNo

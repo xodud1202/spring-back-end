@@ -7,6 +7,8 @@ public record SnippetBootstrapResponse(
 	SnippetUserSessionVO currentUser,
 	List<SnippetLanguageVO> languageList,
 	List<SnippetFolderVO> folderList,
-	List<SnippetTagVO> tagList
+	List<SnippetTagVO> tagList,
+	List<SnippetSummaryVO> recentViewedList,
+	List<SnippetSummaryVO> recentCopiedList
 ) {
 }

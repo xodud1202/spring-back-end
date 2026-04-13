@@ -13,7 +13,11 @@ public record SnippetSummaryVO(
 	Long folderNo,
 	String folderNm,
 	String tagNameText,
+	Integer viewCnt,
+	Integer copyCnt,
+	LocalDateTime lastViewedDt,
 	LocalDateTime lastCopiedDt,
+	String duplicateYn,
 	LocalDateTime regDt,
 	LocalDateTime udtDt
 ) {

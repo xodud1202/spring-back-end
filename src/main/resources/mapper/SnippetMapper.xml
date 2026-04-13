@@ -57,7 +57,11 @@
 			<arg column="FOLDER_NO" javaType="java.lang.Long"/>
 			<arg column="FOLDER_NM" javaType="java.lang.String"/>
 			<arg column="TAG_NAME_TEXT" javaType="java.lang.String"/>
+			<arg column="VIEW_CNT" javaType="java.lang.Integer"/>
+			<arg column="COPY_CNT" javaType="java.lang.Integer"/>
+			<arg column="LAST_VIEWED_DT" javaType="java.time.LocalDateTime"/>
 			<arg column="LAST_COPIED_DT" javaType="java.time.LocalDateTime"/>
+			<arg column="DUPLICATE_YN" javaType="java.lang.String"/>
 			<arg column="REG_DT" javaType="java.time.LocalDateTime"/>
 			<arg column="UDT_DT" javaType="java.time.LocalDateTime"/>
 		</constructor>
@@ -73,11 +77,78 @@
 			<arg column="SNIPPET_BODY" javaType="java.lang.String"/>
 			<arg column="MEMO" javaType="java.lang.String"/>
 			<arg column="IS_FAVORITE" javaType="java.lang.String"/>
+			<arg column="VIEW_CNT" javaType="java.lang.Integer"/>
+			<arg column="COPY_CNT" javaType="java.lang.Integer"/>
+			<arg column="LAST_VIEWED_DT" javaType="java.time.LocalDateTime"/>
 			<arg column="LAST_COPIED_DT" javaType="java.time.LocalDateTime"/>
+			<arg column="DUPLICATE_YN" javaType="java.lang.String"/>
 			<arg column="REG_DT" javaType="java.time.LocalDateTime"/>
 			<arg column="UDT_DT" javaType="java.time.LocalDateTime"/>
 		</constructor>
 	</resultMap>
+
+	<sql id="snippetDuplicateCondition">
+		base.BODY_HASH IS NOT NULL
+		AND EXISTS (
+			SELECT 1
+			  FROM snippet.snippet_base duplicate_base
+			 WHERE duplicate_base.SNIPPET_USER_NO = base.SNIPPET_USER_NO
+			   AND duplicate_base.DEL_YN = 'N'
+			   AND duplicate_base.BODY_HASH = base.BODY_HASH
+			   AND duplicate_base.SNIPPET_NO != base.SNIPPET_NO
+		)
+	</sql>
+
+	<sql id="snippetSummarySelectColumns">
+		base.SNIPPET_NO
+		     , base.TITLE
+		     , base.SUMMARY
+		     , base.LANGUAGE_CD
+		     , language.LANGUAGE_NM
+		     , base.IS_FAVORITE
+		     , base.FOLDER_NO
+		     , folder.FOLDER_NM
+		     , GROUP_CONCAT(DISTINCT tag.TAG_NM ORDER BY tag.SORT_SEQ ASC SEPARATOR ', ') AS TAG_NAME_TEXT
+		     , base.VIEW_CNT
+		     , base.COPY_CNT
+		     , base.LAST_VIEWED_DT
+		     , base.LAST_COPIED_DT
+		     , CASE WHEN <include refid="snippetDuplicateCondition"/> THEN 'Y' ELSE 'N' END AS DUPLICATE_YN
+		     , base.REG_DT
+		     , base.UDT_DT
+	</sql>
+
+	<sql id="snippetSummaryFromJoin">
+		FROM snippet.snippet_base base
+		INNER JOIN snippet.snippet_language language
+		  ON language.LANGUAGE_CD = base.LANGUAGE_CD
+		LEFT JOIN snippet.snippet_folder folder
+		  ON folder.FOLDER_NO = base.FOLDER_NO
+		 AND folder.DEL_YN = 'N'
+		LEFT JOIN snippet.snippet_tag_map tag_map
+		  ON tag_map.SNIPPET_NO = base.SNIPPET_NO
+		LEFT JOIN snippet.snippet_tag tag
+		  ON tag.TAG_NO = tag_map.TAG_NO
+		 AND tag.DEL_YN = 'N'
+	</sql>
+
+	<sql id="snippetSummaryGroupBy">
+		GROUP BY base.SNIPPET_NO
+		       , base.TITLE
+		       , base.SUMMARY
+		       , base.LANGUAGE_CD
+		       , language.LANGUAGE_NM
+		       , base.IS_FAVORITE
+		       , base.FOLDER_NO
+		       , folder.FOLDER_NM
+		       , base.VIEW_CNT
+		       , base.COPY_CNT
+		       , base.LAST_VIEWED_DT
+		       , base.LAST_COPIED_DT
+		       , base.BODY_HASH
+		       , base.REG_DT
+		       , base.UDT_DT
+	</sql>
 
 	<sql id="snippetListFilterWhere">
 		WHERE base.SNIPPET_USER_NO = #{snippetUserNo}
@@ -87,6 +158,9 @@
 		       base.TITLE LIKE CONCAT('%', #{query.q}, '%')
 		    OR base.SUMMARY LIKE CONCAT('%', #{query.q}, '%')
 		    OR base.MEMO LIKE CONCAT('%', #{query.q}, '%')
+			<if test="query.includeBodyYn == 'Y'">
+		    OR base.SNIPPET_BODY LIKE CONCAT('%', #{query.q}, '%')
+			</if>
 		  )
 		</if>
 		<if test="query.folderNo != null">
@@ -105,6 +179,20 @@
 		</if>
 		<if test="query.favoriteYn != null and query.favoriteYn != ''">
 		  AND base.IS_FAVORITE = #{query.favoriteYn}
+		</if>
+		<if test="query.quickFilter == 'favorite'">
+		  AND base.IS_FAVORITE = 'Y'
+		</if>
+		<if test="query.quickFilter == 'recent_viewed'">
+		  AND base.LAST_VIEWED_DT IS NOT NULL
+		  AND base.LAST_VIEWED_DT >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+		</if>
+		<if test="query.quickFilter == 'recent_copied'">
+		  AND base.LAST_COPIED_DT IS NOT NULL
+		  AND base.LAST_COPIED_DT >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+		</if>
+		<if test="query.quickFilter == 'duplicate'">
+		  AND <include refid="snippetDuplicateCondition"/>
 		</if>
 	</sql>
 
@@ -244,6 +332,32 @@
 		 ORDER BY tag.SORT_SEQ ASC, tag.TAG_NO ASC
 	</select>
 
+	<select id="getRecentViewedSnippetList" resultMap="snippetSummaryResultMap">
+		/* SnippetMapper.getRecentViewedSnippetList: 최근 30일 내 조회한 스니펫 목록을 조회 */
+		SELECT <include refid="snippetSummarySelectColumns"/>
+		<include refid="snippetSummaryFromJoin"/>
+		 WHERE base.SNIPPET_USER_NO = #{snippetUserNo}
+		   AND base.DEL_YN = 'N'
+		   AND base.LAST_VIEWED_DT IS NOT NULL
+		   AND base.LAST_VIEWED_DT >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+		<include refid="snippetSummaryGroupBy"/>
+		 ORDER BY base.LAST_VIEWED_DT DESC, base.SNIPPET_NO DESC
+		 LIMIT 0, #{limit}
+	</select>
+
+	<select id="getRecentCopiedSnippetList" resultMap="snippetSummaryResultMap">
+		/* SnippetMapper.getRecentCopiedSnippetList: 최근 30일 내 복사한 스니펫 목록을 조회 */
+		SELECT <include refid="snippetSummarySelectColumns"/>
+		<include refid="snippetSummaryFromJoin"/>
+		 WHERE base.SNIPPET_USER_NO = #{snippetUserNo}
+		   AND base.DEL_YN = 'N'
+		   AND base.LAST_COPIED_DT IS NOT NULL
+		   AND base.LAST_COPIED_DT >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+		<include refid="snippetSummaryGroupBy"/>
+		 ORDER BY base.LAST_COPIED_DT DESC, base.SNIPPET_NO DESC
+		 LIMIT 0, #{limit}
+	</select>
+
 	<select id="countFolderByUserNo" resultType="int">
 		/* SnippetMapper.countFolderByUserNo: 사용자 소유 폴더 존재 여부를 확인 */
 		SELECT COUNT(*)
@@ -331,62 +445,51 @@
 
 	<select id="getSnippetList" resultMap="snippetSummaryResultMap">
 		/* SnippetMapper.getSnippetList: 조건에 맞는 스니펫 목록을 조회 */
-		SELECT base.SNIPPET_NO
-		     , base.TITLE
-		     , base.SUMMARY
-		     , base.LANGUAGE_CD
-		     , language.LANGUAGE_NM
-		     , base.IS_FAVORITE
-		     , base.FOLDER_NO
-		     , folder.FOLDER_NM
-		     , GROUP_CONCAT(DISTINCT tag.TAG_NM ORDER BY tag.SORT_SEQ ASC SEPARATOR ', ') AS TAG_NAME_TEXT
-		     , base.LAST_COPIED_DT
-		     , base.REG_DT
-		     , base.UDT_DT
-		  FROM snippet.snippet_base base
-		  INNER JOIN snippet.snippet_language language
-		    ON language.LANGUAGE_CD = base.LANGUAGE_CD
-		  LEFT JOIN snippet.snippet_folder folder
-		    ON folder.FOLDER_NO = base.FOLDER_NO
-		   AND folder.DEL_YN = 'N'
-		  LEFT JOIN snippet.snippet_tag_map tag_map
-		    ON tag_map.SNIPPET_NO = base.SNIPPET_NO
-		  LEFT JOIN snippet.snippet_tag tag
-		    ON tag.TAG_NO = tag_map.TAG_NO
-		   AND tag.DEL_YN = 'N'
+		SELECT <include refid="snippetSummarySelectColumns"/>
+		<include refid="snippetSummaryFromJoin"/>
 		<include refid="snippetListFilterWhere"/>
-		 GROUP BY base.SNIPPET_NO
-		        , base.TITLE
-		        , base.SUMMARY
-		        , base.LANGUAGE_CD
-		        , language.LANGUAGE_NM
-		        , base.IS_FAVORITE
-		        , base.FOLDER_NO
-		        , folder.FOLDER_NM
-		        , base.LAST_COPIED_DT
-		        , base.REG_DT
-		        , base.UDT_DT
+		<include refid="snippetSummaryGroupBy"/>
+		<choose>
+			<when test="query.sortBy == 'viewed_desc'">
+		 ORDER BY base.LAST_VIEWED_DT DESC, base.UDT_DT DESC, base.SNIPPET_NO DESC
+			</when>
+			<when test="query.sortBy == 'copied_desc'">
+		 ORDER BY base.LAST_COPIED_DT DESC, base.UDT_DT DESC, base.SNIPPET_NO DESC
+			</when>
+			<when test="query.sortBy == 'copy_count_desc'">
+		 ORDER BY base.COPY_CNT DESC, base.LAST_COPIED_DT DESC, base.SNIPPET_NO DESC
+			</when>
+			<when test="query.sortBy == 'title_asc'">
+		 ORDER BY base.TITLE ASC, base.SNIPPET_NO DESC
+			</when>
+			<otherwise>
 		 ORDER BY base.UDT_DT DESC, base.SNIPPET_NO DESC
+			</otherwise>
+		</choose>
 		 LIMIT #{query.offset}, #{query.size}
 	</select>
 
 	<select id="getSnippetDetail" resultMap="snippetDetailRowResultMap">
 		/* SnippetMapper.getSnippetDetail: 스니펫 상세 본문을 조회 */
-		SELECT SNIPPET_NO
-		     , FOLDER_NO
-		     , LANGUAGE_CD
-		     , TITLE
-		     , SUMMARY
-		     , SNIPPET_BODY
-		     , MEMO
-		     , IS_FAVORITE
-		     , LAST_COPIED_DT
-		     , REG_DT
-		     , UDT_DT
-		  FROM snippet.snippet_base
-		 WHERE SNIPPET_USER_NO = #{snippetUserNo}
-		   AND SNIPPET_NO = #{snippetNo}
-		   AND DEL_YN = 'N'
+		SELECT base.SNIPPET_NO
+		     , base.FOLDER_NO
+		     , base.LANGUAGE_CD
+		     , base.TITLE
+		     , base.SUMMARY
+		     , base.SNIPPET_BODY
+		     , base.MEMO
+		     , base.IS_FAVORITE
+		     , base.VIEW_CNT
+		     , base.COPY_CNT
+		     , base.LAST_VIEWED_DT
+		     , base.LAST_COPIED_DT
+		     , CASE WHEN <include refid="snippetDuplicateCondition"/> THEN 'Y' ELSE 'N' END AS DUPLICATE_YN
+		     , base.REG_DT
+		     , base.UDT_DT
+		  FROM snippet.snippet_base base
+		 WHERE base.SNIPPET_USER_NO = #{snippetUserNo}
+		   AND base.SNIPPET_NO = #{snippetNo}
+		   AND base.DEL_YN = 'N'
 		 LIMIT 1
 	</select>
 
@@ -413,6 +516,7 @@
 		     , SNIPPET_BODY
 		     , MEMO
 		     , IS_FAVORITE
+		     , BODY_HASH
 		     , DEL_YN
 		     , REG_NO
 		     , UDT_NO
@@ -425,6 +529,7 @@
 		     , #{command.snippetBody}
 		     , #{command.memo}
 		     , #{command.favoriteYn}
+		     , #{bodyHash}
 		     , 'N'
 		     , #{auditNo}
 		     , #{auditNo}
@@ -441,6 +546,7 @@
 		     , SNIPPET_BODY = #{command.snippetBody}
 		     , MEMO = #{command.memo}
 		     , IS_FAVORITE = #{command.favoriteYn}
+		     , BODY_HASH = #{bodyHash}
 		     , UDT_NO = #{auditNo}
 		     , UDT_DT = NOW()
 		 WHERE SNIPPET_USER_NO = #{snippetUserNo}
@@ -471,9 +577,22 @@
 	</update>
 
 	<update id="updateSnippetLastCopiedDt">
-		/* SnippetMapper.updateSnippetLastCopiedDt: 스니펫 마지막 복사 일시를 갱신 */
+		/* SnippetMapper.updateSnippetLastCopiedDt: 스니펫 마지막 복사 일시와 복사 수를 갱신 */
 		UPDATE snippet.snippet_base
-		   SET LAST_COPIED_DT = NOW()
+		   SET COPY_CNT = COPY_CNT + 1
+		     , LAST_COPIED_DT = NOW()
+		     , UDT_NO = #{auditNo}
+		     , UDT_DT = NOW()
+		 WHERE SNIPPET_USER_NO = #{snippetUserNo}
+		   AND SNIPPET_NO = #{snippetNo}
+		   AND DEL_YN = 'N'
+	</update>
+
+	<update id="updateSnippetLastViewedDt">
+		/* SnippetMapper.updateSnippetLastViewedDt: 스니펫 마지막 조회 일시와 조회 수를 갱신 */
+		UPDATE snippet.snippet_base
+		   SET VIEW_CNT = VIEW_CNT + 1
+		     , LAST_VIEWED_DT = NOW()
 		     , UDT_NO = #{auditNo}
 		     , UDT_DT = NOW()
 		 WHERE SNIPPET_USER_NO = #{snippetUserNo}

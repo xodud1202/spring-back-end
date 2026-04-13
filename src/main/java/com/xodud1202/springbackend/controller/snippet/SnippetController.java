@@ -63,13 +63,18 @@ public class SnippetController {
 		@RequestParam(required = false) Long tagNo,
 		@RequestParam(required = false) String languageCd,
 		@RequestParam(required = false) String favoriteYn,
+		@RequestParam(required = false) String includeBodyYn,
+		@RequestParam(required = false) String sortBy,
+		@RequestParam(required = false) String quickFilter,
 		@RequestParam(required = false) Integer page,
 		@RequestParam(required = false) Integer size
 	) {
 		try {
 			// 로그인 사용자 기준으로 필터링된 스니펫 목록을 반환합니다.
 			Long snippetUserNo = resolveRequiredSnippetUserNo(request);
-			return ResponseEntity.ok(snippetService.getSnippetList(snippetUserNo, q, folderNo, tagNo, languageCd, favoriteYn, page, size));
+			return ResponseEntity.ok(
+				snippetService.getSnippetList(snippetUserNo, q, folderNo, tagNo, languageCd, favoriteYn, includeBodyYn, sortBy, quickFilter, page, size)
+			);
 		} catch (SecurityException | IllegalArgumentException exception) {
 			throw exception;
 		} catch (Exception exception) {
@@ -188,6 +193,25 @@ public class SnippetController {
 		} catch (Exception exception) {
 			log.error("스니펫 복사 이력 갱신 실패 message={}", exception.getMessage(), exception);
 			throw new IllegalStateException("복사 이력 갱신에 실패했습니다.", exception);
+		}
+	}
+
+	@PatchMapping("/api/snippet/snippets/{snippetNo}/viewed")
+	// 스니펫 상세 조회 시 마지막 조회 일시와 조회 수를 갱신합니다.
+	public ResponseEntity<ApiMessageResponse> markSnippetViewed(
+		HttpServletRequest request,
+		@PathVariable Long snippetNo
+	) {
+		try {
+			// 로그인 사용자 기준으로 마지막 조회 일시와 조회 수를 갱신합니다.
+			Long snippetUserNo = resolveRequiredSnippetUserNo(request);
+			snippetService.markSnippetViewed(snippetUserNo, snippetNo);
+			return ResponseEntity.ok(new ApiMessageResponse("조회 이력이 갱신되었습니다."));
+		} catch (SecurityException | IllegalArgumentException exception) {
+			throw exception;
+		} catch (Exception exception) {
+			log.error("스니펫 조회 이력 갱신 실패 message={}", exception.getMessage(), exception);
+			throw new IllegalStateException("조회 이력 갱신에 실패했습니다.", exception);
 		}
 	}
 
