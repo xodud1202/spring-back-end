@@ -4,6 +4,7 @@ import com.xodud1202.springbackend.common.mybatis.GeneratedLongKey;
 import com.xodud1202.springbackend.domain.snippet.SnippetDetailRowVO;
 import com.xodud1202.springbackend.domain.snippet.SnippetFolderSavePO;
 import com.xodud1202.springbackend.domain.snippet.SnippetFolderVO;
+import com.xodud1202.springbackend.domain.snippet.SnippetLanguageSavePO;
 import com.xodud1202.springbackend.domain.snippet.SnippetLanguageVO;
 import com.xodud1202.springbackend.domain.snippet.SnippetListQueryPO;
 import com.xodud1202.springbackend.domain.snippet.SnippetSavePO;
@@ -65,6 +66,18 @@ public interface SnippetMapper {
 
 	// 사용 가능한 언어 코드 존재 여부를 확인합니다.
 	int countLanguageByLanguageCd(@Param("languageCd") String languageCd);
+
+	// 사용 중인 스니펫 언어 건수를 확인합니다.
+	int countActiveSnippetByLanguageCd(@Param("languageCd") String languageCd);
+
+	// 언어명 또는 언어 코드 중복 건수를 조회합니다.
+	int getLanguageDuplicateCount(@Param("languageCd") String languageCd, @Param("languageNm") String languageNm);
+
+	// 언어 정렬순서 최대값을 조회합니다.
+	Integer getMaxLanguageSortSeq();
+
+	// 언어 코드로 언어 상세를 조회합니다.
+	SnippetLanguageVO getSnippetLanguage(@Param("languageCd") String languageCd);
 
 	// 사용자 소유 태그 목록 건수를 확인합니다.
 	int countOwnedTagList(@Param("snippetUserNo") Long snippetUserNo, @Param("tagNoList") List<Long> tagNoList);
@@ -217,4 +230,16 @@ public interface SnippetMapper {
 
 	// 태그 삭제 전에 관련 태그 매핑을 제거합니다.
 	int deleteSnippetTagMapByTagNo(@Param("snippetUserNo") Long snippetUserNo, @Param("tagNo") Long tagNo);
+
+	// 언어를 등록합니다.
+	int insertSnippetLanguage(
+		@Param("command") SnippetLanguageSavePO command,
+		@Param("languageCd") String languageCd,
+		@Param("editorMode") String editorMode,
+		@Param("resolvedSortSeq") Integer resolvedSortSeq,
+		@Param("auditNo") Long auditNo
+	);
+
+	// 언어를 비활성화합니다.
+	int softDeleteSnippetLanguage(@Param("languageCd") String languageCd, @Param("auditNo") Long auditNo);
 }

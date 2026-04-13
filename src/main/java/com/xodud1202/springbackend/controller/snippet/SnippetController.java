@@ -6,6 +6,8 @@ import com.xodud1202.springbackend.domain.snippet.SnippetDetailVO;
 import com.xodud1202.springbackend.domain.snippet.SnippetFavoriteUpdateRequest;
 import com.xodud1202.springbackend.domain.snippet.SnippetFolderSavePO;
 import com.xodud1202.springbackend.domain.snippet.SnippetFolderVO;
+import com.xodud1202.springbackend.domain.snippet.SnippetLanguageSavePO;
+import com.xodud1202.springbackend.domain.snippet.SnippetLanguageVO;
 import com.xodud1202.springbackend.domain.snippet.SnippetListResponse;
 import com.xodud1202.springbackend.domain.snippet.SnippetSavePO;
 import com.xodud1202.springbackend.domain.snippet.SnippetSaveResponse;
@@ -212,6 +214,43 @@ public class SnippetController {
 		} catch (Exception exception) {
 			log.error("스니펫 조회 이력 갱신 실패 message={}", exception.getMessage(), exception);
 			throw new IllegalStateException("조회 이력 갱신에 실패했습니다.", exception);
+		}
+	}
+
+	@PostMapping("/api/snippet/languages")
+	// 언어를 등록합니다.
+	public ResponseEntity<SnippetLanguageVO> createLanguage(
+		HttpServletRequest request,
+		@Valid @RequestBody SnippetLanguageSavePO command
+	) {
+		try {
+			// 로그인 사용자 기준으로 신규 언어를 저장합니다.
+			Long snippetUserNo = resolveRequiredSnippetUserNo(request);
+			return ResponseEntity.ok(snippetService.createLanguage(snippetUserNo, command));
+		} catch (SecurityException | IllegalArgumentException exception) {
+			throw exception;
+		} catch (Exception exception) {
+			log.error("스니펫 언어 등록 실패 message={}", exception.getMessage(), exception);
+			throw new IllegalStateException("언어 등록에 실패했습니다.", exception);
+		}
+	}
+
+	@DeleteMapping("/api/snippet/languages/{languageCd}")
+	// 언어를 삭제합니다.
+	public ResponseEntity<ApiMessageResponse> deleteLanguage(
+		HttpServletRequest request,
+		@PathVariable String languageCd
+	) {
+		try {
+			// 로그인 사용자 기준으로 대상 언어를 비활성화합니다.
+			Long snippetUserNo = resolveRequiredSnippetUserNo(request);
+			snippetService.deleteLanguage(snippetUserNo, languageCd);
+			return ResponseEntity.ok(new ApiMessageResponse("언어가 삭제되었습니다."));
+		} catch (SecurityException | IllegalArgumentException exception) {
+			throw exception;
+		} catch (Exception exception) {
+			log.error("스니펫 언어 삭제 실패 message={}", exception.getMessage(), exception);
+			throw new IllegalStateException("언어 삭제에 실패했습니다.", exception);
 		}
 	}
 

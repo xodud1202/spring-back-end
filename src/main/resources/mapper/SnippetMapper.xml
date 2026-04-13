@@ -158,7 +158,7 @@
 		       base.TITLE LIKE CONCAT('%', #{query.q}, '%')
 		    OR base.SUMMARY LIKE CONCAT('%', #{query.q}, '%')
 		    OR base.MEMO LIKE CONCAT('%', #{query.q}, '%')
-			<if test="query.includeBodyYn == 'Y'">
+			<if test="&quot;Y&quot;.equals(query.includeBodyYn)">
 		    OR base.SNIPPET_BODY LIKE CONCAT('%', #{query.q}, '%')
 			</if>
 		  )
@@ -180,18 +180,18 @@
 		<if test="query.favoriteYn != null and query.favoriteYn != ''">
 		  AND base.IS_FAVORITE = #{query.favoriteYn}
 		</if>
-		<if test="query.quickFilter == 'favorite'">
+		<if test="&quot;favorite&quot;.equals(query.quickFilter)">
 		  AND base.IS_FAVORITE = 'Y'
 		</if>
-		<if test="query.quickFilter == 'recent_viewed'">
+		<if test="&quot;recent_viewed&quot;.equals(query.quickFilter)">
 		  AND base.LAST_VIEWED_DT IS NOT NULL
 		  AND base.LAST_VIEWED_DT >= DATE_SUB(NOW(), INTERVAL 30 DAY)
 		</if>
-		<if test="query.quickFilter == 'recent_copied'">
+		<if test="&quot;recent_copied&quot;.equals(query.quickFilter)">
 		  AND base.LAST_COPIED_DT IS NOT NULL
 		  AND base.LAST_COPIED_DT >= DATE_SUB(NOW(), INTERVAL 30 DAY)
 		</if>
-		<if test="query.quickFilter == 'duplicate'">
+		<if test="&quot;duplicate&quot;.equals(query.quickFilter)">
 		  AND <include refid="snippetDuplicateCondition"/>
 		</if>
 	</sql>
@@ -283,6 +283,18 @@
 		  FROM snippet.snippet_language
 		 WHERE USE_YN = 'Y'
 		 ORDER BY SORT_SEQ ASC, LANGUAGE_CD ASC
+	</select>
+
+	<select id="getSnippetLanguage" resultMap="snippetLanguageResultMap">
+		/* SnippetMapper.getSnippetLanguage: 언어 코드로 언어 상세를 조회 */
+		SELECT LANGUAGE_CD
+		     , LANGUAGE_NM
+		     , EDITOR_MODE
+		     , SORT_SEQ
+		  FROM snippet.snippet_language
+		 WHERE LANGUAGE_CD = #{languageCd}
+		   AND USE_YN = 'Y'
+		 LIMIT 1
 	</select>
 
 	<select id="getSnippetFolderList" resultMap="snippetFolderResultMap">
@@ -384,6 +396,25 @@
 		   AND USE_YN = 'Y'
 	</select>
 
+	<select id="countActiveSnippetByLanguageCd" resultType="int">
+		/* SnippetMapper.countActiveSnippetByLanguageCd: 사용 중인 스니펫 언어 건수를 확인 */
+		SELECT COUNT(*)
+		  FROM snippet.snippet_base
+		 WHERE LANGUAGE_CD = #{languageCd}
+		   AND DEL_YN = 'N'
+	</select>
+
+	<select id="getLanguageDuplicateCount" resultType="int">
+		/* SnippetMapper.getLanguageDuplicateCount: 언어명 또는 언어 코드 중복 건수를 조회 */
+		SELECT COUNT(*)
+		  FROM snippet.snippet_language
+		 WHERE USE_YN = 'Y'
+		   AND (
+		         LANGUAGE_CD = #{languageCd}
+		      OR LANGUAGE_NM = #{languageNm}
+		   )
+	</select>
+
 	<select id="countOwnedTagList" resultType="int">
 		/* SnippetMapper.countOwnedTagList: 사용자 소유 태그 목록 건수를 확인 */
 		SELECT COUNT(*)
@@ -436,6 +467,13 @@
 		   AND DEL_YN = 'N'
 	</select>
 
+	<select id="getMaxLanguageSortSeq" resultType="int">
+		/* SnippetMapper.getMaxLanguageSortSeq: 언어 정렬순서 최대값을 조회 */
+		SELECT COALESCE(MAX(SORT_SEQ), 0)
+		  FROM snippet.snippet_language
+		 WHERE USE_YN = 'Y'
+	</select>
+
 	<select id="getSnippetCount" resultType="int">
 		/* SnippetMapper.getSnippetCount: 스니펫 목록 총 건수를 조회 */
 		SELECT COUNT(DISTINCT base.SNIPPET_NO)
@@ -450,20 +488,23 @@
 		<include refid="snippetListFilterWhere"/>
 		<include refid="snippetSummaryGroupBy"/>
 		<choose>
-			<when test="query.sortBy == 'viewed_desc'">
+			<when test="&quot;created_desc&quot;.equals(query.sortBy)">
+		 ORDER BY base.REG_DT DESC, base.SNIPPET_NO DESC
+			</when>
+			<when test="&quot;viewed_desc&quot;.equals(query.sortBy)">
 		 ORDER BY base.LAST_VIEWED_DT DESC, base.UDT_DT DESC, base.SNIPPET_NO DESC
 			</when>
-			<when test="query.sortBy == 'copied_desc'">
+			<when test="&quot;copied_desc&quot;.equals(query.sortBy)">
 		 ORDER BY base.LAST_COPIED_DT DESC, base.UDT_DT DESC, base.SNIPPET_NO DESC
 			</when>
-			<when test="query.sortBy == 'copy_count_desc'">
+			<when test="&quot;copy_count_desc&quot;.equals(query.sortBy)">
 		 ORDER BY base.COPY_CNT DESC, base.LAST_COPIED_DT DESC, base.SNIPPET_NO DESC
 			</when>
-			<when test="query.sortBy == 'title_asc'">
+			<when test="&quot;title_asc&quot;.equals(query.sortBy)">
 		 ORDER BY base.TITLE ASC, base.SNIPPET_NO DESC
 			</when>
 			<otherwise>
-		 ORDER BY base.UDT_DT DESC, base.SNIPPET_NO DESC
+		 ORDER BY base.REG_DT DESC, base.SNIPPET_NO DESC
 			</otherwise>
 		</choose>
 		 LIMIT #{query.offset}, #{query.size}
@@ -736,4 +777,35 @@
 		 WHERE tag.SNIPPET_USER_NO = #{snippetUserNo}
 		   AND tag.TAG_NO = #{tagNo}
 	</delete>
+
+	<insert id="insertSnippetLanguage">
+		/* SnippetMapper.insertSnippetLanguage: 언어를 등록 */
+		INSERT INTO snippet.snippet_language (
+		       LANGUAGE_CD
+		     , LANGUAGE_NM
+		     , EDITOR_MODE
+		     , SORT_SEQ
+		     , USE_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{languageCd}
+		     , #{command.languageNm}
+		     , #{editorMode}
+		     , #{resolvedSortSeq}
+		     , 'Y'
+		     , #{auditNo}
+		     , #{auditNo}
+		)
+	</insert>
+
+	<update id="softDeleteSnippetLanguage">
+		/* SnippetMapper.softDeleteSnippetLanguage: 언어를 비활성화 */
+		UPDATE snippet.snippet_language
+		   SET USE_YN = 'N'
+		     , UDT_NO = #{auditNo}
+		     , UDT_DT = NOW()
+		 WHERE LANGUAGE_CD = #{languageCd}
+		   AND USE_YN = 'Y'
+	</update>
 </mapper>

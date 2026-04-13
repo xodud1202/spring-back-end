@@ -6,6 +6,8 @@ import com.xodud1202.springbackend.domain.snippet.SnippetDetailRowVO;
 import com.xodud1202.springbackend.domain.snippet.SnippetDetailVO;
 import com.xodud1202.springbackend.domain.snippet.SnippetFolderSavePO;
 import com.xodud1202.springbackend.domain.snippet.SnippetFolderVO;
+import com.xodud1202.springbackend.domain.snippet.SnippetLanguageSavePO;
+import com.xodud1202.springbackend.domain.snippet.SnippetLanguageVO;
 import com.xodud1202.springbackend.domain.snippet.SnippetListQueryPO;
 import com.xodud1202.springbackend.domain.snippet.SnippetListResponse;
 import com.xodud1202.springbackend.domain.snippet.SnippetSavePO;
@@ -41,6 +43,7 @@ public class SnippetService {
 	private static final String QUICK_FILTER_RECENT_VIEWED = "recent_viewed";
 	private static final String QUICK_FILTER_RECENT_COPIED = "recent_copied";
 	private static final String QUICK_FILTER_DUPLICATE = "duplicate";
+	private static final String SORT_BY_CREATED_DESC = "created_desc";
 	private static final String SORT_BY_UPDATED_DESC = "updated_desc";
 	private static final String SORT_BY_VIEWED_DESC = "viewed_desc";
 	private static final String SORT_BY_COPIED_DESC = "copied_desc";
@@ -205,6 +208,47 @@ public class SnippetService {
 		int affectedRowCount = snippetMapper.updateSnippetLastViewedDt(snippetUserNo, normalizedSnippetNo, snippetUserNo);
 		if (affectedRowCount < 1) {
 			throw new IllegalArgumentException("조회 처리할 스니펫을 찾을 수 없습니다.");
+		}
+	}
+
+	@Transactional
+	// 언어를 등록합니다.
+	public SnippetLanguageVO createLanguage(Long snippetUserNo, SnippetLanguageSavePO command) {
+		// 언어명과 언어 코드를 정규화한 뒤 중복 여부를 검증하고 언어 마스터를 등록합니다.
+		snippetAuthService.getRequiredSnippetUser(snippetUserNo);
+		SnippetLanguageSavePO normalizedCommand = normalizeLanguageCommand(command);
+		String resolvedLanguageCd = resolveLanguageCd(normalizedCommand.languageNm());
+		validateLanguageDuplicate(resolvedLanguageCd, normalizedCommand.languageNm());
+
+		Integer resolvedSortSeq = resolveLanguageSortSeq(normalizedCommand.sortSeq());
+		String resolvedEditorMode = resolveLanguageEditorMode(resolvedLanguageCd);
+		int affectedRowCount = snippetMapper.insertSnippetLanguage(
+			normalizedCommand,
+			resolvedLanguageCd,
+			resolvedEditorMode,
+			resolvedSortSeq,
+			snippetUserNo
+		);
+		if (affectedRowCount < 1) {
+			throw new IllegalStateException("언어 등록에 실패했습니다.");
+		}
+		return findRequiredLanguage(resolvedLanguageCd);
+	}
+
+	@Transactional
+	// 언어를 삭제합니다.
+	public void deleteLanguage(Long snippetUserNo, String languageCd) {
+		// 현재 사용 중인 스니펫이 없는 언어만 비활성화합니다.
+		snippetAuthService.getRequiredSnippetUser(snippetUserNo);
+		String normalizedLanguageCd = normalizeRequiredText(languageCd, "언어 코드를 확인해주세요.");
+		ensureLanguageExists(normalizedLanguageCd);
+		if (snippetMapper.countActiveSnippetByLanguageCd(normalizedLanguageCd) > 0) {
+			throw new IllegalArgumentException("사용 중인 스니펫이 있는 언어는 삭제할 수 없습니다.");
+		}
+
+		int affectedRowCount = snippetMapper.softDeleteSnippetLanguage(normalizedLanguageCd, snippetUserNo);
+		if (affectedRowCount < 1) {
+			throw new IllegalStateException("언어 삭제에 실패했습니다.");
 		}
 	}
 
@@ -401,6 +445,18 @@ public class SnippetService {
 		);
 	}
 
+	// 언어 저장 요청을 정규화합니다.
+	private SnippetLanguageSavePO normalizeLanguageCommand(SnippetLanguageSavePO command) {
+		// 언어명의 공백을 제거해 저장 기준을 일관되게 맞춥니다.
+		if (command == null) {
+			throw new IllegalArgumentException("언어 저장 요청이 없습니다.");
+		}
+		return new SnippetLanguageSavePO(
+			normalizeRequiredText(command.languageNm(), "언어명을 입력해주세요."),
+			command.sortSeq()
+		);
+	}
+
 	// 스니펫 저장 요청의 참조 무결성을 검증합니다.
 	private void validateSnippetSaveCommand(Long snippetUserNo, SnippetSavePO command) {
 		// 언어, 폴더, 태그가 모두 현재 사용자 기준으로 유효한지 확인합니다.
@@ -475,6 +531,13 @@ public class SnippetService {
 		}
 	}
 
+	// 언어명 또는 언어 코드 중복을 확인합니다.
+	private void validateLanguageDuplicate(String languageCd, String languageNm) {
+		if (snippetMapper.getLanguageDuplicateCount(languageCd, languageNm) > 0) {
+			throw new IllegalArgumentException("같은 이름의 언어가 이미 존재합니다.");
+		}
+	}
+
 	// 폴더 정렬순서를 보정합니다.
 	private Integer resolveFolderSortSeq(Long snippetUserNo, Integer requestedSortSeq) {
 		if (requestedSortSeq != null) {
@@ -493,12 +556,30 @@ public class SnippetService {
 		return maxSortSeq == null ? 1 : maxSortSeq + 1;
 	}
 
+	// 언어 정렬순서를 보정합니다.
+	private Integer resolveLanguageSortSeq(Integer requestedSortSeq) {
+		if (requestedSortSeq != null) {
+			return requestedSortSeq;
+		}
+		Integer maxSortSeq = snippetMapper.getMaxLanguageSortSeq();
+		return maxSortSeq == null ? 1 : maxSortSeq + 1;
+	}
+
 	// 등록 또는 수정 후 폴더 목록에서 대상 폴더를 찾아 반환합니다.
 	private SnippetFolderVO findRequiredFolder(Long snippetUserNo, Long folderNo) {
 		return snippetMapper.getSnippetFolderList(snippetUserNo).stream()
 			.filter(folder -> Objects.equals(folder.folderNo(), folderNo))
 			.findFirst()
 			.orElseThrow(() -> new IllegalStateException("폴더 조회에 실패했습니다."));
+	}
+
+	// 등록 후 언어 목록에서 대상 언어를 찾아 반환합니다.
+	private SnippetLanguageVO findRequiredLanguage(String languageCd) {
+		SnippetLanguageVO matchedLanguage = snippetMapper.getSnippetLanguage(languageCd);
+		if (matchedLanguage == null) {
+			throw new IllegalStateException("언어 조회에 실패했습니다.");
+		}
+		return matchedLanguage;
 	}
 
 	// 등록 또는 수정 후 태그 목록에서 대상 태그를 찾아 반환합니다.
@@ -639,6 +720,31 @@ public class SnippetService {
 		return normalizeYn(normalizedValue, "Y/N 값을 확인해주세요.");
 	}
 
+	// 언어명으로 내부 언어 코드를 생성합니다.
+	private String resolveLanguageCd(String languageNm) {
+		String normalizedText = languageNm.toLowerCase(Locale.ROOT)
+			.replaceAll("[^a-z0-9]+", "_")
+			.replaceAll("^_+", "")
+			.replaceAll("_+$", "");
+
+		if (normalizedText.isBlank()) {
+			normalizedText = "lang_" + Integer.toUnsignedString(languageNm.hashCode(), 16);
+		}
+		if (Character.isDigit(normalizedText.charAt(0))) {
+			normalizedText = "lang_" + normalizedText;
+		}
+		return normalizedText.length() > 30 ? normalizedText.substring(0, 30) : normalizedText;
+	}
+
+	// 언어 코드에 맞는 기본 에디터 모드를 결정합니다.
+	private String resolveLanguageEditorMode(String languageCd) {
+		return switch (languageCd) {
+			case "javascript", "typescript", "java", "sql", "json", "html", "css", "markdown" -> languageCd;
+			case "plain_text" -> "text";
+			default -> "text";
+		};
+	}
+
 	// 퀵필터 값을 정규화합니다.
 	private String normalizeQuickFilter(String value) {
 		String normalizedValue = trimToNull(value);
@@ -663,11 +769,12 @@ public class SnippetService {
 	private String normalizeSortBy(String value) {
 		String normalizedValue = trimToNull(value);
 		if (normalizedValue == null) {
-			return SORT_BY_UPDATED_DESC;
+			return SORT_BY_CREATED_DESC;
 		}
 
 		String lowerCaseValue = normalizedValue.toLowerCase(Locale.ROOT);
 		if (
+			SORT_BY_CREATED_DESC.equals(lowerCaseValue) ||
 			SORT_BY_UPDATED_DESC.equals(lowerCaseValue) ||
 			SORT_BY_VIEWED_DESC.equals(lowerCaseValue) ||
 			SORT_BY_COPIED_DESC.equals(lowerCaseValue) ||
