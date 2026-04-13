@@ -1,5 +1,6 @@
 package com.xodud1202.springbackend.controller.snippet;
 
+import com.xodud1202.springbackend.common.snippet.SnippetSessionPolicy;
 import com.xodud1202.springbackend.common.response.ApiMessageResponse;
 import com.xodud1202.springbackend.domain.snippet.SnippetGoogleLoginRequest;
 import com.xodud1202.springbackend.domain.snippet.SnippetGoogleLoginResponse;
@@ -26,10 +27,6 @@ import java.util.Arrays;
 @RequiredArgsConstructor
 // 스니펫 구글 로그인과 세션 복구 API를 제공합니다.
 public class SnippetAuthController {
-	private static final String COOKIE_SNIPPET_USER_NO = "snippet_user_no";
-	private static final String SESSION_ATTR_SNIPPET_USER_NO = "snippetUserNo";
-	private static final int SESSION_TIMEOUT_SECONDS = 60 * 60;
-
 	private final SnippetAuthService snippetAuthService;
 	private final AuthCookieFactory authCookieFactory;
 
@@ -56,7 +53,7 @@ public class SnippetAuthController {
 	public ResponseEntity<SnippetSessionRefreshResponse> refreshSnippetSession(HttpServletRequest request) {
 		try {
 			// 사용자번호 쿠키가 없으면 비로그인 응답을 반환합니다.
-			String snippetUserNoValue = findCookieValue(request, COOKIE_SNIPPET_USER_NO);
+			String snippetUserNoValue = findCookieValue(request, SnippetSessionPolicy.COOKIE_SNIPPET_USER_NO);
 			if (isBlank(snippetUserNoValue)) {
 				return ResponseEntity.ok(SnippetSessionRefreshResponse.unauthenticated());
 			}
@@ -67,18 +64,24 @@ public class SnippetAuthController {
 			if (snippetUser == null || snippetUser.snippetUserNo() == null) {
 				invalidateSnippetSession(request);
 				return ResponseEntity.ok()
-					.header(HttpHeaders.SET_COOKIE, authCookieFactory.createExpiredSnippetLoginCookie(COOKIE_SNIPPET_USER_NO).toString())
+					.header(
+						HttpHeaders.SET_COOKIE,
+						authCookieFactory.createExpiredSnippetLoginCookie(SnippetSessionPolicy.COOKIE_SNIPPET_USER_NO).toString()
+					)
 					.body(SnippetSessionRefreshResponse.unauthenticated());
 			}
 
 			// 세션과 로그인 쿠키 만료시간을 함께 갱신합니다.
 			HttpSession session = request.getSession(true);
-			session.setAttribute(SESSION_ATTR_SNIPPET_USER_NO, snippetUser.snippetUserNo());
-			session.setMaxInactiveInterval(SESSION_TIMEOUT_SECONDS);
+			session.setAttribute(SnippetSessionPolicy.SESSION_ATTR_SNIPPET_USER_NO, snippetUser.snippetUserNo());
+			SnippetSessionPolicy.refreshSessionTimeout(session);
 			return ResponseEntity.ok()
 				.header(
 					HttpHeaders.SET_COOKIE,
-					authCookieFactory.createSnippetLoginCookie(COOKIE_SNIPPET_USER_NO, String.valueOf(snippetUser.snippetUserNo())).toString()
+					authCookieFactory.createSnippetLoginCookie(
+						SnippetSessionPolicy.COOKIE_SNIPPET_USER_NO,
+						String.valueOf(snippetUser.snippetUserNo())
+					).toString()
 				)
 				.body(
 					SnippetSessionRefreshResponse.authenticated(
@@ -103,7 +106,10 @@ public class SnippetAuthController {
 			// 스니펫 세션을 무효화하고 로그인 쿠키를 제거합니다.
 			invalidateSnippetSession(request);
 			return ResponseEntity.ok()
-				.header(HttpHeaders.SET_COOKIE, authCookieFactory.createExpiredSnippetLoginCookie(COOKIE_SNIPPET_USER_NO).toString())
+				.header(
+					HttpHeaders.SET_COOKIE,
+					authCookieFactory.createExpiredSnippetLoginCookie(SnippetSessionPolicy.COOKIE_SNIPPET_USER_NO).toString()
+				)
 				.body(new ApiMessageResponse("로그아웃 처리되었습니다."));
 		} catch (Exception exception) {
 			log.error("스니펫 로그아웃 실패 message={}", exception.getMessage(), exception);
@@ -116,16 +122,19 @@ public class SnippetAuthController {
 		SnippetGoogleLoginResponse response,
 		HttpServletRequest httpRequest
 	) {
-		// 세션에 로그인 사용자번호를 기록하고 1시간 만료를 설정합니다.
+		// 세션에 로그인 사용자번호를 기록하고 5시간 만료를 설정합니다.
 		HttpSession session = httpRequest.getSession(true);
-		session.setAttribute(SESSION_ATTR_SNIPPET_USER_NO, response.snippetUserNo());
-		session.setMaxInactiveInterval(SESSION_TIMEOUT_SECONDS);
+		session.setAttribute(SnippetSessionPolicy.SESSION_ATTR_SNIPPET_USER_NO, response.snippetUserNo());
+		SnippetSessionPolicy.refreshSessionTimeout(session);
 
 		// 로그인 쿠키도 함께 발급합니다.
 		return ResponseEntity.ok()
 			.header(
 				HttpHeaders.SET_COOKIE,
-				authCookieFactory.createSnippetLoginCookie(COOKIE_SNIPPET_USER_NO, String.valueOf(response.snippetUserNo())).toString()
+				authCookieFactory.createSnippetLoginCookie(
+					SnippetSessionPolicy.COOKIE_SNIPPET_USER_NO,
+					String.valueOf(response.snippetUserNo())
+				).toString()
 			)
 			.body(response);
 	}
@@ -136,7 +145,7 @@ public class SnippetAuthController {
 		if (session == null) {
 			return;
 		}
-		session.removeAttribute(SESSION_ATTR_SNIPPET_USER_NO);
+		session.removeAttribute(SnippetSessionPolicy.SESSION_ATTR_SNIPPET_USER_NO);
 		session.invalidate();
 	}
 

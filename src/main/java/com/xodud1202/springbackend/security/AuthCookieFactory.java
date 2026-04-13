@@ -1,5 +1,6 @@
 package com.xodud1202.springbackend.security;
 
+import com.xodud1202.springbackend.common.snippet.SnippetSessionPolicy;
 import com.xodud1202.springbackend.config.properties.JwtProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseCookie;
@@ -12,7 +13,6 @@ import java.time.Duration;
 // 인증 관련 httpOnly 쿠키 생성 규칙을 중앙화합니다.
 public class AuthCookieFactory {
 	private static final Duration SHOP_SESSION_COOKIE_MAX_AGE = Duration.ofHours(1);
-	private static final Duration SNIPPET_SESSION_COOKIE_MAX_AGE = Duration.ofHours(1);
 
 	private final JwtProperties jwtProperties;
 
@@ -66,7 +66,7 @@ public class AuthCookieFactory {
 			.httpOnly(true)
 			.secure(jwtProperties.cookieSecure())
 			.path("/")
-			.maxAge(SNIPPET_SESSION_COOKIE_MAX_AGE)
+			.maxAge(SnippetSessionPolicy.SESSION_COOKIE_MAX_AGE)
 			.sameSite("Lax")
 			.build();
 	}

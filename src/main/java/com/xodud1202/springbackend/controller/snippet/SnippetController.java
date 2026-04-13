@@ -1,5 +1,6 @@
 package com.xodud1202.springbackend.controller.snippet;
 
+import com.xodud1202.springbackend.common.snippet.SnippetSessionPolicy;
 import com.xodud1202.springbackend.common.response.ApiMessageResponse;
 import com.xodud1202.springbackend.domain.snippet.SnippetBootstrapResponse;
 import com.xodud1202.springbackend.domain.snippet.SnippetDetailVO;
@@ -37,8 +38,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 // 스니펫 메인 화면, 스니펫 CRUD, 폴더/태그 관리 API를 제공합니다.
 public class SnippetController {
-	private static final String SESSION_ATTR_SNIPPET_USER_NO = "snippetUserNo";
-
 	private final SnippetService snippetService;
 
 	@GetMapping("/api/snippet/bootstrap")
@@ -373,22 +372,9 @@ public class SnippetController {
 			throw new SecurityException("로그인이 필요합니다.");
 		}
 
-		Object sessionValue = session.getAttribute(SESSION_ATTR_SNIPPET_USER_NO);
-		if (sessionValue instanceof Long snippetUserNo && snippetUserNo > 0L) {
+		Long snippetUserNo = SnippetSessionPolicy.resolveSnippetUserNo(session.getAttribute(SnippetSessionPolicy.SESSION_ATTR_SNIPPET_USER_NO));
+		if (snippetUserNo != null) {
 			return snippetUserNo;
-		}
-		if (sessionValue instanceof Integer snippetUserNo && snippetUserNo > 0) {
-			return snippetUserNo.longValue();
-		}
-		if (sessionValue instanceof String snippetUserNoText) {
-			try {
-				Long snippetUserNo = Long.valueOf(snippetUserNoText);
-				if (snippetUserNo > 0L) {
-					return snippetUserNo;
-				}
-			} catch (NumberFormatException ignored) {
-				// 문자열 파싱 실패는 아래 공통 예외로 처리합니다.
-			}
 		}
 		throw new SecurityException("로그인이 필요합니다.");
 	}
