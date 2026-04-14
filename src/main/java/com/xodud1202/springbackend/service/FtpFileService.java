@@ -113,6 +113,28 @@ public class FtpFileService {
 	}
 
 	/**
+	 * 회사 업무 첨부파일을 FTP 서버에 업로드하고 접근 가능한 URL을 반환합니다.
+	 * @param file 업로드할 첨부파일
+	 * @param workSeq 업무 번호
+	 * @param regNo 등록자 번호
+	 * @return 업로드된 첨부파일의 접근 URL
+	 */
+	public String uploadCompanyWorkFile(MultipartFile file, Long workSeq, String regNo) throws IOException {
+		String[] subDirs = {
+				String.valueOf(workSeq),
+				"job"
+		};
+		String fileKeyPrefix = "job_" + safePathSegment(regNo) + "_" + workSeq;
+		return uploadFileToFtp(
+				file,
+				ftpProperties.getUploadCompanyWorkReplyTargetPath(),
+				ftpProperties.getUploadCompanyWorkReplyView(),
+				subDirs,
+				fileKeyPrefix
+		);
+	}
+
+	/**
 	 * 회사 업무 댓글 첨부파일을 FTP 서버에 업로드하고 접근 가능한 URL을 반환합니다.
 	 * @param file 업로드할 첨부파일
 	 * @param workSeq 업무 번호
@@ -257,6 +279,32 @@ public class FtpFileService {
 				new String[] { String.valueOf(bannerNo) },
 				fileName
 		);
+	}
+
+	/**
+	 * 회사 업무 첨부파일 URL을 기준으로 FTP 파일을 삭제합니다.
+	 * @param fileUrl 삭제할 첨부파일 URL
+	 */
+	public void deleteCompanyWorkFile(String fileUrl) throws IOException {
+		String normalizedFileUrl = safeTrim(fileUrl);
+		if (normalizedFileUrl == null) {
+			return;
+		}
+
+		// 저장 URL에서 업무 첨부 하위 경로와 파일명을 복원합니다.
+		String[] pathSegments = resolvePathSegmentsFromPublicUrl(
+				normalizedFileUrl,
+				ftpProperties.getUploadCompanyWorkReplyView()
+		);
+		if (pathSegments.length < 3) {
+			return;
+		}
+
+		// 마지막 세그먼트는 파일명이고 앞부분은 하위 디렉토리입니다.
+		String fileName = pathSegments[pathSegments.length - 1];
+		String[] subDirs = new String[pathSegments.length - 1];
+		System.arraycopy(pathSegments, 0, subDirs, 0, pathSegments.length - 1);
+		deleteFileFromFtp(ftpProperties.getUploadCompanyWorkReplyTargetPath(), subDirs, fileName);
 	}
 
 	/**

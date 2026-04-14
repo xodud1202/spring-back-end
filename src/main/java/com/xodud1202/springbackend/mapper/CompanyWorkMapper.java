@@ -35,6 +35,15 @@ public interface CompanyWorkMapper {
 	// 관리자 회사 업무 비완료 상태 목록을 조회합니다.
 	List<AdminCompanyWorkListRowVO> getAdminCompanyWorkStatusList(AdminCompanyWorkSearchPO param);
 
+	// 업무관리 화면용 상태 포함 전체 목록을 조회합니다.
+	List<AdminCompanyWorkListRowVO> getWorkCompanyList(AdminCompanyWorkSearchPO param);
+
+	// 업무관리 화면 특정 상태의 추가 목록을 조회합니다.
+	List<AdminCompanyWorkListRowVO> getWorkCompanySectionList(AdminCompanyWorkSearchPO param);
+
+	// 업무관리 화면 특정 상태의 전체 건수를 조회합니다.
+	int getWorkCompanySectionCount(AdminCompanyWorkSearchPO param);
+
 	// 관리자 회사 업무 완료 목록을 조회합니다.
 	List<AdminCompanyWorkListRowVO> getAdminCompanyWorkCompletedList(AdminCompanyWorkSearchPO param);
 
@@ -47,8 +56,14 @@ public interface CompanyWorkMapper {
 	// 관리자 회사 업무 상세 정보를 조회합니다.
 	AdminCompanyWorkDetailVO getAdminCompanyWorkDetail(@Param("workSeq") Long workSeq);
 
+	// 업무관리 화면용 회사 업무 상세 정보를 조회합니다.
+	AdminCompanyWorkDetailVO getWorkCompanyWorkDetail(@Param("workSeq") Long workSeq);
+
 	// 관리자 회사 업무 첨부파일 목록을 조회합니다.
 	List<AdminCompanyWorkFileVO> getAdminCompanyWorkFileList(@Param("workSeq") Long workSeq);
+
+	// 관리자 회사 업무 첨부파일 단건을 조회합니다.
+	AdminCompanyWorkFileVO getAdminCompanyWorkFile(@Param("workJobFileSeq") Integer workJobFileSeq);
 
 	// 관리자 회사 업무 댓글 목록을 조회합니다.
 	List<AdminCompanyWorkReplyVO> getAdminCompanyWorkReplyList(@Param("workSeq") Long workSeq);
@@ -89,6 +104,13 @@ public interface CompanyWorkMapper {
 
 	// 관리자 회사 업무 첨부파일 정보를 저장합니다.
 	int insertAdminCompanyWorkImportFile(AdminCompanyWorkImportFileSavePO param);
+
+	// 관리자 회사 업무 첨부파일을 삭제 처리합니다.
+	int softDeleteAdminCompanyWorkFile(
+		@Param("workSeq") Long workSeq,
+		@Param("workJobFileSeq") Integer workJobFileSeq,
+		@Param("udtNo") Long udtNo
+	);
 
 	// 관리자 회사 업무 즉시 수정 가능 항목을 저장합니다.
 	int updateAdminCompanyWorkEditableFields(AdminCompanyWorkUpdatePO param);

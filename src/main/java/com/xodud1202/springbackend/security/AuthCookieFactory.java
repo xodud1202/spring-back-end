@@ -1,6 +1,7 @@
 package com.xodud1202.springbackend.security;
 
 import com.xodud1202.springbackend.common.snippet.SnippetSessionPolicy;
+import com.xodud1202.springbackend.common.work.WorkSessionPolicy;
 import com.xodud1202.springbackend.config.properties.JwtProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseCookie;
@@ -73,6 +74,28 @@ public class AuthCookieFactory {
 
 	// 스니펫 로그인 만료 쿠키를 생성합니다.
 	public ResponseCookie createExpiredSnippetLoginCookie(String name) {
+		return ResponseCookie.from(name, "")
+			.httpOnly(true)
+			.secure(jwtProperties.cookieSecure())
+			.path("/")
+			.maxAge(Duration.ZERO)
+			.sameSite("Lax")
+			.build();
+	}
+
+	// 업무관리 로그인 쿠키를 생성합니다.
+	public ResponseCookie createWorkLoginCookie(String name, String value) {
+		return ResponseCookie.from(name, value)
+			.httpOnly(true)
+			.secure(jwtProperties.cookieSecure())
+			.path("/")
+			.maxAge(WorkSessionPolicy.SESSION_COOKIE_MAX_AGE)
+			.sameSite("Lax")
+			.build();
+	}
+
+	// 업무관리 로그인 만료 쿠키를 생성합니다.
+	public ResponseCookie createExpiredWorkLoginCookie(String name) {
 		return ResponseCookie.from(name, "")
 			.httpOnly(true)
 			.secure(jwtProperties.cookieSecure())

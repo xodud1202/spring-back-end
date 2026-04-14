@@ -45,4 +45,16 @@ public class UserBaseService {
 					return info;
 				});
 	}
+
+	/**
+	 * 사용자 번호로 원본 엔티티를 조회합니다.
+	 * @param usrNo 사용자 번호
+	 * @return 사용자 엔티티 결과
+	 */
+	public Optional<UserBaseEntity> getUserEntityByUsrNo(Long usrNo) {
+		if (usrNo == null) {
+			return Optional.empty();
+		}
+		return userRepository.findById(usrNo);
+	}
 }

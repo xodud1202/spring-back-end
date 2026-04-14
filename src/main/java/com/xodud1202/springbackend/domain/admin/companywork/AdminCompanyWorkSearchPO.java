@@ -11,6 +11,10 @@ public class AdminCompanyWorkSearchPO {
 	private Integer workCompanyProjectSeq;
 	// 타이틀 검색어입니다.
 	private String title;
+	// 본문 포함 검색 여부입니다.
+	private String includeBodyYn;
+	// 선택 상태 코드 목록입니다.
+	private java.util.List<String> workStatCdList;
 	// 현재 페이지입니다.
 	private Integer page;
 	// 페이지 크기입니다.
