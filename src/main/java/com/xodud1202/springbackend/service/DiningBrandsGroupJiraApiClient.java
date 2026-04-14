@@ -22,7 +22,9 @@ public class DiningBrandsGroupJiraApiClient {
 
 	private final ObjectMapper objectMapper;
 	private final DiningBrandsGroupJiraProperties jiraProperties;
-	private final HttpClient httpClient = HttpClient.newBuilder().build();
+	private final HttpClient httpClient = HttpClient.newBuilder()
+		.followRedirects(HttpClient.Redirect.NORMAL)
+		.build();
 
 	// 생성자에서 Jira 인증 설정과 JSON 파서를 주입받습니다.
 	public DiningBrandsGroupJiraApiClient(
@@ -71,6 +73,53 @@ public class DiningBrandsGroupJiraApiClient {
 		}
 	}
 
+	// Jira 첨부파일 URL을 인증 헤더와 함께 다운로드합니다.
+	public DiningBrandsGroupJiraAttachmentDownloadResult downloadAttachment(String attachmentUrl) {
+		// 첨부 URL과 인증 설정을 먼저 확인합니다.
+		String normalizedAttachmentUrl = trimToNull(attachmentUrl);
+		validateApiSettings();
+		if (normalizedAttachmentUrl == null) {
+			throw new IllegalArgumentException("Jira 첨부파일 URL을 확인해주세요.");
+		}
+
+		try {
+			// Jira 첨부 URL을 Basic 인증으로 직접 조회합니다.
+			HttpRequest request = HttpRequest.newBuilder()
+				.uri(URI.create(normalizedAttachmentUrl))
+				.timeout(Duration.ofSeconds(HTTP_TIMEOUT_SECONDS))
+				.header("Authorization", "Basic " + buildBasicAuthorizationValue())
+				.header("Accept", "*/*")
+				.GET()
+				.build();
+			HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+			validateAttachmentResponse(response);
+
+			// 응답 헤더와 바이트 길이 기준으로 다운로드 결과를 구성합니다.
+			byte[] responseBody = response.body() == null ? new byte[0] : response.body();
+			String contentType = response.headers().firstValue("content-type").orElse("");
+			long contentLength = response.headers()
+				.firstValue("content-length")
+				.map((headerValue) -> {
+					try {
+						return Long.parseLong(headerValue);
+					} catch (NumberFormatException ignoredException) {
+						return (long) responseBody.length;
+					}
+				})
+				.orElse((long) responseBody.length);
+			return new DiningBrandsGroupJiraAttachmentDownloadResult(responseBody, contentType, contentLength);
+		} catch (InterruptedException exception) {
+			Thread.currentThread().interrupt();
+			throw new IllegalStateException("Jira 첨부파일 다운로드가 중단되었습니다.", exception);
+		} catch (IllegalArgumentException exception) {
+			throw exception;
+		} catch (IllegalStateException exception) {
+			throw exception;
+		} catch (Exception exception) {
+			throw new IllegalStateException("Jira 첨부파일 다운로드에 실패했습니다.", exception);
+		}
+	}
+
 	// Jira 이슈 상세 조회 URL을 생성합니다.
 	private String buildIssueRequestUrl(String apiBaseUrl, String workKey) {
 		// API URL 끝 경로 구분자를 보정한 뒤 쿼리를 조합합니다.
@@ -95,6 +144,22 @@ public class DiningBrandsGroupJiraApiClient {
 			throw new IllegalArgumentException("Jira 업무를 조회할 수 없습니다. 이슈가 존재하지 않거나 권한이 없습니다.");
 		}
 		throw new IllegalStateException("Jira API 호출에 실패했습니다. status=" + statusCode + ", body=" + responseBody);
+	}
+
+	// Jira 첨부파일 다운로드 응답 상태코드를 검증합니다.
+	private void validateAttachmentResponse(HttpResponse<byte[]> response) {
+		// 성공 응답이 아니면 상태코드별 안내 메시지를 반환합니다.
+		int statusCode = response == null ? 0 : response.statusCode();
+		if (statusCode >= 200 && statusCode < 300) {
+			return;
+		}
+		if (statusCode == 401 || statusCode == 403) {
+			throw new IllegalStateException("다이닝브랜즈그룹 Jira 첨부 인증에 실패했습니다.");
+		}
+		if (statusCode == 404) {
+			throw new IllegalArgumentException("Jira 첨부파일을 조회할 수 없습니다.");
+		}
+		throw new IllegalStateException("Jira 첨부파일 다운로드에 실패했습니다. status=" + statusCode);
 	}
 
 	// Jira 기본 인증 헤더 값을 생성합니다.

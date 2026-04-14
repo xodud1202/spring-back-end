@@ -47,6 +47,10 @@ public class FtpProperties {
 	private String uploadCompanyWorkReplyTargetPath;
 	private String uploadCompanyWorkReplyView;
 
+	// 회사 업무 import 첨부 upload 설정
+	private String uploadCompanyWorkImportTargetPath;
+	private String uploadCompanyWorkImportView;
+
 	// goods upload 설정
 	private int uploadGoodsMaxSize;
 	private String uploadGoodsAllowExtension;

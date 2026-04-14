@@ -499,11 +499,11 @@ public class CompanyWorkService {
 		JsonNode jiraIssueNode = diningBrandsGroupJiraApiClient.getIssue(companyInfo.getApiUrl(), normalizedParam.getWorkKey());
 		AdminCompanyWorkImportJobSavePO jobSaveParam = buildImportJobSaveParam(normalizedParam, jiraIssueNode);
 		companyWorkMapper.insertAdminCompanyWorkImportJob(jobSaveParam);
-		saveImportFileList(jobSaveParam.getWorkSeq(), normalizedParam, jiraIssueNode);
+		List<String> fallbackFileNameList = saveImportFileList(jobSaveParam, jiraIssueNode);
 
 		// 저장 완료 응답을 구성해 반환합니다.
 		AdminCompanyWorkImportResponseVO response = new AdminCompanyWorkImportResponseVO();
-		response.setMessage("업무를 가져왔습니다.");
+		response.setMessage(buildImportResponseMessage(fallbackFileNameList));
 		response.setWorkSeq(jobSaveParam.getWorkSeq());
 		response.setWorkKey(jobSaveParam.getWorkKey());
 		return response;
@@ -1049,6 +1049,12 @@ public class CompanyWorkService {
 
 	// 업무 첨부파일 개별 유효성을 검증합니다.
 	private void validateWorkAttachmentFile(MultipartFile file) {
+		String originalFileName = normalizeStoredFileName(file == null ? null : file.getOriginalFilename(), "업무 첨부파일명을 확인해주세요.");
+		validateWorkAttachmentFile(originalFileName, file == null ? 0 : file.getSize());
+	}
+
+	// 업무 첨부파일 개별 유효성을 파일명과 크기 기준으로 검증합니다.
+	private void validateWorkAttachmentFile(String originalFileName, long fileSize) {
 		// 현재 업무 첨부는 댓글 첨부 업로드 설정을 재사용합니다.
 		if (ftpProperties.getUploadCompanyWorkReplyMaxSize() <= 0) {
 			throw new IllegalStateException("업무 첨부파일 업로드 설정을 확인해주세요.");
@@ -1057,13 +1063,13 @@ public class CompanyWorkService {
 			throw new IllegalStateException("업무 첨부파일 허용 확장자 설정을 확인해주세요.");
 		}
 
-		String originalFileName = extractOriginalFileName(file);
+		String normalizedFileName = normalizeStoredFileName(originalFileName, "업무 첨부파일명을 확인해주세요.");
 		long maxSizeInBytes = (long) ftpProperties.getUploadCompanyWorkReplyMaxSize() * 1024 * 1024;
-		if (file.getSize() > maxSizeInBytes) {
+		if (fileSize > maxSizeInBytes) {
 			throw new IllegalArgumentException("업무 첨부파일 크기가 " + ftpProperties.getUploadCompanyWorkReplyMaxSize() + "MB를 초과합니다.");
 		}
 
-		String extension = extractFileExtension(originalFileName);
+		String extension = extractFileExtension(normalizedFileName);
 		if (extension == null || !isAllowedFileExtension(ftpProperties.getUploadCompanyWorkReplyAllowExtension(), extension)) {
 			throw new IllegalArgumentException("허용되지 않는 업무 첨부파일 형식입니다. 허용 형식: " + ftpProperties.getUploadCompanyWorkReplyAllowExtension());
 		}
@@ -1206,7 +1212,7 @@ public class CompanyWorkService {
 	) {
 		try {
 			// FTP 업로드 후 첨부 메타를 저장합니다.
-			String originalFileName = extractOriginalFileName(file);
+			String originalFileName = normalizeStoredFileName(file == null ? null : file.getOriginalFilename(), "업무 첨부파일명을 확인해주세요.");
 			String uploadedFileUrl = limitLength(
 				ftpFileService.uploadCompanyWorkFile(file, workSeq, String.valueOf(regNo)),
 				ADMIN_COMPANY_WORK_MAX_FILE_URL_LENGTH
@@ -1494,39 +1500,117 @@ public class CompanyWorkService {
 	}
 
 	// Jira 첨부파일 배열을 회사 업무 첨부파일 테이블에 저장합니다.
-	private void saveImportFileList(Long workSeq, AdminCompanyWorkImportPO param, JsonNode jiraIssueNode) {
-		// 업무 번호가 없거나 첨부 배열이 없으면 종료합니다.
-		if (workSeq == null || jiraIssueNode == null) {
-			return;
+	private List<String> saveImportFileList(AdminCompanyWorkImportJobSavePO jobSaveParam, JsonNode jiraIssueNode) {
+		// 업무 번호가 없거나 첨부 배열이 없으면 저장 없이 종료합니다.
+		if (jobSaveParam == null || jobSaveParam.getWorkSeq() == null || jiraIssueNode == null) {
+			return List.of();
 		}
 
 		JsonNode attachmentNode = jiraIssueNode.path("fields").path("attachment");
 		if (!attachmentNode.isArray()) {
-			return;
+			return List.of();
 		}
 
-		// 첨부 배열을 순회하며 건별 저장 파라미터를 생성해 저장합니다.
-		for (JsonNode attachmentItem : attachmentNode) {
-			String fileName = limitLength(
-				safeValue(trimToNull(attachmentItem.path("filename").asText(null))),
-				ADMIN_COMPANY_WORK_MAX_FILE_NAME_LENGTH
-			);
-			String fileUrl = limitLength(
-				safeValue(trimToNull(attachmentItem.path("content").asText(null))),
-				ADMIN_COMPANY_WORK_MAX_FILE_URL_LENGTH
-			);
-			if (fileName.isEmpty() && fileUrl.isEmpty()) {
-				continue;
+		List<String> uploadedFileUrlList = new ArrayList<>();
+		List<String> fallbackFileNameList = new ArrayList<>();
+
+		try {
+			// 첨부 배열을 순회하며 내부 저장소 업로드를 시도하고 실패 시 Jira 원본 URL로 대체합니다.
+			for (JsonNode attachmentItem : attachmentNode) {
+				String originalFileName = trimToNull(attachmentItem.path("filename").asText(null));
+				String originalFileUrl = trimToNull(attachmentItem.path("content").asText(null));
+				if (originalFileName == null && originalFileUrl == null) {
+					continue;
+				}
+
+				String resolvedFileUrl = resolveImportAttachmentFileUrl(
+					jobSaveParam,
+					originalFileName,
+					originalFileUrl,
+					uploadedFileUrlList,
+					fallbackFileNameList
+				);
+
+				AdminCompanyWorkImportFileSavePO fileSaveParam = new AdminCompanyWorkImportFileSavePO();
+				fileSaveParam.setWorkSeq(jobSaveParam.getWorkSeq());
+				fileSaveParam.setWorkJobFileNm(limitLength(safeValue(originalFileName), ADMIN_COMPANY_WORK_MAX_FILE_NAME_LENGTH));
+				fileSaveParam.setWorkJobFileUrl(limitLength(safeValue(resolvedFileUrl), ADMIN_COMPANY_WORK_MAX_FILE_URL_LENGTH));
+				fileSaveParam.setRegNo(jobSaveParam.getRegNo());
+				fileSaveParam.setUdtNo(jobSaveParam.getUdtNo());
+				companyWorkMapper.insertAdminCompanyWorkImportFile(fileSaveParam);
 			}
-
-			AdminCompanyWorkImportFileSavePO fileSaveParam = new AdminCompanyWorkImportFileSavePO();
-			fileSaveParam.setWorkSeq(workSeq);
-			fileSaveParam.setWorkJobFileNm(fileName);
-			fileSaveParam.setWorkJobFileUrl(fileUrl);
-			fileSaveParam.setRegNo(param.getRegNo());
-			fileSaveParam.setUdtNo(param.getUdtNo());
-			companyWorkMapper.insertAdminCompanyWorkImportFile(fileSaveParam);
+			return fallbackFileNameList;
+		} catch (IllegalArgumentException exception) {
+			// 업로드 후속 DB 저장이 깨지면 이미 올린 내부 파일만 정리하고 사용자 오류를 그대로 전달합니다.
+			cleanupUploadedWorkFiles(uploadedFileUrlList);
+			throw exception;
+		} catch (Exception exception) {
+			// 예기치 않은 오류 시 내부 업로드 파일을 정리한 뒤 서버 오류로 변환합니다.
+			cleanupUploadedWorkFiles(uploadedFileUrlList);
+			throw new IllegalStateException("SR 첨부파일 저장 중 오류가 발생했습니다.", exception);
 		}
+	}
+
+	// SR 가져오기 첨부를 내부 저장소에 저장하고 실패 시 Jira 원본 링크로 대체합니다.
+	private String resolveImportAttachmentFileUrl(
+		AdminCompanyWorkImportJobSavePO jobSaveParam,
+		String originalFileName,
+		String originalFileUrl,
+		List<String> uploadedFileUrlList,
+		List<String> fallbackFileNameList
+	) {
+		String displayFileName = resolveImportAttachmentDisplayName(originalFileName, originalFileUrl);
+
+		try {
+			// Jira 인증으로 첨부를 다운로드한 뒤 기존 업무 첨부 규칙으로 검증합니다.
+			DiningBrandsGroupJiraAttachmentDownloadResult downloadedAttachment = diningBrandsGroupJiraApiClient.downloadAttachment(originalFileUrl);
+			validateWorkAttachmentFile(originalFileName, downloadedAttachment.getContentLength());
+
+			// 검증을 통과하면 회사/프로젝트/workKey 경로에 내부 업로드하고 공개 URL을 저장합니다.
+			String uploadedFileUrl = ftpFileService.uploadImportedCompanyWorkFile(
+				originalFileName,
+				downloadedAttachment.getContent(),
+				jobSaveParam.getWorkCompanySeq(),
+				jobSaveParam.getWorkCompanyProjectSeq(),
+				jobSaveParam.getWorkKey()
+			);
+			uploadedFileUrlList.add(uploadedFileUrl);
+			return uploadedFileUrl;
+		} catch (Exception exception) {
+			// 첨부 단건 실패는 import 전체를 막지 않고 Jira 원본 URL로 대체 저장합니다.
+			fallbackFileNameList.add(displayFileName);
+			log.warn(
+				"SR 가져오기 첨부를 내부 저장소에 저장하지 못해 Jira 원본 링크로 대체합니다. workSeq={}, workKey={}, fileName={}, fileUrl={}",
+				jobSaveParam.getWorkSeq(),
+				jobSaveParam.getWorkKey(),
+				displayFileName,
+				originalFileUrl,
+				exception
+			);
+			return safeValue(originalFileUrl);
+		}
+	}
+
+	// SR 가져오기 응답 메시지를 fallback 첨부 건수 기준으로 구성합니다.
+	private String buildImportResponseMessage(List<String> fallbackFileNameList) {
+		int fallbackCount = fallbackFileNameList == null ? 0 : fallbackFileNameList.size();
+		if (fallbackCount < 1) {
+			return "업무를 가져왔습니다.";
+		}
+		return "업무를 가져왔습니다. 일부 첨부 " + fallbackCount + "건은 Jira 원본 링크로 저장되었습니다.";
+	}
+
+	// SR 가져오기 첨부의 표시용 이름을 파일명 우선으로 계산합니다.
+	private String resolveImportAttachmentDisplayName(String fileName, String fileUrl) {
+		String normalizedFileName = trimToNull(fileName);
+		if (normalizedFileName != null) {
+			return normalizedFileName;
+		}
+		String normalizedFileUrl = trimToNull(fileUrl);
+		if (normalizedFileUrl != null) {
+			return normalizedFileUrl;
+		}
+		return "이름없는 첨부파일";
 	}
 
 	// Jira 이슈 키를 응답값 우선으로 해석합니다.
@@ -1709,18 +1793,22 @@ public class CompanyWorkService {
 
 	// 멀티파트 파일에서 원본 파일명을 추출하고 저장 가능한 값으로 정규화합니다.
 	private String extractOriginalFileName(MultipartFile file) {
+		return normalizeStoredFileName(file == null ? null : file.getOriginalFilename(), "댓글 첨부파일명을 확인해주세요.");
+	}
+
+	// 원본 파일명을 저장 가능한 파일명으로 정규화합니다.
+	private String normalizeStoredFileName(String originalFileName, String invalidMessage) {
 		// 브라우저별 경로 포함 파일명은 마지막 파일명만 남기고 검증합니다.
-		String originalFileName = trimToNull(file == null ? null : file.getOriginalFilename());
-		if (originalFileName == null) {
-			throw new IllegalArgumentException("댓글 첨부파일명을 확인해주세요.");
+		String normalizedOriginalFileName = trimToNull(originalFileName);
+		if (normalizedOriginalFileName == null) {
+			throw new IllegalArgumentException(invalidMessage);
 		}
 
-		String normalizedFileName = originalFileName
-			.replace("\\", "/");
+		String normalizedFileName = normalizedOriginalFileName.replace("\\", "/");
 		int lastSlashIndex = normalizedFileName.lastIndexOf('/');
 		String baseFileName = lastSlashIndex >= 0 ? normalizedFileName.substring(lastSlashIndex + 1) : normalizedFileName;
 		if (trimToNull(baseFileName) == null) {
-			throw new IllegalArgumentException("댓글 첨부파일명을 확인해주세요.");
+			throw new IllegalArgumentException(invalidMessage);
 		}
 		return baseFileName;
 	}

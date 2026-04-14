@@ -135,6 +135,44 @@ public class FtpFileService {
 	}
 
 	/**
+	 * SR 가져오기 업무 첨부파일을 FTP 서버에 업로드하고 접근 가능한 URL을 반환합니다.
+	 * @param originalFileName Jira 원본 파일명
+	 * @param fileBytes 업로드할 파일 바이트 배열
+	 * @param workCompanySeq 회사 번호
+	 * @param workCompanyProjectSeq 프로젝트 번호
+	 * @param workKey 업무 키
+	 * @return 업로드된 첨부파일의 접근 URL
+	 */
+	public String uploadImportedCompanyWorkFile(
+		String originalFileName,
+		byte[] fileBytes,
+		Integer workCompanySeq,
+		Integer workCompanyProjectSeq,
+		String workKey
+	) throws IOException {
+		if (workCompanySeq == null || workCompanyProjectSeq == null) {
+			throw new IllegalArgumentException("회사/프로젝트 정보를 확인해주세요.");
+		}
+		if (safeTrim(workKey) == null) {
+			throw new IllegalArgumentException("업무 키를 확인해주세요.");
+		}
+
+		// 회사/프로젝트/workKey 폴더를 순서대로 생성하며 원본 파일명을 최대한 유지합니다.
+		String[] subDirs = {
+			safePathSegment(String.valueOf(workCompanySeq)),
+			safePathSegment(String.valueOf(workCompanyProjectSeq)),
+			safePathSegment(workKey)
+		};
+		return uploadBytesToFtp(
+			fileBytes,
+			normalizeUploadFileName(originalFileName),
+			ftpProperties.getUploadCompanyWorkImportTargetPath(),
+			ftpProperties.getUploadCompanyWorkImportView(),
+			subDirs
+		);
+	}
+
+	/**
 	 * 회사 업무 댓글 첨부파일을 FTP 서버에 업로드하고 접근 가능한 URL을 반환합니다.
 	 * @param file 업로드할 첨부파일
 	 * @param workSeq 업무 번호
@@ -291,20 +329,21 @@ public class FtpFileService {
 			return;
 		}
 
-		// 저장 URL에서 업무 첨부 하위 경로와 파일명을 복원합니다.
-		String[] pathSegments = resolvePathSegmentsFromPublicUrl(
-				normalizedFileUrl,
-				ftpProperties.getUploadCompanyWorkReplyView()
-		);
-		if (pathSegments.length < 3) {
+		// 신규 SR import 경로를 우선 확인하고, 아니면 기존 업무 첨부 경로를 확인합니다.
+		if (deleteManagedCompanyWorkFile(
+			normalizedFileUrl,
+			ftpProperties.getUploadCompanyWorkImportView(),
+			ftpProperties.getUploadCompanyWorkImportTargetPath(),
+			4
+		)) {
 			return;
 		}
-
-		// 마지막 세그먼트는 파일명이고 앞부분은 하위 디렉토리입니다.
-		String fileName = pathSegments[pathSegments.length - 1];
-		String[] subDirs = new String[pathSegments.length - 1];
-		System.arraycopy(pathSegments, 0, subDirs, 0, pathSegments.length - 1);
-		deleteFileFromFtp(ftpProperties.getUploadCompanyWorkReplyTargetPath(), subDirs, fileName);
+		deleteManagedCompanyWorkFile(
+			normalizedFileUrl,
+			ftpProperties.getUploadCompanyWorkReplyView(),
+			ftpProperties.getUploadCompanyWorkReplyTargetPath(),
+			3
+		);
 	}
 
 	/**
@@ -541,6 +580,59 @@ public class FtpFileService {
 	}
 
 	/**
+	 * 바이트 배열 기반 일반 파일을 FTP에 업로드하고 접근 가능한 URL을 반환합니다.
+	 * @param fileBytes 업로드할 파일 바이트 배열
+	 * @param originalFileName 원본 파일명
+	 * @param targetPath 업로드 대상 기본 경로
+	 * @param viewBase 웹 접근 기본 URL
+	 * @param subDirs 추가로 생성할 하위 폴더 목록
+	 * @return 업로드된 파일의 접근 URL
+	 */
+	private String uploadBytesToFtp(
+		byte[] fileBytes,
+		String originalFileName,
+		String targetPath,
+		String viewBase,
+		String[] subDirs
+	) throws IOException {
+		FTPClient ftpClient = new FTPClient();
+		byte[] normalizedFileBytes = fileBytes == null ? new byte[0] : fileBytes;
+
+		try {
+			// FTP 서버 접속과 바이너리 업로드 모드를 설정합니다.
+			ftpClient.connect(ftpProperties.getHost(), ftpProperties.getPort());
+			boolean login = ftpClient.login(ftpProperties.getUsername(), ftpProperties.getPwd());
+			if (!login) {
+				throw new IOException("FTP 로그인 실패");
+			}
+			ftpClient.enterLocalPassiveMode();
+			ftpClient.setFileType(FTP.BINARY_FILE_TYPE);
+
+			// 기본 경로와 회사/프로젝트/workKey 하위 경로를 없으면 생성하며 이동합니다.
+			changeOrCreateDirectories(ftpClient, targetPath);
+			for (String subDir : subDirs) {
+				ensureAndChangeDirectory(ftpClient, subDir);
+			}
+
+			// 같은 폴더 내 이름 충돌이 있으면 suffix를 붙여 유일한 파일명으로 업로드합니다.
+			String fileName = resolveUniqueFileName(ftpClient, originalFileName);
+			try (InputStream inputStream = new ByteArrayInputStream(normalizedFileBytes)) {
+				boolean uploaded = ftpClient.storeFile(fileName, inputStream);
+				if (!uploaded) {
+					throw new IOException("FTP 파일 업로드 실패");
+				}
+			}
+
+			return buildPublicFileUrl(viewBase, subDirs, fileName);
+		} finally {
+			if (ftpClient.isConnected()) {
+				ftpClient.logout();
+				ftpClient.disconnect();
+			}
+		}
+	}
+
+	/**
 	 * FTP에서 파일을 삭제합니다.
 	 * @param targetPath 업로드 대상 기본 경로
 	 * @param subDirs 하위 폴더 목록
@@ -569,6 +661,33 @@ public class FtpFileService {
 				ftpClient.disconnect();
 			}
 		}
+	}
+
+	/**
+	 * 회사 업무 공개 URL이 관리 대상 경로인지 확인하고 맞으면 FTP 파일을 삭제합니다.
+	 * @param fileUrl 삭제할 공개 URL
+	 * @param viewBase 관리 대상 공개 URL 기본 경로
+	 * @param targetPath 관리 대상 FTP 기본 경로
+	 * @param minimumSegmentCount 최소 경로 세그먼트 개수
+	 * @return 삭제 대상 경로로 인식했는지 여부
+	 */
+	private boolean deleteManagedCompanyWorkFile(
+		String fileUrl,
+		String viewBase,
+		String targetPath,
+		int minimumSegmentCount
+	) throws IOException {
+		String[] pathSegments = resolvePathSegmentsFromPublicUrl(fileUrl, viewBase);
+		if (pathSegments.length < minimumSegmentCount) {
+			return false;
+		}
+
+		// 마지막 세그먼트는 파일명이고 앞부분은 하위 디렉토리입니다.
+		String fileName = pathSegments[pathSegments.length - 1];
+		String[] subDirs = new String[pathSegments.length - 1];
+		System.arraycopy(pathSegments, 0, subDirs, 0, pathSegments.length - 1);
+		deleteFileFromFtp(targetPath, subDirs, fileName);
+		return true;
 	}
 
 	/**
@@ -635,6 +754,72 @@ public class FtpFileService {
 				throw new IOException("FTP 폴더 생성 실패: " + directoryName);
 			}
 		}
+	}
+
+	/**
+	 * 현재 폴더 기준으로 이름 충돌이 없는 업로드 파일명을 계산합니다.
+	 * @param ftpClient FTP 클라이언트
+	 * @param originalFileName 원본 파일명
+	 * @return 중복이 해소된 파일명
+	 */
+	private String resolveUniqueFileName(FTPClient ftpClient, String originalFileName) throws IOException {
+		String normalizedFileName = normalizeUploadFileName(originalFileName);
+		String[] existingFileNameList = ftpClient.listNames();
+		if (!containsFileName(existingFileNameList, normalizedFileName)) {
+			return normalizedFileName;
+		}
+
+		// 확장자 앞에 증가 suffix를 붙여 중복을 해소합니다.
+		String baseFileName = normalizedFileName;
+		String extension = "";
+		int extensionIndex = normalizedFileName.lastIndexOf('.');
+		if (extensionIndex > 0) {
+			baseFileName = normalizedFileName.substring(0, extensionIndex);
+			extension = normalizedFileName.substring(extensionIndex);
+		}
+
+		for (int duplicateIndex = 1; duplicateIndex < 10000; duplicateIndex++) {
+			String candidateFileName = baseFileName + "_" + duplicateIndex + extension;
+			if (!containsFileName(existingFileNameList, candidateFileName)) {
+				return candidateFileName;
+			}
+		}
+		throw new IOException("FTP 업로드 파일명 중복을 해소하지 못했습니다.");
+	}
+
+	/**
+	 * FTP 현재 디렉토리에 동일 파일명이 존재하는지 확인합니다.
+	 * @param fileNameList 현재 디렉토리 파일명 목록
+	 * @param fileName 확인할 파일명
+	 * @return 존재 여부
+	 */
+	private boolean containsFileName(String[] fileNameList, String fileName) {
+		for (String fileNameItem : fileNameList == null ? new String[0] : fileNameList) {
+			String normalizedFileNameItem = safeTrim(fileNameItem);
+			if (normalizedFileNameItem != null && normalizedFileNameItem.equals(fileName)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * 업로드용 원본 파일명을 경로와 구분한 뒤 저장 가능한 파일명으로 정리합니다.
+	 * @param originalFileName 원본 파일명
+	 * @return 정리된 파일명
+	 */
+	private String normalizeUploadFileName(String originalFileName) {
+		String normalizedFileName = safeTrim(originalFileName);
+		if (normalizedFileName == null) {
+			return "file";
+		}
+
+		// 경로 구분자가 섞여 들어오면 마지막 파일명만 남기고 저장합니다.
+		String baseFileName = normalizedFileName.replace("\\", "/");
+		int lastSlashIndex = baseFileName.lastIndexOf('/');
+		String resolvedFileName = lastSlashIndex >= 0 ? baseFileName.substring(lastSlashIndex + 1) : baseFileName;
+		String sanitizedFileName = resolvedFileName.replace("/", "_").replace("\\", "_");
+		return sanitizedFileName.isBlank() ? "file" : sanitizedFileName;
 	}
 
 	/**
@@ -714,7 +899,7 @@ public class FtpFileService {
 	 */
 	private String safePathSegment(String value) {
 		String normalizedValue = safeTrim(value);
-		return normalizedValue == null ? "anonymous" : normalizedValue;
+		return normalizedValue == null ? "anonymous" : normalizedValue.replace("/", "_").replace("\\", "_");
 	}
 
 	/**
