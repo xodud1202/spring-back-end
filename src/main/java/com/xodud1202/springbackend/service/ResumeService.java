@@ -153,7 +153,7 @@ public class ResumeService {
 			List<ResumeIntroduceEntity> introduceList = resumeIntroduceRepository.findByUsrNoAndDelYnOrderBySortSeq(usrNo, "N");
 			ResumeIntroduceEntity entity = introduceList.isEmpty()
 					? createDefaultIntroduce(usrNo)
-					: introduceList.get(0);
+					: introduceList.getFirst();
 
 			entity.setIntroduce(introduce);
 
@@ -183,16 +183,30 @@ public class ResumeService {
 		return resumeMapper.getAdminResumeExperienceList(usrNo);
 	}
 
-	public Map<String, String> saveResumeExperience(Long usrNo, ResumeExperienceBase param) {
-		Map<String, String> result = new HashMap<>();
-
+	// 저장 요청 객체 존재 여부를 확인하고 사용자 번호를 주입합니다.
+	private Map<String, String> validateRequiredResumeSaveParam(Object param, Runnable bindUsrNoAction) {
 		if (param == null) {
-			result.put("result", "fail");
-			result.put("message", "요청 데이터가 없습니다.");
-			return result;
+			return createResumeFailureResult("요청 데이터가 없습니다.");
+		}
+		bindUsrNoAction.run();
+		return null;
+	}
+
+	// 이력서 저장 실패 응답 맵을 생성합니다.
+	private Map<String, String> createResumeFailureResult(String message) {
+		Map<String, String> result = new HashMap<>();
+		result.put("result", "fail");
+		result.put("message", message);
+		return result;
+	}
+
+	public Map<String, String> saveResumeExperience(Long usrNo, ResumeExperienceBase param) {
+		Map<String, String> validationResult = validateRequiredResumeSaveParam(param, () -> param.setUsrNo(usrNo));
+		if (validationResult != null) {
+			return validationResult;
 		}
 
-		param.setUsrNo(usrNo);
+		Map<String, String> result = new HashMap<>();
 
 		if (StringUtils.isBlank(param.getCompanyNm())
 				|| StringUtils.isBlank(param.getEmploymentTypeCd())
@@ -360,15 +374,12 @@ public class ResumeService {
 	 * @return 저장 처리 결과
 	 */
 	public Map<String, String> saveResumeOtherExperience(Long usrNo, ResumeOtherExperience param) {
-		Map<String, String> result = new HashMap<>();
-
-		if (param == null) {
-			result.put("result", "fail");
-			result.put("message", "요청 데이터가 없습니다.");
-			return result;
+		Map<String, String> validationResult = validateRequiredResumeSaveParam(param, () -> param.setUsrNo(usrNo));
+		if (validationResult != null) {
+			return validationResult;
 		}
 
-		param.setUsrNo(usrNo);
+		Map<String, String> result = new HashMap<>();
 
 		if (StringUtils.isBlank(param.getExperienceTitle()) || StringUtils.isBlank(param.getExperienceSubTitle())) {
 			result.put("result", "fail");
@@ -448,22 +459,19 @@ public class ResumeService {
 	}
 
 	public List<ResumeEducation> getAdminResumeEducationList(Long usrNo) {
-		log.info("file.encoding={}", System.getProperty("file.encoding"));
+		log.info("file.encoding={}", Charset.defaultCharset().displayName());
 		log.info("sun.jnu.encoding={}", System.getProperty("sun.jnu.encoding"));
 		log.info("defaultCharset={}", Charset.defaultCharset());
 		return resumeMapper.getAdminResumeEducationList(usrNo);
 	}
 
 	public Map<String, String> saveResumeEducation(Long usrNo, ResumeEducation param) {
-		Map<String, String> result = new HashMap<>();
-
-		if (param == null) {
-			result.put("result", "fail");
-			result.put("message", "요청 데이터가 없습니다.");
-			return result;
+		Map<String, String> validationResult = validateRequiredResumeSaveParam(param, () -> param.setUsrNo(usrNo));
+		if (validationResult != null) {
+			return validationResult;
 		}
 
-		param.setUsrNo(usrNo);
+		Map<String, String> result = new HashMap<>();
 
 		if (StringUtils.isBlank(param.getEducationNm())
 				|| StringUtils.isBlank(param.getDepartment())

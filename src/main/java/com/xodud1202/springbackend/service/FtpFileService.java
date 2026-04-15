@@ -1,5 +1,6 @@
 package com.xodud1202.springbackend.service;
 
+import com.xodud1202.springbackend.common.util.CommonTextUtils;
 import com.xodud1202.springbackend.domain.common.FtpProperties;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.net.ftp.FTP;
@@ -17,6 +18,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -765,7 +767,7 @@ public class FtpFileService {
 	private String resolveUniqueFileName(FTPClient ftpClient, String originalFileName) throws IOException {
 		String normalizedFileName = normalizeUploadFileName(originalFileName);
 		String[] existingFileNameList = ftpClient.listNames();
-		if (!containsFileName(existingFileNameList, normalizedFileName)) {
+		if (isAvailableFileName(existingFileNameList, normalizedFileName)) {
 			return normalizedFileName;
 		}
 
@@ -780,7 +782,7 @@ public class FtpFileService {
 
 		for (int duplicateIndex = 1; duplicateIndex < 10000; duplicateIndex++) {
 			String candidateFileName = baseFileName + "_" + duplicateIndex + extension;
-			if (!containsFileName(existingFileNameList, candidateFileName)) {
+			if (isAvailableFileName(existingFileNameList, candidateFileName)) {
 				return candidateFileName;
 			}
 		}
@@ -788,19 +790,19 @@ public class FtpFileService {
 	}
 
 	/**
-	 * FTP 현재 디렉토리에 동일 파일명이 존재하는지 확인합니다.
+	 * FTP 현재 디렉토리에서 파일명이 사용 가능한지 확인합니다.
 	 * @param fileNameList 현재 디렉토리 파일명 목록
 	 * @param fileName 확인할 파일명
-	 * @return 존재 여부
+	 * @return 사용 가능 여부
 	 */
-	private boolean containsFileName(String[] fileNameList, String fileName) {
+	private boolean isAvailableFileName(String[] fileNameList, String fileName) {
 		for (String fileNameItem : fileNameList == null ? new String[0] : fileNameList) {
 			String normalizedFileNameItem = safeTrim(fileNameItem);
 			if (normalizedFileNameItem != null && normalizedFileNameItem.equals(fileName)) {
-				return true;
+				return false;
 			}
 		}
-		return false;
+		return true;
 	}
 
 	/**
@@ -830,7 +832,7 @@ public class FtpFileService {
 	 */
 	private String buildFileName(MultipartFile file, String folderKey) {
 		String originalFilename = file.getOriginalFilename();
-		String extension = originalFilename.substring(originalFilename.lastIndexOf("."));
+		String extension = Objects.requireNonNull(originalFilename).substring(originalFilename.lastIndexOf("."));
 		return folderKey + "_" + System.currentTimeMillis() + extension;
 	}
 
@@ -842,7 +844,7 @@ public class FtpFileService {
 	 */
 	private String buildBrandLogoFileName(MultipartFile file, String brandNo) {
 		String originalFilename = file.getOriginalFilename();
-		String extension = originalFilename.substring(originalFilename.lastIndexOf("."));
+		String extension = Objects.requireNonNull(originalFilename).substring(originalFilename.lastIndexOf("."));
 		String timeKey = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS"));
 		String normalizedBrandNo = brandNo.trim();
 		return normalizedBrandNo + "_" + timeKey + extension;
@@ -908,11 +910,7 @@ public class FtpFileService {
 	 * @return 정리된 문자열
 	 */
 	private String safeTrim(String value) {
-		if (value == null) {
-			return null;
-		}
-		String trimmedValue = value.trim();
-		return trimmedValue.isEmpty() ? null : trimmedValue;
+		return CommonTextUtils.trimToNull(value);
 	}
 
 	/**

@@ -1,7 +1,5 @@
 package com.xodud1202.springbackend.service;
 
-import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
-
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xodud1202.springbackend.config.properties.NotionProperties;
@@ -18,12 +16,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
+
+import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
 
 @Service
 // Notion 웹훅 이벤트를 기준으로 Notion 상세 데이터를 조회해 NOTION_DATA_LIST에 저장하는 서비스입니다.
@@ -263,9 +258,7 @@ public class NotionWebhookDataSyncService {
 			return "";
 		}
 
-		Iterator<Map.Entry<String, JsonNode>> iterator = propertiesNode.properties().iterator();
-		while (iterator.hasNext()) {
-			Map.Entry<String, JsonNode> entry = iterator.next();
+		for (Map.Entry<String, JsonNode> entry : propertiesNode.properties()) {
 			JsonNode propertyNode = entry.getValue();
 			if (!"title".equals(propertyNode.path("type").asText())) {
 				continue;
@@ -323,9 +316,7 @@ public class NotionWebhookDataSyncService {
 		}
 
 		if (node.isObject()) {
-			Iterator<Map.Entry<String, JsonNode>> iterator = node.properties().iterator();
-			while (iterator.hasNext()) {
-				Map.Entry<String, JsonNode> entry = iterator.next();
+			for (Map.Entry<String, JsonNode> entry : node.properties()) {
 				if ("plain_text".equals(entry.getKey()) && entry.getValue().isTextual()) {
 					collector.add(entry.getValue().asText(""));
 					continue;
@@ -351,14 +342,12 @@ public class NotionWebhookDataSyncService {
 		JsonNode categoryNode = propertiesNode.path("Category");
 		if (categoryNode.isObject()) {
 			JsonNode multiSelectNode = categoryNode.path("multi_select");
-			if (multiSelectNode.isArray() && multiSelectNode.size() > 0) {
+			if (multiSelectNode.isArray() && !multiSelectNode.isEmpty()) {
 				return trimToNull(multiSelectNode.get(0).path("id").asText(null));
 			}
 		}
 
-		Iterator<Map.Entry<String, JsonNode>> iterator = propertiesNode.properties().iterator();
-		while (iterator.hasNext()) {
-			Map.Entry<String, JsonNode> entry = iterator.next();
+		for (Map.Entry<String, JsonNode> entry : propertiesNode.properties()) {
 			String propertyName = trimToNull(entry.getKey());
 			if (propertyName == null || !propertyName.equalsIgnoreCase("category_id")) {
 				continue;
@@ -380,11 +369,11 @@ public class NotionWebhookDataSyncService {
 			}
 			if ("select".equals(propertyType)) {
 				return firstNonBlank(
-					trimToNull(propertyNode.path("select").path("id").asText(null)),
-					trimToNull(propertyNode.path("select").path("name").asText(null))
+						trimToNull(propertyNode.path("select").path("id").asText(null)),
+						trimToNull(propertyNode.path("select").path("name").asText(null))
 				);
 			}
-			if ("relation".equals(propertyType) && propertyNode.path("relation").isArray() && propertyNode.path("relation").size() > 0) {
+			if ("relation".equals(propertyType) && propertyNode.path("relation").isArray() && !propertyNode.path("relation").isEmpty()) {
 				return trimToNull(propertyNode.path("relation").get(0).path("id").asText(null));
 			}
 		}
@@ -407,9 +396,7 @@ public class NotionWebhookDataSyncService {
 			return rows;
 		}
 
-		Iterator<Map.Entry<String, JsonNode>> iterator = propertiesNode.properties().iterator();
-		while (iterator.hasNext()) {
-			Map.Entry<String, JsonNode> entry = iterator.next();
+		for (Map.Entry<String, JsonNode> entry : propertiesNode.properties()) {
 			JsonNode propertyNode = entry.getValue();
 			if (!propertyNode.isObject()) {
 				continue;
@@ -468,9 +455,7 @@ public class NotionWebhookDataSyncService {
 			return safeValue(trimToNull(urlProperty.path("url").asText(null)));
 		}
 
-		Iterator<Map.Entry<String, JsonNode>> iterator = propertiesNode.properties().iterator();
-		while (iterator.hasNext()) {
-			Map.Entry<String, JsonNode> entry = iterator.next();
+		for (Map.Entry<String, JsonNode> entry : propertiesNode.properties()) {
 			JsonNode propertyNode = entry.getValue();
 			if (!propertyNode.isObject()) {
 				continue;

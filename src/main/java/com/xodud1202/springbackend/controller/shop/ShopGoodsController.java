@@ -58,17 +58,16 @@ public class ShopGoodsController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			// 로그인 고객번호를 확인합니다.
+			Long custNo = requireAuthenticatedCustNo(request);
 
 			// 상품상세 기준 쿠폰 다운로드를 수행합니다.
 			String goodsId = requestBody == null ? null : requestBody.getGoodsId();
 			Long cpnNo = requestBody == null ? null : requestBody.getCpnNo();
 			goodsService.downloadShopGoodsCoupon(goodsId, cpnNo, custNo);
 			return ResponseEntity.ok(Map.of("message", "쿠폰을 다운로드했습니다."));
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			if ("상품 정보를 찾을 수 없습니다.".equals(exception.getMessage())) {
 				return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", exception.getMessage()));
@@ -87,22 +86,17 @@ public class ShopGoodsController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			// 필수 파라미터(goodsId) 유효성을 확인합니다.
-			Object goodsIdValue = requestBody == null ? null : requestBody.get("goodsId");
-			String goodsId = goodsIdValue instanceof String ? ((String) goodsIdValue).trim() : "";
-			if (goodsId.isEmpty()) {
-				return ResponseEntity.badRequest().body(Map.of("message", "상품코드를 확인해주세요."));
-			}
+			// 필수 파라미터(goodsId)와 로그인 고객번호를 확인합니다.
+			String goodsId = requireRequestBodyTextValue(requestBody, "goodsId", "상품코드를 확인해주세요.");
 
-			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			// 로그인 고객번호를 확인합니다.
+			Long custNo = requireAuthenticatedCustNo(request);
 
 			// 위시리스트 토글 처리 후 최종 상태를 반환합니다.
 			boolean wished = goodsService.toggleShopGoodsWishlist(goodsId, custNo);
 			return ResponseEntity.ok(Map.of("wished", wished));
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			if ("상품 정보를 찾을 수 없습니다.".equals(exception.getMessage())) {
 				return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", exception.getMessage()));

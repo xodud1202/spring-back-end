@@ -167,7 +167,7 @@ public class AdminCompanyWorkController {
 	// 관리자 회사 업무 수기 등록을 저장합니다.
 	@PostMapping("/api/admin/company/work/manual")
 	public ResponseEntity<Object> createAdminCompanyWorkManual(@RequestBody AdminCompanyWorkManualCreatePO param) {
-		if (!isAuthenticatedRequest()) {
+		if (isUnauthenticatedRequest()) {
 			return unauthorizedResponse();
 		}
 
@@ -221,7 +221,7 @@ public class AdminCompanyWorkController {
 	// 관리자 회사 업무 댓글을 등록합니다.
 	@PostMapping(value = "/api/admin/company/work/reply", consumes = MediaType.APPLICATION_JSON_VALUE)
 	public ResponseEntity<Object> saveAdminCompanyWorkReply(@RequestBody AdminCompanyWorkReplySavePO param) {
-		if (!isAuthenticatedRequest()) {
+		if (isUnauthenticatedRequest()) {
 			return unauthorizedResponse();
 		}
 
@@ -247,7 +247,7 @@ public class AdminCompanyWorkController {
 		@RequestPart("payload") String payload,
 		@RequestPart(value = "files", required = false) List<MultipartFile> files
 	) {
-		if (!isAuthenticatedRequest()) {
+		if (isUnauthenticatedRequest()) {
 			return unauthorizedResponse();
 		}
 
@@ -277,7 +277,7 @@ public class AdminCompanyWorkController {
 		@RequestPart("payload") String payload,
 		@RequestPart(value = "files", required = false) List<MultipartFile> files
 	) {
-		if (!isAuthenticatedRequest()) {
+		if (isUnauthenticatedRequest()) {
 			return unauthorizedResponse();
 		}
 
@@ -304,7 +304,7 @@ public class AdminCompanyWorkController {
 	// 관리자 회사 업무 댓글을 삭제 처리합니다.
 	@PostMapping("/api/admin/company/work/reply/delete")
 	public ResponseEntity<Object> deleteAdminCompanyWorkReply(@RequestBody AdminCompanyWorkReplyDeletePO param) {
-		if (!isAuthenticatedRequest()) {
+		if (isUnauthenticatedRequest()) {
 			return unauthorizedResponse();
 		}
 
@@ -330,7 +330,7 @@ public class AdminCompanyWorkController {
 		@RequestParam(required = false) Integer replyFileSeq
 	) {
 		// 공개 API로 열려 있어도 실제 다운로드는 인증된 관리자만 허용합니다.
-		if (!isAuthenticatedRequest()) {
+		if (isUnauthenticatedRequest()) {
 			return unauthorizedResponse();
 		}
 
@@ -354,13 +354,13 @@ public class AdminCompanyWorkController {
 		}
 	}
 
-	// 현재 요청이 인증된 사용자 요청인지 확인합니다.
-	private boolean isAuthenticatedRequest() {
-		// 익명 인증 또는 미인증 상태는 다운로드를 허용하지 않습니다.
+	// 현재 요청이 미인증 사용자 요청인지 확인합니다.
+	private boolean isUnauthenticatedRequest() {
+		// 익명 인증 또는 미인증 상태는 관리자 요청으로 허용하지 않습니다.
 		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-		return authentication != null
-			&& authentication.isAuthenticated()
-			&& !(authentication instanceof AnonymousAuthenticationToken);
+		return authentication == null
+			|| !authentication.isAuthenticated()
+			|| authentication instanceof AnonymousAuthenticationToken;
 	}
 
 	// 로그인 필요 응답을 공통 형식으로 반환합니다.

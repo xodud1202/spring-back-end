@@ -47,7 +47,7 @@ public class AdminResumeController {
 		List<ResumeIntroduceEntity> introduceList = resumeService.getResumeIntroduceByUsrNo(usrNo);
 
 		if (introduceList != null && !introduceList.isEmpty()) {
-			ResumeIntroduceEntity introduce = introduceList.get(0);
+			ResumeIntroduceEntity introduce = introduceList.getFirst();
 			response.put("usrNo", introduce.getUsrNo());
 			response.put("sortSeq", introduce.getSortSeq());
 			response.put("introduceTitle", introduce.getIntroduceTitle());

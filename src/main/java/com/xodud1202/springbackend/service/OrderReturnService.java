@@ -78,13 +78,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Supplier;
 
 import static com.xodud1202.springbackend.common.Constants.Shop.*;
@@ -494,8 +488,8 @@ public class OrderReturnService {
 			throw new IllegalArgumentException(ADMIN_ORDER_RETURN_PICKUP_COMPLETE_SAVE_INVALID_MESSAGE);
 		}
 
-		String reasonCd = trimToNull(param == null ? null : param.getReasonCd());
-		String reasonDetail = trimToNull(param == null ? null : param.getReasonDetail());
+		String reasonCd = trimToNull(param.getReasonCd());
+		String reasonDetail = trimToNull(param.getReasonDetail());
 		ShopOrderReturnItemPO reasonValidationItem = new ShopOrderReturnItemPO();
 		reasonValidationItem.setReasonCd(reasonCd);
 		reasonValidationItem.setReasonDetail(reasonDetail);
@@ -541,7 +535,7 @@ public class OrderReturnService {
 		serverPreviewAmount.setShippingAdjustmentAmt(shippingAdjustmentAmt);
 		serverPreviewAmount.setTotalPointRefundAmt(resolveNonNegativeLong(fixedPreviewAmount.getTotalPointRefundAmt()));
 		serverPreviewAmount.setDeliveryCouponRefundAmt(resolveNonNegativeLong(fixedPreviewAmount.getDeliveryCouponRefundAmt()));
-		validateShopOrderReturnPreviewAmount(param == null ? null : param.getPreviewAmount(), serverPreviewAmount);
+		validateShopOrderReturnPreviewAmount(param.getPreviewAmount(), serverPreviewAmount);
 
 		// 주문상세 반영용 선택 상품 목록과 포인트 환급 금액 분기를 구성합니다.
 		List<AdminOrderReturnManagePickupCompleteSelectedItem> selectedItemList =
@@ -573,9 +567,6 @@ public class OrderReturnService {
 	) {
 		// 반품 상세 전체를 클레임 공통 사유 1개로 통일합니다.
 		for (ShopMypageReturnHistoryDetailVO detailItem : returnItem == null ? List.<ShopMypageReturnHistoryDetailVO>of() : returnItem.getDetailList()) {
-			if (detailItem == null) {
-				continue;
-			}
 			detailItem.setChgReasonCd(reasonCd);
 			detailItem.setChgReasonDtl(reasonDetail);
 		}
@@ -589,7 +580,7 @@ public class OrderReturnService {
 		// 현재 주문상세를 주문상세번호 기준 맵으로 구성합니다.
 		Map<Integer, ShopMypageOrderDetailItemVO> detailItemMap = new LinkedHashMap<>();
 		for (ShopMypageOrderDetailItemVO detailItem : orderGroup == null ? List.<ShopMypageOrderDetailItemVO>of() : orderGroup.getDetailList()) {
-			if (detailItem == null || detailItem.getOrdDtlNo() == null) {
+			if (detailItem.getOrdDtlNo() == null) {
 				continue;
 			}
 			detailItemMap.put(detailItem.getOrdDtlNo(), detailItem);
@@ -598,9 +589,9 @@ public class OrderReturnService {
 		// 클레임 상세 전체가 현재 주문상세와 정확히 매칭되는지 검증합니다.
 		List<AdminOrderReturnManagePickupCompleteSelectedItem> result = new ArrayList<>();
 		for (AdminOrderReturnManagePickupCompleteDetailVO claimDetail : detailList == null ? List.<AdminOrderReturnManagePickupCompleteDetailVO>of() : detailList) {
-			Integer ordDtlNo = claimDetail == null ? null : claimDetail.getOrdDtlNo();
+			Integer ordDtlNo = claimDetail.getOrdDtlNo();
 			ShopMypageOrderDetailItemVO detailItem = ordDtlNo == null ? null : detailItemMap.get(ordDtlNo);
-			int returnQty = normalizeNonNegativeNumber(claimDetail == null ? null : claimDetail.getQty());
+			int returnQty = normalizeNonNegativeNumber(claimDetail.getQty());
 			int currentRemainingQty = resolveShopOrderRemainingQty(detailItem);
 			String currentOrdDtlStatCd = trimToNull(detailItem == null ? null : detailItem.getOrdDtlStatCd());
 			if (ordDtlNo == null
@@ -781,9 +772,6 @@ public class OrderReturnService {
 		}
 		Set<Long> activeCartCouponNoSet = new HashSet<>();
 		for (ShopMypageOrderDetailItemVO detailItem : orderGroup == null ? List.<ShopMypageOrderDetailItemVO>of() : orderGroup.getDetailList()) {
-			if (detailItem == null) {
-				continue;
-			}
 			AdminOrderReturnManagePickupCompleteSelectedItem selectedItem =
 				detailItem.getOrdDtlNo() == null ? null : selectedItemMap.get(detailItem.getOrdDtlNo());
 			int remainingAfterReturnQty = selectedItem == null
@@ -1237,16 +1225,16 @@ public class OrderReturnService {
 		long totalCartCouponDiscountAmt = 0L;
 		long totalPointRefundAmt = 0L;
 		for (ShopMypageReturnHistoryDetailVO detailItem : returnItem == null ? List.<ShopMypageReturnHistoryDetailVO>of() : returnItem.getDetailList()) {
-			int qty = normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getQty());
-			long unitSupplyAmt = normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getSupplyAmt());
+			int qty = normalizeNonNegativeNumber(detailItem.getQty());
+			long unitSupplyAmt = normalizeNonNegativeNumber(detailItem.getSupplyAmt());
 			long unitOrderAmt =
-				(long) normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getSaleAmt())
-					+ normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getAddAmt());
+				(long) normalizeNonNegativeNumber(detailItem.getSaleAmt())
+					+ normalizeNonNegativeNumber(detailItem.getAddAmt());
 			totalSupplyAmt += unitSupplyAmt * qty;
 			totalOrderAmt += unitOrderAmt * qty;
-			totalGoodsCouponDiscountAmt += normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getGoodsCouponDiscountAmt());
-			totalCartCouponDiscountAmt += normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getCartCouponDiscountAmt());
-			totalPointRefundAmt += normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getPointDcAmt());
+			totalGoodsCouponDiscountAmt += normalizeNonNegativeNumber(detailItem.getGoodsCouponDiscountAmt());
+			totalCartCouponDiscountAmt += normalizeNonNegativeNumber(detailItem.getCartCouponDiscountAmt());
+			totalPointRefundAmt += normalizeNonNegativeNumber(detailItem.getPointDcAmt());
 		}
 
 		// 전체 반품 여부에 따라 배송비 환급/쿠폰 환급 금액을 계산합니다.
@@ -1294,20 +1282,20 @@ public class OrderReturnService {
 		for (AdminOrderReturnManagePickupCompleteDetailVO detail : detailList == null ? List.<AdminOrderReturnManagePickupCompleteDetailVO>of() : detailList) {
 			ShopMypageReturnHistoryDetailVO mappedDetail = new ShopMypageReturnHistoryDetailVO();
 			mappedDetail.setClmNo(trimToNull(claim == null ? null : claim.getClmNo()));
-			mappedDetail.setOrdDtlNo(detail == null ? null : detail.getOrdDtlNo());
-			mappedDetail.setGoodsId(trimToNull(detail == null ? null : detail.getGoodsId()));
-			mappedDetail.setGoodsNm(trimToNull(detail == null ? null : detail.getGoodsNm()));
-			mappedDetail.setSizeId(trimToNull(detail == null ? null : detail.getSizeId()));
-			mappedDetail.setQty(detail == null ? null : detail.getQty());
-			mappedDetail.setSaleAmt(detail == null ? null : detail.getSaleAmt());
-			mappedDetail.setAddAmt(detail == null ? null : detail.getAddAmt());
-			mappedDetail.setSupplyAmt(detail == null ? null : detail.getSupplyAmt());
-			mappedDetail.setGoodsCouponDiscountAmt(detail == null ? null : detail.getGoodsCouponDiscountAmt());
-			mappedDetail.setCartCouponDiscountAmt(detail == null ? null : detail.getCartCouponDiscountAmt());
-			mappedDetail.setPointDcAmt(detail == null ? null : detail.getPointDcAmt());
-			mappedDetail.setChgReasonCd(trimToNull(detail == null ? null : detail.getChgReasonCd()));
-			mappedDetail.setChgReasonDtl(trimToNull(detail == null ? null : detail.getChgReasonDtl()));
-			mappedDetail.setChgDtlStatCd(trimToNull(detail == null ? null : detail.getChgDtlStatCd()));
+			mappedDetail.setOrdDtlNo(detail.getOrdDtlNo());
+			mappedDetail.setGoodsId(trimToNull(detail.getGoodsId()));
+			mappedDetail.setGoodsNm(trimToNull(detail.getGoodsNm()));
+			mappedDetail.setSizeId(trimToNull(detail.getSizeId()));
+			mappedDetail.setQty(detail.getQty());
+			mappedDetail.setSaleAmt(detail.getSaleAmt());
+			mappedDetail.setAddAmt(detail.getAddAmt());
+			mappedDetail.setSupplyAmt(detail.getSupplyAmt());
+			mappedDetail.setGoodsCouponDiscountAmt(detail.getGoodsCouponDiscountAmt());
+			mappedDetail.setCartCouponDiscountAmt(detail.getCartCouponDiscountAmt());
+			mappedDetail.setPointDcAmt(detail.getPointDcAmt());
+			mappedDetail.setChgReasonCd(trimToNull(detail.getChgReasonCd()));
+			mappedDetail.setChgReasonDtl(trimToNull(detail.getChgReasonDtl()));
+			mappedDetail.setChgDtlStatCd(trimToNull(detail.getChgDtlStatCd()));
 			mappedDetailList.add(mappedDetail);
 		}
 		result.setDetailList(mappedDetailList);
@@ -1327,16 +1315,16 @@ public class OrderReturnService {
 		long totalCartCouponDiscountAmt = 0L;
 		long totalPointRefundAmt = 0L;
 		for (ShopMypageReturnHistoryDetailVO detailItem : returnItem == null ? List.<ShopMypageReturnHistoryDetailVO>of() : returnItem.getDetailList()) {
-			int qty = normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getQty());
-			long unitSupplyAmt = normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getSupplyAmt());
+			int qty = normalizeNonNegativeNumber(detailItem.getQty());
+			long unitSupplyAmt = normalizeNonNegativeNumber(detailItem.getSupplyAmt());
 			long unitOrderAmt =
-				(long) normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getSaleAmt())
-					+ normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getAddAmt());
+				(long) normalizeNonNegativeNumber(detailItem.getSaleAmt())
+					+ normalizeNonNegativeNumber(detailItem.getAddAmt());
 			totalSupplyAmt += unitSupplyAmt * qty;
 			totalOrderAmt += unitOrderAmt * qty;
-			totalGoodsCouponDiscountAmt += normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getGoodsCouponDiscountAmt());
-			totalCartCouponDiscountAmt += normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getCartCouponDiscountAmt());
-			totalPointRefundAmt += normalizeNonNegativeNumber(detailItem == null ? null : detailItem.getPointDcAmt());
+			totalGoodsCouponDiscountAmt += normalizeNonNegativeNumber(detailItem.getGoodsCouponDiscountAmt());
+			totalCartCouponDiscountAmt += normalizeNonNegativeNumber(detailItem.getCartCouponDiscountAmt());
+			totalPointRefundAmt += normalizeNonNegativeNumber(detailItem.getPointDcAmt());
 		}
 
 		// 전체 반품 여부에 따라 배송비쿠폰 환급 금액만 고정값으로 계산합니다.
@@ -1370,16 +1358,16 @@ public class OrderReturnService {
 		boolean initialized = false;
 		boolean mixedReasonYn = false;
 		for (AdminOrderReturnManagePickupCompleteDetailVO detail : detailList == null ? List.<AdminOrderReturnManagePickupCompleteDetailVO>of() : detailList) {
-			String currentReasonCd = trimToNull(detail == null ? null : detail.getChgReasonCd());
-			String currentReasonDetail = trimToNull(detail == null ? null : detail.getChgReasonDtl());
+			String currentReasonCd = trimToNull(detail.getChgReasonCd());
+			String currentReasonDetail = trimToNull(detail.getChgReasonDtl());
 			if (!initialized) {
 				defaultReasonCd = currentReasonCd;
 				defaultReasonDetail = currentReasonDetail;
 				initialized = true;
 				continue;
 			}
-			if (!isSameAdminOrderReturnManagePickupCompleteReasonValue(defaultReasonCd, currentReasonCd)
-				|| !isSameAdminOrderReturnManagePickupCompleteReasonValue(defaultReasonDetail, currentReasonDetail)) {
+			if (!Objects.equals(defaultReasonCd, currentReasonCd)
+				|| !Objects.equals(defaultReasonDetail, currentReasonDetail)) {
 				mixedReasonYn = true;
 				break;
 			}
@@ -1388,17 +1376,6 @@ public class OrderReturnService {
 		result.setMixedReasonYn(mixedReasonYn);
 		result.setDefaultReasonCd(mixedReasonYn ? null : defaultReasonCd);
 		result.setDefaultReasonDetail(mixedReasonYn ? null : defaultReasonDetail);
-	}
-
-	// 관리자 반품 회수완료 검수 팝업의 사유 문자열 2개가 같은지 비교합니다.
-	private boolean isSameAdminOrderReturnManagePickupCompleteReasonValue(String leftValue, String rightValue) {
-		// 공백과 null을 동일 규칙으로 정규화한 뒤 비교합니다.
-		String normalizedLeftValue = trimToNull(leftValue);
-		String normalizedRightValue = trimToNull(rightValue);
-		if (normalizedLeftValue == null || normalizedRightValue == null) {
-			return normalizedLeftValue == normalizedRightValue;
-		}
-		return normalizedLeftValue.equals(normalizedRightValue);
 	}
 
 	// 현재 주문 기준으로 이번 반품이 전체 반품인지 계산합니다.
@@ -1415,7 +1392,7 @@ public class OrderReturnService {
 
 		// 현재 주문에 남아 있는 주문상세와 현재 반품 수량을 비교합니다.
 		for (ShopMypageOrderDetailItemVO detailItem : orderGroup == null ? List.<ShopMypageOrderDetailItemVO>of() : orderGroup.getDetailList()) {
-			Integer ordDtlNo = detailItem == null ? null : detailItem.getOrdDtlNo();
+			Integer ordDtlNo = detailItem.getOrdDtlNo();
 			if (ordDtlNo == null) {
 				continue;
 			}
@@ -1445,7 +1422,7 @@ public class OrderReturnService {
 		// 중복 주문상세번호가 있으면 수량을 누적합니다.
 		Map<Integer, Integer> result = new LinkedHashMap<>();
 		for (ShopMypageReturnHistoryDetailVO detailItem : returnItem == null ? List.<ShopMypageReturnHistoryDetailVO>of() : returnItem.getDetailList()) {
-			Integer ordDtlNo = detailItem == null ? null : detailItem.getOrdDtlNo();
+			Integer ordDtlNo = detailItem.getOrdDtlNo();
 			if (ordDtlNo == null) {
 				continue;
 			}
@@ -1460,7 +1437,7 @@ public class OrderReturnService {
 		// 같은 주문상세번호에 완료 상태가 하나라도 있으면 완료로 간주합니다.
 		Map<Integer, Boolean> result = new LinkedHashMap<>();
 		for (ShopMypageReturnHistoryDetailVO detailItem : returnItem == null ? List.<ShopMypageReturnHistoryDetailVO>of() : returnItem.getDetailList()) {
-			Integer ordDtlNo = detailItem == null ? null : detailItem.getOrdDtlNo();
+			Integer ordDtlNo = detailItem.getOrdDtlNo();
 			if (ordDtlNo == null) {
 				continue;
 			}
@@ -1691,8 +1668,8 @@ public class OrderReturnService {
 		// 클레임번호와 주문상세번호 조합을 키로 사용해 빠르게 찾을 수 있게 구성합니다.
 		Map<String, AdminOrderClaimRowVO> claimRowMap = new LinkedHashMap<>();
 		for (AdminOrderClaimRowVO claimRow : claimList == null ? List.<AdminOrderClaimRowVO>of() : claimList) {
-			String clmNo = trimToNull(claimRow == null ? null : claimRow.getClmNo());
-			Integer ordDtlNo = claimRow == null ? null : claimRow.getOrdDtlNo();
+			String clmNo = trimToNull(claimRow.getClmNo());
+			Integer ordDtlNo = claimRow.getOrdDtlNo();
 			if (clmNo == null || ordDtlNo == null || ordDtlNo < 1) {
 				continue;
 			}
@@ -2008,7 +1985,7 @@ public class OrderReturnService {
 
 		// 기타 사유는 상품별 직접입력값을 필수로 확인합니다.
 		if (isShopOrderReasonDetailRequired(matchedReason)
-			&& trimToNull(returnItem == null ? null : returnItem.getReasonDetail()) == null) {
+			&& trimToNull(returnItem.getReasonDetail()) == null) {
 			throw new IllegalArgumentException("기타 사유를 입력해주세요.");
 		}
 	}

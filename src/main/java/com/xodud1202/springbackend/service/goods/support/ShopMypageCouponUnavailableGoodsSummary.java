@@ -1,13 +1,17 @@
 package com.xodud1202.springbackend.service.goods.support;
 
 import com.xodud1202.springbackend.domain.shop.mypage.ShopMypageCouponUnavailableGoodsVO;
+import lombok.Getter;
 
 import java.util.List;
 
 // 쿠폰 사용 불가 상품 요약 정보를 전달합니다.
+@Getter
 public class ShopMypageCouponUnavailableGoodsSummary {
+	// 쿠폰 사용 불가 상품 전체 건수를 반환합니다.
 	// 쿠폰 사용 불가 상품 전체 건수입니다.
 	private final int unavailableGoodsCount;
+	// 쿠폰 사용 불가 상품 목록을 반환합니다.
 	// 쿠폰 사용 불가 상품 목록입니다.
 	private final List<ShopMypageCouponUnavailableGoodsVO> unavailableGoodsList;
 
@@ -25,14 +29,5 @@ public class ShopMypageCouponUnavailableGoodsSummary {
 		return new ShopMypageCouponUnavailableGoodsSummary(0, List.of());
 	}
 
-	// 쿠폰 사용 불가 상품 전체 건수를 반환합니다.
-	public int getUnavailableGoodsCount() {
-		return unavailableGoodsCount;
-	}
-
-	// 쿠폰 사용 불가 상품 목록을 반환합니다.
-	public List<ShopMypageCouponUnavailableGoodsVO> getUnavailableGoodsList() {
-		return unavailableGoodsList;
-	}
 }
 

@@ -59,12 +59,11 @@ public class ShopMypageController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			Long custNo = requireAuthenticatedCustNo(request);
 			ShopMypageWishPageVO result = goodsService.getShopMypageWishPage(custNo, pageNo);
 			return ResponseEntity.ok(result);
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
 		} catch (Exception exception) {
@@ -80,19 +79,14 @@ public class ShopMypageController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			Object goodsIdValue = requestBody == null ? null : requestBody.get("goodsId");
-			String goodsId = goodsIdValue instanceof String ? ((String) goodsIdValue).trim() : "";
-			if (goodsId.isEmpty()) {
-				return ResponseEntity.badRequest().body(Map.of("message", "상품코드를 확인해주세요."));
-			}
+			String goodsId = requireRequestBodyTextValue(requestBody, "goodsId", "상품코드를 확인해주세요.");
 
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			Long custNo = requireAuthenticatedCustNo(request);
 
 			goodsService.deleteShopMypageWishGoods(goodsId, custNo);
 			return ResponseEntity.ok(Map.of("message", "위시리스트에서 삭제했습니다."));
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
 		} catch (Exception exception) {
@@ -109,12 +103,11 @@ public class ShopMypageController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			Long custNo = requireAuthenticatedCustNo(request);
 			ShopMypageCouponPageVO result = goodsService.getShopMypageCouponPage(custNo, ownedPageNo, downloadablePageNo);
 			return ResponseEntity.ok(result);
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
 		} catch (Exception exception) {
@@ -132,12 +125,11 @@ public class ShopMypageController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			Long custNo = requireAuthenticatedCustNo(request);
 			ShopMypageOrderPageVO result = orderService.getShopMypageOrderPage(custNo, pageNo, startDate, endDate);
 			return ResponseEntity.ok(result);
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
 		} catch (Exception exception) {
@@ -153,16 +145,15 @@ public class ShopMypageController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			Long custNo = requireAuthenticatedCustNo(request);
 			if (ordNo == null || ordNo.trim().isEmpty()) {
 				return ResponseEntity.badRequest().body(Map.of("message", "주문번호를 확인해주세요."));
 			}
 
 			ShopMypageOrderDetailPageVO result = orderService.getShopMypageOrderDetailPage(custNo, ordNo);
 			return ResponseEntity.ok(result);
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			if ("주문 정보를 찾을 수 없습니다.".equals(exception.getMessage())) {
 				return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", exception.getMessage()));
@@ -182,16 +173,15 @@ public class ShopMypageController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			Long custNo = requireAuthenticatedCustNo(request);
 			if (ordNo == null || ordNo.trim().isEmpty()) {
 				return ResponseEntity.badRequest().body(Map.of("message", "주문번호를 확인해주세요."));
 			}
 
 			ShopMypageOrderCancelPageVO result = orderCancelService.getShopMypageOrderCancelPage(custNo, ordNo, ordDtlNo);
 			return ResponseEntity.ok(result);
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			if ("주문 정보를 찾을 수 없습니다.".equals(exception.getMessage())) {
 				return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", exception.getMessage()));
@@ -217,16 +207,15 @@ public class ShopMypageController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			Long custNo = requireAuthenticatedCustNo(request);
 			if (ordNo == null || ordNo.trim().isEmpty()) {
 				return ResponseEntity.badRequest().body(Map.of("message", "주문번호를 확인해주세요."));
 			}
 
 			ShopMypageOrderReturnPageVO result = orderReturnService.getShopMypageOrderReturnPage(custNo, ordNo, ordDtlNo);
 			return ResponseEntity.ok(result);
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			if ("주문 정보를 찾을 수 없습니다.".equals(exception.getMessage())) {
 				return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", exception.getMessage()));
@@ -251,13 +240,12 @@ public class ShopMypageController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			Long custNo = requireAuthenticatedCustNo(request);
 
 			ShopOrderReturnResultVO result = orderReturnService.returnShopMypageOrder(param, custNo);
 			return ResponseEntity.ok(result);
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			if (SHOP_MYPAGE_ORDER_RETURN_AMOUNT_MISMATCH_MESSAGE.equals(exception.getMessage())) {
 				return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", exception.getMessage()));
@@ -279,13 +267,12 @@ public class ShopMypageController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			Long custNo = requireAuthenticatedCustNo(request);
 
 			ShopOrderReturnWithdrawResultVO result = orderReturnService.withdrawShopMypageOrderReturn(param, custNo);
 			return ResponseEntity.ok(result);
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
 		} catch (Exception exception) {
@@ -303,13 +290,12 @@ public class ShopMypageController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			Long custNo = requireAuthenticatedCustNo(request);
 
 			ShopMypageCancelHistoryPageVO result = orderCancelService.getShopMypageCancelHistoryPage(custNo, pageNo, startDate, endDate);
 			return ResponseEntity.ok(result);
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
 		} catch (Exception exception) {
@@ -325,13 +311,12 @@ public class ShopMypageController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			Long custNo = requireAuthenticatedCustNo(request);
 
 			ShopMypageCancelHistoryVO result = orderCancelService.getShopMypageCancelHistoryDetail(custNo, clmNo);
 			return ResponseEntity.ok(result);
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
 		} catch (Exception exception) {
@@ -349,13 +334,12 @@ public class ShopMypageController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			Long custNo = requireAuthenticatedCustNo(request);
 
 			ShopMypageReturnHistoryPageVO result = orderReturnService.getShopMypageReturnHistoryPage(custNo, pageNo, startDate, endDate);
 			return ResponseEntity.ok(result);
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
 		} catch (Exception exception) {
@@ -371,13 +355,12 @@ public class ShopMypageController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			Long custNo = requireAuthenticatedCustNo(request);
 
 			ShopMypageReturnDetailPageVO result = orderReturnService.getShopMypageReturnHistoryDetail(custNo, clmNo);
 			return ResponseEntity.ok(result);
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
 		} catch (Exception exception) {
@@ -393,13 +376,12 @@ public class ShopMypageController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			Long custNo = requireAuthenticatedCustNo(request);
 
 			goodsService.downloadShopMypageCoupon(requestBody, custNo);
 			return ResponseEntity.ok(Map.of("message", "쿠폰을 다운로드했습니다."));
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
 		} catch (Exception exception) {
@@ -412,14 +394,13 @@ public class ShopMypageController extends ShopControllerSupport {
 	@PostMapping("/api/shop/mypage/coupon/download/all")
 	public ResponseEntity<Object> downloadAllShopMypageCoupon(HttpServletRequest request) {
 		try {
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			Long custNo = requireAuthenticatedCustNo(request);
 
 			int downloadedCount = goodsService.downloadAllShopMypageCoupon(custNo);
 			String message = downloadedCount > 0 ? "전체 쿠폰을 다운로드했습니다." : "다운로드 가능한 쿠폰이 없습니다.";
 			return ResponseEntity.ok(Map.of("downloadedCount", downloadedCount, "message", message));
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
 		} catch (Exception exception) {
@@ -435,13 +416,12 @@ public class ShopMypageController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			Long custNo = requireAuthenticatedCustNo(request);
 
 			ShopMypagePointPageVO result = orderService.getShopMypagePointPage(custNo, pageNo);
 			return ResponseEntity.ok(result);
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
 		} catch (Exception exception) {
@@ -457,12 +437,11 @@ public class ShopMypageController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			Long custNo = requireAuthenticatedCustNo(request);
 
 			return ResponseEntity.ok(orderCancelService.cancelShopMypageOrder(param, custNo));
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			if (SHOP_MYPAGE_ORDER_CANCEL_AMOUNT_MISMATCH_MESSAGE.equals(exception.getMessage())) {
 				return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", exception.getMessage()));
@@ -484,13 +463,12 @@ public class ShopMypageController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			Long custNo = requireAuthenticatedCustNo(request);
 
 			ShopOrderDetailStatusUpdateVO result = deliveryService.completeShopMypageOrderDelivery(param, custNo);
 			return ResponseEntity.ok(result);
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			if (SHOP_MYPAGE_ORDER_NOT_FOUND_MESSAGE.equals(exception.getMessage())) {
 				return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", exception.getMessage()));
@@ -509,13 +487,12 @@ public class ShopMypageController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			Long custNo = requireAuthenticatedCustNo(request);
 
 			ShopOrderDetailStatusUpdateVO result = orderService.confirmShopMypageOrderPurchase(param, custNo);
 			return ResponseEntity.ok(result);
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			if (SHOP_MYPAGE_ORDER_NOT_FOUND_MESSAGE.equals(exception.getMessage())) {
 				return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", exception.getMessage()));

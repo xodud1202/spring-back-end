@@ -405,23 +405,7 @@ public class CouponService {
 			return List.of();
 		}
 		List<CouponTargetRowVO> existingRows = couponMapper.getExistingGoodsTargetRows(targetValues);
-		Map<String, CouponTargetRowVO> existingRowMap = new LinkedHashMap<>();
-		for (CouponTargetRowVO row : existingRows) {
-			if (row == null || isBlank(row.getTargetValue())) {
-				continue;
-			}
-			existingRowMap.put(row.getTargetValue(), row);
-		}
-
-		// 입력 순서를 유지하며 유효 대상만 반영합니다.
-		List<CouponTargetRowVO> result = new ArrayList<>();
-		for (String targetValue : targetValues) {
-			CouponTargetRowVO existingRow = existingRowMap.get(targetValue);
-			if (existingRow != null) {
-				result.add(existingRow);
-			}
-		}
-		return result;
+		return retainExistingTargetRowsInInputOrder(targetValues, existingRows);
 	}
 
 	// 브랜드 대상 목록에서 유효한 브랜드만 반환합니다.
@@ -446,23 +430,7 @@ public class CouponService {
 
 		// 유효한 브랜드 목록을 조회합니다.
 		List<CouponTargetRowVO> existingRows = couponMapper.getExistingBrandTargetRows(brandNoList);
-		Map<String, CouponTargetRowVO> existingRowMap = new LinkedHashMap<>();
-		for (CouponTargetRowVO row : existingRows) {
-			if (row == null || isBlank(row.getTargetValue())) {
-				continue;
-			}
-			existingRowMap.put(row.getTargetValue(), row);
-		}
-
-		// 입력 순서를 유지하며 유효 대상만 반영합니다.
-		List<CouponTargetRowVO> result = new ArrayList<>();
-		for (String targetValue : targetValues) {
-			CouponTargetRowVO existingRow = existingRowMap.get(targetValue);
-			if (existingRow != null) {
-				result.add(existingRow);
-			}
-		}
-		return result;
+		return retainExistingTargetRowsInInputOrder(targetValues, existingRows);
 	}
 
 	// 기획전 대상 목록에서 유효한 기획전만 반환합니다.
@@ -474,12 +442,10 @@ public class CouponService {
 
 		// 숫자형 기획전 번호만 추출합니다.
 		List<Integer> exhibitionNoList = new ArrayList<>();
-		Map<String, String> originalValueMap = new LinkedHashMap<>();
 		for (String targetValue : targetValues) {
 			try {
 				Integer parsedNo = Integer.parseInt(targetValue);
 				exhibitionNoList.add(parsedNo);
-				originalValueMap.put(String.valueOf(parsedNo), targetValue);
 			} catch (NumberFormatException ignored) {
 				// 숫자 변환이 불가능한 값은 무시합니다.
 			}
@@ -491,23 +457,7 @@ public class CouponService {
 
 		// 유효한 기획전 목록을 조회합니다.
 		List<CouponTargetRowVO> existingRows = couponMapper.getExistingExhibitionTargetRows(exhibitionNoList);
-		Map<String, CouponTargetRowVO> existingRowMap = new LinkedHashMap<>();
-		for (CouponTargetRowVO row : existingRows) {
-			if (row == null || isBlank(row.getTargetValue())) {
-				continue;
-			}
-			existingRowMap.put(row.getTargetValue(), row);
-		}
-
-		// 입력 순서를 유지하며 유효 대상만 반영합니다.
-		List<CouponTargetRowVO> result = new ArrayList<>();
-		for (String targetValue : targetValues) {
-			CouponTargetRowVO existingRow = existingRowMap.get(targetValue);
-			if (existingRow != null) {
-				result.add(existingRow);
-			}
-		}
-		return result;
+		return retainExistingTargetRowsInInputOrder(targetValues, existingRows);
 	}
 
 	// 카테고리 대상 목록에서 유효한 카테고리만 반환합니다.
@@ -517,17 +467,25 @@ public class CouponService {
 			return List.of();
 		}
 		List<CouponTargetRowVO> existingRows = couponMapper.getExistingCategoryTargetRows(targetValues);
+		return retainExistingTargetRowsInInputOrder(targetValues, existingRows);
+	}
+
+	// 기존 대상 행 목록에서 입력 순서를 유지하며 유효 행만 다시 구성합니다.
+	private List<CouponTargetRowVO> retainExistingTargetRowsInInputOrder(
+		List<String> targetValues,
+		List<CouponTargetRowVO> existingRows
+	) {
+		// 기존 행을 targetValue 기준 맵으로 만든 뒤 입력 순서대로 다시 꺼냅니다.
 		Map<String, CouponTargetRowVO> existingRowMap = new LinkedHashMap<>();
-		for (CouponTargetRowVO row : existingRows) {
+		for (CouponTargetRowVO row : existingRows == null ? List.<CouponTargetRowVO>of() : existingRows) {
 			if (row == null || isBlank(row.getTargetValue())) {
 				continue;
 			}
 			existingRowMap.put(row.getTargetValue(), row);
 		}
 
-		// 입력 순서를 유지하며 유효 대상만 반영합니다.
 		List<CouponTargetRowVO> result = new ArrayList<>();
-		for (String targetValue : targetValues) {
+		for (String targetValue : targetValues == null ? List.<String>of() : targetValues) {
 			CouponTargetRowVO existingRow = existingRowMap.get(targetValue);
 			if (existingRow != null) {
 				result.add(existingRow);

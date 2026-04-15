@@ -761,6 +761,9 @@ public class CompanyWorkService {
 		String normalizedCoManager = param.getCoManager() == null
 			? null
 			: normalizeOptionalManagerName(param.getCoManager());
+		String normalizedItManager = param.getItManager() == null
+			? null
+			: normalizeOptionalManagerName(param.getItManager());
 		String normalizedContent = param.getContent() == null
 			? null
 			: normalizeOptionalCompanyWorkContent(param.getContent());
@@ -776,6 +779,7 @@ public class CompanyWorkService {
 		normalizedParam.setWorkSeq(resolvedWorkSeq);
 		normalizedParam.setTitle(normalizedTitle);
 		normalizedParam.setWorkStatCd(normalizedWorkStatCd);
+		normalizedParam.setItManager(normalizedItManager);
 		normalizedParam.setCoManager(normalizedCoManager);
 		normalizedParam.setWorkCreateDt(normalizedWorkCreateDt);
 		normalizedParam.setWorkStartDt(normalizedWorkStartDt);

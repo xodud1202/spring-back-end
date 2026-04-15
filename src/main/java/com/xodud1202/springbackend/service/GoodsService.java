@@ -1,8 +1,5 @@
 package com.xodud1202.springbackend.service;
 
-import static com.xodud1202.springbackend.common.util.CommonPaginationUtils.*;
-import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xodud1202.springbackend.config.properties.TossProperties;
 import com.xodud1202.springbackend.domain.admin.brand.BrandVO;
@@ -16,11 +13,7 @@ import com.xodud1202.springbackend.domain.shop.goods.*;
 import com.xodud1202.springbackend.domain.shop.mypage.*;
 import com.xodud1202.springbackend.domain.shop.site.ShopSiteInfoVO;
 import com.xodud1202.springbackend.entity.UserBaseEntity;
-import com.xodud1202.springbackend.mapper.CartMapper;
-import com.xodud1202.springbackend.mapper.CommonMapper;
-import com.xodud1202.springbackend.mapper.ExhibitionMapper;
-import com.xodud1202.springbackend.mapper.GoodsMapper;
-import com.xodud1202.springbackend.mapper.SiteInfoMapper;
+import com.xodud1202.springbackend.mapper.*;
 import com.xodud1202.springbackend.service.goods.support.CategoryGoodsExcelRow;
 import com.xodud1202.springbackend.service.goods.support.ShopMypageCouponUnavailableGoodsSummary;
 import com.xodud1202.springbackend.service.order.support.ShopCartCouponEstimateRow;
@@ -48,6 +41,9 @@ import java.util.*;
 import static com.xodud1202.springbackend.common.Constants.Common.NO;
 import static com.xodud1202.springbackend.common.Constants.Common.YES;
 import static com.xodud1202.springbackend.common.Constants.Shop.*;
+import static com.xodud1202.springbackend.common.util.CommonPaginationUtils.*;
+import static com.xodud1202.springbackend.common.util.CommonTextUtils.isBlank;
+import static com.xodud1202.springbackend.common.util.CommonTextUtils.trimToNull;
 
 @Service
 @RequiredArgsConstructor
@@ -62,7 +58,7 @@ public class GoodsService {
 	private final SiteInfoMapper siteInfoMapper;
 	private final FtpFileService ftpFileService;
 	private final GoodsImageService goodsImageService;
-	private final ShopAuthService shopAuthService;
+	private final ShopCustomerCouponService shopCustomerCouponService;
 	private final JusoAddressApiClient jusoAddressApiClient;
 	private final TossPaymentsClient tossPaymentsClient;
 	private final TossProperties tossProperties;
@@ -125,6 +121,7 @@ public class GoodsService {
 	}
 
 	// 관리자 상품을 등록합니다.
+	@Transactional
 	public int insertAdminGoods(GoodsSavePO param) {
 		if (param != null && param.getUdtNo() == null) {
 			param.setUdtNo(param.getRegNo());
@@ -135,6 +132,7 @@ public class GoodsService {
 	}
 
 	// 관리자 상품을 수정합니다.
+	@Transactional
 	public int updateAdminGoods(GoodsSavePO param) {
 		int result = goodsMapper.updateAdminGoods(param);
 		saveAdminGoodsCategories(param);
@@ -794,7 +792,7 @@ public class GoodsService {
 		}
 
 		// 쿠폰 1건을 고객에게 발급합니다.
-		int issuedCount = shopAuthService.issueShopCustomerCoupon(custNo, cpnNo, 1);
+		int issuedCount = shopCustomerCouponService.issueShopCustomerCoupon(custNo, cpnNo, 1);
 		if (issuedCount < 1) {
 			throw new IllegalArgumentException("쿠폰 다운로드에 실패했습니다.");
 		}
@@ -826,7 +824,7 @@ public class GoodsService {
 			}
 
 			// 개별 쿠폰 발급 실패 시 전체 다운로드를 실패 처리합니다.
-			int issuedCount = shopAuthService.issueShopCustomerCoupon(custNo, downloadableCoupon.getCpnNo(), 1);
+			int issuedCount = shopCustomerCouponService.issueShopCustomerCoupon(custNo, downloadableCoupon.getCpnNo(), 1);
 			if (issuedCount < 1) {
 				throw new IllegalArgumentException("쿠폰 다운로드에 실패했습니다.");
 			}
@@ -1057,7 +1055,7 @@ public class GoodsService {
 		}
 
 		// 검증된 상품쿠폰 1건을 고객에게 발급합니다.
-		int issuedCount = shopAuthService.issueShopCustomerCoupon(custNo, cpnNo, 1);
+		int issuedCount = shopCustomerCouponService.issueShopCustomerCoupon(custNo, cpnNo, 1);
 		if (issuedCount < 1) {
 			throw new IllegalArgumentException("쿠폰 다운로드에 실패했습니다.");
 		}
@@ -1454,9 +1452,7 @@ public class GoodsService {
 		int matrixSize = Math.max(rowCount, columnCount);
 		int[][] paddedMatrix = new int[matrixSize + 1][matrixSize + 1];
 		for (int rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
-			for (int columnIndex = 0; columnIndex < columnCount; columnIndex += 1) {
-				paddedMatrix[rowIndex + 1][columnIndex + 1] = weightMatrix[rowIndex][columnIndex];
-			}
+			System.arraycopy(weightMatrix[rowIndex], 0, paddedMatrix[rowIndex + 1], 1, columnCount);
 		}
 
 		// 최소 비용 문제 형태로 변환한 뒤 최적 할당을 계산합니다.
@@ -1673,7 +1669,7 @@ public class GoodsService {
 
 		// 장바구니 행별 사이즈 옵션 목록을 매핑합니다.
 		for (ShopCartItemVO cartItem : cartItemList == null ? List.<ShopCartItemVO>of() : cartItemList) {
-			if (cartItem == null || isBlank(cartItem.getGoodsId())) {
+			if (isBlank(cartItem.getGoodsId())) {
 				continue;
 			}
 			String normalizedGoodsId = cartItem.getGoodsId().trim();
@@ -1711,7 +1707,7 @@ public class GoodsService {
 			List<ShopGoodsSizeItemVO> sizeList = goodsMapper.getShopGoodsSizeList(normalizedGoodsId);
 			List<ShopCartSizeOptionVO> optionList = new ArrayList<>();
 			for (ShopGoodsSizeItemVO sizeItem : sizeList == null ? List.<ShopGoodsSizeItemVO>of() : sizeList) {
-				if (sizeItem == null || isBlank(sizeItem.getSizeId())) {
+				if (isBlank(sizeItem.getSizeId())) {
 					continue;
 				}
 				int stockQty = sizeItem.getStockQty() == null ? 0 : Math.max(sizeItem.getStockQty(), 0);
@@ -1874,7 +1870,7 @@ public class GoodsService {
 			throw new IllegalArgumentException("변경 대상 사이즈를 확인해주세요.");
 		}
 
-		String normalizedGoodsId = param.getGoodsId().trim();
+		String normalizedGoodsId = Objects.requireNonNull(param).getGoodsId().trim();
 		String normalizedSizeId = param.getSizeId().trim();
 		Long fallbackCartId = cartMapper.getShopCartIdByGoodsIdAndSizeId(custNo, normalizedGoodsId, normalizedSizeId);
 		if (fallbackCartId == null || fallbackCartId < 1L) {
@@ -1936,7 +1932,7 @@ public class GoodsService {
 	private ShopCartSiteInfoVO createShopCartSiteInfo(ShopSiteInfoVO siteInfo) {
 		// 조회 결과가 없으면 0원 기본값을 반환합니다.
 		ShopCartSiteInfoVO result = new ShopCartSiteInfoVO();
-		result.setSiteId(isBlank(siteInfo == null ? null : siteInfo.getSiteId()) ? SHOP_SITE_ID : siteInfo.getSiteId());
+		result.setSiteId(isBlank(siteInfo == null ? null : siteInfo.getSiteId()) ? SHOP_SITE_ID : Objects.requireNonNull(siteInfo).getSiteId());
 		result.setDeliveryFee(siteInfo == null || siteInfo.getDeliveryFee() == null ? 0 : Math.max(siteInfo.getDeliveryFee(), 0));
 		result.setDeliveryFeeLimit(
 			siteInfo == null || siteInfo.getDeliveryFeeLimit() == null ? 0 : Math.max(siteInfo.getDeliveryFeeLimit(), 0)
@@ -1948,7 +1944,7 @@ public class GoodsService {
 	private ShopGoodsSiteInfoVO createShopGoodsSiteInfo(ShopSiteInfoVO siteInfo) {
 		// 조회 결과가 없으면 0원 기본값을 반환합니다.
 		ShopGoodsSiteInfoVO result = new ShopGoodsSiteInfoVO();
-		result.setSiteId(isBlank(siteInfo == null ? null : siteInfo.getSiteId()) ? SHOP_SITE_ID : siteInfo.getSiteId());
+		result.setSiteId(isBlank(siteInfo == null ? null : siteInfo.getSiteId()) ? SHOP_SITE_ID : Objects.requireNonNull(siteInfo).getSiteId());
 		result.setSiteNm(siteInfo == null || siteInfo.getSiteNm() == null ? "" : siteInfo.getSiteNm());
 		result.setDeliveryFee(siteInfo == null || siteInfo.getDeliveryFee() == null ? 0 : Math.max(siteInfo.getDeliveryFee(), 0));
 		result.setDeliveryFeeLimit(
@@ -1966,7 +1962,7 @@ public class GoodsService {
 
 		// 할인율은 소수점 버림 정수로 계산합니다.
 		int discountRate = 0;
-		if (showSupplyStrike && supplyAmt > 0) {
+		if (showSupplyStrike) {
 			discountRate = (int) Math.floor(((double) (supplyAmt - saleAmt) / (double) supplyAmt) * 100.0d);
 		}
 
@@ -2792,8 +2788,7 @@ public class GoodsService {
 	}
 
 	// 관리자 상품 카테고리를 저장합니다.
-	@Transactional
-	public void saveAdminGoodsCategories(GoodsSavePO param) {
+	private void saveAdminGoodsCategories(GoodsSavePO param) {
 		if (param == null || param.getCategoryList() == null) {
 			return;
 		}

@@ -37,11 +37,8 @@ public class ShopOrderController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			// 로그인 고객번호를 확인합니다.
+			Long custNo = requireAuthenticatedCustNo(request);
 
 			// 주문서 페이지 데이터를 조회해 반환합니다.
 			ShopOrderPageVO result = orderService.getShopOrderPage(
@@ -51,6 +48,8 @@ public class ShopOrderController extends ShopControllerSupport {
 				resolveShopOrigin(request)
 			);
 			return ResponseEntity.ok(result);
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
 		} catch (Exception exception) {
@@ -68,14 +67,13 @@ public class ShopOrderController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			// 로그인 고객번호를 확인합니다.
+			Long custNo = requireAuthenticatedCustNo(request);
 
 			// 배송지 검색 결과를 조회해 반환합니다.
 			return ResponseEntity.ok(orderService.searchShopOrderAddress(keyword, currentPage, countPerPage, custNo));
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
 		} catch (Exception exception) {
@@ -91,14 +89,13 @@ public class ShopOrderController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			// 로그인 고객번호를 확인합니다.
+			Long custNo = requireAuthenticatedCustNo(request);
 
 			// 배송지 등록 결과를 조회해 반환합니다.
 			return ResponseEntity.ok(orderService.registerShopOrderAddress(param, custNo));
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
 		} catch (Exception exception) {
@@ -114,14 +111,13 @@ public class ShopOrderController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			// 로그인 고객번호를 확인합니다.
+			Long custNo = requireAuthenticatedCustNo(request);
 
 			// 배송지 수정 결과를 조회해 반환합니다.
 			return ResponseEntity.ok(orderService.updateShopOrderAddress(param, custNo));
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
 		} catch (Exception exception) {
@@ -137,14 +133,13 @@ public class ShopOrderController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			// 로그인 고객번호를 확인합니다.
+			Long custNo = requireAuthenticatedCustNo(request);
 
 			// 할인 재계산 결과를 조회해 반환합니다.
 			return ResponseEntity.ok(orderService.quoteShopOrderDiscount(param, custNo));
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
 		} catch (Exception exception) {
@@ -160,11 +155,8 @@ public class ShopOrderController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			// 로그인 고객번호를 확인합니다.
+			Long custNo = requireAuthenticatedCustNo(request);
 
 			// 주문 결제 준비 결과를 생성해 반환합니다.
 			return ResponseEntity.ok(
@@ -175,6 +167,8 @@ public class ShopOrderController extends ShopControllerSupport {
 					resolveShopOrigin(request)
 				)
 			);
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
 		} catch (Exception exception) {
@@ -190,14 +184,13 @@ public class ShopOrderController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			// 로그인 고객번호를 확인합니다.
+			Long custNo = requireAuthenticatedCustNo(request);
 
 			// 결제 승인 결과를 반환합니다.
 			return ResponseEntity.ok(orderService.confirmShopOrderPayment(param, custNo));
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
 		} catch (Exception exception) {
@@ -213,15 +206,14 @@ public class ShopOrderController extends ShopControllerSupport {
 		HttpServletRequest request
 	) {
 		try {
-			// 로그인 고객번호가 없으면 401 응답을 반환합니다.
-			Long custNo = parseCustNoCookie(request);
-			if (custNo == null) {
-				return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-			}
+			// 로그인 고객번호를 확인합니다.
+			Long custNo = requireAuthenticatedCustNo(request);
 
 			// 결제 실패/취소 결과를 저장한 뒤 성공 응답을 반환합니다.
 			orderService.failShopOrderPayment(param, custNo);
 			return ResponseEntity.ok(Map.of("success", true));
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
 		} catch (Exception exception) {

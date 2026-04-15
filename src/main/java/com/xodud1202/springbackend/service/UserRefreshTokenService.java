@@ -44,8 +44,8 @@ public class UserRefreshTokenService {
 	}
 
 	// 토큰 정보를 저장합니다.
-	public UserRefreshTokenEntity saveToken(UserRefreshTokenEntity token) {
-		return userRefreshTokenRepository.save(token);
+	public void saveToken(UserRefreshTokenEntity token) {
+		userRefreshTokenRepository.save(token);
 	}
 
 	// 사용 이력을 갱신합니다.

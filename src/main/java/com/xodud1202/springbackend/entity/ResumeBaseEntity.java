@@ -7,14 +7,14 @@ import lombok.Setter;
 
 import java.util.List;
 
+/**
+ * RESUME_BASE 테이블 매핑 엔티티입니다.
+ */
 @Getter
 @Setter
 @Entity
 @NoArgsConstructor
 @Table(name = "RESUME_BASE")
-/**
- * RESUME_BASE 테이블 매핑 엔티티입니다.
- */
 public class ResumeBaseEntity {
 	@Id
 	@Column(name = "USR_NO")

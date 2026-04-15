@@ -2067,7 +2067,7 @@ public class OrderService {
 				List<ShopGoodsCouponTargetVO> targetList = coupon == null || coupon.getCpnNo() == null
 					? List.of()
 					: couponTargetMap.getOrDefault(coupon.getCpnNo(), List.of());
-				if (!isMatchedShopCartGoodsCoupon(coupon, targetList, estimateRow)) {
+				if (isUnmatchedShopCartGoodsCoupon(coupon, targetList, estimateRow)) {
 					continue;
 				}
 				int discountAmt = calculateCouponDiscountAmount(coupon, estimateRow.rowSaleAmt());
@@ -2265,16 +2265,16 @@ public class OrderService {
 	}
 
 	// 상품쿠폰 1건이 특정 장바구니 행에 적용 가능한지 확인합니다.
-	private boolean isMatchedShopCartGoodsCoupon(
+	private boolean isUnmatchedShopCartGoodsCoupon(
 		ShopCartCustomerCouponVO coupon,
 		List<ShopGoodsCouponTargetVO> targetList,
 		ShopCartCouponEstimateRow estimateRow
 	) {
 		// 비교할 쿠폰 또는 행 정보가 없으면 미적용 처리합니다.
 		if (coupon == null || estimateRow == null || isBlank(estimateRow.goodsId())) {
-			return false;
+			return true;
 		}
-		return isMatchedShopCouponTarget(
+		return !isMatchedShopCouponTarget(
 			coupon.getCpnTargetCd(),
 			targetList,
 			estimateRow.goodsId(),
@@ -2499,7 +2499,7 @@ public class OrderService {
 			List<ShopGoodsCouponTargetVO> targetList = coupon == null || coupon.getCpnNo() == null
 				? List.of()
 				: discountContext.couponTargetMap().getOrDefault(coupon.getCpnNo(), List.of());
-			if (!isMatchedShopCartGoodsCoupon(coupon, targetList, estimateRow)) {
+			if (isUnmatchedShopCartGoodsCoupon(coupon, targetList, estimateRow)) {
 				continue;
 			}
 			if (calculateCouponDiscountAmount(coupon, estimateRow.rowSaleAmt()) < 1) {
@@ -2655,7 +2655,7 @@ public class OrderService {
 				List<ShopGoodsCouponTargetVO> targetList = coupon == null || coupon.getCpnNo() == null
 					? List.of()
 					: discountContext.couponTargetMap().getOrDefault(coupon.getCpnNo(), List.of());
-				if (!isMatchedShopCartGoodsCoupon(coupon, targetList, estimateRow)) {
+				if (isUnmatchedShopCartGoodsCoupon(coupon, targetList, estimateRow)) {
 					continue;
 				}
 				int discountAmt = calculateCouponDiscountAmount(coupon, estimateRow.rowSaleAmt());

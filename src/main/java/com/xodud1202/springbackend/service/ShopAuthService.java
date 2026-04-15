@@ -2,8 +2,6 @@ package com.xodud1202.springbackend.service;
 
 import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
 
-import static com.xodud1202.springbackend.common.Constants.Shop.CPN_USE_DT_DATETIME;
-import static com.xodud1202.springbackend.common.Constants.Shop.CPN_USE_DT_PERIOD;
 import static com.xodud1202.springbackend.common.Constants.Shop.AGREEMENT_N;
 import static com.xodud1202.springbackend.common.Constants.Shop.AGREEMENT_Y;
 import static com.xodud1202.springbackend.common.Constants.Shop.CUST_GRADE_GRP_CD;
@@ -24,8 +22,6 @@ import static com.xodud1202.springbackend.common.Constants.Shop.SEX_UNSELECTED;
 import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_SITE_ID;
 
 import com.xodud1202.springbackend.common.mybatis.GeneratedLongKey;
-import com.xodud1202.springbackend.domain.shop.auth.ShopCouponIssueRuleVO;
-import com.xodud1202.springbackend.domain.shop.auth.ShopCustomerCouponSavePO;
 import com.xodud1202.springbackend.domain.shop.auth.ShopCustomerGradeBenefitVO;
 import com.xodud1202.springbackend.domain.shop.auth.ShopCustomerPointDetailSavePO;
 import com.xodud1202.springbackend.domain.shop.auth.ShopCustomerPointSavePO;
@@ -59,6 +55,7 @@ public class ShopAuthService {
 
 	private final ShopAuthMapper shopAuthMapper;
 	private final SiteInfoMapper siteInfoMapper;
+	private final ShopCustomerCouponService shopCustomerCouponService;
 
 	// 공통코드 코드값으로 코드명을 조회합니다.
 	public String getCommonCodeName(String grpCd, String cd) {
@@ -253,78 +250,9 @@ public class ShopAuthService {
 		}
 
 		// 혜택 쿠폰 번호/수량이 설정된 항목을 고객에게 발급합니다.
-		issueShopCustomerCoupon(custNo, benefitVO.goodsCpnNo(), benefitVO.goodsCpnCnt());
-		issueShopCustomerCoupon(custNo, benefitVO.cartCpnNo(), benefitVO.cartCpnCnt());
-		issueShopCustomerCoupon(custNo, benefitVO.deliveryCpnNo(), benefitVO.deliveryCpnCnt());
-	}
-
-	@Transactional
-	// 단일 쿠폰을 지정 수량만큼 고객에게 지급하고 실제 지급 건수를 반환합니다.
-	public int issueShopCustomerCoupon(Long custNo, Long cpnNo, Integer issueCount) {
-		// 쿠폰번호/수량이 유효하지 않으면 지급을 생략합니다.
-		if (custNo == null || custNo < 1L || cpnNo == null || issueCount == null || issueCount < 1) {
-			return 0;
-		}
-
-		// 정상 상태(CPN_STAT_02) 쿠폰만 발급 규칙을 조회합니다.
-		ShopCouponIssueRuleVO couponRule = shopAuthMapper.getIssuableCouponIssueRule(cpnNo);
-		if (couponRule == null) {
-			return 0;
-		}
-
-		// 쿠폰 사용 가능 시작/종료 일시를 계산합니다.
-		LocalDateTime now = LocalDateTime.now();
-		LocalDateTime usableStartDt = resolveCouponUsableStartDateTime(couponRule, now);
-		LocalDateTime usableEndDt = resolveCouponUsableEndDateTime(couponRule, now);
-		if (usableStartDt == null || usableEndDt == null || usableStartDt.isAfter(usableEndDt)) {
-			return 0;
-		}
-
-		// 요청 수량만큼 고객 쿠폰을 반복 지급합니다.
-		int issuedCount = 0;
-		for (int issueIndex = 0; issueIndex < issueCount; issueIndex += 1) {
-			ShopCustomerCouponSavePO couponSaveCommand = new ShopCustomerCouponSavePO(
-				custNo,
-				cpnNo,
-				usableStartDt,
-				usableEndDt,
-				custNo,
-				custNo
-			);
-			issuedCount += shopAuthMapper.insertCustomerCoupon(couponSaveCommand);
-		}
-		return issuedCount;
-	}
-
-	// 쿠폰 사용 가능 시작 일시를 계산합니다.
-	private LocalDateTime resolveCouponUsableStartDateTime(ShopCouponIssueRuleVO couponRule, LocalDateTime now) {
-		// 기간형 쿠폰은 발급 시점을 시작일시로 사용합니다.
-		if (CPN_USE_DT_PERIOD.equals(couponRule.cpnUseDtGb())) {
-			return now;
-		}
-
-		// 고정일시형 쿠폰은 쿠폰 기본 시작일시를 사용합니다.
-		if (CPN_USE_DT_DATETIME.equals(couponRule.cpnUseDtGb())) {
-			return couponRule.cpnUseStartDt();
-		}
-		return null;
-	}
-
-	// 쿠폰 사용 가능 종료 일시를 계산합니다.
-	private LocalDateTime resolveCouponUsableEndDateTime(ShopCouponIssueRuleVO couponRule, LocalDateTime now) {
-		// 기간형 쿠폰은 사용 가능 일수 기준으로 종료일시를 계산합니다.
-		if (CPN_USE_DT_PERIOD.equals(couponRule.cpnUseDtGb())) {
-			if (couponRule.cpnUsableDt() == null || couponRule.cpnUsableDt() < 1) {
-				return null;
-			}
-			return now.plusDays(couponRule.cpnUsableDt());
-		}
-
-		// 고정일시형 쿠폰은 쿠폰 기본 종료일시를 사용합니다.
-		if (CPN_USE_DT_DATETIME.equals(couponRule.cpnUseDtGb())) {
-			return couponRule.cpnUseEndDt();
-		}
-		return null;
+		shopCustomerCouponService.issueShopCustomerCoupon(custNo, benefitVO.goodsCpnNo(), benefitVO.goodsCpnCnt());
+		shopCustomerCouponService.issueShopCustomerCoupon(custNo, benefitVO.cartCpnNo(), benefitVO.cartCpnCnt());
+		shopCustomerCouponService.issueShopCustomerCoupon(custNo, benefitVO.deliveryCpnNo(), benefitVO.deliveryCpnCnt());
 	}
 
 	// 회원가입 요청의 필수값/약관 동의 여부를 확인합니다.
@@ -459,16 +387,12 @@ public class ShopAuthService {
 
 		// WEB/MOBILE/APP 값을 공통코드 값으로 변환합니다.
 		String normalizedDeviceType = deviceType.trim().toUpperCase();
-		if (DEVICE_TYPE_WEB.equals(normalizedDeviceType)) {
-			return DEVICE_GB_PC;
-		}
-		if (DEVICE_TYPE_MOBILE.equals(normalizedDeviceType)) {
-			return DEVICE_GB_MO;
-		}
-		if (DEVICE_TYPE_APP.equals(normalizedDeviceType)) {
-			return DEVICE_GB_APP;
-		}
-		throw new IllegalArgumentException("가입 디바이스 값이 올바르지 않습니다.");
+		return switch (normalizedDeviceType) {
+			case DEVICE_TYPE_WEB -> DEVICE_GB_PC;
+			case DEVICE_TYPE_MOBILE -> DEVICE_GB_MO;
+			case DEVICE_TYPE_APP -> DEVICE_GB_APP;
+			default -> throw new IllegalArgumentException("가입 디바이스 값이 올바르지 않습니다.");
+		};
 	}
 
 	// 필수 문자열을 trim 처리하고 비어 있으면 예외를 반환합니다.

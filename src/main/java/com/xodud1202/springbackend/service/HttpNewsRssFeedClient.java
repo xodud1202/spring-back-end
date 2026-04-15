@@ -297,9 +297,6 @@ public class HttpNewsRssFeedClient implements NewsRssFeedClient {
 			return localName;
 		}
 		String nodeName = element.getNodeName();
-		if (nodeName == null) {
-			return "";
-		}
 		int separatorIndex = nodeName.indexOf(':');
 		if (separatorIndex < 0) {
 			return nodeName;

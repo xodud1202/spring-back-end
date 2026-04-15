@@ -42,11 +42,7 @@ import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Service
 @Slf4j
@@ -438,7 +434,7 @@ public class NewsService {
 		String resolvedPressId = requestedPressId;
 		boolean isRequestedPressValid = requestedPressId != null && pressList.stream().anyMatch((pressItem) -> requestedPressId.equals(pressItem.getId()));
 		if (!isRequestedPressValid) {
-			resolvedPressId = pressList.get(0).getId();
+			resolvedPressId = pressList.getFirst().getId();
 			fallbackApplied = requestedPressId != null;
 		}
 		response.setSelectedPressId(resolvedPressId);
@@ -461,7 +457,7 @@ public class NewsService {
 		boolean isRequestedCategoryValid = requestedCategoryId != null
 			&& categoryList.stream().anyMatch((categoryItem) -> requestedCategoryId.equals(categoryItem.getId()));
 		if (!isRequestedCategoryValid) {
-			resolvedCategoryId = categoryList.get(0).getId();
+			resolvedCategoryId = categoryList.getFirst().getId();
 			fallbackApplied = fallbackApplied || requestedCategoryId != null;
 		}
 		response.setSelectedCategoryId(resolvedCategoryId);
@@ -536,7 +532,7 @@ public class NewsService {
 					if (!categoryItemById.containsKey(categoryId)) {
 						NewsListJsonSnapshotVO.CategoryItem categoryItem = new NewsListJsonSnapshotVO.CategoryItem();
 						categoryItem.setId(categoryId);
-						categoryItem.setName(trimToNull(target.getCategoryNm()));
+						categoryItem.setName(trimToNull(Objects.requireNonNull(target).getCategoryNm()));
 						categoryItem.setSortSeq(nextCategorySortSeqByPressId.getOrDefault(pressId, 1));
 						categoryItem.setUseYn("Y");
 						categoryItem.setRssUrl(trimToNull(target.getRssUrl()));
@@ -562,7 +558,7 @@ public class NewsService {
 					articleItemList = buildSnapshotArticleItemListFromRss(target, rssFetchResult.articleItemList(), generatedAtText);
 					log.info(
 						"뉴스 JSON 스냅샷 RSS 조회 성공 pressNo={}, categoryCd={}, rssUrl={}, attemptCount={}, articleCount={}, resultCode={}",
-						target.getPressNo(),
+						Objects.requireNonNull(target).getPressNo(),
 						target.getCategoryCd(),
 						target.getRssUrl(),
 						rssFetchResult.attemptCount(),
@@ -571,7 +567,7 @@ public class NewsService {
 					);
 				} else {
 					// 재시도 후에도 RSS가 비정상이면 DB 최신 기사로 fallback 처리합니다.
-					articleItemList = buildSnapshotArticleItemListFromDbFallback(target, generatedAtText);
+					articleItemList = buildSnapshotArticleItemListFromDbFallback(Objects.requireNonNull(target), generatedAtText);
 					log.warn(
 						"뉴스 JSON 스냅샷 RSS fallback 사용 pressNo={}, categoryCd={}, rssUrl={}, attemptCount={}, fallbackArticleCount={}, resultCode={}, resultMessage={}",
 						target.getPressNo(),
@@ -622,7 +618,7 @@ public class NewsService {
 		snapshot.setMeta(meta);
 
 		NewsListJsonSnapshotVO.DefaultSelection defaultSelection = new NewsListJsonSnapshotVO.DefaultSelection();
-		defaultSelection.setDefaultPressId(pressIdList.isEmpty() ? "" : pressIdList.get(0));
+		defaultSelection.setDefaultPressId(pressIdList.isEmpty() ? "" : pressIdList.getFirst());
 		defaultSelection.setDefaultCategoryIdByPressId(defaultCategoryIdByPressId);
 		snapshot.setDefaultSelection(defaultSelection);
 
@@ -711,38 +707,39 @@ public class NewsService {
 
 	// RSS 조회를 재시도 정책(3회, 0.5/1/2초)으로 수행합니다.
 	private RssFetchResult fetchArticleItemsWithRetry(NewsRssTargetVO target) {
-		String lastMessage = null;
+		RssFetchResult lastFetchResult = null;
 		for (int attempt = 1; attempt <= RSS_FETCH_MAX_ATTEMPT_COUNT; attempt += 1) {
-			try {
-				throwIfSchedulerInterrupted("뉴스 RSS 조회 재시도 전에 인터럽트가 감지되었습니다.");
-
-				// RSS 조회가 성공하면 item 비어있음 여부를 검증합니다.
-				List<RssArticleItem> feedItemList = newsRssFeedClient.fetchArticleItems(target.getRssUrl());
-				throwIfSchedulerInterrupted("뉴스 RSS 조회 응답 처리 중 인터럽트가 감지되었습니다.");
-				if (!feedItemList.isEmpty()) {
-					return new RssFetchResult(feedItemList, attempt, RSS_FETCH_RESULT_OK, null);
-				}
-
-				lastMessage = "RSS item이 비어 있습니다.";
-				if (attempt < RSS_FETCH_MAX_ATTEMPT_COUNT) {
-					sleepBeforeRetry(attempt, target, lastMessage);
-					continue;
-				}
-				return new RssFetchResult(List.of(), attempt, RSS_FETCH_RESULT_EMPTY, lastMessage);
-			} catch (Exception exception) {
-				if (isSchedulerInterrupted(exception)) {
-					Thread.currentThread().interrupt();
-					throw new IllegalStateException("뉴스 RSS 조회가 인터럽트로 중단되었습니다.", exception);
-				}
-				lastMessage = exception.getMessage();
-				if (attempt < RSS_FETCH_MAX_ATTEMPT_COUNT) {
-					sleepBeforeRetry(attempt, target, lastMessage);
-					continue;
-				}
-				return new RssFetchResult(List.of(), attempt, RSS_FETCH_RESULT_ERROR, lastMessage);
+			lastFetchResult = fetchArticleItemsOnce(target, attempt);
+			if (RSS_FETCH_RESULT_OK.equals(lastFetchResult.resultCode())) {
+				return lastFetchResult;
+			}
+			if (attempt < RSS_FETCH_MAX_ATTEMPT_COUNT) {
+				sleepBeforeRetry(attempt, target, lastFetchResult.resultMessage());
 			}
 		}
-		return new RssFetchResult(List.of(), RSS_FETCH_MAX_ATTEMPT_COUNT, RSS_FETCH_RESULT_ERROR, lastMessage);
+		
+		return lastFetchResult;
+	}
+
+	// RSS 단건 조회를 수행하고 결과 코드를 표준 형태로 반환합니다.
+	private RssFetchResult fetchArticleItemsOnce(NewsRssTargetVO target, int attempt) {
+		try {
+			throwIfSchedulerInterrupted("뉴스 RSS 조회 재시도 전에 인터럽트가 감지되었습니다.");
+
+			// RSS 조회가 성공하면 item 비어있음 여부를 검증합니다.
+			List<RssArticleItem> feedItemList = newsRssFeedClient.fetchArticleItems(target.getRssUrl());
+			throwIfSchedulerInterrupted("뉴스 RSS 조회 응답 처리 중 인터럽트가 감지되었습니다.");
+			if (!feedItemList.isEmpty()) {
+				return new RssFetchResult(feedItemList, attempt, RSS_FETCH_RESULT_OK, null);
+			}
+			return new RssFetchResult(List.of(), attempt, RSS_FETCH_RESULT_EMPTY, "RSS item이 비어 있습니다.");
+		} catch (Exception exception) {
+			if (isSchedulerInterrupted(exception)) {
+				Thread.currentThread().interrupt();
+				throw new IllegalStateException("뉴스 RSS 조회가 인터럽트로 중단되었습니다.", exception);
+			}
+			return new RssFetchResult(List.of(), attempt, RSS_FETCH_RESULT_ERROR, exception.getMessage());
+		}
 	}
 
 	// RSS 재시도 전 대기시간을 적용합니다.
@@ -829,14 +826,13 @@ public class NewsService {
 
 	// 스냅샷 기사 식별자를 생성합니다.
 	private String buildSnapshotArticleId(NewsRssTargetVO target, RssArticleItem feedItem, int rankScore) {
-		StringBuilder builder = new StringBuilder();
-		builder.append(target.getPressNo()).append('|');
-		builder.append(trimToNull(target.getCategoryCd())).append('|');
-		builder.append(trimToNull(feedItem.guid())).append('|');
-		builder.append(trimToNull(feedItem.link())).append('|');
-		builder.append(trimToNull(feedItem.title())).append('|');
-		builder.append(rankScore);
-		return sha256(builder.toString());
+		String builder = String.valueOf(target.getPressNo()) + '|' +
+				trimToNull(target.getCategoryCd()) + '|' +
+				trimToNull(feedItem.guid()) + '|' +
+				trimToNull(feedItem.link()) + '|' +
+				trimToNull(feedItem.title()) + '|' +
+				rankScore;
+		return sha256(builder);
 	}
 
 	// 스냅샷용 언론사-카테고리 키를 생성합니다.
@@ -1093,15 +1089,14 @@ public class NewsService {
 				}
 				int rankScore = 0;
 				int activeUseYnCount = 0;
-				for (int feedIndex = 0; feedIndex < feedItems.size(); feedIndex += 1) {
+				for (RssArticleItem item : feedItems) {
 					if (activeUseYnCount >= MAX_ACTIVE_ARTICLE_COUNT_PER_TARGET) {
 						break;
 					}
-					RssArticleItem feedItem = feedItems.get(feedIndex);
 					rankScore += 1;
 					attemptedArticleCount += 1;
 
-					NewsArticleCreatePO saveParam = buildNewsArticleCreateParam(target, feedItem, rankScore);
+					NewsArticleCreatePO saveParam = buildNewsArticleCreateParam(target, item, rankScore);
 					int affectedCount = newsMapper.insertNewsArticle(saveParam);
 					if (affectedCount > 0) {
 						insertedArticleCount += 1;
@@ -1138,18 +1133,15 @@ public class NewsService {
 		String articleGuidOriginal = trimToNull(limitLength(item.guid(), 150));
 		String articleUrlOriginal = trimToNull(limitLength(item.link(), 150));
 		String articleTitleOriginal = trimToNull(limitLength(item.title(), 500));
-		String articleSummaryOriginal = trimToNull(item.summary());
-		String thumbnailUrlOriginal = trimToNull(limitLength(item.thumbnailUrl(), 150));
-		String authorNmOriginal = trimToNull(limitLength(item.authorNm(), 100));
+		String articleSummary = trimToNull(item.summary());
+		String thumbnailUrl = trimToNull(limitLength(item.thumbnailUrl(), 150));
+		String authorNm = trimToNull(limitLength(item.authorNm(), 100));
 		LocalDateTime publishedDt = item.publishedDt();
 		boolean hasRequiredMissing = articleUrlOriginal == null || articleTitleOriginal == null;
 
 		String articleUrl = valueOrDash(articleUrlOriginal);
 		String articleTitle = valueOrDash(articleTitleOriginal);
 		String articleGuid = articleGuidOriginal == null ? articleUrl : articleGuidOriginal;
-		String articleSummary = articleSummaryOriginal;
-		String thumbnailUrl = thumbnailUrlOriginal;
-		String authorNm = authorNmOriginal;
 		String articleHashSource = articleUrlOriginal == null
 			? buildMissingArticleHashSource(target, item, rankScore)
 			: articleUrl;
@@ -1173,17 +1165,16 @@ public class NewsService {
 
 	// 기사 URL 누락 시 해시 생성 입력값을 생성합니다.
 	private String buildMissingArticleHashSource(NewsRssTargetVO target, RssArticleItem item, int rankScore) {
-		StringBuilder builder = new StringBuilder();
-		builder.append("MISSING_URL|");
-		builder.append(target.getPressNo()).append('|');
-		builder.append(trimToNull(target.getCategoryCd())).append('|');
-		builder.append(trimToNull(item.guid())).append('|');
-		builder.append(trimToNull(item.title())).append('|');
-		builder.append(trimToNull(item.summary())).append('|');
-		builder.append(trimToNull(item.authorNm())).append('|');
-		builder.append(item.publishedDt()).append('|');
-		builder.append(rankScore);
-		return builder.toString();
+		String builder = "MISSING_URL|" +
+				target.getPressNo() + '|' +
+				trimToNull(target.getCategoryCd()) + '|' +
+				trimToNull(item.guid()) + '|' +
+				trimToNull(item.title()) + '|' +
+				trimToNull(item.summary()) + '|' +
+				trimToNull(item.authorNm()) + '|' +
+				item.publishedDt() + '|' +
+				rankScore;
+		return builder;
 	}
 
 	// SHA-256 해시 문자열을 생성합니다.

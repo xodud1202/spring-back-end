@@ -1,11 +1,15 @@
 package com.xodud1202.springbackend.controller.shop;
 
+import com.xodud1202.springbackend.common.util.CommonTextUtils;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Map;
 
 import static com.xodud1202.springbackend.common.Constants.Shop.DEVICE_GB_MO;
 import static com.xodud1202.springbackend.common.Constants.Shop.DEVICE_GB_PC;
@@ -29,6 +33,20 @@ abstract class ShopControllerSupport {
 		} catch (NumberFormatException exception) {
 			return null;
 		}
+	}
+
+	// 로그인된 고객번호를 필수로 요구하고 미로그인 시 예외를 발생시킵니다.
+	protected Long requireAuthenticatedCustNo(HttpServletRequest request) {
+		Long custNo = parseCustNoCookie(request);
+		if (custNo == null) {
+			throw new SecurityException("로그인이 필요합니다.");
+		}
+		return custNo;
+	}
+
+	// 미인증 요청에 대한 공통 401 응답을 반환합니다.
+	protected ResponseEntity<Object> unauthorizedResponse() {
+		return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
 	}
 
 	// 요청 쿠키에서 지정한 이름의 값을 조회합니다.
@@ -84,6 +102,25 @@ abstract class ShopControllerSupport {
 		return null;
 	}
 
+	// 요청 본문 맵에서 필수 문자열 값을 trim 처리해 반환합니다.
+	protected String requireRequestBodyTextValue(Map<String, Object> requestBody, String fieldName, String message) {
+		Object rawValue = requestBody == null ? null : requestBody.get(fieldName);
+		String normalizedValue = rawValue instanceof String ? ((String) rawValue).trim() : "";
+		if (normalizedValue.isEmpty()) {
+			throw new IllegalArgumentException(message);
+		}
+		return normalizedValue;
+	}
+
+	// 요청 본문 값에서 1 이상의 필수 정수 값을 반환합니다.
+	protected Integer requirePositiveIntegerValue(Object rawValue, String message) {
+		Integer parsedValue = parseIntegerValue(rawValue);
+		if (parsedValue == null || parsedValue < 1) {
+			throw new IllegalArgumentException(message);
+		}
+		return parsedValue;
+	}
+
 	// 선택 기획전 번호를 양수 정수 또는 null로 정규화합니다.
 	protected Integer normalizeOptionalExhibitionNo(Object rawValue) {
 		// 숫자/문자열 값을 정수로 바꾼 뒤 1 이상만 허용합니다.
@@ -133,11 +170,6 @@ abstract class ShopControllerSupport {
 
 	// 문자열을 trim 처리하고 비어 있으면 null을 반환합니다.
 	protected String trimToNull(String value) {
-		// null은 그대로 반환합니다.
-		if (value == null) {
-			return null;
-		}
-		String trimmed = value.trim();
-		return trimmed.isEmpty() ? null : trimmed;
+		return CommonTextUtils.trimToNull(value);
 	}
 }

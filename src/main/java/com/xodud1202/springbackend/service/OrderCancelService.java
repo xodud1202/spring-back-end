@@ -376,7 +376,7 @@ public class OrderCancelService {
 
 			// 기타 사유는 상품별 직접입력값을 필수로 확인합니다.
 			if (isShopOrderReasonDetailRequired(matchedReason)
-				&& trimToNull(cancelItem == null ? null : cancelItem.getReasonDetail()) == null) {
+				&& trimToNull(cancelItem.getReasonDetail()) == null) {
 				throw new IllegalArgumentException("기타 사유를 입력해주세요.");
 			}
 		}
@@ -519,22 +519,22 @@ public class OrderCancelService {
 		long paidDeliveryFeeRefundAmt =
 			isFullCancel
 				? Math.max(
-					resolveNonNegativeLong(orderBase == null ? null : Long.valueOf(normalizeNonNegativeNumber(orderBase.getOrdDelvAmt())))
-						- resolveNonNegativeLong(orderBase == null ? null : Long.valueOf(normalizeNonNegativeNumber(orderBase.getDelvCpnDcAmt()))),
+					resolveNonNegativeLong(orderBase == null ? null : (long) normalizeNonNegativeNumber(orderBase.getOrdDelvAmt()))
+						- resolveNonNegativeLong(orderBase == null ? null : (long) normalizeNonNegativeNumber(orderBase.getDelvCpnDcAmt())),
 					0L
 				)
 				: 0L;
 		long deliveryCouponRefundAmt =
 			isFullCancel
-				? resolveNonNegativeLong(orderBase == null ? null : Long.valueOf(normalizeNonNegativeNumber(orderBase.getDelvCpnDcAmt())))
+				? resolveNonNegativeLong(orderBase == null ? null : (long) normalizeNonNegativeNumber(orderBase.getDelvCpnDcAmt()))
 				: 0L;
 		long shippingDeductionAmt =
 			!isFullCancel
-				&& resolveNonNegativeLong(orderBase == null ? null : Long.valueOf(normalizeNonNegativeNumber(orderBase.getOrdDelvAmt()))) < 1L
+				&& resolveNonNegativeLong(orderBase == null ? null : (long) normalizeNonNegativeNumber(orderBase.getOrdDelvAmt())) < 1L
 				&& currentOrderAmt > 0L
 				&& remainingOrderAmtAfterCancel > 0L
-				&& remainingOrderAmtAfterCancel < resolveNonNegativeLong(siteInfo == null ? null : Long.valueOf(normalizeNonNegativeNumber(siteInfo.getDeliveryFeeLimit())))
-					? resolveNonNegativeLong(siteInfo == null ? null : Long.valueOf(normalizeNonNegativeNumber(siteInfo.getDeliveryFee())))
+				&& remainingOrderAmtAfterCancel < resolveNonNegativeLong(siteInfo == null ? null : (long) normalizeNonNegativeNumber(siteInfo.getDeliveryFeeLimit()))
+					? resolveNonNegativeLong(siteInfo == null ? null : (long) normalizeNonNegativeNumber(siteInfo.getDeliveryFee()))
 					: 0L;
 		long paidGoodsAmt = previewSummary.getTotalOrderAmt();
 		long benefitAmt =
@@ -543,8 +543,7 @@ public class OrderCancelService {
 				+ previewSummary.getTotalPointRefundAmt();
 		long shippingAdjustmentAmt = paidDeliveryFeeRefundAmt - shippingDeductionAmt;
 		long expectedRefundAmt = paidGoodsAmt - benefitAmt + shippingAdjustmentAmt;
-		long refundedCashAmt = expectedRefundAmt;
-		if (refundedCashAmt < 0L) {
+		if (expectedRefundAmt < 0L) {
 			throw new IllegalArgumentException("배송비 차감 후 취소 예정 금액이 0원 미만이라 신청할 수 없습니다.");
 		}
 
@@ -560,7 +559,7 @@ public class OrderCancelService {
 			selectedItemList,
 			previewAmount,
 			isFullCancel,
-			refundedCashAmt,
+				expectedRefundAmt,
 			previewSummary.getTotalPointRefundAmt(),
 			shippingAdjustmentAmt
 		);
@@ -570,9 +569,6 @@ public class OrderCancelService {
 	private void validateShopOrderCancelFullOnly(ShopMypageOrderGroupVO orderGroup, Map<Integer, Integer> cancelQtyMap) {
 		// 남은 주문행 중 하나라도 빠졌거나 전량 선택이 아니면 전체취소 전용 예외를 반환합니다.
 		for (ShopMypageOrderDetailItemVO detailItem : orderGroup == null ? List.<ShopMypageOrderDetailItemVO>of() : orderGroup.getDetailList()) {
-			if (detailItem == null) {
-				continue;
-			}
 			int remainingQty = resolveShopOrderRemainingQty(detailItem);
 			if (remainingQty < 1) {
 				continue;
@@ -824,9 +820,6 @@ public class OrderCancelService {
 		// 취소 후에도 남아 있는 장바구니쿠폰 집합을 한 번에 계산합니다.
 		Set<Long> activeCartCouponNoSet = new HashSet<>();
 		for (ShopMypageOrderDetailItemVO detailItem : orderGroup == null ? List.<ShopMypageOrderDetailItemVO>of() : orderGroup.getDetailList()) {
-			if (detailItem == null) {
-				continue;
-			}
 			ShopOrderCancelSelectedItem selectedItem = detailItem.getOrdDtlNo() == null ? null : selectedItemMap.get(detailItem.getOrdDtlNo());
 			int remainingAfterCancelQty = selectedItem == null ? resolveShopOrderRemainingQty(detailItem) : Math.max(selectedItem.remainingAfterCancelQty(), 0);
 			if (remainingAfterCancelQty < 1 || detailItem.getCartCpnNo() == null || detailItem.getCartCpnNo() < 1L) {
@@ -868,7 +861,7 @@ public class OrderCancelService {
 		// 동일 상품과 사이즈는 취소 수량을 합산해 재고를 복구합니다.
 		Map<String, ShopOrderRestoreCartItemVO> stockItemMap = new LinkedHashMap<>();
 		for (ShopOrderCancelSelectedItem selectedItem : selectedItemList == null ? List.<ShopOrderCancelSelectedItem>of() : selectedItemList) {
-			if (selectedItem == null || selectedItem.detailItem() == null || isBlank(selectedItem.detailItem().getGoodsId()) || isBlank(selectedItem.detailItem().getSizeId())) {
+			if (selectedItem.detailItem() == null || isBlank(selectedItem.detailItem().getGoodsId()) || isBlank(selectedItem.detailItem().getSizeId())) {
 				continue;
 			}
 			String stockKey = selectedItem.detailItem().getGoodsId().trim() + "|" + selectedItem.detailItem().getSizeId().trim();
@@ -1077,7 +1070,7 @@ public class OrderCancelService {
 		result.setChgDt(cancelDt);
 		result.setChgCompleteDt(cancelDt);
 		result.setChgStatCd(SHOP_ORDER_CHANGE_STAT_PROGRESS);
-		result.setPayDelvAmt((int) Math.max(Math.min(cancelComputation == null ? 0L : cancelComputation.shippingAdjustmentAmt(), Integer.MAX_VALUE), Integer.MIN_VALUE));
+		result.setPayDelvAmt((int) Math.clamp(cancelComputation == null ? 0L : cancelComputation.shippingAdjustmentAmt(), Integer.MIN_VALUE, Integer.MAX_VALUE));
 		result.setRegNo(auditNo);
 		result.setUdtNo(auditNo);
 		return result;
@@ -1170,7 +1163,7 @@ public class OrderCancelService {
 	// 환불 PAYMENT 저장금액을 음수 기준으로 변환합니다.
 	private long resolveRefundPaymentAmt(Long refundedCashAmt) {
 		// 환불 저장금액은 절댓값 기준으로 음수화합니다.
-		long normalizedRefundedCashAmt = Math.abs(refundedCashAmt == null ? 0L : refundedCashAmt.longValue());
+		long normalizedRefundedCashAmt = Math.abs(refundedCashAmt == null ? 0L : refundedCashAmt);
 		return normalizedRefundedCashAmt * -1L;
 	}
 

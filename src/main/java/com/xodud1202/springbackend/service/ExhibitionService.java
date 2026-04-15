@@ -163,7 +163,7 @@ public class ExhibitionService {
 
 		// PC/모바일 HTML과 기본 선택 탭을 응답 객체에 반영합니다.
 		detail.setTabList(safeTabList);
-		detail.setDefaultTabNo(safeTabList.get(0).getExhibitionTabNo());
+		detail.setDefaultTabNo(safeTabList.getFirst().getExhibitionTabNo());
 		detail.setVisibleHtml(resolveVisibleExhibitionHtml(detail.getPcHtml(), detail.getMobileHtml()));
 		return detail;
 	}
@@ -278,10 +278,10 @@ public class ExhibitionService {
 		if (trimToNull(param.getExhibitionNm()) == null) {
 			return "기획전명을 입력해주세요.";
 		}
-		if (param.getListShowYn() == null || !isYnValue(param.getListShowYn().trim())) {
+		if (param.getListShowYn() == null || isInvalidYnValue(param.getListShowYn().trim())) {
 			return "리스트 노출 여부를 확인해주세요.";
 		}
-		if (param.getShowYn() == null || !isYnValue(param.getShowYn().trim())) {
+		if (param.getShowYn() == null || isInvalidYnValue(param.getShowYn().trim())) {
 			return "노출 여부를 확인해주세요.";
 		}
 		if (isCreate && param.getRegNo() == null) {
@@ -296,8 +296,7 @@ public class ExhibitionService {
 		if (dateValidation != null) {
 			return dateValidation;
 		}
-		String tabDateValidation = normalizeAndValidateTabDisplayPeriod(param);
-		return tabDateValidation;
+		return normalizeAndValidateTabDisplayPeriod(param);
 	}
 
 	// 기획전 등록 요청을 검증합니다.
@@ -318,20 +317,14 @@ public class ExhibitionService {
 
 	// 기획전 탭 저장 요청을 검증합니다.
 	public String validateExhibitionTabSave(ExhibitionSavePO param) {
-		// 필수 요청값을 확인합니다.
-		if (param == null) {
-			return "요청 데이터가 없습니다.";
+		// 필수 요청값과 수정 대상 기획전 유효성을 함께 확인합니다.
+		String requestValidation = validateRequestParamExists(param);
+		if (requestValidation != null) {
+			return requestValidation;
 		}
-		if (param.getExhibitionNo() == null || param.getExhibitionNo() < 1) {
-			return "기획전 번호를 확인해주세요.";
-		}
-		if (param.getUdtNo() == null) {
-			return "수정자 정보를 확인해주세요.";
-		}
-		// 기획전 존재 여부를 확인합니다.
-		int exists = exhibitionMapper.countExhibitionByNo(param.getExhibitionNo());
-		if (exists == 0) {
-			return "기획전 정보를 확인해주세요.";
+		String exhibitionValidation = validateRequiredExistingExhibitionForUpdate(param.getExhibitionNo(), param.getUdtNo());
+		if (exhibitionValidation != null) {
+			return exhibitionValidation;
 		}
 
 		// 탭 노출 일시 형식을 정리하고 유효성을 검증합니다.
@@ -355,7 +348,7 @@ public class ExhibitionService {
 				return "탭[" + (index + 1) + "] 이름은 50자 이내로 입력해주세요.";
 			}
 			String showYn = trimToNull(tab.getShowYn());
-			if (showYn != null && !isYnValue(showYn)) {
+			if (showYn != null && isInvalidYnValue(showYn)) {
 				return "탭[" + (index + 1) + "] 노출여부를 확인해주세요.";
 			}
 		}
@@ -364,20 +357,14 @@ public class ExhibitionService {
 
 	// 기획전 탭 상품 저장 요청을 검증합니다.
 	public String validateExhibitionGoodsSave(ExhibitionSavePO param) {
-		// 필수 요청값을 확인합니다.
-		if (param == null) {
-			return "요청 데이터가 없습니다.";
+		// 필수 요청값과 수정 대상 기획전 유효성을 함께 확인합니다.
+		String requestValidation = validateRequestParamExists(param);
+		if (requestValidation != null) {
+			return requestValidation;
 		}
-		if (param.getExhibitionNo() == null || param.getExhibitionNo() < 1) {
-			return "기획전 번호를 확인해주세요.";
-		}
-		if (param.getUdtNo() == null) {
-			return "수정자 정보를 확인해주세요.";
-		}
-		// 기획전 존재 여부를 확인합니다.
-		int exists = exhibitionMapper.countExhibitionByNo(param.getExhibitionNo());
-		if (exists == 0) {
-			return "기획전 정보를 확인해주세요.";
+		String exhibitionValidation = validateRequiredExistingExhibitionForUpdate(param.getExhibitionNo(), param.getUdtNo());
+		if (exhibitionValidation != null) {
+			return exhibitionValidation;
 		}
 
 		// 기획전에 등록된 탭 번호 목록을 조회합니다.
@@ -407,7 +394,7 @@ public class ExhibitionService {
 				return "상품[" + (index + 1) + "]의 탭 정보를 확인해주세요.";
 			}
 			String showYn = trimToNull(goods.getShowYn());
-			if (showYn != null && !isYnValue(showYn)) {
+			if (showYn != null && isInvalidYnValue(showYn)) {
 				return "상품[" + (index + 1) + "] 노출여부를 확인해주세요.";
 			}
 		}
@@ -416,20 +403,14 @@ public class ExhibitionService {
 
 	// 기획전 삭제 요청을 검증합니다.
 	public String validateExhibitionDelete(ExhibitionDeletePO param) {
-		// 필수 요청값을 확인합니다.
-		if (param == null) {
-			return "요청 데이터가 없습니다.";
+		// 필수 요청값과 수정 대상 기획전 유효성을 함께 확인합니다.
+		String requestValidation = validateRequestParamExists(param);
+		if (requestValidation != null) {
+			return requestValidation;
 		}
-		if (param.getExhibitionNo() == null || param.getExhibitionNo() < 1) {
-			return "기획전 번호를 확인해주세요.";
-		}
-		if (param.getUdtNo() == null) {
-			return "수정자 정보를 확인해주세요.";
-		}
-		// 존재 여부를 확인합니다.
-		int exists = exhibitionMapper.countExhibitionByNo(param.getExhibitionNo());
-		if (exists == 0) {
-			return "기획전 정보를 확인해주세요.";
+		String exhibitionValidation = validateRequiredExistingExhibitionForUpdate(param.getExhibitionNo(), param.getUdtNo());
+		if (exhibitionValidation != null) {
+			return exhibitionValidation;
 		}
 		return null;
 	}
@@ -897,9 +878,31 @@ public class ExhibitionService {
 		return YN_N.equals(normalized) ? YN_N : YN_Y;
 	}
 
-	// YN 값을 검증합니다.
-	private boolean isYnValue(String value) {
-		return YN_Y.equals(value) || YN_N.equals(value);
+	// YN 외의 값인지 검증합니다.
+	private boolean isInvalidYnValue(String value) {
+		return !YN_Y.equals(value) && !YN_N.equals(value);
+	}
+
+	// 요청 객체 존재 여부를 검증합니다.
+	private String validateRequestParamExists(Object param) {
+		return param == null ? "요청 데이터가 없습니다." : null;
+	}
+
+	// 수정 대상 기획전 공통 필수값과 존재 여부를 검증합니다.
+	private String validateRequiredExistingExhibitionForUpdate(Integer exhibitionNo, Long udtNo) {
+		if (exhibitionNo == null || exhibitionNo < 1) {
+			return "기획전 번호를 확인해주세요.";
+		}
+		if (udtNo == null) {
+			return "수정자 정보를 확인해주세요.";
+		}
+
+		// 실제 수정 대상 기획전이 존재하는지 확인합니다.
+		int exists = exhibitionMapper.countExhibitionByNo(exhibitionNo);
+		if (exists == 0) {
+			return "기획전 정보를 확인해주세요.";
+		}
+		return null;
 	}
 
 	// 조회 파라미터 기본값을 정리합니다.

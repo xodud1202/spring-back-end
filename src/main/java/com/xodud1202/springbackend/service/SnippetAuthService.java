@@ -144,8 +144,6 @@ public class SnippetAuthService {
 			}
 
 			return new VerifiedSnippetGoogleUser(googleSub, email, userNm, profileImgUrl);
-		} catch (IllegalArgumentException exception) {
-			throw exception;
 		} catch (GeneralSecurityException | IOException exception) {
 			throw new IllegalStateException("구글 로그인 검증 중 오류가 발생했습니다.", exception);
 		}

@@ -13,6 +13,8 @@ public class AdminCompanyWorkDetailUpdatePO {
 	private String title;
 	// 업무 상태 코드입니다.
 	private String workStatCd;
+	// IT 담당자명입니다.
+	private String itManager;
 	// 업무 담당자명입니다.
 	private String coManager;
 	// 업무 생성 일시입니다.

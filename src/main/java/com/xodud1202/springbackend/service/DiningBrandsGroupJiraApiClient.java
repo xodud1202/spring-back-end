@@ -66,9 +66,7 @@ public class DiningBrandsGroupJiraApiClient {
 		} catch (InterruptedException exception) {
 			Thread.currentThread().interrupt();
 			throw new IllegalStateException("Jira API 호출이 중단되었습니다.", exception);
-		} catch (IllegalArgumentException exception) {
-			throw exception;
-		} catch (IllegalStateException exception) {
+		} catch (IllegalArgumentException | IllegalStateException exception) {
 			throw exception;
 		} catch (Exception exception) {
 			throw new IllegalStateException("Jira API 호출에 실패했습니다.", exception);
@@ -113,9 +111,7 @@ public class DiningBrandsGroupJiraApiClient {
 		} catch (InterruptedException exception) {
 			Thread.currentThread().interrupt();
 			throw new IllegalStateException("Jira 첨부파일 다운로드가 중단되었습니다.", exception);
-		} catch (IllegalArgumentException exception) {
-			throw exception;
-		} catch (IllegalStateException exception) {
+		} catch (IllegalArgumentException | IllegalStateException exception) {
 			throw exception;
 		} catch (Exception exception) {
 			throw new IllegalStateException("Jira 첨부파일 다운로드에 실패했습니다.", exception);
