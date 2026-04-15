@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xodud1202.springbackend.config.properties.TossProperties;
 import com.xodud1202.springbackend.domain.admin.brand.BrandVO;
@@ -273,20 +275,6 @@ public class GoodsService {
 			builder.append('+').append(token).append('*');
 		}
 		return builder.isEmpty() ? null : builder.toString();
-	}
-
-	// 문자열 공백 여부를 확인합니다.
-	private boolean isBlank(String value) {
-		return value == null || value.trim().isEmpty();
-	}
-
-	// 문자열을 trim 처리하고 비어 있으면 null을 반환합니다.
-	private String trimToNull(String value) {
-		if (value == null) {
-			return null;
-		}
-		String trimmed = value.trim();
-		return trimmed.isEmpty() ? null : trimmed;
 	}
 
 	// 관리자 주문 검색 구분값을 허용 범위로 보정합니다.

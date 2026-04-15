@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.xodud1202.springbackend.common.mybatis.GeneratedLongKey;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManageClaimItemPO;
@@ -2388,15 +2390,6 @@ public class OrderReturnService {
 		}
 	}
 
-	// 첫 번째 문자열이 비어 있으면 두 번째 문자열을 대신 반환합니다.
-	private String firstNonBlank(String first, String second) {
-		String normalizedFirst = trimToNull(first);
-		if (normalizedFirst != null) {
-			return normalizedFirst;
-		}
-		return trimToNull(second);
-	}
-
 	// 현재 로그인한 관리자 번호를 조회합니다.
 	private Long resolveCurrentAdminUserNo() {
 		// 스프링 시큐리티 인증정보에서 관리자 사용자번호를 추출합니다.
@@ -2409,11 +2402,6 @@ public class OrderReturnService {
 			return userBaseEntity.getUsrNo();
 		}
 		return null;
-	}
-
-	// 문자열의 공백을 제거하고 빈 값이면 null을 반환합니다.
-	private String trimToNull(String value) {
-		return orderService.trimToNull(value);
 	}
 
 	// Integer 값을 0 이상의 안전한 숫자로 보정합니다.

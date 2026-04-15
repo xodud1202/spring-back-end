@@ -1,5 +1,9 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
+
+import static com.xodud1202.springbackend.common.util.CommonValidationUtils.*;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportCompanyInfoVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkDetailResponseVO;
@@ -78,8 +82,7 @@ public class CompanyWorkService {
 	private static final String WORK_PRIOR_HIGH_CODE = "WORK_PRIOR_01";
 	private static final String WORK_PRIOR_NORMAL_CODE = "WORK_PRIOR_02";
 	private static final String WORK_PRIOR_LOW_CODE = "WORK_PRIOR_03";
-	private static final String DINING_BRANDS_GROUP_COMPANY_NAME = "다이닝 브랜즈 그룹";
-	private static final String JIRA_PLATFORM_NAME = "JIRA";
+	private static final int DINING_BRANDS_GROUP_COMPANY_SEQ = 1;
 	private static final DateTimeFormatter ADMIN_COMPANY_WORK_DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 	private static final DateTimeFormatter ADMIN_COMPANY_WORK_DATE_TIME_MINUTE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 	private static final DateTimeFormatter ADMIN_COMPANY_WORK_DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
@@ -1440,9 +1443,8 @@ public class CompanyWorkService {
 	// 현재 구현이 지원하는 회사/플랫폼인지 확인합니다.
 	private void validateSupportedCompanyPlatform(AdminCompanyWorkImportCompanyInfoVO companyInfo) {
 		// 다이닝브랜즈그룹 Jira만 지원하고 나머지는 차단합니다.
-		String companyName = trimToNull(companyInfo == null ? null : companyInfo.getWorkCompanyNm());
-		String platformName = trimToNull(companyInfo == null ? null : companyInfo.getWorkPlatformNm());
-		if (!DINING_BRANDS_GROUP_COMPANY_NAME.equals(companyName) || platformName == null || !JIRA_PLATFORM_NAME.equalsIgnoreCase(platformName)) {
+		Integer workCompanySeq = companyInfo == null ? null : companyInfo.getWorkCompanySeq();
+		if (workCompanySeq == null || workCompanySeq.intValue() != DINING_BRANDS_GROUP_COMPANY_SEQ) {
 			throw new IllegalArgumentException("아직 지원하지 않는 회사 업무 플랫폼입니다.");
 		}
 	}
@@ -1886,7 +1888,7 @@ public class CompanyWorkService {
 			return;
 		}
 		if ("mention".equals(nodeType)) {
-			String mentionText = firstNonNull(
+			String mentionText = firstNonBlank(
 				trimToNull(node.path("attrs").path("text").asText(null)),
 				trimToNull(node.path("attrs").path("id").asText(null))
 			);
@@ -1894,7 +1896,7 @@ public class CompanyWorkService {
 			return;
 		}
 		if ("emoji".equals(nodeType)) {
-			String emojiText = firstNonNull(
+			String emojiText = firstNonBlank(
 				trimToNull(node.path("attrs").path("text").asText(null)),
 				trimToNull(node.path("attrs").path("shortName").asText(null))
 			);
@@ -1950,29 +1952,20 @@ public class CompanyWorkService {
 
 	// 필수 시퀀스 값을 1 이상 정수로 검증합니다.
 	private int normalizeRequiredSequence(Integer sequenceValue, String invalidMessage) {
-		// 값이 없거나 0 이하이면 요청 오류로 처리합니다.
-		if (sequenceValue == null || sequenceValue < 1) {
-			throw new IllegalArgumentException(invalidMessage);
-		}
-		return sequenceValue;
+		// 공통 검증 유틸로 1 이상 정수값을 검증합니다.
+		return requirePositiveInt(sequenceValue, invalidMessage);
 	}
 
 	// 필수 업무 시퀀스를 1 이상 long 값으로 검증합니다.
 	private long normalizeRequiredWorkSequence(Long workSeq, String invalidMessage) {
-		// 값이 없거나 0 이하이면 요청 오류로 처리합니다.
-		if (workSeq == null || workSeq < 1) {
-			throw new IllegalArgumentException(invalidMessage);
-		}
-		return workSeq;
+		// 공통 검증 유틸로 1 이상 업무 번호를 검증합니다.
+		return requirePositiveLong(workSeq, invalidMessage);
 	}
 
 	// 필수 사용자 번호를 1 이상 long 값으로 검증합니다.
 	private long normalizeRequiredUserNo(Long userNo, String invalidMessage) {
-		// 값이 없거나 0 이하이면 요청 오류로 처리합니다.
-		if (userNo == null || userNo < 1) {
-			throw new IllegalArgumentException(invalidMessage);
-		}
-		return userNo;
+		// 공통 검증 유틸로 1 이상 사용자 번호를 검증합니다.
+		return requirePositiveLong(userNo, invalidMessage);
 	}
 
 	// 페이지 번호를 1 이상으로 보정합니다.
@@ -2010,33 +2003,6 @@ public class CompanyWorkService {
 			return safeRowList;
 		}
 		return new ArrayList<>(safeRowList.subList(0, sectionSize));
-	}
-
-	// 문자열을 trim 처리하고 빈 값은 null로 변환합니다.
-	private String trimToNull(String value) {
-		// null 문자열은 그대로 null로 반환합니다.
-		if (value == null) {
-			return null;
-		}
-		String trimmedValue = value.trim();
-		return trimmedValue.isEmpty() ? null : trimmedValue;
-	}
-
-	// 앞에서부터 null이 아닌 문자열을 반환합니다.
-	private String firstNonNull(String... values) {
-		// 전달된 문자열 중 첫 번째 유효값을 반환합니다.
-		for (String value : values) {
-			String normalizedValue = trimToNull(value);
-			if (normalizedValue != null) {
-				return normalizedValue;
-			}
-		}
-		return null;
-	}
-
-	// null 문자열을 빈 문자열로 변환합니다.
-	private String safeValue(String value) {
-		return value == null ? "" : value;
 	}
 
 	// 문자열을 지정한 길이 이하로 제한합니다.

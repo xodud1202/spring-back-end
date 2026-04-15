@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
+
 import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsImageVO;
 import com.xodud1202.springbackend.domain.admin.goods.GoodsVO;
@@ -160,11 +162,5 @@ public class GoodsImageService {
 		}
 		// 파일명만 있는 경우 FTP 규칙으로 URL을 생성합니다.
 		return ftpFileService.buildGoodsImageUrl(goodsId, imgPath);
-	}
-
-	// 문자열이 null 또는 공백인지 확인합니다.
-	private boolean isBlank(String value) {
-		// null이거나 trim 결과가 비어 있으면 공백으로 판단합니다.
-		return value == null || value.trim().isEmpty();
 	}
 }

@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xodud1202.springbackend.domain.admin.news.AdminNewsCategoryDeletePO;
@@ -1300,14 +1302,5 @@ public class NewsService {
 		} catch (DateTimeParseException e) {
 			return null;
 		}
-	}
-
-	// 문자열을 trim 처리하고 빈 값이면 null로 변환합니다.
-	private String trimToNull(String value) {
-		if (value == null) {
-			return null;
-		}
-		String trimmed = value.trim();
-		return trimmed.isEmpty() ? null : trimmed;
 	}
 }

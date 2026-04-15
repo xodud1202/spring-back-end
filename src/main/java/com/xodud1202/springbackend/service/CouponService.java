@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
+
 import static com.xodud1202.springbackend.common.Constants.Shop.*;
 
 import com.xodud1202.springbackend.domain.admin.coupon.CouponDetailVO;
@@ -772,19 +774,5 @@ public class CouponService {
 			return param.getUdtNo();
 		}
 		return param.getRegNo();
-	}
-
-	// 문자열 공백 여부를 확인합니다.
-	private boolean isBlank(String value) {
-		return value == null || value.trim().isEmpty();
-	}
-
-	// 문자열 공백을 제거하고 빈값은 null로 반환합니다.
-	private String trimToNull(String value) {
-		if (value == null) {
-			return null;
-		}
-		String trimmed = value.trim();
-		return trimmed.isEmpty() ? null : trimmed;
 	}
 }

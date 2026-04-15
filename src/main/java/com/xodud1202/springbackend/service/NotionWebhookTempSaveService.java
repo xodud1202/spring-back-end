@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xodud1202.springbackend.domain.notion.NotionWebhookTempEntryPO;
@@ -213,19 +215,5 @@ public class NotionWebhookTempSaveService {
 			return "";
 		}
 		return value.endsWith(".") ? value.substring(0, value.length() - 1) : value;
-	}
-
-	// 문자열을 trim 처리하고 비어 있으면 null로 변환합니다.
-	private String trimToNull(String value) {
-		if (value == null) {
-			return null;
-		}
-		String trimmed = value.trim();
-		return trimmed.isEmpty() ? null : trimmed;
-	}
-
-	// DB 저장용 문자열 null 안전값을 반환합니다.
-	private String safeValue(String value) {
-		return value == null ? "" : value;
 	}
 }

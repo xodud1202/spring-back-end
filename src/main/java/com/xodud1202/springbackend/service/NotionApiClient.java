@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xodud1202.springbackend.config.properties.NotionProperties;
@@ -113,19 +115,5 @@ public class NotionApiClient {
 	// Notion API 버전을 null 안전하게 반환합니다.
 	private String resolveApiVersion() {
 		return safeValue(notionProperties.apiVersion());
-	}
-
-	// 문자열을 trim 처리하고 비어 있으면 null로 변환합니다.
-	private String trimToNull(String value) {
-		if (value == null) {
-			return null;
-		}
-		String trimmed = value.trim();
-		return trimmed.isEmpty() ? null : trimmed;
-	}
-
-	// 문자열 null 안전값을 반환합니다.
-	private String safeValue(String value) {
-		return value == null ? "" : value;
 	}
 }

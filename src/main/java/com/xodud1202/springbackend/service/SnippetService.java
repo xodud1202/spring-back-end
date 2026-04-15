@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
+
 import com.xodud1202.springbackend.common.mybatis.GeneratedLongKey;
 import com.xodud1202.springbackend.domain.snippet.SnippetBootstrapResponse;
 import com.xodud1202.springbackend.domain.snippet.SnippetDetailRowVO;
@@ -809,14 +811,5 @@ public class SnippetService {
 			return upperCaseValue;
 		}
 		throw new IllegalArgumentException(errorMessage);
-	}
-
-	// 문자열을 trim 처리하고 비어 있으면 null로 변환합니다.
-	private String trimToNull(String value) {
-		if (value == null) {
-			return null;
-		}
-		String trimmedValue = value.trim();
-		return trimmedValue.isEmpty() ? null : trimmedValue;
 	}
 }

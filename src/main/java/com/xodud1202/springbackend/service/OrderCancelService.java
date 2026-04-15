@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartSiteInfoVO;
 import com.xodud1202.springbackend.domain.shop.mypage.*;
@@ -1169,21 +1171,6 @@ public class OrderCancelService {
 		// 환불 저장금액은 절댓값 기준으로 음수화합니다.
 		long normalizedRefundedCashAmt = Math.abs(refundedCashAmt == null ? 0L : refundedCashAmt.longValue());
 		return normalizedRefundedCashAmt * -1L;
-	}
-
-	// 문자열의 공백을 제거하고 빈 값이면 null을 반환합니다.
-	private String trimToNull(String value) {
-		return orderService.trimToNull(value);
-	}
-
-	// 비어 있는 문자열인지 확인합니다.
-	private boolean isBlank(String value) {
-		return orderService.isBlank(value);
-	}
-
-	// 첫 번째 비어 있지 않은 문자열을 반환합니다.
-	private String firstNonBlank(String first, String second) {
-		return orderService.firstNonBlank(first, second);
 	}
 
 	// Integer 값을 0 이상의 안전한 숫자로 보정합니다.

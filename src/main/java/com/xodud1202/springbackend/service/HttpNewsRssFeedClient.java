@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
+
 import com.xodud1202.springbackend.domain.news.RssArticleItem;
 import org.springframework.stereotype.Component;
 import org.w3c.dom.Document;
@@ -303,14 +305,5 @@ public class HttpNewsRssFeedClient implements NewsRssFeedClient {
 			return nodeName;
 		}
 		return nodeName.substring(separatorIndex + 1);
-	}
-
-	// 문자열을 trim하고 빈 문자열은 null로 반환합니다.
-	private String trimToNull(String value) {
-		if (value == null) {
-			return null;
-		}
-		String trimmed = value.trim();
-		return trimmed.isEmpty() ? null : trimmed;
 	}
 }

@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
+
 import static com.xodud1202.springbackend.common.Constants.Shop.CPN_USE_DT_DATETIME;
 import static com.xodud1202.springbackend.common.Constants.Shop.CPN_USE_DT_PERIOD;
 import static com.xodud1202.springbackend.common.Constants.Shop.AGREEMENT_N;
@@ -476,19 +478,5 @@ public class ShopAuthService {
 			throw new IllegalArgumentException(errorMessage);
 		}
 		return normalizedValue;
-	}
-
-	// 문자열을 trim 처리하고 비어 있으면 null을 반환합니다.
-	private String trimToNull(String value) {
-		if (value == null) {
-			return null;
-		}
-		String normalizedValue = value.trim();
-		return normalizedValue.isEmpty() ? null : normalizedValue;
-	}
-
-	// 문자열 공백 여부를 확인합니다.
-	private boolean isBlank(String value) {
-		return trimToNull(value) == null;
 	}
 }

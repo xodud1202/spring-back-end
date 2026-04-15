@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
+
 import com.xodud1202.springbackend.domain.admin.notion.AdminNotionCategorySortRowPO;
 import com.xodud1202.springbackend.domain.admin.notion.AdminNotionCategorySortSavePO;
 import com.xodud1202.springbackend.domain.admin.notion.AdminNotionCategoryVO;
@@ -140,15 +142,6 @@ public class AdminNotionService {
 			categoryIdSet.add(categoryId);
 		}
 		return new ArrayList<>(categoryIdSet);
-	}
-
-	// 문자열을 trim 처리하고 빈값은 null로 변환합니다.
-	private String trimToNull(String value) {
-		if (value == null) {
-			return null;
-		}
-		String trimmed = value.trim();
-		return trimmed.isEmpty() ? null : trimmed;
 	}
 
 	// yyyy-MM-dd 형식 문자열을 LocalDate로 파싱합니다.

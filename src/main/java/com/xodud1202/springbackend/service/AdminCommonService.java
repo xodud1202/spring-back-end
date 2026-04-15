@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
+
 import com.xodud1202.springbackend.domain.admin.common.AdminMenuLnb;
 import com.xodud1202.springbackend.domain.admin.common.CommonCodeManagePO;
 import com.xodud1202.springbackend.domain.admin.common.MenuBase;
@@ -493,20 +495,6 @@ public class AdminCommonService {
 		param.setCdNm(trimToNull(param.getCdNm()));
 		param.setCdDesc(trimToNull(param.getCdDesc()));
 		param.setUseYn(trimToNull(param.getUseYn()));
-	}
-
-	// 문자열의 공백 여부를 확인합니다.
-	private boolean isBlank(String value) {
-		return value == null || value.trim().isEmpty();
-	}
-
-	// 문자열 양끝 공백 제거 후 빈값은 null로 변환합니다.
-	private String trimToNull(String value) {
-		if (value == null) {
-			return null;
-		}
-		String trimmed = value.trim();
-		return trimmed.isEmpty() ? null : trimmed;
 	}
 
 	// 문자열에 한글 포함 여부를 확인합니다.

@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
+
 import com.xodud1202.springbackend.domain.admin.banner.BannerDetailVO;
 import com.xodud1202.springbackend.domain.admin.banner.BannerDeletePO;
 import com.xodud1202.springbackend.domain.admin.banner.BannerGoodsOrderSavePO;
@@ -846,11 +848,6 @@ public class BannerService {
 		}
 	}
 
-	// 문자열 공백 여부를 확인합니다.
-	private boolean isBlank(String value) {
-		return value == null || value.trim().isEmpty();
-	}
-
 	// 업로드 파일과 행 키를 매핑해 반환합니다.
 	private Map<String, MultipartFile> toImageFileMap(List<MultipartFile> images, List<String> imageKeys) {
 		Map<String, MultipartFile> imageFileMap = new LinkedHashMap<>();
@@ -867,15 +864,6 @@ public class BannerService {
 			imageFileMap.put(rowKey, imageFile);
 		}
 		return imageFileMap;
-	}
-
-	// 문자열을 trim 처리하고 빈값이면 null로 반환합니다.
-	private String trimToNull(String value) {
-		if (value == null) {
-			return null;
-		}
-		String trimmed = value.trim();
-		return trimmed.isEmpty() ? null : trimmed;
 	}
 
 	// 노출기간을 검증하고 DB 저장 형식으로 정규화합니다.

@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xodud1202.springbackend.config.properties.NotionProperties;
@@ -198,11 +200,11 @@ public class NotionWebhookDataSyncService {
 
 		// ID/상위 식별자를 우선 웹훅 기준으로 설정하고 누락 시 페이지 응답으로 보완합니다.
 		String pageId = trimToNull(webhookNode.path("entity").path("id").asText(null));
-		String databaseId = firstNonNull(
+		String databaseId = firstNonBlank(
 			trimToNull(webhookNode.path("data").path("parent").path("id").asText(null)),
 			trimToNull(pageNode.path("parent").path("database_id").asText(null))
 		);
-		String dataSourceId = firstNonNull(
+		String dataSourceId = firstNonBlank(
 			trimToNull(webhookNode.path("data").path("parent").path("data_source_id").asText(null)),
 			trimToNull(pageNode.path("parent").path("data_source_id").asText(null))
 		);
@@ -377,7 +379,7 @@ public class NotionWebhookDataSyncService {
 				return trimToNull(propertyNode.path("number").asText(null));
 			}
 			if ("select".equals(propertyType)) {
-				return firstNonNull(
+				return firstNonBlank(
 					trimToNull(propertyNode.path("select").path("id").asText(null)),
 					trimToNull(propertyNode.path("select").path("name").asText(null))
 				);
@@ -496,17 +498,6 @@ public class NotionWebhookDataSyncService {
 		return textBuilder.toString();
 	}
 
-	// 앞에서부터 null이 아닌 값을 반환합니다.
-	private String firstNonNull(String... values) {
-		for (String value : values) {
-			String normalized = trimToNull(value);
-			if (normalized != null) {
-				return normalized;
-			}
-		}
-		return null;
-	}
-
 	// 문자열 길이를 컬럼 길이 제한에 맞춰 자릅니다.
 	private String limitLength(String value, int maxLength) {
 		String normalized = safeValue(value);
@@ -514,19 +505,5 @@ public class NotionWebhookDataSyncService {
 			return normalized;
 		}
 		return normalized.substring(0, maxLength);
-	}
-
-	// 문자열을 trim 처리하고 비어 있으면 null로 변환합니다.
-	private String trimToNull(String value) {
-		if (value == null) {
-			return null;
-		}
-		String trimmed = value.trim();
-		return trimmed.isEmpty() ? null : trimmed;
-	}
-
-	// 문자열 null 안전값을 반환합니다.
-	private String safeValue(String value) {
-		return value == null ? "" : value;
 	}
 }

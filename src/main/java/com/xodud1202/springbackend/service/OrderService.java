@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -312,19 +314,6 @@ public class OrderService {
 			true
 		);
 	}
-	// 문자열 공백 여부를 확인합니다.
-	boolean isBlank(String value) {
-		return value == null || value.trim().isEmpty();
-	}
-
-	// 문자열을 trim 처리하고 비어 있으면 null을 반환합니다.
-	String trimToNull(String value) {
-		if (value == null) {
-			return null;
-		}
-		String trimmed = value.trim();
-		return trimmed.isEmpty() ? null : trimmed;
-	}
 
 	// 관리자 주문 검색 구분값을 허용 범위로 보정합니다.
 	private String normalizeAdminOrderSearchGb(String searchGb) {
@@ -618,7 +607,7 @@ public class OrderService {
 		result.setReturnFeeContext(returnFeeContext);
 		result.setAddressList(addressList);
 		result.setPickupAddress(pickupAddress);
-		result.setCustomerPhoneNumber(firstNonBlank(trimToNull(customerInfo == null ? null : customerInfo.getPhoneNumber()), ""));
+		result.setCustomerPhoneNumber(safeValue(firstNonBlank(trimToNull(customerInfo == null ? null : customerInfo.getPhoneNumber()), "")));
 		return result;
 	}
 
@@ -1633,8 +1622,8 @@ public class OrderService {
 			trimToNull(param.getCode()),
 			trimToNull(param.getMessage()),
 			writeShopOrderJson(Map.of(
-				"code", firstNonBlank(trimToNull(param.getCode()), ""),
-				"message", firstNonBlank(trimToNull(param.getMessage()), "")
+				"code", safeValue(firstNonBlank(trimToNull(param.getCode()), "")),
+				"message", safeValue(firstNonBlank(trimToNull(param.getMessage()), ""))
 			)),
 			custNo
 		);
@@ -1654,7 +1643,7 @@ public class OrderService {
 		// 결제키 또는 주문번호와 상태를 읽어 현재 결제 row를 조회합니다.
 		JsonNode rootNode = readShopOrderJsonNode(normalizedRawBody);
 		JsonNode dataNode = rootNode.path("data");
-		String eventType = firstNonBlank(resolveJsonText(rootNode, "eventType"), "");
+		String eventType = safeValue(firstNonBlank(resolveJsonText(rootNode, "eventType"), ""));
 		String paymentKey = firstNonBlank(resolveJsonText(dataNode, "paymentKey"), resolveJsonText(rootNode, "paymentKey"));
 		String ordNo = firstNonBlank(resolveJsonText(rootNode, "orderId"), resolveJsonText(dataNode, "orderId"));
 		String paymentStatus = firstNonBlank(resolveJsonText(dataNode, "status"), resolveJsonText(rootNode, "status"));
@@ -2973,8 +2962,8 @@ public class OrderService {
 		customerInfo.setCustomerKey("SHOP-CUST-" + customerInfo.getCustNo());
 		customerInfo.setDeviceGbCd(firstNonBlank(trimToNull(deviceGbCd), "PC"));
 		customerInfo.setCustNm(firstNonBlank(trimToNull(customerInfo.getCustNm()), "고객"));
-		customerInfo.setEmail(firstNonBlank(trimToNull(customerInfo.getEmail()), ""));
-		customerInfo.setPhoneNumber(firstNonBlank(trimToNull(customerInfo.getPhoneNumber()), ""));
+		customerInfo.setEmail(safeValue(firstNonBlank(trimToNull(customerInfo.getEmail()), "")));
+		customerInfo.setPhoneNumber(safeValue(firstNonBlank(trimToNull(customerInfo.getPhoneNumber()), "")));
 		return customerInfo;
 	}
 
@@ -3031,7 +3020,7 @@ public class OrderService {
 		result.setRefundBankCd(refundAccountInfo == null ? null : refundAccountInfo.refundBankCd());
 		result.setRefundBankNo(refundAccountInfo == null ? null : refundAccountInfo.refundBankNo());
 		result.setRefundHolderNm(refundAccountInfo == null ? null : refundAccountInfo.refundHolderNm());
-		result.setCartYn("goods".equalsIgnoreCase(firstNonBlank(trimToNull(from), "")) ? NO : YES);
+		result.setCartYn("goods".equalsIgnoreCase(safeValue(firstNonBlank(trimToNull(from), ""))) ? NO : YES);
 		result.setDeviceGbCd(firstNonBlank(trimToNull(deviceGbCd), "PC"));
 		result.setRegNo(custNo);
 		result.setUdtNo(custNo);
@@ -3696,12 +3685,12 @@ public class OrderService {
 	// URL 쿼리값을 인코딩합니다.
 	private String encodeShopOrderUrlValue(String value) {
 		// UTF-8 기준으로 안전하게 인코딩합니다.
-		return URLEncoder.encode(firstNonBlank(value, ""), StandardCharsets.UTF_8);
+		return URLEncoder.encode(safeValue(firstNonBlank(value, "")), StandardCharsets.UTF_8);
 	}
 
 	// Toss 클라이언트 키를 반환합니다.
 	private String resolveShopOrderClientKey() {
-		return firstNonBlank(trimToNull(tossProperties.clientKey()), "");
+		return safeValue(firstNonBlank(trimToNull(tossProperties.clientKey()), ""));
 	}
 
 	// 다양한 날짜 문자열을 주문 결제 저장용 형식으로 정규화합니다.
@@ -3748,17 +3737,6 @@ public class OrderService {
 		// 코드에 CANCEL이 포함되면 사용자 취소 계열로 판단합니다.
 		String normalizedCode = trimToNull(code);
 		return normalizedCode != null && normalizedCode.toUpperCase().contains("CANCEL");
-	}
-
-	// 첫 번째 비어 있지 않은 문자열을 반환합니다.
-	String firstNonBlank(String first, String second) {
-		// 첫 번째 값이 비어 있으면 두 번째 값을 반환합니다.
-		String normalizedFirst = trimToNull(first);
-		if (normalizedFirst != null) {
-			return normalizedFirst;
-		}
-		String normalizedSecond = trimToNull(second);
-		return normalizedSecond == null ? "" : normalizedSecond;
 	}
 
 	// 현재 고객의 배송지 목록을 기본 배송지 우선 순서로 조회합니다.

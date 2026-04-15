@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
+
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.google.api.client.http.javanet.NetHttpTransport;
@@ -190,15 +192,6 @@ public class SnippetAuthService {
 		if (value != null && value.length() > maxLength) {
 			throw new IllegalArgumentException(errorMessage);
 		}
-	}
-
-	// 문자열을 trim 처리하고 비어 있으면 null로 변환합니다.
-	private String trimToNull(String value) {
-		if (value == null) {
-			return null;
-		}
-		String trimmedValue = value.trim();
-		return trimmedValue.isEmpty() ? null : trimmedValue;
 	}
 
 	// 검증이 끝난 구글 사용자 정보를 전달합니다.

@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
+
 import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionDeletePO;
 import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionDetailVO;
 import com.xodud1202.springbackend.domain.admin.exhibition.ExhibitionGoodsPO;
@@ -910,20 +912,6 @@ public class ExhibitionService {
 			return filePath;
 		}
 		return ftpFileService.buildGoodsImageUrl(goodsId, filePath);
-	}
-
-	// 기획전 조회 공백 문자열을 판별합니다.
-	private boolean isBlank(String value) {
-		return value == null || value.trim().isEmpty();
-	}
-
-	// 문자열을 trim하고 빈값은 null로 바꿉니다.
-	private String trimToNull(String value) {
-		if (value == null) {
-			return null;
-		}
-		String normalized = value.trim();
-		return normalized.isEmpty() ? null : normalized;
 	}
 
 	// 문자열 YN 값을 정규화합니다.

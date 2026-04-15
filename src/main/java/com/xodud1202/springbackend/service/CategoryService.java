@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
+
 import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsDeletePO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsOrderSavePO;
 import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsRegisterPO;
@@ -248,11 +250,6 @@ public class CategoryService {
 			categoryNameByIdMap.put(category.getCategoryId(), category.getCategoryNm() == null ? "" : category.getCategoryNm());
 			collectCategoryNameById(category.getChildren(), categoryNameByIdMap);
 		}
-	}
-
-	// 문자열 공백 여부를 확인합니다.
-	private boolean isBlank(String value) {
-		return value == null || value.trim().isEmpty();
 	}
 	
 	// 쇼핑몰 헤더 노출용 전체 카테고리를 한 번에 조회해 정렬 후 반환합니다.
