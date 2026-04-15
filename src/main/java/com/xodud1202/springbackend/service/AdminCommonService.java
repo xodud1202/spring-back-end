@@ -144,7 +144,7 @@ public class AdminCommonService {
 		}
 		// 상위 메뉴 규칙을 적용합니다.
 		if (upMenuNo != 0) {
-			if (parent != null && parent.getMenuLevel() >= MENU_LEVEL_MAX) {
+			if (parent.getMenuLevel() >= MENU_LEVEL_MAX) {
 				return "3레벨 메뉴에는 하위 메뉴를 추가할 수 없습니다.";
 			}
 			if (StringUtils.isNotBlank(parent.getMenuUrl())) {

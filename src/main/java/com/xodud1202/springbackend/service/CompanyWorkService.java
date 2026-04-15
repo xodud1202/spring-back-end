@@ -1,7 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonPaginationUtils.*;
 import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
-
 import static com.xodud1202.springbackend.common.util.CommonValidationUtils.*;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -137,19 +137,12 @@ public class CompanyWorkService {
 		List<CommonCodeVO> workStatusCodeList = commonMapper.getCommonCodeList(WORK_STATUS_GROUP_CODE);
 
 		// 상태 코드별 행 목록을 맵으로 정리합니다.
-		Map<String, List<AdminCompanyWorkListRowVO>> rowListMapByStatusCode = new LinkedHashMap<>();
-		for (AdminCompanyWorkListRowVO rowItem : rowList == null ? List.<AdminCompanyWorkListRowVO>of() : rowList) {
-			String workStatusCode = trimToNull(rowItem == null ? null : rowItem.getWorkStatCd());
-			if (workStatusCode == null) {
-				continue;
-			}
-			rowListMapByStatusCode.computeIfAbsent(workStatusCode, ignoredKey -> new ArrayList<>()).add(rowItem);
-		}
+		Map<String, List<AdminCompanyWorkListRowVO>> rowListMapByStatusCode = groupCompanyWorkRowListByStatusCode(rowList);
 
 		// 공통코드 정렬 순서대로 상태별 섹션 응답을 구성합니다.
 		List<AdminCompanyWorkStatusSectionVO> statusSectionList = new ArrayList<>();
 		for (CommonCodeVO workStatusCodeItem : workStatusCodeList == null ? List.<CommonCodeVO>of() : workStatusCodeList) {
-			String workStatusCode = trimToNull(workStatusCodeItem == null ? null : workStatusCodeItem.getCd());
+			String workStatusCode = trimToNull(workStatusCodeItem.getCd());
 			if (workStatusCode == null || WORK_COMPLETED_STATUS_CODE.equals(workStatusCode)) {
 				continue;
 			}
@@ -191,17 +184,10 @@ public class CompanyWorkService {
 		);
 		List<AdminCompanyWorkListRowVO> rowList = companyWorkMapper.getWorkCompanyList(param);
 		List<CommonCodeVO> workStatusCodeList = getWorkStatusCodeList();
-		int resolvedSectionSize = normalizePageSize(sectionSize);
+		int resolvedSectionSize = normalizePageSize(sectionSize, ADMIN_COMPANY_WORK_DEFAULT_PAGE_SIZE, ADMIN_COMPANY_WORK_MAX_PAGE_SIZE);
 
 		// 상태 코드별 행 목록을 맵으로 정리합니다.
-		Map<String, List<AdminCompanyWorkListRowVO>> rowListMapByStatusCode = new LinkedHashMap<>();
-		for (AdminCompanyWorkListRowVO rowItem : rowList == null ? List.<AdminCompanyWorkListRowVO>of() : rowList) {
-			String workStatusCode = trimToNull(rowItem == null ? null : rowItem.getWorkStatCd());
-			if (workStatusCode == null) {
-				continue;
-			}
-			rowListMapByStatusCode.computeIfAbsent(workStatusCode, ignoredKey -> new ArrayList<>()).add(rowItem);
-		}
+		Map<String, List<AdminCompanyWorkListRowVO>> rowListMapByStatusCode = groupCompanyWorkRowListByStatusCode(rowList);
 
 		// 공통코드 정렬 순서대로 상태별 섹션 응답을 구성합니다.
 		List<AdminCompanyWorkStatusSectionVO> statusSectionList = new ArrayList<>();
@@ -261,7 +247,7 @@ public class CompanyWorkService {
 		}
 		validateWorkStatusCode(normalizedWorkStatusCode);
 
-		int resolvedLimit = normalizePageSize(limit);
+		int resolvedLimit = normalizePageSize(limit, ADMIN_COMPANY_WORK_DEFAULT_PAGE_SIZE, ADMIN_COMPANY_WORK_MAX_PAGE_SIZE);
 		int resolvedOffset = normalizeNonNegativeOffset(offset);
 		AdminCompanyWorkSearchPO param = createSearchParam(
 			workCompanySeq,
@@ -312,33 +298,21 @@ public class CompanyWorkService {
 		return response;
 	}
 
-	// 관리자 회사 업무 상세 팝업 정보를 조회합니다.
-	public AdminCompanyWorkDetailResponseVO getAdminCompanyWorkDetail(Long workSeq) {
+	// 회사 업무 상세 정보를 조회합니다.
+	public AdminCompanyWorkDetailResponseVO getCompanyWorkDetail(Long workSeq) {
 		// 선택 업무 번호를 검증한 뒤 상세/첨부/댓글 정보를 함께 조회합니다.
 		long resolvedWorkSeq = normalizeRequiredWorkSequence(workSeq, "업무 정보를 확인해주세요.");
-		AdminCompanyWorkDetailVO detail = getRequiredAdminCompanyWorkDetail(resolvedWorkSeq);
-		List<AdminCompanyWorkFileVO> fileList = companyWorkMapper.getAdminCompanyWorkFileList(resolvedWorkSeq);
-		List<AdminCompanyWorkReplyVO> replyList = companyWorkMapper.getAdminCompanyWorkReplyList(resolvedWorkSeq);
-		List<AdminCompanyWorkReplyFileVO> replyFileList = companyWorkMapper.getAdminCompanyWorkReplyFileList(resolvedWorkSeq);
-
-		// 상세 팝업 응답 구조로 묶어서 반환합니다.
-		AdminCompanyWorkDetailResponseVO response = new AdminCompanyWorkDetailResponseVO();
-		response.setDetail(detail);
-		response.setFileList(fileList == null ? List.of() : fileList);
-		response.setReplyList(applyReplyFileList(replyList, replyFileList));
-		return response;
+		AdminCompanyWorkDetailVO detail = getRequiredCompanyWorkDetail(resolvedWorkSeq);
+		return buildCompanyWorkDetailResponse(resolvedWorkSeq, detail);
 	}
 
-	// 업무관리 화면 전용 상세 정보를 시분초 포함 형식으로 조회합니다.
-	public AdminCompanyWorkDetailResponseVO getWorkCompanyWorkDetail(Long workSeq) {
-		// 선택 업무 번호를 검증한 뒤 상세/첨부/댓글 정보를 함께 조회합니다.
-		long resolvedWorkSeq = normalizeRequiredWorkSequence(workSeq, "업무 정보를 확인해주세요.");
-		AdminCompanyWorkDetailVO detail = getRequiredWorkCompanyWorkDetail(resolvedWorkSeq);
-		List<AdminCompanyWorkFileVO> fileList = companyWorkMapper.getAdminCompanyWorkFileList(resolvedWorkSeq);
-		List<AdminCompanyWorkReplyVO> replyList = companyWorkMapper.getAdminCompanyWorkReplyList(resolvedWorkSeq);
-		List<AdminCompanyWorkReplyFileVO> replyFileList = companyWorkMapper.getAdminCompanyWorkReplyFileList(resolvedWorkSeq);
+	// 회사 업무 상세 응답 구조를 조립합니다.
+	private AdminCompanyWorkDetailResponseVO buildCompanyWorkDetailResponse(Long workSeq, AdminCompanyWorkDetailVO detail) {
+		// 상세 본문과 첨부와 댓글을 함께 묶어 공통 응답으로 반환합니다.
+		List<AdminCompanyWorkFileVO> fileList = companyWorkMapper.getAdminCompanyWorkFileList(workSeq);
+		List<AdminCompanyWorkReplyVO> replyList = companyWorkMapper.getAdminCompanyWorkReplyList(workSeq);
+		List<AdminCompanyWorkReplyFileVO> replyFileList = companyWorkMapper.getAdminCompanyWorkReplyFileList(workSeq);
 
-		// 상세 응답 구조로 묶어서 반환합니다.
 		AdminCompanyWorkDetailResponseVO response = new AdminCompanyWorkDetailResponseVO();
 		response.setDetail(detail);
 		response.setFileList(fileList == null ? List.of() : fileList);
@@ -350,7 +324,7 @@ public class CompanyWorkService {
 	public List<AdminCompanyWorkReplyVO> getAdminCompanyWorkReplyList(Long workSeq) {
 		// 선택 업무 번호를 검증하고 대상 업무 존재 여부를 먼저 확인합니다.
 		long resolvedWorkSeq = normalizeRequiredWorkSequence(workSeq, "업무 정보를 확인해주세요.");
-		getRequiredAdminCompanyWorkDetail(resolvedWorkSeq);
+		getRequiredCompanyWorkDetail(resolvedWorkSeq);
 
 		// 댓글 목록과 댓글 첨부파일 목록을 함께 조회해 댓글별 첨부를 매핑합니다.
 		List<AdminCompanyWorkReplyVO> replyList = companyWorkMapper.getAdminCompanyWorkReplyList(resolvedWorkSeq);
@@ -380,20 +354,14 @@ public class CompanyWorkService {
 	}
 
 	@Transactional
-	// 관리자 회사 업무 상세 수정 항목을 저장합니다.
-	public AdminCompanyWorkDetailVO updateAdminCompanyWorkDetail(AdminCompanyWorkDetailUpdatePO param) {
+	// 관리자 회사 업무 상세 수정 후 최신 상세를 반환합니다.
+	public AdminCompanyWorkDetailVO updateAdminCompanyWorkDetailAndGetDetail(AdminCompanyWorkDetailUpdatePO param) {
 		// 요청값을 정규화하고 필수값을 검증합니다.
 		AdminCompanyWorkDetailUpdatePO normalizedParam = normalizeDetailUpdateParam(param);
-		validateWorkStatusCode(normalizedParam.getWorkStatCd());
-
-		// 실제 업무 수정이 반영되지 않으면 요청 오류로 처리합니다.
-		int updatedCount = companyWorkMapper.updateAdminCompanyWorkDetailFields(normalizedParam);
-		if (updatedCount < 1) {
-			throw new IllegalArgumentException("업무 정보를 확인해주세요.");
-		}
+		long updatedWorkSeq = updateCompanyWorkDetailFields(normalizedParam);
 
 		// 저장 후 최신 상세 정보를 반환합니다.
-		return getRequiredAdminCompanyWorkDetail(normalizedParam.getWorkSeq());
+		return getRequiredCompanyWorkDetail(updatedWorkSeq);
 	}
 
 	@Transactional
@@ -404,8 +372,8 @@ public class CompanyWorkService {
 		Long currentUserNo
 	) {
 		// 상세 수정 요청값을 정규화한 뒤 본문/첨부 변경을 순서대로 반영합니다.
-		AdminCompanyWorkDetailVO updatedDetail = updateAdminCompanyWorkDetail(param);
 		AdminCompanyWorkDetailUpdatePO normalizedParam = normalizeDetailUpdateParam(param);
+		long updatedWorkSeq = updateCompanyWorkDetailFields(normalizedParam);
 
 		// 삭제 요청 첨부파일을 먼저 반영해 동일 요청의 신규 첨부가 이어서 저장되도록 처리합니다.
 		for (Integer workJobFileSeq : normalizedParam.getDeleteWorkJobFileSeqList() == null ? List.<Integer>of() : normalizedParam.getDeleteWorkJobFileSeqList()) {
@@ -417,9 +385,20 @@ public class CompanyWorkService {
 
 		// 신규 첨부파일이 있으면 같은 업무에 이어서 저장합니다.
 		for (MultipartFile fileItem : normalizeWorkFileList(files)) {
-			uploadAdminCompanyWorkFile(updatedDetail.getWorkSeq(), fileItem, currentUserNo);
+			uploadAdminCompanyWorkFile(updatedWorkSeq, fileItem, currentUserNo);
 		}
-		return getAdminCompanyWorkDetail(updatedDetail.getWorkSeq());
+		return getCompanyWorkDetail(updatedWorkSeq);
+	}
+
+	// 회사 업무 상세 수정 필드만 반영하고 대상 업무 번호를 반환합니다.
+	private long updateCompanyWorkDetailFields(AdminCompanyWorkDetailUpdatePO normalizedParam) {
+		// 상태 코드 검증 후 실제 상세 수정 SQL을 반영합니다.
+		validateWorkStatusCode(normalizedParam.getWorkStatCd());
+		int updatedCount = companyWorkMapper.updateAdminCompanyWorkDetailFields(normalizedParam);
+		if (updatedCount < 1) {
+			throw new IllegalArgumentException("업무 정보를 확인해주세요.");
+		}
+		return normalizedParam.getWorkSeq();
 	}
 
 	@Transactional
@@ -427,8 +406,8 @@ public class CompanyWorkService {
 	public AdminCompanyWorkFileVO uploadAdminCompanyWorkFile(Long workSeq, MultipartFile file, Long currentUserNo) {
 		// 업무 존재 여부와 업로드 파일 유효성을 먼저 검증합니다.
 		long resolvedWorkSeq = normalizeRequiredWorkSequence(workSeq, "업무 정보를 확인해주세요.");
-		long resolvedCurrentUserNo = normalizeRequiredUserNo(currentUserNo, "로그인 사용자 정보를 확인해주세요.");
-		getRequiredAdminCompanyWorkDetail(resolvedWorkSeq);
+		long resolvedCurrentUserNo = normalizeRequiredUserNo(currentUserNo);
+		getRequiredCompanyWorkDetail(resolvedWorkSeq);
 
 		List<MultipartFile> normalizedFileList = normalizeWorkFileList(List.of(file));
 		if (normalizedFileList.isEmpty()) {
@@ -436,7 +415,7 @@ public class CompanyWorkService {
 		}
 
 		// 단건 업로드 기준으로 첨부를 저장하고 최신 메타를 다시 조회합니다.
-		AdminCompanyWorkImportFileSavePO fileSaveParam = saveWorkFile(normalizedFileList.get(0), resolvedWorkSeq, resolvedCurrentUserNo, resolvedCurrentUserNo);
+		AdminCompanyWorkImportFileSavePO fileSaveParam = saveWorkFile(normalizedFileList.getFirst(), resolvedWorkSeq, resolvedCurrentUserNo, resolvedCurrentUserNo);
 		AdminCompanyWorkFileVO savedFile = companyWorkMapper.getAdminCompanyWorkFile(fileSaveParam.getWorkJobFileSeq());
 		if (savedFile == null) {
 			throw new IllegalStateException("업무 첨부파일 정보를 확인할 수 없습니다.");
@@ -454,8 +433,8 @@ public class CompanyWorkService {
 
 		long resolvedWorkSeq = normalizeRequiredWorkSequence(param.getWorkSeq(), "업무 정보를 확인해주세요.");
 		int resolvedWorkJobFileSeq = normalizeRequiredSequence(param.getWorkJobFileSeq(), "업무 첨부파일 정보를 확인해주세요.");
-		long resolvedCurrentUserNo = normalizeRequiredUserNo(currentUserNo, "로그인 사용자 정보를 확인해주세요.");
-		getRequiredAdminCompanyWorkDetail(resolvedWorkSeq);
+		long resolvedCurrentUserNo = normalizeRequiredUserNo(currentUserNo);
+		getRequiredCompanyWorkDetail(resolvedWorkSeq);
 
 		AdminCompanyWorkFileVO workFile = companyWorkMapper.getAdminCompanyWorkFile(resolvedWorkJobFileSeq);
 		if (workFile == null || workFile.getWorkSeq() == null || !workFile.getWorkSeq().equals(resolvedWorkSeq)) {
@@ -582,7 +561,7 @@ public class CompanyWorkService {
 		validateReplySaveRequester(normalizedParam.getRegNo(), normalizedParam.getUdtNo(), currentUserNo);
 		List<MultipartFile> normalizedFileList = normalizeReplyFileList(files);
 		validateReplySaveContent(normalizedParam.getReplyComment(), normalizedFileList);
-		getRequiredAdminCompanyWorkDetail(normalizedParam.getWorkSeq());
+		getRequiredCompanyWorkDetail(normalizedParam.getWorkSeq());
 
 		// 댓글 저장 후 첨부파일 메타까지 저장하고 최신 댓글 정보를 조회해 반환합니다.
 		companyWorkMapper.insertAdminCompanyWorkReply(normalizedParam);
@@ -616,7 +595,7 @@ public class CompanyWorkService {
 		// 요청값과 작성자 권한과 첨부 삭제 대상을 함께 검증합니다.
 		AdminCompanyWorkReplyUpdatePO normalizedParam = normalizeReplyUpdateParam(param);
 		validateReplyUpdateRequester(normalizedParam.getUdtNo(), currentUserNo);
-		getRequiredAdminCompanyWorkDetail(normalizedParam.getWorkSeq());
+		getRequiredCompanyWorkDetail(normalizedParam.getWorkSeq());
 		AdminCompanyWorkReplyVO currentReply = getAuthorizedAdminCompanyWorkReply(
 			normalizedParam.getReplySeq(),
 			normalizedParam.getWorkSeq(),
@@ -671,7 +650,7 @@ public class CompanyWorkService {
 		// 요청값과 작성자 권한을 검증한 뒤 댓글과 첨부를 함께 숨김 처리합니다.
 		AdminCompanyWorkReplyDeletePO normalizedParam = normalizeReplyDeleteParam(param);
 		validateReplyUpdateRequester(normalizedParam.getUdtNo(), currentUserNo);
-		getRequiredAdminCompanyWorkDetail(normalizedParam.getWorkSeq());
+		getRequiredCompanyWorkDetail(normalizedParam.getWorkSeq());
 		getAuthorizedAdminCompanyWorkReply(normalizedParam.getReplySeq(), normalizedParam.getWorkSeq(), currentUserNo);
 
 		int deletedReplyCount = companyWorkMapper.softDeleteAdminCompanyWorkReply(normalizedParam);
@@ -740,9 +719,9 @@ public class CompanyWorkService {
 		int resolvedWorkCompanyProjectSeq = normalizeRequiredSequence(workCompanyProjectSeq, "프로젝트를 선택해주세요.");
 
 		// 페이징 조건은 완료 목록에서만 사용하도록 기본값을 계산합니다.
-		int resolvedPage = page == null ? ADMIN_COMPANY_WORK_DEFAULT_PAGE : normalizePage(page);
-		int resolvedPageSize = pageSize == null ? ADMIN_COMPANY_WORK_DEFAULT_PAGE_SIZE : normalizePageSize(pageSize);
-		int offset = (resolvedPage - 1) * resolvedPageSize;
+		int resolvedPage = normalizePage(page, ADMIN_COMPANY_WORK_DEFAULT_PAGE);
+		int resolvedPageSize = normalizePageSize(pageSize, ADMIN_COMPANY_WORK_DEFAULT_PAGE_SIZE, ADMIN_COMPANY_WORK_MAX_PAGE_SIZE);
+		int offset = calculateOffset(resolvedPage, resolvedPageSize);
 
 		// 검증 완료된 조회 조건을 PO에 반영합니다.
 		AdminCompanyWorkSearchPO param = new AdminCompanyWorkSearchPO();
@@ -781,7 +760,7 @@ public class CompanyWorkService {
 		}
 		String normalizedCoManager = param.getCoManager() == null
 			? null
-			: normalizeOptionalManagerName(param.getCoManager(), "업무담당자를 확인해주세요.");
+			: normalizeOptionalManagerName(param.getCoManager());
 		String normalizedContent = param.getContent() == null
 			? null
 			: normalizeOptionalCompanyWorkContent(param.getContent());
@@ -790,7 +769,7 @@ public class CompanyWorkService {
 		String normalizedWorkEndDt = normalizeOptionalDate(param.getWorkEndDt(), "종료일시를 확인해주세요.");
 		Integer normalizedWorkTime = normalizeOptionalWorkTime(param.getWorkTime());
 		List<Integer> normalizedDeleteWorkJobFileSeqList = normalizeDeleteWorkFileSeqList(param.getDeleteWorkJobFileSeqList());
-		long resolvedUdtNo = normalizeRequiredUserNo(param.getUdtNo(), "로그인 사용자 정보를 확인해주세요.");
+		long resolvedUdtNo = normalizeRequiredUserNo(param.getUdtNo());
 
 		// 정규화된 상세 저장 요청값을 새 객체에 반영합니다.
 		AdminCompanyWorkDetailUpdatePO normalizedParam = new AdminCompanyWorkDetailUpdatePO();
@@ -824,7 +803,7 @@ public class CompanyWorkService {
 		String normalizedWorkEndDt = normalizeOptionalDate(param.getWorkEndDt(), "종료일시를 확인해주세요.");
 		Integer normalizedWorkTime = normalizeOptionalWorkTime(param.getWorkTime());
 		String normalizedItManager = trimToNull(limitLength(trimToNull(param.getItManager()), ADMIN_COMPANY_WORK_MAX_MANAGER_NAME_LENGTH));
-		long resolvedUdtNo = normalizeRequiredUserNo(param.getUdtNo(), "로그인 사용자 정보를 확인해주세요.");
+		long resolvedUdtNo = normalizeRequiredUserNo(param.getUdtNo());
 
 		// 정규화된 수정 요청값을 새 객체에 반영합니다.
 		AdminCompanyWorkUpdatePO normalizedParam = new AdminCompanyWorkUpdatePO();
@@ -859,9 +838,9 @@ public class CompanyWorkService {
 			throw new IllegalArgumentException("우선순위를 선택해주세요.");
 		}
 		String normalizedContent = normalizeOptionalCompanyWorkContent(param.getContent());
-		String normalizedCoManager = normalizeOptionalManagerName(param.getCoManager(), "업무담당자를 확인해주세요.");
-		long resolvedRegNo = normalizeRequiredUserNo(param.getRegNo(), "로그인 사용자 정보를 확인해주세요.");
-		long resolvedUdtNo = normalizeRequiredUserNo(param.getUdtNo(), "로그인 사용자 정보를 확인해주세요.");
+		String normalizedCoManager = normalizeOptionalManagerName(param.getCoManager());
+		long resolvedRegNo = normalizeRequiredUserNo(param.getRegNo());
+		long resolvedUdtNo = normalizeRequiredUserNo(param.getUdtNo());
 
 		// 정규화된 수기 등록 요청값을 새 객체에 반영합니다.
 		AdminCompanyWorkManualCreatePO normalizedParam = new AdminCompanyWorkManualCreatePO();
@@ -885,8 +864,8 @@ public class CompanyWorkService {
 
 		long resolvedWorkSeq = normalizeRequiredWorkSequence(param.getWorkSeq(), "업무 정보를 확인해주세요.");
 		String normalizedReplyComment = normalizeOptionalReplyComment(param.getReplyComment());
-		long resolvedRegNo = normalizeRequiredUserNo(param.getRegNo(), "로그인 사용자 정보를 확인해주세요.");
-		long resolvedUdtNo = normalizeRequiredUserNo(param.getUdtNo(), "로그인 사용자 정보를 확인해주세요.");
+		long resolvedRegNo = normalizeRequiredUserNo(param.getRegNo());
+		long resolvedUdtNo = normalizeRequiredUserNo(param.getUdtNo());
 
 		// 정규화된 댓글 저장 요청값을 새 객체에 반영합니다.
 		AdminCompanyWorkReplySavePO normalizedParam = new AdminCompanyWorkReplySavePO();
@@ -907,7 +886,7 @@ public class CompanyWorkService {
 		long resolvedReplySeq = normalizeRequiredWorkSequence(param.getReplySeq(), "댓글 정보를 확인해주세요.");
 		long resolvedWorkSeq = normalizeRequiredWorkSequence(param.getWorkSeq(), "업무 정보를 확인해주세요.");
 		String normalizedReplyComment = normalizeOptionalReplyComment(param.getReplyComment());
-		long resolvedUdtNo = normalizeRequiredUserNo(param.getUdtNo(), "로그인 사용자 정보를 확인해주세요.");
+		long resolvedUdtNo = normalizeRequiredUserNo(param.getUdtNo());
 
 		// 정규화된 댓글 수정 요청값을 새 객체에 반영합니다.
 		AdminCompanyWorkReplyUpdatePO normalizedParam = new AdminCompanyWorkReplyUpdatePO();
@@ -930,7 +909,7 @@ public class CompanyWorkService {
 
 		long resolvedReplySeq = normalizeRequiredWorkSequence(param.getReplySeq(), "댓글 정보를 확인해주세요.");
 		long resolvedWorkSeq = normalizeRequiredWorkSequence(param.getWorkSeq(), "업무 정보를 확인해주세요.");
-		long resolvedUdtNo = normalizeRequiredUserNo(param.getUdtNo(), "로그인 사용자 정보를 확인해주세요.");
+		long resolvedUdtNo = normalizeRequiredUserNo(param.getUdtNo());
 
 		// 정규화된 댓글 삭제 요청값을 새 객체에 반영합니다.
 		AdminCompanyWorkReplyDeletePO normalizedParam = new AdminCompanyWorkReplyDeletePO();
@@ -1002,7 +981,7 @@ public class CompanyWorkService {
 	private List<MultipartFile> normalizeReplyFileList(List<MultipartFile> files) {
 		List<MultipartFile> normalizedFileList = new ArrayList<>();
 		for (MultipartFile fileItem : files == null ? List.<MultipartFile>of() : files) {
-			if (fileItem == null || fileItem.isEmpty()) {
+			if (fileItem.isEmpty()) {
 				continue;
 			}
 
@@ -1017,7 +996,7 @@ public class CompanyWorkService {
 	private List<MultipartFile> normalizeWorkFileList(List<MultipartFile> files) {
 		List<MultipartFile> normalizedFileList = new ArrayList<>();
 		for (MultipartFile fileItem : files == null ? List.<MultipartFile>of() : files) {
-			if (fileItem == null || fileItem.isEmpty()) {
+			if (fileItem.isEmpty()) {
 				continue;
 			}
 
@@ -1045,7 +1024,7 @@ public class CompanyWorkService {
 		}
 
 		String extension = extractFileExtension(originalFileName);
-		if (extension == null || !isAllowedFileExtension(ftpProperties.getUploadCompanyWorkReplyAllowExtension(), extension)) {
+		if (isDisallowedFileExtension(ftpProperties.getUploadCompanyWorkReplyAllowExtension(), extension)) {
 			throw new IllegalArgumentException("허용되지 않는 댓글 첨부파일 형식입니다. 허용 형식: " + ftpProperties.getUploadCompanyWorkReplyAllowExtension());
 		}
 	}
@@ -1073,7 +1052,7 @@ public class CompanyWorkService {
 		}
 
 		String extension = extractFileExtension(normalizedFileName);
-		if (extension == null || !isAllowedFileExtension(ftpProperties.getUploadCompanyWorkReplyAllowExtension(), extension)) {
+		if (isDisallowedFileExtension(ftpProperties.getUploadCompanyWorkReplyAllowExtension(), extension)) {
 			throw new IllegalArgumentException("허용되지 않는 업무 첨부파일 형식입니다. 허용 형식: " + ftpProperties.getUploadCompanyWorkReplyAllowExtension());
 		}
 	}
@@ -1096,7 +1075,7 @@ public class CompanyWorkService {
 	) {
 		LinkedHashSet<Integer> validReplyFileSeqSet = new LinkedHashSet<>();
 		for (AdminCompanyWorkReplyFileVO currentReplyFileItem : currentReplyFileList == null ? List.<AdminCompanyWorkReplyFileVO>of() : currentReplyFileList) {
-			if (currentReplyFileItem != null && currentReplyFileItem.getReplyFileSeq() != null) {
+			if (currentReplyFileItem.getReplyFileSeq() != null) {
 				validReplyFileSeqSet.add(currentReplyFileItem.getReplyFileSeq());
 			}
 		}
@@ -1255,7 +1234,7 @@ public class CompanyWorkService {
 	) {
 		Map<Long, List<AdminCompanyWorkReplyFileVO>> replyFileMap = new HashMap<>();
 		for (AdminCompanyWorkReplyFileVO replyFileItem : replyFileList == null ? List.<AdminCompanyWorkReplyFileVO>of() : replyFileList) {
-			Long replySeq = replyFileItem == null ? null : replyFileItem.getReplySeq();
+			Long replySeq = replyFileItem.getReplySeq();
 			if (replySeq == null) {
 				continue;
 			}
@@ -1266,10 +1245,6 @@ public class CompanyWorkService {
 
 		List<AdminCompanyWorkReplyVO> normalizedReplyList = new ArrayList<>();
 		for (AdminCompanyWorkReplyVO replyItem : replyList == null ? List.<AdminCompanyWorkReplyVO>of() : replyList) {
-			if (replyItem == null) {
-				continue;
-			}
-
 			// 댓글이 첨부가 없더라도 빈 목록을 유지하도록 반영합니다.
 			replyItem.setReplyFileList(replyFileMap.getOrDefault(replyItem.getReplySeq(), List.of()));
 			normalizedReplyList.add(replyItem);
@@ -1332,8 +1307,8 @@ public class CompanyWorkService {
 		if (normalizedWorkKey.length() > ADMIN_COMPANY_WORK_MAX_WORK_KEY_LENGTH) {
 			throw new IllegalArgumentException("업무키를 확인해주세요.");
 		}
-		long resolvedRegNo = normalizeRequiredUserNo(param.getRegNo(), "로그인 사용자 정보를 확인해주세요.");
-		long resolvedUdtNo = normalizeRequiredUserNo(param.getUdtNo(), "로그인 사용자 정보를 확인해주세요.");
+		long resolvedRegNo = normalizeRequiredUserNo(param.getRegNo());
+		long resolvedUdtNo = normalizeRequiredUserNo(param.getUdtNo());
 
 		// 정규화된 요청값을 새 객체에 반영합니다.
 		AdminCompanyWorkImportPO normalizedParam = new AdminCompanyWorkImportPO();
@@ -1361,20 +1336,10 @@ public class CompanyWorkService {
 		return companyInfo;
 	}
 
-	// 관리자 회사 업무 상세 정보를 조회하고 없으면 예외를 발생시킵니다.
-	private AdminCompanyWorkDetailVO getRequiredAdminCompanyWorkDetail(Long workSeq) {
+	// 회사 업무 상세 정보를 조회하고 없으면 예외를 발생시킵니다.
+	private AdminCompanyWorkDetailVO getRequiredCompanyWorkDetail(Long workSeq) {
 		// 삭제되지 않은 업무 상세가 없으면 요청 오류로 처리합니다.
-		AdminCompanyWorkDetailVO detail = companyWorkMapper.getAdminCompanyWorkDetail(workSeq);
-		if (detail == null) {
-			throw new IllegalArgumentException("업무 정보를 확인해주세요.");
-		}
-		return detail;
-	}
-
-	// 업무관리 화면 전용 상세 정보를 조회하고 없으면 예외를 발생시킵니다.
-	private AdminCompanyWorkDetailVO getRequiredWorkCompanyWorkDetail(Long workSeq) {
-		// 삭제되지 않은 업무 상세가 없으면 요청 오류로 처리합니다.
-		AdminCompanyWorkDetailVO detail = companyWorkMapper.getWorkCompanyWorkDetail(workSeq);
+		AdminCompanyWorkDetailVO detail = companyWorkMapper.getCompanyWorkDetail(workSeq);
 		if (detail == null) {
 			throw new IllegalArgumentException("업무 정보를 확인해주세요.");
 		}
@@ -1444,7 +1409,7 @@ public class CompanyWorkService {
 	private void validateSupportedCompanyPlatform(AdminCompanyWorkImportCompanyInfoVO companyInfo) {
 		// 다이닝브랜즈그룹 Jira만 지원하고 나머지는 차단합니다.
 		Integer workCompanySeq = companyInfo == null ? null : companyInfo.getWorkCompanySeq();
-		if (workCompanySeq == null || workCompanySeq.intValue() != DINING_BRANDS_GROUP_COMPANY_SEQ) {
+		if (workCompanySeq == null || workCompanySeq != DINING_BRANDS_GROUP_COMPANY_SEQ) {
 			throw new IllegalArgumentException("아직 지원하지 않는 회사 업무 플랫폼입니다.");
 		}
 	}
@@ -1454,7 +1419,7 @@ public class CompanyWorkService {
 		// 사용 가능한 우선순위 코드 목록에 존재하지 않으면 요청 오류로 처리합니다.
 		List<CommonCodeVO> workPriorityCodeList = commonMapper.getCommonCodeList(WORK_PRIORITY_GROUP_CODE);
 		for (CommonCodeVO workPriorityCodeItem : workPriorityCodeList == null ? List.<CommonCodeVO>of() : workPriorityCodeList) {
-			if (workPriorityCodeItem != null && workPriorCd.equals(trimToNull(workPriorityCodeItem.getCd()))) {
+			if (workPriorCd.equals(trimToNull(workPriorityCodeItem.getCd()))) {
 				return;
 			}
 		}
@@ -1466,7 +1431,7 @@ public class CompanyWorkService {
 		// 사용 가능한 상태 코드 목록에 존재하지 않으면 요청 오류로 처리합니다.
 		List<CommonCodeVO> workStatusCodeList = commonMapper.getCommonCodeList(WORK_STATUS_GROUP_CODE);
 		for (CommonCodeVO workStatusCodeItem : workStatusCodeList == null ? List.<CommonCodeVO>of() : workStatusCodeList) {
-			if (workStatusCodeItem != null && workStatCd.equals(trimToNull(workStatusCodeItem.getCd()))) {
+			if (workStatCd.equals(trimToNull(workStatusCodeItem.getCd()))) {
 				return;
 			}
 		}
@@ -1762,14 +1727,14 @@ public class CompanyWorkService {
 	}
 
 	// 업무 담당자명을 저장 가능한 값으로 정규화합니다.
-	private String normalizeOptionalManagerName(String managerName, String invalidMessage) {
+	private String normalizeOptionalManagerName(String managerName) {
 		// 빈 값은 빈 문자열로 저장하고, 길이 초과는 요청 오류로 처리합니다.
 		String normalizedManagerName = trimToNull(managerName);
 		if (normalizedManagerName == null) {
 			return "";
 		}
 		if (normalizedManagerName.length() > ADMIN_COMPANY_WORK_MAX_MANAGER_NAME_LENGTH) {
-			throw new IllegalArgumentException(invalidMessage);
+			throw new IllegalArgumentException("업무담당자를 확인해주세요.");
 		}
 		return normalizedManagerName;
 	}
@@ -1830,21 +1795,21 @@ public class CompanyWorkService {
 		return normalizedFileName.substring(extensionIndex + 1).toLowerCase();
 	}
 
-	// 허용 확장자 목록에 현재 파일 확장자가 포함되는지 확인합니다.
-	private boolean isAllowedFileExtension(String allowedExtensions, String extension) {
-		// 콤마 기준으로 분리한 뒤 정확히 일치하는 확장자만 허용합니다.
+	// 허용 확장자 목록에 없는 파일 확장자인지 확인합니다.
+	private boolean isDisallowedFileExtension(String allowedExtensions, String extension) {
+		// 확장자가 비어 있으면 허용 불가로 간주하고, 일치 항목이 있으면 통과시킵니다.
 		String normalizedExtension = trimToNull(extension);
 		if (normalizedExtension == null) {
-			return false;
+			return true;
 		}
 
 		for (String allowedExtensionItem : safeValue(allowedExtensions).split(",")) {
 			String normalizedAllowedExtension = trimToNull(allowedExtensionItem);
-			if (normalizedAllowedExtension != null && normalizedExtension.equalsIgnoreCase(normalizedAllowedExtension)) {
-				return true;
+			if (normalizedExtension.equalsIgnoreCase(normalizedAllowedExtension)) {
+				return false;
 			}
 		}
-		return false;
+		return true;
 	}
 
 	// Jira ADF 본문을 여러 줄 plain text로 변환합니다.
@@ -1935,7 +1900,7 @@ public class CompanyWorkService {
 	// 텍스트 끝에 줄바꿈이 없으면 한 줄을 추가합니다.
 	private void appendLineBreakIfNeeded(StringBuilder collector) {
 		// 직전 문자가 줄바꿈이 아니면 줄바꿈을 추가합니다.
-		if (collector.length() == 0) {
+		if (collector.isEmpty()) {
 			return;
 		}
 		if (collector.charAt(collector.length() - 1) != '\n') {
@@ -1946,8 +1911,7 @@ public class CompanyWorkService {
 	// Jira 본문 텍스트의 공백과 줄바꿈을 정리합니다.
 	private String normalizeJiraDescriptionText(String value) {
 		// CRLF를 LF로 통일하고 양끝 공백을 제거합니다.
-		String normalizedValue = safeValue(value).replace("\r\n", "\n").replace('\r', '\n').trim();
-		return normalizedValue;
+		return safeValue(value).replace("\r\n", "\n").replace('\r', '\n').trim();
 	}
 
 	// 필수 시퀀스 값을 1 이상 정수로 검증합니다.
@@ -1963,36 +1927,9 @@ public class CompanyWorkService {
 	}
 
 	// 필수 사용자 번호를 1 이상 long 값으로 검증합니다.
-	private long normalizeRequiredUserNo(Long userNo, String invalidMessage) {
+	private long normalizeRequiredUserNo(Long userNo) {
 		// 공통 검증 유틸로 1 이상 사용자 번호를 검증합니다.
-		return requirePositiveLong(userNo, invalidMessage);
-	}
-
-	// 페이지 번호를 1 이상으로 보정합니다.
-	private int normalizePage(Integer page) {
-		// 유효하지 않은 페이지는 기본 페이지로 보정합니다.
-		if (page == null || page < 1) {
-			return ADMIN_COMPANY_WORK_DEFAULT_PAGE;
-		}
-		return page;
-	}
-
-	// 페이지 크기를 허용 범위로 보정합니다.
-	private int normalizePageSize(Integer pageSize) {
-		// 유효하지 않은 페이지 크기는 기본 크기로 보정합니다.
-		if (pageSize == null || pageSize < 1) {
-			return ADMIN_COMPANY_WORK_DEFAULT_PAGE_SIZE;
-		}
-		return Math.min(pageSize, ADMIN_COMPANY_WORK_MAX_PAGE_SIZE);
-	}
-
-	// 추가 조회 오프셋을 0 이상으로 보정합니다.
-	private int normalizeNonNegativeOffset(Integer offset) {
-		// 유효하지 않은 오프셋은 0으로 보정합니다.
-		if (offset == null || offset < 0) {
-			return 0;
-		}
-		return offset;
+		return requirePositiveLong(userNo, "로그인 사용자 정보를 확인해주세요.");
 	}
 
 	// 상태 섹션 목록을 지정한 최대 개수만큼 잘라 반환합니다.
@@ -2003,6 +1940,20 @@ public class CompanyWorkService {
 			return safeRowList;
 		}
 		return new ArrayList<>(safeRowList.subList(0, sectionSize));
+	}
+
+	// 회사 업무 목록을 상태 코드 기준 맵으로 그룹핑합니다.
+	private Map<String, List<AdminCompanyWorkListRowVO>> groupCompanyWorkRowListByStatusCode(List<AdminCompanyWorkListRowVO> rowList) {
+		// 상태 코드가 비어 있지 않은 행만 같은 상태 코드끼리 순서대로 묶습니다.
+		Map<String, List<AdminCompanyWorkListRowVO>> rowListMapByStatusCode = new LinkedHashMap<>();
+		for (AdminCompanyWorkListRowVO rowItem : rowList == null ? List.<AdminCompanyWorkListRowVO>of() : rowList) {
+			String workStatusCode = trimToNull(rowItem.getWorkStatCd());
+			if (workStatusCode == null) {
+				continue;
+			}
+			rowListMapByStatusCode.computeIfAbsent(workStatusCode, ignoredKey -> new ArrayList<>()).add(rowItem);
+		}
+		return rowListMapByStatusCode;
 	}
 
 	// 문자열을 지정한 길이 이하로 제한합니다.

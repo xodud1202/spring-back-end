@@ -72,11 +72,7 @@ public class AdminUserService {
 			return "수정 대상을 확인해주세요.";
 		}
 		// 입력 형식을 검증합니다.
-		String formatMessage = validateUserFormat(param);
-		if (formatMessage != null) {
-			return formatMessage;
-		}
-		return null;
+		return validateUserFormat(param);
 	}
 
 	// 등록 요청의 필수 입력값을 검증합니다.

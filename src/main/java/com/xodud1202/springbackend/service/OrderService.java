@@ -1,5 +1,6 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonPaginationUtils.*;
 import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -93,11 +94,9 @@ public class OrderService {
 		String chgDtlStatCd
 	) {
 		// 페이징 기본값을 계산합니다.
-		int resolvedPage = page == null || page < 1 ? ADMIN_ORDER_DEFAULT_PAGE : page;
-		int resolvedPageSize = pageSize == null || pageSize < 1
-			? ADMIN_ORDER_DEFAULT_PAGE_SIZE
-			: Math.min(pageSize, ADMIN_ORDER_MAX_PAGE_SIZE);
-		int offset = (resolvedPage - 1) * resolvedPageSize;
+		int resolvedPage = normalizePage(page, ADMIN_ORDER_DEFAULT_PAGE);
+		int resolvedPageSize = normalizePageSize(pageSize, ADMIN_ORDER_DEFAULT_PAGE_SIZE, ADMIN_ORDER_MAX_PAGE_SIZE);
+		int offset = calculateOffset(resolvedPage, resolvedPageSize);
 
 		// 검색 조건과 조회 기간을 정규화합니다.
 		String normalizedSearchValue = trimToNull(searchValue);
@@ -140,11 +139,9 @@ public class OrderService {
 		String ordDtlStatCd
 	) {
 		// 페이징 기본값을 계산합니다.
-		int resolvedPage = page == null || page < 1 ? ADMIN_ORDER_DEFAULT_PAGE : page;
-		int resolvedPageSize = pageSize == null || pageSize < 1
-			? ADMIN_ORDER_DEFAULT_PAGE_SIZE
-			: Math.min(pageSize, ADMIN_ORDER_MAX_PAGE_SIZE);
-		int offset = (resolvedPage - 1) * resolvedPageSize;
+		int resolvedPage = normalizePage(page, ADMIN_ORDER_DEFAULT_PAGE);
+		int resolvedPageSize = normalizePageSize(pageSize, ADMIN_ORDER_DEFAULT_PAGE_SIZE, ADMIN_ORDER_MAX_PAGE_SIZE);
+		int offset = calculateOffset(resolvedPage, resolvedPageSize);
 
 		// 허용된 배송 상태만 조회 조건으로 사용합니다.
 		String normalizedOrdDtlStatCd = normalizeAdminOrderStartDeliveryStatus(ordDtlStatCd);
@@ -503,7 +500,7 @@ public class OrderService {
 		}
 
 		// 요청 페이지 번호와 조회 기간을 각각 보정합니다.
-		int resolvedRequestedPageNo = resolveRequestedPageNo(requestedPageNo);
+		int resolvedRequestedPageNo = normalizePage(requestedPageNo, 1);
 		ShopMypageOrderDateRange orderDateRange = resolveShopMypageOrderDateRange(requestedStartDate, requestedEndDate);
 
 		// 주문번호 기준 전체 건수와 전체 페이지 수를 계산합니다.
@@ -650,14 +647,14 @@ public class OrderService {
 		}
 
 		// 요청 페이지 번호를 1 이상으로 보정합니다.
-		int resolvedRequestedPageNo = resolveRequestedPageNo(requestedPageNo);
+		int resolvedRequestedPageNo = normalizePage(requestedPageNo, 1);
 		// 포인트 내역 전체 건수를 조회합니다.
 		Integer pointCountResult = orderMapper.getShopMypagePointItemCount(custNo);
 		int pointCount = pointCountResult == null ? 0 : pointCountResult;
 		// 전체 페이지 수를 계산합니다.
 		int totalPageCount = calculateTotalPageCount(pointCount, SHOP_MYPAGE_POINT_PAGE_SIZE);
 		// 범위를 초과한 페이지 번호를 마지막 페이지로 보정합니다.
-		int resolvedPageNo = totalPageCount == 0 ? 1 : Math.min(resolvedRequestedPageNo, totalPageCount);
+		int resolvedPageNo = resolvePageNoWithinRange(resolvedRequestedPageNo, totalPageCount);
 		// 페이지 조회 오프셋을 계산합니다.
 		int offset = calculateOffset(resolvedPageNo, SHOP_MYPAGE_POINT_PAGE_SIZE);
 
@@ -706,38 +703,6 @@ public class OrderService {
 			SHOP_MYPAGE_ORDER_PURCHASE_CONFIRM_UNAVAILABLE_MESSAGE,
 			false
 		);
-	}
-
-	// 요청 페이지 번호를 1 이상 값으로 보정합니다.
-	int resolveRequestedPageNo(Integer requestedPageNo) {
-		if (requestedPageNo == null || requestedPageNo < 1) {
-			return 1;
-		}
-		return requestedPageNo;
-	}
-
-	// 전체 페이지 수 범위 안으로 현재 페이지 번호를 보정합니다.
-	int resolvePageNoWithinRange(int requestedPageNo, int totalPageCount) {
-		if (totalPageCount <= 0) {
-			return 1;
-		}
-		return Math.clamp(requestedPageNo, 1, totalPageCount);
-	}
-
-	// 전체 건수와 페이지 크기를 기준으로 전체 페이지 수를 계산합니다.
-	int calculateTotalPageCount(int goodsCount, int pageSize) {
-		if (goodsCount <= 0 || pageSize <= 0) {
-			return 0;
-		}
-		return (goodsCount + pageSize - 1) / pageSize;
-	}
-
-	// 현재 페이지와 페이지 크기를 기준으로 조회 오프셋을 계산합니다.
-	int calculateOffset(int pageNo, int pageSize) {
-		if (pageNo < 1 || pageSize <= 0) {
-			return 0;
-		}
-		return (pageNo - 1) * pageSize;
 	}
 
 	// 마이페이지 주문내역 조회 기간을 기본값 포함 유효한 기간으로 보정합니다.

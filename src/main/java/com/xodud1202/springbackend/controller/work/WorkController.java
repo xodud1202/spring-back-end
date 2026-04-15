@@ -180,7 +180,7 @@ public class WorkController {
 		try {
 			// 로그인 사용자 기준으로 상세 데이터를 반환합니다.
 			resolveRequiredWorkUserNo(request);
-			return ResponseEntity.ok(companyWorkService.getWorkCompanyWorkDetail(workSeq));
+			return ResponseEntity.ok(companyWorkService.getCompanyWorkDetail(workSeq));
 		} catch (SecurityException | IllegalArgumentException exception) {
 			throw exception;
 		} catch (Exception exception) {
@@ -245,8 +245,7 @@ public class WorkController {
 			Long workUserNo = resolveRequiredWorkUserNo(request);
 			AdminCompanyWorkDetailUpdatePO command = objectMapper.readValue(payload, AdminCompanyWorkDetailUpdatePO.class);
 			command.setUdtNo(workUserNo);
-			companyWorkService.updateAdminCompanyWorkDetail(command, files, workUserNo);
-			return ResponseEntity.ok(companyWorkService.getWorkCompanyWorkDetail(command.getWorkSeq()));
+			return ResponseEntity.ok(companyWorkService.updateAdminCompanyWorkDetail(command, files, workUserNo));
 		} catch (SecurityException | IllegalArgumentException exception) {
 			throw exception;
 		} catch (IOException exception) {

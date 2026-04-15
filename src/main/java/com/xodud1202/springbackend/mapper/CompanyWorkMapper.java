@@ -53,11 +53,8 @@ public interface CompanyWorkMapper {
 	// 관리자 회사 업무 단건 행 정보를 조회합니다.
 	AdminCompanyWorkListRowVO getAdminCompanyWorkRow(@Param("workSeq") Long workSeq);
 
-	// 관리자 회사 업무 상세 정보를 조회합니다.
-	AdminCompanyWorkDetailVO getAdminCompanyWorkDetail(@Param("workSeq") Long workSeq);
-
-	// 업무관리 화면용 회사 업무 상세 정보를 조회합니다.
-	AdminCompanyWorkDetailVO getWorkCompanyWorkDetail(@Param("workSeq") Long workSeq);
+	// 회사 업무 상세 정보를 조회합니다.
+	AdminCompanyWorkDetailVO getCompanyWorkDetail(@Param("workSeq") Long workSeq);
 
 	// 관리자 회사 업무 첨부파일 목록을 조회합니다.
 	List<AdminCompanyWorkFileVO> getAdminCompanyWorkFileList(@Param("workSeq") Long workSeq);

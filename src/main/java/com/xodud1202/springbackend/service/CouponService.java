@@ -1,15 +1,6 @@
 package com.xodud1202.springbackend.service;
 
-import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
-
-import static com.xodud1202.springbackend.common.Constants.Shop.*;
-
-import com.xodud1202.springbackend.domain.admin.coupon.CouponDetailVO;
-import com.xodud1202.springbackend.domain.admin.coupon.CouponPO;
-import com.xodud1202.springbackend.domain.admin.coupon.CouponSavePO;
-import com.xodud1202.springbackend.domain.admin.coupon.CouponTargetRowVO;
-import com.xodud1202.springbackend.domain.admin.coupon.CouponTargetSaveRowPO;
-import com.xodud1202.springbackend.domain.admin.coupon.CouponVO;
+import com.xodud1202.springbackend.domain.admin.coupon.*;
 import com.xodud1202.springbackend.mapper.CouponMapper;
 import lombok.RequiredArgsConstructor;
 import org.apache.poi.ss.usermodel.Row;
@@ -26,14 +17,12 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+
+import static com.xodud1202.springbackend.common.Constants.Shop.*;
+import static com.xodud1202.springbackend.common.util.CommonPaginationUtils.*;
+import static com.xodud1202.springbackend.common.util.CommonTextUtils.isBlank;
+import static com.xodud1202.springbackend.common.util.CommonTextUtils.trimToNull;
 
 // 관리자 쿠폰 비즈니스 로직을 처리합니다.
 @Service
@@ -69,9 +58,9 @@ public class CouponService {
 		String cpnDownAbleYn
 	) {
 		// 페이징 기본값을 계산합니다.
-		int resolvedPage = page == null || page < 1 ? DEFAULT_PAGE : page;
-		int resolvedPageSize = pageSize == null || pageSize < 1 ? DEFAULT_PAGE_SIZE : Math.min(pageSize, MAX_PAGE_SIZE);
-		int offset = (resolvedPage - 1) * resolvedPageSize;
+		int resolvedPage = normalizePage(page, DEFAULT_PAGE);
+		int resolvedPageSize = normalizePageSize(pageSize, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
+		int offset = calculateOffset(resolvedPage, resolvedPageSize);
 
 		// 검색 조건을 정규화합니다.
 		String normalizedSearchValue = trimToNull(searchValue);
@@ -169,9 +158,6 @@ public class CouponService {
 		}
 		if (!isCreateMode && param.getUdtNo() == null) {
 			return "수정자 정보를 확인해주세요.";
-		}
-		if (!isCreateMode && (param.getCpnNo() == null || param.getCpnNo() < 1)) {
-			return "쿠폰 번호를 확인해주세요.";
 		}
 
 		// 쿠폰 기본 필수값을 확인합니다.
@@ -498,6 +484,7 @@ public class CouponService {
 				// 숫자 변환이 불가능한 값은 무시합니다.
 			}
 		}
+		
 		if (exhibitionNoList.isEmpty()) {
 			return List.of();
 		}

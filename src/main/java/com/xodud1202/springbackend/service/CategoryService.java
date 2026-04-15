@@ -1,5 +1,6 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonPaginationUtils.*;
 import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
 
 import com.xodud1202.springbackend.domain.admin.category.CategoryGoodsDeletePO;
@@ -175,13 +176,13 @@ public class CategoryService {
 		// 요청 카테고리 아이디를 유효한 선택값으로 보정합니다.
 		String resolvedSelectedCategoryId = resolveSelectedCategoryId(selectedCategoryId, categoryNameByIdMap);
 		// 요청 페이지 번호를 1 이상으로 보정합니다.
-		int resolvedRequestedPageNo = resolveRequestedPageNo(requestedPageNo);
+		int resolvedRequestedPageNo = normalizePage(requestedPageNo, 1);
 		// 선택 카테고리의 전체 상품 건수를 조회합니다.
 		int goodsCount = goodsService.countShopCategoryGoods(resolvedSelectedCategoryId);
 		// 전체 페이지 수를 계산합니다.
 		int totalPageCount = calculateTotalPageCount(goodsCount, SHOP_CATEGORY_PAGE_SIZE);
 		// 범위를 초과한 페이지 번호를 마지막 페이지로 보정합니다.
-		int resolvedPageNo = totalPageCount == 0 ? 1 : Math.min(resolvedRequestedPageNo, totalPageCount);
+		int resolvedPageNo = resolvePageNoWithinRange(resolvedRequestedPageNo, totalPageCount);
 		// 페이지 조회 오프셋을 계산합니다.
 		int offset = calculateOffset(resolvedPageNo, SHOP_CATEGORY_PAGE_SIZE);
 		// 선택 카테고리의 페이징 상품 목록을 조회합니다.
@@ -198,30 +199,6 @@ public class CategoryService {
 		result.setPageSize(SHOP_CATEGORY_PAGE_SIZE);
 		result.setTotalPageCount(totalPageCount);
 		return result;
-	}
-
-	// 요청 페이지 번호를 1 이상 값으로 보정합니다.
-	private int resolveRequestedPageNo(Integer requestedPageNo) {
-		if (requestedPageNo == null || requestedPageNo < 1) {
-			return 1;
-		}
-		return requestedPageNo;
-	}
-
-	// 전체 건수와 페이지 크기를 기준으로 전체 페이지 수를 계산합니다.
-	private int calculateTotalPageCount(int goodsCount, int pageSize) {
-		if (goodsCount <= 0 || pageSize <= 0) {
-			return 0;
-		}
-		return (goodsCount + pageSize - 1) / pageSize;
-	}
-
-	// 현재 페이지와 페이지 크기를 기준으로 조회 오프셋을 계산합니다.
-	private int calculateOffset(int pageNo, int pageSize) {
-		if (pageNo < 1 || pageSize <= 0) {
-			return 0;
-		}
-		return (pageNo - 1) * pageSize;
 	}
 
 	// 선택 카테고리 아이디를 유효한 값으로 보정합니다.

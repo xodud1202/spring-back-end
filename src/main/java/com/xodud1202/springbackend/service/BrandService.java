@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonPaginationUtils.*;
+
 import com.xodud1202.springbackend.domain.admin.brand.BrandVO;
 import com.xodud1202.springbackend.domain.admin.brand.BrandAdminVO;
 import com.xodud1202.springbackend.domain.admin.brand.BrandPO;
@@ -23,9 +25,9 @@ public class BrandService {
 	// 관리자 브랜드 목록을 페이징 조건으로 조회합니다.
 	public Map<String, Object> getAdminBrandList(BrandPO param) {
 		// 페이지 정보가 없으면 기본값을 사용합니다.
-		int page = param.getPage() == null || param.getPage() < 1 ? 1 : param.getPage();
+		int page = normalizePage(param.getPage(), 1);
 		int pageSize = 20;
-		int offset = (page - 1) * pageSize;
+		int offset = calculateOffset(page, pageSize);
 
 		// 페이징 파라미터를 요청 객체에 반영합니다.
 		param.setPage(page);

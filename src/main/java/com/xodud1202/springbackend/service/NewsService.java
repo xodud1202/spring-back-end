@@ -1,5 +1,6 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonPaginationUtils.*;
 import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -128,9 +129,9 @@ public class NewsService {
 	// 관리자 뉴스 목록을 페이지 단위로 조회합니다.
 	public Map<String, Object> getAdminNewsList(AdminNewsListQueryPO param) {
 		AdminNewsListQueryPO resolvedParam = param == null ? new AdminNewsListQueryPO() : param;
-		int page = resolvedParam.getPage() == null || resolvedParam.getPage() < 1 ? 1 : resolvedParam.getPage();
+		int page = normalizePage(resolvedParam.getPage(), 1);
 		int pageSize = DEFAULT_PAGE_SIZE;
-		int offset = (page - 1) * pageSize;
+		int offset = calculateOffset(page, pageSize);
 
 		resolvedParam.setPage(page);
 		resolvedParam.setPageSize(pageSize);

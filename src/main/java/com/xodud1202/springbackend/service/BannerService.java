@@ -1,5 +1,6 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonPaginationUtils.*;
 import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
 
 import com.xodud1202.springbackend.domain.admin.banner.BannerDetailVO;
@@ -35,11 +36,7 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -66,9 +63,9 @@ public class BannerService {
 		Integer pageSize
 	) {
 		// 페이징 기본값을 계산합니다.
-		int resolvedPage = page == null || page < 1 ? 1 : page;
-		int resolvedPageSize = pageSize == null || pageSize < 1 ? 20 : Math.min(pageSize, 200);
-		int offset = (resolvedPage - 1) * resolvedPageSize;
+		int resolvedPage = normalizePage(page, 1);
+		int resolvedPageSize = normalizePageSize(pageSize, 20, 200);
+		int offset = calculateOffset(resolvedPage, resolvedPageSize);
 
 		// 조회 조건 객체를 구성합니다.
 		BannerPO param = new BannerPO();
@@ -104,7 +101,7 @@ public class BannerService {
 		detail.setImageInfoList(imageInfoList);
 		// 단건 호환 필드를 함께 유지합니다.
 		if (imageInfoList != null && !imageInfoList.isEmpty()) {
-			detail.setImageInfo(imageInfoList.get(0));
+			detail.setImageInfo(imageInfoList.getFirst());
 		}
 		// 탭/상품 정보를 조회합니다.
 		detail.setTabList(bannerMapper.getBannerTabList(bannerNo));
@@ -142,19 +139,14 @@ public class BannerService {
 		section.setGoodsItems(List.of());
 
 		String bannerDivCd = section.getBannerDivCd() == null ? "" : section.getBannerDivCd().trim();
-		if (DIV_01.equals(bannerDivCd) || DIV_03.equals(bannerDivCd)) {
-			// 이미지형 배너(대배너/띠배너) 아이템을 결합합니다.
-			attachShopImageBannerItems(section);
-			return;
-		}
-		if (DIV_02.equals(bannerDivCd)) {
-			// 상품배너A 탭/상품 목록을 결합합니다.
-			attachShopGoodsTabBannerItems(section);
-			return;
-		}
-		if (DIV_04.equals(bannerDivCd)) {
-			// 상품리스트 배너 상품 목록을 결합합니다.
-			attachShopGoodsListBannerItems(section);
+		switch (bannerDivCd) {
+			case DIV_01, DIV_03 -> // 이미지형 배너(대배너/띠배너) 아이템을 결합합니다.
+				attachShopImageBannerItems(section);
+			case DIV_02 -> // 상품배너A 탭/상품 목록을 결합합니다.
+				attachShopGoodsTabBannerItems(section);
+			case DIV_04 ->
+				// 상품리스트 배너 상품 목록을 결합합니다.
+				attachShopGoodsListBannerItems(section);
 		}
 	}
 
@@ -169,7 +161,7 @@ public class BannerService {
 
 		// null 항목을 제외한 이미지 아이템 목록을 설정합니다.
 		List<ShopMainImageBannerItemVO> normalizedImageItemList = imageItemList.stream()
-			.filter(item -> item != null)
+			.filter(Objects::nonNull)
 			.toList();
 		section.setImageItems(normalizedImageItemList);
 	}
@@ -223,7 +215,7 @@ public class BannerService {
 		// 상품 이미지 URL을 보정한 뒤 null 항목을 제거해 설정합니다.
 		applyShopGoodsImageUrls(goodsList);
 		List<ShopMainGoodsItemVO> normalizedGoodsList = goodsList.stream()
-			.filter(item -> item != null)
+			.filter(Objects::nonNull)
 			.toList();
 		section.setGoodsItems(normalizedGoodsList);
 	}
@@ -261,12 +253,7 @@ public class BannerService {
 	// 배너 등록 요청을 검증합니다.
 	public String validateBannerCreate(BannerSavePO param, List<MultipartFile> images, List<String> imageKeys) {
 		// 공통 검증을 수행합니다.
-		String commonValidation = validateBannerCommon(param, true);
-		if (commonValidation != null) {
-			return commonValidation;
-		}
-		// 신규 등록 시 분기별 검증을 수행합니다.
-		return validateDivSpecific(param, toImageFileMap(images, imageKeys), true);
+		return validateBannerCommon(param, true);
 	}
 
 	// 배너 수정 요청을 검증합니다.
@@ -501,7 +488,7 @@ public class BannerService {
 				}
 				item.put("goodsId", goodsId);
 				item.put("tabNm", tabNm);
-				item.put("dispOrd", dispOrd < 1 ? 1 : dispOrd);
+				item.put("dispOrd", Math.max(dispOrd, 1));
 				item.put("showYn", "Y");
 				rows.add(item);
 			}
@@ -554,11 +541,7 @@ public class BannerService {
 			return "배너 구분이 올바르지 않습니다.";
 		}
 		// 노출기간 형식을 검증하고 표준 형식으로 정규화합니다.
-		String displayPeriodValidation = normalizeAndValidateDisplayPeriod(param);
-		if (displayPeriodValidation != null) {
-			return displayPeriodValidation;
-		}
-		return null;
+		return normalizeAndValidateDisplayPeriod(param);
 	}
 
 	// 배너 구분별 요청을 검증합니다.

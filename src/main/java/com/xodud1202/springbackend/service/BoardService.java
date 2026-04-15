@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonPaginationUtils.*;
+
 import com.xodud1202.springbackend.domain.admin.board.BoardPO;
 import com.xodud1202.springbackend.domain.admin.board.BoardVO;
 import com.xodud1202.springbackend.mapper.BoardMapper;
@@ -17,9 +19,9 @@ public class BoardService {
 
 	// 관리자 게시판 목록을 페이징 조건으로 조회합니다.
 	public Map<String, Object> getAdminBoardList(BoardPO param) {
-		int page = param.getPage() == null || param.getPage() < 1 ? 1 : param.getPage();
+		int page = normalizePage(param.getPage(), 1);
 		int pageSize = 20;
-		int offset = (page - 1) * pageSize;
+		int offset = calculateOffset(page, pageSize);
 
 		param.setPage(page);
 		param.setPageSize(pageSize);

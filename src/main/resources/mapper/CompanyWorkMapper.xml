@@ -107,40 +107,8 @@
 		   AND J.DEL_YN = 'N'
 	</select>
 
-	<select id="getAdminCompanyWorkDetail" resultType="com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkDetailVO">
-		/* CompanyWorkMapper.getAdminCompanyWorkDetail: 관리자 회사 업무 상세 정보 조회 */
-		SELECT J.WORK_SEQ
-		     , J.WORK_COMPANY_SEQ
-		     , J.WORK_COMPANY_PROJECT_SEQ
-		     , C.WORK_COMPANY_NM
-		     , P.WORK_COMPANY_PROJECT_NM
-		     , J.WORK_STAT_CD
-		     , J.WORK_KEY
-		     , J.TITLE
-		     , <include refid="adminCompanyWorkReplyCountColumn" />
-		     , J.CONTENT
-		     , DATE_FORMAT(J.WORK_CREATE_DT, '%Y-%m-%d %H:%i:%s') AS WORK_CREATE_DT
-		     , DATE_FORMAT(J.WORK_START_DT, '%Y-%m-%d %H:%i:%s') AS WORK_START_DT
-		     , DATE_FORMAT(J.WORK_END_DT, '%Y-%m-%d %H:%i:%s') AS WORK_END_DT
-		     , J.WORK_TIME
-		     , J.WORK_PRIOR_CD
-		     , FN_GET_CODE_NM('WORK_PRIOR', J.WORK_PRIOR_CD) AS WORK_PRIOR_NM
-		     , J.IT_MANAGER
-		     , J.CO_MANAGER
-		     , DATE_FORMAT(J.REG_DT, '%Y-%m-%d %H:%i:%s') AS REG_DT
-		     , DATE_FORMAT(J.UDT_DT, '%Y-%m-%d %H:%i:%s') AS UDT_DT
-		  FROM WORK_COMPANY_PROJECT_JOB J
-		  JOIN WORK_COMPANY_INFO C
-		    ON C.WORK_COMPANY_SEQ = J.WORK_COMPANY_SEQ
-		  JOIN WORK_COMPANY_PROJECT_INFO P
-		    ON P.WORK_COMPANY_PROJECT_SEQ = J.WORK_COMPANY_PROJECT_SEQ
-		   AND P.WORK_COMPANY_SEQ = J.WORK_COMPANY_SEQ
-		 WHERE J.WORK_SEQ = #{workSeq}
-		   AND J.DEL_YN = 'N'
-	</select>
-
-	<select id="getWorkCompanyWorkDetail" resultType="com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkDetailVO">
-		/* CompanyWorkMapper.getWorkCompanyWorkDetail: 업무관리 화면용 회사 업무 상세 정보 조회 */
+	<select id="getCompanyWorkDetail" resultType="com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkDetailVO">
+		/* CompanyWorkMapper.getCompanyWorkDetail: 회사 업무 상세 정보 조회 */
 		SELECT J.WORK_SEQ
 		     , J.WORK_COMPANY_SEQ
 		     , J.WORK_COMPANY_PROJECT_SEQ

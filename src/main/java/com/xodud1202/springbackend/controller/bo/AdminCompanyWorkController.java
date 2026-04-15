@@ -125,7 +125,7 @@ public class AdminCompanyWorkController {
 	) {
 		try {
 			// 선택 업무 기준 상세 팝업 데이터를 반환합니다.
-			AdminCompanyWorkDetailResponseVO response = companyWorkService.getAdminCompanyWorkDetail(workSeq);
+			AdminCompanyWorkDetailResponseVO response = companyWorkService.getCompanyWorkDetail(workSeq);
 			return ResponseEntity.ok(response);
 		} catch (IllegalArgumentException exception) {
 			// 요청값 오류는 400 응답으로 반환합니다.
@@ -192,7 +192,7 @@ public class AdminCompanyWorkController {
 	public ResponseEntity<Object> updateAdminCompanyWorkDetail(@RequestBody AdminCompanyWorkDetailUpdatePO param) {
 		try {
 			// 상세 저장 요청을 처리하고 최신 상세 정보를 반환합니다.
-			return ResponseEntity.ok(companyWorkService.updateAdminCompanyWorkDetail(param));
+			return ResponseEntity.ok(companyWorkService.updateAdminCompanyWorkDetailAndGetDetail(param));
 		} catch (IllegalArgumentException exception) {
 			// 요청값 오류는 400 응답으로 반환합니다.
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));

@@ -1,5 +1,6 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonPaginationUtils.*;
 import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -110,7 +111,7 @@ public class OrderCancelService {
 		}
 
 		// 요청 페이지 번호와 조회 기간을 각각 보정합니다.
-		int resolvedRequestedPageNo = orderService.resolveRequestedPageNo(requestedPageNo);
+		int resolvedRequestedPageNo = normalizePage(requestedPageNo, 1);
 		ShopMypageOrderDateRange dateRange = orderService.resolveShopMypageOrderDateRange(
 			requestedStartDate,
 			requestedEndDate
@@ -122,9 +123,9 @@ public class OrderCancelService {
 			dateRange.getStartDate(),
 			dateRange.getEndDate()
 		);
-		int totalPageCount = orderService.calculateTotalPageCount(cancelCount, SHOP_MYPAGE_CANCEL_PAGE_SIZE);
-		int resolvedPageNo = orderService.resolvePageNoWithinRange(resolvedRequestedPageNo, totalPageCount);
-		int offset = orderService.calculateOffset(resolvedPageNo, SHOP_MYPAGE_CANCEL_PAGE_SIZE);
+		int totalPageCount = calculateTotalPageCount(cancelCount, SHOP_MYPAGE_CANCEL_PAGE_SIZE);
+		int resolvedPageNo = resolvePageNoWithinRange(resolvedRequestedPageNo, totalPageCount);
+		int offset = calculateOffset(resolvedPageNo, SHOP_MYPAGE_CANCEL_PAGE_SIZE);
 
 		// 현재 페이지의 취소 클레임 목록을 조회합니다.
 		List<ShopMypageCancelHistoryVO> cancelList = orderMapper.getShopMypageCancelHistoryList(

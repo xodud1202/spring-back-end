@@ -1,5 +1,6 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonPaginationUtils.*;
 import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -212,11 +213,9 @@ public class OrderReturnService {
 		String chgDtlStatCd
 	) {
 		// 페이지 기본값과 오프셋을 계산합니다.
-		int resolvedPage = page == null || page < 1 ? ADMIN_ORDER_DEFAULT_PAGE : page;
-		int resolvedPageSize = pageSize == null || pageSize < 1
-			? ADMIN_ORDER_DEFAULT_PAGE_SIZE
-			: Math.min(pageSize, ADMIN_ORDER_MAX_PAGE_SIZE);
-		int offset = (resolvedPage - 1) * resolvedPageSize;
+		int resolvedPage = normalizePage(page, ADMIN_ORDER_DEFAULT_PAGE);
+		int resolvedPageSize = normalizePageSize(pageSize, ADMIN_ORDER_DEFAULT_PAGE_SIZE, ADMIN_ORDER_MAX_PAGE_SIZE);
+		int offset = calculateOffset(resolvedPage, resolvedPageSize);
 
 		// 허용된 반품 상태만 조회 조건으로 사용합니다.
 		String normalizedChgDtlStatCd = normalizeAdminOrderReturnManageStatus(chgDtlStatCd);
@@ -1132,7 +1131,7 @@ public class OrderReturnService {
 		}
 
 		// 요청 페이지 번호와 조회 기간을 각각 보정합니다.
-		int resolvedRequestedPageNo = orderService.resolveRequestedPageNo(requestedPageNo);
+		int resolvedRequestedPageNo = normalizePage(requestedPageNo, 1);
 		ShopMypageOrderDateRange dateRange = orderService.resolveShopMypageOrderDateRange(
 			requestedStartDate,
 			requestedEndDate
@@ -1144,9 +1143,9 @@ public class OrderReturnService {
 			dateRange.getStartDate(),
 			dateRange.getEndDate()
 		);
-		int totalPageCount = orderService.calculateTotalPageCount(returnCount, SHOP_MYPAGE_RETURN_PAGE_SIZE);
-		int resolvedPageNo = orderService.resolvePageNoWithinRange(resolvedRequestedPageNo, totalPageCount);
-		int offset = orderService.calculateOffset(resolvedPageNo, SHOP_MYPAGE_RETURN_PAGE_SIZE);
+		int totalPageCount = calculateTotalPageCount(returnCount, SHOP_MYPAGE_RETURN_PAGE_SIZE);
+		int resolvedPageNo = resolvePageNoWithinRange(resolvedRequestedPageNo, totalPageCount);
+		int offset = calculateOffset(resolvedPageNo, SHOP_MYPAGE_RETURN_PAGE_SIZE);
 
 		// 현재 페이지의 반품 클레임 목록을 조회합니다.
 		List<ShopMypageReturnHistoryVO> returnList = orderMapper.getShopMypageReturnHistoryList(

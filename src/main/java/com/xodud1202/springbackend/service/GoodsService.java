@@ -1,5 +1,6 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonPaginationUtils.*;
 import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -82,13 +83,10 @@ public class GoodsService {
 
 	// 관리자 상품 목록을 페이징 조건으로 조회합니다.
 	public Map<String, Object> getAdminGoodsList(GoodsPO param) {
-		int page = param.getPage() == null || param.getPage() < 1 ? 1 : param.getPage();
+		int page = normalizePage(param.getPage(), 1);
 		// 페이지 사이즈 기본값과 최대값을 설정합니다.
-		int pageSize = 20;
-		if (param.getPageSize() != null && param.getPageSize() > 0) {
-			pageSize = Math.min(param.getPageSize(), 200);
-		}
-		int offset = (page - 1) * pageSize;
+		int pageSize = normalizePageSize(param.getPageSize(), 20, 200);
+		int offset = calculateOffset(page, pageSize);
 
 		param.setPage(page);
 		param.setPageSize(pageSize);
@@ -692,13 +690,13 @@ public class GoodsService {
 		}
 
 		// 요청 페이지 번호를 1 이상으로 보정합니다.
-		int resolvedRequestedPageNo = resolveRequestedPageNo(requestedPageNo);
+		int resolvedRequestedPageNo = normalizePage(requestedPageNo, 1);
 		// 위시리스트 전체 건수를 조회합니다.
 		int goodsCount = goodsMapper.countShopMypageWishGoods(custNo);
 		// 전체 페이지 수를 계산합니다.
 		int totalPageCount = calculateTotalPageCount(goodsCount, SHOP_MYPAGE_WISH_PAGE_SIZE);
 		// 범위를 초과한 페이지 번호를 마지막 페이지로 보정합니다.
-		int resolvedPageNo = totalPageCount == 0 ? 1 : Math.min(resolvedRequestedPageNo, totalPageCount);
+		int resolvedPageNo = resolvePageNoWithinRange(resolvedRequestedPageNo, totalPageCount);
 		// 페이지 조회 오프셋을 계산합니다.
 		int offset = calculateOffset(resolvedPageNo, SHOP_MYPAGE_WISH_PAGE_SIZE);
 		// 위시리스트 상품 목록을 조회합니다.
@@ -738,8 +736,8 @@ public class GoodsService {
 		}
 
 		// 보유 쿠폰/다운로드 쿠폰 요청 페이지 번호를 각각 보정합니다.
-		int resolvedRequestedOwnedPageNo = resolveRequestedPageNo(requestedOwnedPageNo);
-		int resolvedRequestedDownloadablePageNo = resolveRequestedPageNo(requestedDownloadablePageNo);
+		int resolvedRequestedOwnedPageNo = normalizePage(requestedOwnedPageNo, 1);
+		int resolvedRequestedDownloadablePageNo = normalizePage(requestedDownloadablePageNo, 1);
 
 		// 보유 쿠폰/다운로드 쿠폰 전체 건수와 전체 페이지 수를 계산합니다.
 		int ownedCouponCount = goodsMapper.countShopMypageOwnedCoupon(custNo);
@@ -958,38 +956,6 @@ public class GoodsService {
 			targetValueSet.add(target.getTargetValue().trim());
 		}
 		return targetValueSet.isEmpty() ? List.of() : new ArrayList<>(targetValueSet);
-	}
-
-	// 요청 페이지 번호를 1 이상 값으로 보정합니다.
-	private int resolveRequestedPageNo(Integer requestedPageNo) {
-		if (requestedPageNo == null || requestedPageNo < 1) {
-			return 1;
-		}
-		return requestedPageNo;
-	}
-
-	// 전체 페이지 수 범위 안으로 현재 페이지 번호를 보정합니다.
-	private int resolvePageNoWithinRange(int requestedPageNo, int totalPageCount) {
-		if (totalPageCount <= 0) {
-			return 1;
-		}
-		return Math.min(Math.max(requestedPageNo, 1), totalPageCount);
-	}
-
-	// 전체 건수와 페이지 크기를 기준으로 전체 페이지 수를 계산합니다.
-	private int calculateTotalPageCount(int goodsCount, int pageSize) {
-		if (goodsCount <= 0 || pageSize <= 0) {
-			return 0;
-		}
-		return (goodsCount + pageSize - 1) / pageSize;
-	}
-
-	// 현재 페이지와 페이지 크기를 기준으로 조회 오프셋을 계산합니다.
-	private int calculateOffset(int pageNo, int pageSize) {
-		if (pageNo < 1 || pageSize <= 0) {
-			return 0;
-		}
-		return (pageNo - 1) * pageSize;
 	}
 
 	// 주문번호 1건을 조회하고 주문상세 목록과 이미지 URL을 연결합니다.

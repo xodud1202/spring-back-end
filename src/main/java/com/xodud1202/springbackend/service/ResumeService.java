@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonPaginationUtils.*;
+
 import com.xodud1202.springbackend.domain.admin.resume.ResumePO;
 import com.xodud1202.springbackend.domain.admin.resume.ResumeVO;
 import com.xodud1202.springbackend.domain.resume.ResumeEducation;
@@ -533,9 +535,9 @@ public class ResumeService {
 	 * @return 목록, 총 건수, 페이지 정보를 포함한 결과 맵
 	 */
 	public Map<String, Object> getAdminResumeList(ResumePO param) {
-		int page = param.getPage() == null || param.getPage() < 1 ? 1 : param.getPage();
+		int page = normalizePage(param.getPage(), 1);
 		int pageSize = 20;
-		int offset = (page - 1) * pageSize;
+		int offset = calculateOffset(page, pageSize);
 
 		param.setPage(page);
 		param.setPageSize(pageSize);

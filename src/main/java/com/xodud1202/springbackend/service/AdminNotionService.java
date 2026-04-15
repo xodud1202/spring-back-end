@@ -1,5 +1,6 @@
 package com.xodud1202.springbackend.service;
 
+import static com.xodud1202.springbackend.common.util.CommonPaginationUtils.*;
 import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
 
 import com.xodud1202.springbackend.domain.admin.notion.AdminNotionCategorySortRowPO;
@@ -55,8 +56,8 @@ public class AdminNotionService {
 
 	// 관리자 Notion 저장 목록을 페이징 조회합니다.
 	public Map<String, Object> getAdminNotionSaveList(AdminNotionListQueryPO param) {
-		int page = param.getPage() == null || param.getPage() < 1 ? 1 : param.getPage();
-		int offset = (page - 1) * PAGE_SIZE;
+		int page = normalizePage(param.getPage(), 1);
+		int offset = calculateOffset(page, PAGE_SIZE);
 
 		param.setCategoryId(trimToNull(param.getCategoryId()));
 		param.setTitle(trimToNull(param.getTitle()));
