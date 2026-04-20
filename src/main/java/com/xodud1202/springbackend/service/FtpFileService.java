@@ -25,6 +25,7 @@ import java.util.Objects;
 // FTP 파일 업로드/삭제와 경로 계산을 제공하는 서비스입니다.
 public class FtpFileService {
 	private static final DateTimeFormatter FTP_TEMP_FILE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
+	private static final DateTimeFormatter IMPORTED_COMPANY_WORK_FILE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
 	private static final int ATOMIC_TEXT_UPLOAD_CONNECT_TIMEOUT_MILLIS = 10000;
 	private static final int ATOMIC_TEXT_UPLOAD_SOCKET_TIMEOUT_MILLIS = 30000;
 	private static final int ATOMIC_TEXT_UPLOAD_DATA_TIMEOUT_MILLIS = 30000;
@@ -150,7 +151,8 @@ public class FtpFileService {
 		byte[] fileBytes,
 		Integer workCompanySeq,
 		Integer workCompanyProjectSeq,
-		String workKey
+		String workKey,
+		Long workSeq
 	) throws IOException {
 		if (workCompanySeq == null || workCompanyProjectSeq == null) {
 			throw new IllegalArgumentException("회사/프로젝트 정보를 확인해주세요.");
@@ -158,8 +160,11 @@ public class FtpFileService {
 		if (safeTrim(workKey) == null) {
 			throw new IllegalArgumentException("업무 키를 확인해주세요.");
 		}
+		if (workSeq == null) {
+			throw new IllegalArgumentException("업무 정보를 확인해주세요.");
+		}
 
-		// 회사/프로젝트/workKey 폴더를 순서대로 생성하며 원본 파일명을 최대한 유지합니다.
+		// 회사/프로젝트/workKey 폴더를 순서대로 생성하며 저장용 파일명은 ASCII-safe 규칙으로 생성합니다.
 		String[] subDirs = {
 			safePathSegment(String.valueOf(workCompanySeq)),
 			safePathSegment(String.valueOf(workCompanyProjectSeq)),
@@ -167,7 +172,7 @@ public class FtpFileService {
 		};
 		return uploadBytesToFtp(
 			fileBytes,
-			normalizeUploadFileName(originalFileName),
+			buildImportedCompanyWorkStorageFileName(originalFileName, workSeq),
 			ftpProperties.getUploadCompanyWorkImportTargetPath(),
 			ftpProperties.getUploadCompanyWorkImportView(),
 			subDirs
@@ -601,12 +606,18 @@ public class FtpFileService {
 		byte[] normalizedFileBytes = fileBytes == null ? new byte[0] : fileBytes;
 
 		try {
+			// SR import 바이트 업로드 경로는 제어 채널 인코딩을 먼저 UTF-8로 맞춥니다.
+			configureImportUploadControlEncoding(ftpClient);
+
 			// FTP 서버 접속과 바이너리 업로드 모드를 설정합니다.
 			ftpClient.connect(ftpProperties.getHost(), ftpProperties.getPort());
 			boolean login = ftpClient.login(ftpProperties.getUsername(), ftpProperties.getPwd());
 			if (!login) {
 				throw new IOException("FTP 로그인 실패");
 			}
+
+			// 서버가 지원하면 UTF-8 제어 옵션을 활성화하고, 미지원이어도 ASCII-safe 파일명으로 계속 진행합니다.
+			enableImportUploadUtf8Option(ftpClient);
 			ftpClient.enterLocalPassiveMode();
 			ftpClient.setFileType(FTP.BINARY_FILE_TYPE);
 
@@ -822,6 +833,57 @@ public class FtpFileService {
 		String resolvedFileName = lastSlashIndex >= 0 ? baseFileName.substring(lastSlashIndex + 1) : baseFileName;
 		String sanitizedFileName = resolvedFileName.replace("/", "_").replace("\\", "_");
 		return sanitizedFileName.isBlank() ? "file" : sanitizedFileName;
+	}
+
+	/**
+	 * SR 가져오기 첨부의 실제 FTP 저장 파일명을 ASCII-safe 규칙으로 생성합니다.
+	 * @param originalFileName Jira 원본 파일명
+	 * @param workSeq 업무 번호
+	 * @return ASCII-safe 저장 파일명
+	 */
+	String buildImportedCompanyWorkStorageFileName(String originalFileName, Long workSeq) {
+		String normalizedFileName = normalizeUploadFileName(originalFileName);
+		String extension = resolveImportedCompanyWorkFileExtension(normalizedFileName);
+		String timeKey = LocalDateTime.now().format(IMPORTED_COMPANY_WORK_FILE_TIME_FORMATTER);
+		return "import_" + workSeq + "_" + timeKey + "_1" + extension;
+	}
+
+	/**
+	 * SR 가져오기 첨부의 저장 파일명에 붙일 확장자를 계산합니다.
+	 * @param normalizedFileName 정리된 원본 파일명
+	 * @return 확장자 문자열
+	 */
+	private String resolveImportedCompanyWorkFileExtension(String normalizedFileName) {
+		String safeFileName = safeTrim(normalizedFileName);
+		if (safeFileName == null) {
+			return "";
+		}
+
+		int extensionIndex = safeFileName.lastIndexOf('.');
+		if (extensionIndex < 0 || extensionIndex == safeFileName.length() - 1) {
+			return "";
+		}
+		return safeFileName.substring(extensionIndex);
+	}
+
+	/**
+	 * SR import 바이트 업로드용 FTP 클라이언트 제어 채널 인코딩을 미리 설정합니다.
+	 * @param ftpClient FTP 클라이언트
+	 */
+	private void configureImportUploadControlEncoding(FTPClient ftpClient) {
+		ftpClient.setControlEncoding(StandardCharsets.UTF_8.name());
+	}
+
+	/**
+	 * SR import 바이트 업로드 시 서버가 지원하면 UTF-8 제어 옵션을 활성화합니다.
+	 * @param ftpClient FTP 클라이언트
+	 */
+	private void enableImportUploadUtf8Option(FTPClient ftpClient) {
+		try {
+			ftpClient.sendCommand("OPTS", "UTF8 ON");
+		} catch (Exception ignoredException) {
+			// 서버가 지원하지 않아도 ASCII-safe 파일명 규칙으로 업로드를 계속 진행합니다.
+		}
 	}
 
 	/**

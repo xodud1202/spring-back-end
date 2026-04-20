@@ -1531,35 +1531,100 @@ public class CompanyWorkService {
 		List<String> fallbackFileNameList
 	) {
 		String displayFileName = resolveImportAttachmentDisplayName(originalFileName, originalFileUrl);
+		Long contentLength = null;
 
 		try {
-			// Jira 인증으로 첨부를 다운로드한 뒤 기존 업무 첨부 규칙으로 검증합니다.
-			DiningBrandsGroupJiraAttachmentDownloadResult downloadedAttachment = diningBrandsGroupJiraApiClient.downloadAttachment(originalFileUrl);
-			validateWorkAttachmentFile(originalFileName, downloadedAttachment.getContentLength());
+			// Jira 인증으로 첨부를 다운로드합니다.
+			DiningBrandsGroupJiraAttachmentDownloadResult downloadedAttachment;
+			try {
+				downloadedAttachment = diningBrandsGroupJiraApiClient.downloadAttachment(originalFileUrl);
+				contentLength = downloadedAttachment.getContentLength();
+			} catch (Exception exception) {
+				return appendImportAttachmentFallback(
+					jobSaveParam,
+					displayFileName,
+					originalFileUrl,
+					contentLength,
+					fallbackFileNameList,
+					"Jira 다운로드 실패",
+					exception
+				);
+			}
+
+			// 다운로드된 첨부를 기존 업무 첨부 규칙으로 검증합니다.
+			try {
+				validateWorkAttachmentFile(originalFileName, downloadedAttachment.getContentLength());
+			} catch (Exception exception) {
+				return appendImportAttachmentFallback(
+					jobSaveParam,
+					displayFileName,
+					originalFileUrl,
+					downloadedAttachment.getContentLength(),
+					fallbackFileNameList,
+					"업무 첨부 검증 실패",
+					exception
+				);
+			}
 
 			// 검증을 통과하면 회사/프로젝트/workKey 경로에 내부 업로드하고 공개 URL을 저장합니다.
-			String uploadedFileUrl = ftpFileService.uploadImportedCompanyWorkFile(
-				originalFileName,
-				downloadedAttachment.getContent(),
-				jobSaveParam.getWorkCompanySeq(),
-				jobSaveParam.getWorkCompanyProjectSeq(),
-				jobSaveParam.getWorkKey()
-			);
-			uploadedFileUrlList.add(uploadedFileUrl);
-			return uploadedFileUrl;
+			try {
+				String uploadedFileUrl = ftpFileService.uploadImportedCompanyWorkFile(
+					originalFileName,
+					downloadedAttachment.getContent(),
+					jobSaveParam.getWorkCompanySeq(),
+					jobSaveParam.getWorkCompanyProjectSeq(),
+					jobSaveParam.getWorkKey(),
+					jobSaveParam.getWorkSeq()
+				);
+				uploadedFileUrlList.add(uploadedFileUrl);
+				return uploadedFileUrl;
+			} catch (Exception exception) {
+				return appendImportAttachmentFallback(
+					jobSaveParam,
+					displayFileName,
+					originalFileUrl,
+					downloadedAttachment.getContentLength(),
+					fallbackFileNameList,
+					"FTP 업로드 실패",
+					exception
+				);
+			}
 		} catch (Exception exception) {
-			// 첨부 단건 실패는 import 전체를 막지 않고 Jira 원본 URL로 대체 저장합니다.
-			fallbackFileNameList.add(displayFileName);
-			log.warn(
-				"SR 가져오기 첨부를 내부 저장소에 저장하지 못해 Jira 원본 링크로 대체합니다. workSeq={}, workKey={}, fileName={}, fileUrl={}",
-				jobSaveParam.getWorkSeq(),
-				jobSaveParam.getWorkKey(),
+			// 분기에서 다루지 못한 예외는 최종 fallback 로그를 남기고 Jira 원본 URL로 대체합니다.
+			return appendImportAttachmentFallback(
+				jobSaveParam,
 				displayFileName,
 				originalFileUrl,
+				contentLength,
+				fallbackFileNameList,
+				"SR 첨부 처리 중 예기치 않은 오류",
 				exception
 			);
-			return safeValue(originalFileUrl);
 		}
+	}
+
+	// SR 가져오기 첨부 fallback 로그를 남기고 Jira 원본 URL을 반환합니다.
+	private String appendImportAttachmentFallback(
+		AdminCompanyWorkImportJobSavePO jobSaveParam,
+		String displayFileName,
+		String originalFileUrl,
+		Long fileSize,
+		List<String> fallbackFileNameList,
+		String fallbackReason,
+		Exception exception
+	) {
+		fallbackFileNameList.add(displayFileName);
+		log.warn(
+			"SR 가져오기 첨부를 내부 저장소에 저장하지 못해 Jira 원본 링크로 대체합니다. reason={}, workSeq={}, workKey={}, fileName={}, fileSize={}, fileUrl={}",
+			fallbackReason,
+			jobSaveParam.getWorkSeq(),
+			jobSaveParam.getWorkKey(),
+			displayFileName,
+			fileSize,
+			originalFileUrl,
+			exception
+		);
+		return safeValue(originalFileUrl);
 	}
 
 	// SR 가져오기 응답 메시지를 fallback 첨부 건수 기준으로 구성합니다.
