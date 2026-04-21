@@ -1,6 +1,7 @@
 package com.xodud1202.springbackend.controller.bo;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkAttachmentDownloadVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkCompanyVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkCompletedListResponseVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkDetailResponseVO;
@@ -12,7 +13,6 @@ import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkManu
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkManualCreateResponseVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkProjectVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyDeletePO;
-import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyFileDownloadVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplySavePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyUpdatePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyVO;
@@ -336,8 +336,8 @@ public class AdminCompanyWorkController {
 
 		try {
 			// 댓글 첨부파일 메타와 파일 데이터를 조회해 attachment 응답으로 반환합니다.
-			AdminCompanyWorkReplyFileDownloadVO response = companyWorkService.downloadAdminCompanyWorkReplyFile(replyFileSeq);
-			String encodedFileName = encodeAttachmentFileName(response.getReplyFileNm());
+			AdminCompanyWorkAttachmentDownloadVO response = companyWorkService.downloadAdminCompanyWorkReplyFile(replyFileSeq);
+			String encodedFileName = encodeAttachmentFileName(response.getFileNm());
 			return ResponseEntity.ok()
 				.header(
 					HttpHeaders.CONTENT_DISPOSITION,
