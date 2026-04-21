@@ -9,6 +9,7 @@ import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImpo
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkDetailResponseVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkDetailUpdatePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkDetailVO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkAttachmentDownloadVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkFileVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportFileSavePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImportJobSavePO;
@@ -17,7 +18,6 @@ import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkImpo
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkManualCreatePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkManualCreateResponseVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkManualSavePO;
-import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyFileDownloadVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyFileSavePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyFileVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyDeletePO;
@@ -454,6 +454,34 @@ public class CompanyWorkService {
 		}
 	}
 
+	// 관리자 회사 업무 첨부파일을 다운로드합니다.
+	public AdminCompanyWorkAttachmentDownloadVO downloadAdminCompanyWorkFile(Integer workJobFileSeq) {
+		// 요청 업무 첨부파일 번호를 검증하고 메타를 조회합니다.
+		int resolvedWorkJobFileSeq = normalizeRequiredSequence(workJobFileSeq, "업무 첨부파일 정보를 확인해주세요.");
+		AdminCompanyWorkFileVO workFile = companyWorkMapper.getAdminCompanyWorkFile(resolvedWorkJobFileSeq);
+		if (workFile == null) {
+			throw new IllegalArgumentException("업무 첨부파일 정보를 확인해주세요.");
+		}
+
+		// 내부 저장 파일과 Jira fallback 파일을 모두 다운로드 응답 구조로 변환합니다.
+		try {
+			AdminCompanyWorkAttachmentDownloadVO response = new AdminCompanyWorkAttachmentDownloadVO();
+			response.setFileNm(safeValue(workFile.getWorkJobFileNm()));
+			response.setFileData(
+				downloadCompanyWorkAttachmentFileData(
+					workFile.getWorkJobFileUrl(),
+					true,
+					"업무 첨부파일 URL을 확인할 수 없습니다."
+				)
+			);
+			return response;
+		} catch (IllegalStateException exception) {
+			throw exception;
+		} catch (Exception exception) {
+			throw new IllegalStateException("업무 첨부파일 다운로드 중 오류가 발생했습니다.", exception);
+		}
+	}
+
 	@Transactional
 	// 관리자 회사 업무 Jira 이슈를 가져와 업무와 첨부파일을 저장합니다.
 	public AdminCompanyWorkImportResponseVO importAdminCompanyWork(AdminCompanyWorkImportPO param) {
@@ -665,7 +693,7 @@ public class CompanyWorkService {
 	}
 
 	// 관리자 회사 업무 댓글 첨부파일을 다운로드합니다.
-	public AdminCompanyWorkReplyFileDownloadVO downloadAdminCompanyWorkReplyFile(Integer replyFileSeq) {
+	public AdminCompanyWorkAttachmentDownloadVO downloadAdminCompanyWorkReplyFile(Integer replyFileSeq) {
 		// 요청 댓글 첨부파일 번호를 검증하고 메타를 조회합니다.
 		int resolvedReplyFileSeq = normalizeRequiredSequence(replyFileSeq, "댓글 첨부파일 정보를 확인해주세요.");
 		AdminCompanyWorkReplyFileVO replyFile = companyWorkMapper.getAdminCompanyWorkReplyFile(resolvedReplyFileSeq);
@@ -675,15 +703,15 @@ public class CompanyWorkService {
 
 		// 저장 URL을 기준으로 공개 파일을 다운로드하고 응답 구조로 반환합니다.
 		try {
-			String replyFileUrl = trimToNull(replyFile.getReplyFileUrl());
-			String replyFileViewBase = trimToNull(ftpProperties.getUploadCompanyWorkReplyView());
-			if (replyFileViewBase == null || replyFileUrl == null || !replyFileUrl.startsWith(replyFileViewBase)) {
-				throw new IllegalStateException("댓글 첨부파일 URL을 확인할 수 없습니다.");
-			}
-
-			AdminCompanyWorkReplyFileDownloadVO response = new AdminCompanyWorkReplyFileDownloadVO();
-			response.setReplyFileNm(safeValue(replyFile.getReplyFileNm()));
-			response.setFileData(ftpFileService.downloadFileFromUrl(replyFileUrl));
+			AdminCompanyWorkAttachmentDownloadVO response = new AdminCompanyWorkAttachmentDownloadVO();
+			response.setFileNm(safeValue(replyFile.getReplyFileNm()));
+			response.setFileData(
+				downloadCompanyWorkAttachmentFileData(
+					replyFile.getReplyFileUrl(),
+					false,
+					"댓글 첨부파일 URL을 확인할 수 없습니다."
+				)
+			);
 			return response;
 		} catch (IllegalStateException exception) {
 			throw exception;
@@ -1013,7 +1041,7 @@ public class CompanyWorkService {
 
 	// 댓글 첨부파일 개별 유효성을 검증합니다.
 	private void validateReplyAttachmentFile(MultipartFile file) {
-		// 업로드 설정과 파일명과 용량과 확장자를 순서대로 확인합니다.
+		// 업로드 설정과 파일명과 용량과 확장자 정책을 순서대로 확인합니다.
 		if (ftpProperties.getUploadCompanyWorkReplyMaxSize() <= 0) {
 			throw new IllegalStateException("댓글 첨부파일 업로드 설정을 확인해주세요.");
 		}
@@ -1866,6 +1894,11 @@ public class CompanyWorkService {
 
 	// 허용 확장자 목록에 없는 파일 확장자인지 확인합니다.
 	private boolean isDisallowedFileExtension(String allowedExtensions, String extension) {
+		// allow-all 설정이면 확장자 유무와 관계없이 모두 허용합니다.
+		if (isAllowAllFileExtensionConfigured(allowedExtensions)) {
+			return false;
+		}
+
 		// 확장자가 비어 있으면 허용 불가로 간주하고, 일치 항목이 있으면 통과시킵니다.
 		String normalizedExtension = trimToNull(extension);
 		if (normalizedExtension == null) {
@@ -1879,6 +1912,51 @@ public class CompanyWorkService {
 			}
 		}
 		return true;
+	}
+
+	// 업무/댓글 첨부 허용 확장자 설정이 전체 허용 모드인지 확인합니다.
+	private boolean isAllowAllFileExtensionConfigured(String allowedExtensions) {
+		return "*".equals(trimToNull(allowedExtensions));
+	}
+
+	// 회사 업무 첨부 URL에서 실제 파일 바이트를 읽어옵니다.
+	private byte[] downloadCompanyWorkAttachmentFileData(
+		String fileUrl,
+		boolean allowJiraFallback,
+		String invalidMessage
+	) throws Exception {
+		String normalizedFileUrl = trimToNull(fileUrl);
+		if (normalizedFileUrl == null) {
+			throw new IllegalStateException(invalidMessage);
+		}
+
+		// 내부 저장소 URL은 공개 파일 다운로드로 처리합니다.
+		if (
+			isManagedCompanyWorkPublicUrl(normalizedFileUrl, ftpProperties.getUploadCompanyWorkReplyView())
+			|| isManagedCompanyWorkPublicUrl(normalizedFileUrl, ftpProperties.getUploadCompanyWorkImportView())
+		) {
+			return ftpFileService.downloadFileFromUrl(normalizedFileUrl);
+		}
+
+		// 업무 첨부는 SR import fallback Jira 링크도 허용합니다.
+		if (allowJiraFallback) {
+			return diningBrandsGroupJiraApiClient.downloadAttachment(normalizedFileUrl).getContent();
+		}
+		throw new IllegalStateException(invalidMessage);
+	}
+
+	// 공개 URL이 회사 업무 내부 저장소 경로인지 확인합니다.
+	private boolean isManagedCompanyWorkPublicUrl(String fileUrl, String viewBase) {
+		String normalizedFileUrl = trimToNull(fileUrl);
+		String normalizedViewBase = trimToNull(viewBase);
+		if (normalizedFileUrl == null || normalizedViewBase == null) {
+			return false;
+		}
+
+		String resolvedViewBase = normalizedViewBase.endsWith("/")
+			? normalizedViewBase.substring(0, normalizedViewBase.length() - 1)
+			: normalizedViewBase;
+		return normalizedFileUrl.startsWith(resolvedViewBase + "/");
 	}
 
 	// Jira ADF 본문을 여러 줄 plain text로 변환합니다.

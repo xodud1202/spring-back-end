@@ -18,7 +18,6 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -843,17 +842,17 @@ public class FtpFileService {
 	 */
 	String buildImportedCompanyWorkStorageFileName(String originalFileName, Long workSeq) {
 		String normalizedFileName = normalizeUploadFileName(originalFileName);
-		String extension = resolveImportedCompanyWorkFileExtension(normalizedFileName);
+		String extension = resolveOptionalFileExtension(normalizedFileName);
 		String timeKey = LocalDateTime.now().format(IMPORTED_COMPANY_WORK_FILE_TIME_FORMATTER);
 		return "import_" + workSeq + "_" + timeKey + "_1" + extension;
 	}
 
 	/**
-	 * SR 가져오기 첨부의 저장 파일명에 붙일 확장자를 계산합니다.
+	 * 원본 파일명에 붙은 확장자를 유지 가능한 형식으로 계산합니다.
 	 * @param normalizedFileName 정리된 원본 파일명
 	 * @return 확장자 문자열
 	 */
-	private String resolveImportedCompanyWorkFileExtension(String normalizedFileName) {
+	private String resolveOptionalFileExtension(String normalizedFileName) {
 		String safeFileName = safeTrim(normalizedFileName);
 		if (safeFileName == null) {
 			return "";
@@ -893,8 +892,8 @@ public class FtpFileService {
 	 * @return 생성된 파일명
 	 */
 	private String buildFileName(MultipartFile file, String folderKey) {
-		String originalFilename = file.getOriginalFilename();
-		String extension = Objects.requireNonNull(originalFilename).substring(originalFilename.lastIndexOf("."));
+		String normalizedFileName = normalizeUploadFileName(file == null ? null : file.getOriginalFilename());
+		String extension = resolveOptionalFileExtension(normalizedFileName);
 		return folderKey + "_" + System.currentTimeMillis() + extension;
 	}
 
@@ -905,8 +904,8 @@ public class FtpFileService {
 	 * @return 브랜드 번호_시분초밀리초.확장자 형식의 파일명
 	 */
 	private String buildBrandLogoFileName(MultipartFile file, String brandNo) {
-		String originalFilename = file.getOriginalFilename();
-		String extension = Objects.requireNonNull(originalFilename).substring(originalFilename.lastIndexOf("."));
+		String normalizedFileName = normalizeUploadFileName(file == null ? null : file.getOriginalFilename());
+		String extension = resolveOptionalFileExtension(normalizedFileName);
 		String timeKey = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS"));
 		String normalizedBrandNo = brandNo.trim();
 		return normalizedBrandNo + "_" + timeKey + extension;

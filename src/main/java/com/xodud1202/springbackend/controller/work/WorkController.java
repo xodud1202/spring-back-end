@@ -3,6 +3,7 @@ package com.xodud1202.springbackend.controller.work;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xodud1202.springbackend.common.work.WorkSessionPolicy;
 import com.xodud1202.springbackend.domain.admin.common.UserInfoVO;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkAttachmentDownloadVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkCompanyVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkDetailResponseVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkDetailUpdatePO;
@@ -13,7 +14,6 @@ import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkManu
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkManualCreateResponseVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkProjectVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyDeletePO;
-import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyFileDownloadVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplySavePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyUpdatePO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyVO;
@@ -370,20 +370,32 @@ public class WorkController {
 		try {
 			// 로그인 사용자 기준으로 댓글 첨부파일 다운로드를 허용합니다.
 			resolveRequiredWorkUserNo(request);
-			AdminCompanyWorkReplyFileDownloadVO response = companyWorkService.downloadAdminCompanyWorkReplyFile(replyFileSeq);
-			String encodedFileName = encodeAttachmentFileName(response.getReplyFileNm());
-			return ResponseEntity.ok()
-				.header(
-					HttpHeaders.CONTENT_DISPOSITION,
-					"attachment; filename=\"download\"; filename*=UTF-8''" + encodedFileName
-				)
-				.contentType(MediaType.APPLICATION_OCTET_STREAM)
-				.body(response.getFileData());
+			AdminCompanyWorkAttachmentDownloadVO response = companyWorkService.downloadAdminCompanyWorkReplyFile(replyFileSeq);
+			return buildAttachmentDownloadResponse(response.getFileData(), response.getFileNm());
 		} catch (SecurityException | IllegalArgumentException exception) {
 			throw exception;
 		} catch (Exception exception) {
 			log.error("업무관리 댓글 첨부 다운로드 실패 message={}", exception.getMessage(), exception);
 			throw new IllegalStateException("댓글 첨부파일 다운로드에 실패했습니다.", exception);
+		}
+	}
+
+	@GetMapping("/api/work/file/download")
+	// 업무 첨부파일을 다운로드합니다.
+	public ResponseEntity<Object> downloadWorkFile(
+		HttpServletRequest request,
+		@RequestParam(required = false) Integer workJobFileSeq
+	) {
+		try {
+			// 로그인 사용자 기준으로 업무 첨부파일 다운로드를 허용합니다.
+			resolveRequiredWorkUserNo(request);
+			AdminCompanyWorkAttachmentDownloadVO response = companyWorkService.downloadAdminCompanyWorkFile(workJobFileSeq);
+			return buildAttachmentDownloadResponse(response.getFileData(), response.getFileNm());
+		} catch (SecurityException | IllegalArgumentException exception) {
+			throw exception;
+		} catch (Exception exception) {
+			log.error("업무관리 첨부 다운로드 실패 message={}", exception.getMessage(), exception);
+			throw new IllegalStateException("업무 첨부파일 다운로드에 실패했습니다.", exception);
 		}
 	}
 
@@ -399,6 +411,18 @@ public class WorkController {
 			return workUserNo;
 		}
 		throw new SecurityException("로그인이 필요합니다.");
+	}
+
+	// 바이너리 첨부파일 다운로드 응답을 공통 형식으로 생성합니다.
+	private ResponseEntity<Object> buildAttachmentDownloadResponse(byte[] fileData, String fileName) {
+		String encodedFileName = encodeAttachmentFileName(fileName);
+		return ResponseEntity.ok()
+			.header(
+				HttpHeaders.CONTENT_DISPOSITION,
+				"attachment; filename=\"download\"; filename*=UTF-8''" + encodedFileName
+			)
+			.contentType(MediaType.APPLICATION_OCTET_STREAM)
+			.body(fileData);
 	}
 
 	// attachment 헤더용 파일명을 UTF-8 RFC5987 형식으로 인코딩합니다.
