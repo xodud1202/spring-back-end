@@ -1097,24 +1097,94 @@ public class GoodsService {
 		ShopCartValidatedInput validatedInput = validateShopCartInput(goodsId, sizeId, qty, custNo);
 		Integer validatedExhibitionNo = resolveValidatedShopCartExhibitionNo(validatedInput.getGoodsId(), exhibitionNo);
 
-		// 기존 장바구니(C) 존재 여부에 따라 수량 가산 또는 신규 등록을 수행합니다.
-		int existedCount = cartMapper.countShopCartByGoodsIdAndSizeId(custNo, validatedInput.getGoodsId(), validatedInput.getSizeId());
-		if (existedCount > 0) {
-			cartMapper.addShopCartQtyByGoodsIdAndSizeId(
-				custNo,
+		// 동일 고객의 일반 장바구니 쓰기는 FOR UPDATE 범위 잠금으로 직렬화합니다.
+		cartMapper.lockShopCartForUpdate(custNo);
+
+		// 기존 장바구니(C) 중복 행이 있으면 대표 행 1건으로 정규화해 수량을 합산합니다.
+		List<ShopCartItemVO> duplicateCartItemList = cartMapper.getShopCartDuplicateItemList(
+			custNo,
+			validatedInput.getGoodsId(),
+			validatedInput.getSizeId()
+		);
+		if (duplicateCartItemList != null && !duplicateCartItemList.isEmpty()) {
+			return mergeShopCartDuplicateItems(
+				duplicateCartItemList,
 				validatedInput.getGoodsId(),
 				validatedInput.getSizeId(),
 				validatedInput.getQty(),
 				validatedExhibitionNo,
 				custNo
 			);
-		} else {
-			cartMapper.insertShopCart(createShopCartSavePO(SHOP_CART_GB_CART, custNo, validatedInput, validatedExhibitionNo));
 		}
 
-		// 저장 이후 장바구니 최종 수량을 조회해 반환합니다.
-		Integer latestQty = cartMapper.getShopCartQtyByGoodsIdAndSizeId(custNo, validatedInput.getGoodsId(), validatedInput.getSizeId());
-		return latestQty == null ? validatedInput.getQty() : latestQty;
+		// 기존 행이 없으면 상품/사이즈 기준 원자적 증가를 먼저 시도해 동시 삽입 경쟁을 흡수합니다.
+		int updatedCount = cartMapper.addShopCartQtyByGoodsIdAndSizeId(
+			custNo,
+			validatedInput.getGoodsId(),
+			validatedInput.getSizeId(),
+			validatedInput.getQty(),
+			validatedExhibitionNo,
+			custNo
+		);
+		if (updatedCount > 0) {
+			return resolveLatestShopCartQty(custNo, validatedInput.getGoodsId(), validatedInput.getSizeId(), validatedInput.getQty());
+		}
+
+		// 증가 대상이 없을 때만 신규 장바구니를 등록합니다.
+		cartMapper.insertShopCart(createShopCartSavePO(SHOP_CART_GB_CART, custNo, validatedInput, validatedExhibitionNo));
+		return validatedInput.getQty();
+	}
+
+	// 동일 상품/사이즈의 장바구니 중복 행을 1건으로 정규화하고 최종 수량을 반환합니다.
+	private int mergeShopCartDuplicateItems(
+		List<ShopCartItemVO> duplicateCartItemList,
+		String goodsId,
+		String sizeId,
+		int additionalQty,
+		Integer exhibitionNo,
+		Long custNo
+	) {
+		// 대표 행 1건에 기존 전체 수량과 신규 수량을 합산합니다.
+		ShopCartItemVO baseCartItem = duplicateCartItemList.get(0);
+		int incrementQty = additionalQty;
+		List<Long> deleteCartIdList = new ArrayList<>();
+		for (int index = 0; index < duplicateCartItemList.size(); index += 1) {
+			ShopCartItemVO duplicateCartItem = duplicateCartItemList.get(index);
+			if (duplicateCartItem == null) {
+				continue;
+			}
+			if (index > 0) {
+				incrementQty += Math.max(duplicateCartItem.getQty() == null ? 0 : duplicateCartItem.getQty(), 0);
+			}
+			if (index > 0 && duplicateCartItem.getCartId() != null && duplicateCartItem.getCartId() > 0L) {
+				deleteCartIdList.add(duplicateCartItem.getCartId());
+			}
+		}
+
+		// 대표 행 수량은 장바구니번호 기준 원자적 증가 SQL로 갱신합니다.
+		int updatedCount = cartMapper.addShopCartQtyAndExhibitionByCartId(
+			custNo,
+			baseCartItem.getCartId(),
+			incrementQty,
+			exhibitionNo,
+			custNo
+		);
+		if (updatedCount < 1) {
+			throw new IllegalStateException("장바구니 수량 갱신에 실패했습니다.");
+		}
+
+		// 나머지 중복 행은 삭제해 동일 상품/사이즈가 1건만 남도록 정리합니다.
+		if (!deleteCartIdList.isEmpty()) {
+			cartMapper.deleteShopCartByCartIdList(custNo, deleteCartIdList);
+		}
+		return resolveLatestShopCartQty(custNo, goodsId, sizeId, Math.max((baseCartItem.getQty() == null ? 0 : baseCartItem.getQty()), 0) + incrementQty);
+	}
+
+	// 장바구니 최종 수량을 조회하고 미조회 시 계산값을 대체 반환합니다.
+	private int resolveLatestShopCartQty(Long custNo, String goodsId, String sizeId, int fallbackQty) {
+		// 상품/사이즈 기준 현재 수량을 다시 조회해 최종 반환값을 맞춥니다.
+		Integer latestQty = cartMapper.getShopCartQtyByGoodsIdAndSizeId(custNo, goodsId, sizeId);
+		return latestQty == null ? fallbackQty : latestQty;
 	}
 
 	// 쇼핑몰 바로구매용 장바구니를 신규 등록하고 생성된 장바구니 번호를 반환합니다.

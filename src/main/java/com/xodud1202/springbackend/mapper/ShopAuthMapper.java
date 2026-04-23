@@ -15,6 +15,9 @@ public interface ShopAuthMapper {
 	// CI 값으로 기존 고객 로그인 정보를 조회합니다.
 	ShopCustomerSessionVO getShopCustomerByCi(@Param("ci") String ci);
 
+	// 고객번호로 현재 정상 고객 로그인 정보를 조회합니다.
+	ShopCustomerSessionVO getShopCustomerByCustNo(@Param("custNo") Long custNo);
+
 	// 공통코드 코드값으로 코드명을 조회합니다.
 	String getCommonCodeName(@Param("grpCd") String grpCd, @Param("cd") String cd);
 

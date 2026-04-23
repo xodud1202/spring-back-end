@@ -1,5 +1,8 @@
 package com.xodud1202.springbackend.common.work;
 
+import com.xodud1202.springbackend.common.web.HttpCookieUtils;
+import com.xodud1202.springbackend.security.SignedLoginTokenService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 
 import java.time.Duration;
@@ -38,9 +41,39 @@ public final class WorkSessionPolicy {
 		return null;
 	}
 
+	// 요청 쿠키의 서명 토큰에서 업무관리 사용자번호를 복구합니다.
+	public static Long resolveWorkUserNoFromRequest(HttpServletRequest request, SignedLoginTokenService signedLoginTokenService) {
+		// 동일 쿠키 이름을 유지하되 값은 서명 토큰으로만 신뢰합니다.
+		if (signedLoginTokenService == null) {
+			return null;
+		}
+		return signedLoginTokenService.parseWorkUserNo(HttpCookieUtils.findCookieValue(request, COOKIE_WORK_USER_NO));
+	}
+
+	// 업무관리 인증 세션에 사용자번호를 저장하고 만료시간을 갱신합니다.
+	public static void applyAuthenticatedSession(HttpSession session, Long workUserNo) {
+		// 세션 또는 사용자번호가 없으면 저장하지 않습니다.
+		if (session == null || workUserNo == null || workUserNo < 1L) {
+			return;
+		}
+		session.setAttribute(SESSION_ATTR_WORK_USER_NO, workUserNo);
+		refreshSessionTimeout(session);
+	}
+
+	// 업무관리 인증 세션에서 사용자번호를 제거합니다.
+	public static void clearAuthenticatedSession(HttpSession session) {
+		// 세션이 없으면 제거할 값도 없습니다.
+		if (session == null) {
+			return;
+		}
+		session.removeAttribute(SESSION_ATTR_WORK_USER_NO);
+	}
+
 	// 업무관리 세션의 비활성 타임아웃을 정책 시간으로 갱신합니다.
 	public static void refreshSessionTimeout(HttpSession session) {
 		// 로그인 유지시간 5시간 기준으로 세션 만료시간을 다시 맞춥니다.
-		session.setMaxInactiveInterval(SESSION_TIMEOUT_SECONDS);
+		if (session != null) {
+			session.setMaxInactiveInterval(SESSION_TIMEOUT_SECONDS);
+		}
 	}
 }

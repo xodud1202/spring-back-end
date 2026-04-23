@@ -34,7 +34,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -68,6 +71,7 @@ public class OrderService {
 	private final TossPaymentsClient tossPaymentsClient;
 	private final TossProperties tossProperties;
 	private final ObjectMapper objectMapper;
+	private final PlatformTransactionManager transactionManager;
 	private static final int GOODS_IMAGE_MIN_SIZE = 500;
 	private static final int GOODS_IMAGE_MAX_SIZE = 1500;
 	private static final int ADMIN_ORDER_DEFAULT_PAGE = 1;
@@ -1415,7 +1419,7 @@ public class OrderService {
 		}
 
 		// 결제창 성공/실패 URL과 고객 정보를 함께 응답합니다.
-		String normalizedShopOrigin = normalizeShopOrigin(shopOrigin);
+		String normalizedShopOrigin = requireShopOriginForPayment(shopOrigin);
 		ShopOrderPaymentPrepareVO result = new ShopOrderPaymentPrepareVO();
 		result.setOrdNo(ordNo);
 		result.setPayNo(paymentSavePO.getPayNo());
@@ -1470,16 +1474,7 @@ public class OrderService {
 			JsonNode errorNode = readShopOrderJsonNode(exception.getResponseBody());
 			String errorCode = firstNonBlank(resolveJsonText(errorNode, "code"), "TOSS_CONFIRM_ERROR");
 			String errorMessage = firstNonBlank(resolveJsonText(errorNode, "message"), SHOP_ORDER_PAYMENT_CONFIRM_MESSAGE);
-			orderMapper.updateShopPaymentFailure(
-				payment.getPayNo(),
-				SHOP_ORDER_PAY_STAT_FAIL,
-				errorCode,
-				errorMessage,
-				exception.getResponseBody(),
-				custNo
-			);
-			orderMapper.updateShopOrderBaseStatus(param.getOrdNo().trim(), SHOP_ORDER_STAT_CANCEL, custNo);
-			orderMapper.updateShopOrderDetailStatus(param.getOrdNo().trim(), SHOP_ORDER_DTL_STAT_CANCEL, custNo);
+			recordShopOrderConfirmPaymentFailure(param.getOrdNo().trim(), payment.getPayNo(), errorCode, errorMessage, exception.getResponseBody(), custNo);
 			throw new IllegalArgumentException(errorMessage);
 		}
 		JsonNode responseNode = readShopOrderJsonNode(rawResponse);
@@ -1596,6 +1591,32 @@ public class OrderService {
 		orderMapper.updateShopOrderDetailStatus(param.getOrdNo().trim(), SHOP_ORDER_DTL_STAT_CANCEL, custNo);
 	}
 
+	// Toss 결제 승인 실패 상태를 별도 트랜잭션으로 저장합니다.
+	private void recordShopOrderConfirmPaymentFailure(
+		String ordNo,
+		Long payNo,
+		String errorCode,
+		String errorMessage,
+		String responseBody,
+		Long custNo
+	) {
+		// 승인 실패 기록은 외부 승인 예외로 메인 트랜잭션이 롤백되어도 보존되어야 합니다.
+		TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+		transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+		transactionTemplate.executeWithoutResult(status -> {
+			orderMapper.updateShopPaymentFailure(
+				payNo,
+				SHOP_ORDER_PAY_STAT_FAIL,
+				errorCode,
+				errorMessage,
+				responseBody,
+				custNo
+			);
+			orderMapper.updateShopOrderBaseStatus(ordNo, SHOP_ORDER_STAT_CANCEL, custNo);
+			orderMapper.updateShopOrderDetailStatus(ordNo, SHOP_ORDER_DTL_STAT_CANCEL, custNo);
+		});
+	}
+
 	// Toss 웹훅 결과를 반영해 무통장입금 입금완료/만료/취소 후속 처리를 수행합니다.
 	@Transactional
 	public void handleShopOrderPaymentWebhook(String rawBody) {
@@ -1636,6 +1657,8 @@ public class OrderService {
 		// DEPOSIT_CALLBACK은 secret 값을 비교해 토스 승인 응답과 일치하는지 확인합니다.
 		if ("DEPOSIT_CALLBACK".equals(eventType) || (isBlank(paymentKey) && !isBlank(ordNo))) {
 			validateShopOrderDepositWebhookSecret(payment, trimToNull(resolveJsonText(rootNode, "secret")));
+		} else {
+			validateShopOrderPaymentStatusWebhook(payment, paymentKey, ordNo, paymentStatus);
 		}
 
 		// 무통장입금 완료는 결제 완료 상태로 승격하고, 만료/취소는 원복 처리합니다.
@@ -1704,25 +1727,71 @@ public class OrderService {
 
 	// DEPOSIT_CALLBACK secret 값이 승인 응답의 secret과 같은지 확인합니다.
 	private void validateShopOrderDepositWebhookSecret(ShopOrderPaymentVO payment, String webhookSecret) {
-		// secret이 비어 있으면 비교하지 않습니다.
-		if (payment == null || isBlank(webhookSecret)) {
+		// 결제 row가 없으면 검증하지 않습니다.
+		if (payment == null) {
 			return;
+		}
+
+		// 요청 secret이 비어 있으면 즉시 실패 처리합니다.
+		if (isBlank(webhookSecret)) {
+			log.warn("쇼핑몰 주문 결제 웹훅 secret 누락 ordNo={} payNo={}", payment.getOrdNo(), payment.getPayNo());
+			throw new IllegalArgumentException("웹훅 secret 값이 필요합니다.");
 		}
 
 		// 승인 응답 원본 JSON에 저장된 secret 값을 꺼내 비교합니다.
 		String savedSecret = trimToNull(resolveJsonText(readShopOrderJsonNode(payment.getRspRawJson()), "secret"));
 		if (savedSecret == null) {
-			return;
+			log.warn("쇼핑몰 주문 결제 웹훅 저장 secret 누락 ordNo={} payNo={}", payment.getOrdNo(), payment.getPayNo());
+			throw new SecurityException("웹훅 검증에 실패했습니다.");
 		}
 		if (!savedSecret.equals(webhookSecret.trim())) {
 			log.warn(
-				"쇼핑몰 주문 결제 웹훅 secret 불일치 ordNo={} payNo={} webhookSecret={} savedSecret={}",
+				"쇼핑몰 주문 결제 웹훅 secret 불일치 ordNo={} payNo={} webhookSecretPresent={} savedSecretPresent={}",
 				payment.getOrdNo(),
 				payment.getPayNo(),
-				webhookSecret,
-				savedSecret
+				!isBlank(webhookSecret),
+				!isBlank(savedSecret)
 			);
-			throw new IllegalArgumentException("웹훅 검증에 실패했습니다.");
+			throw new SecurityException("웹훅 검증에 실패했습니다.");
+		}
+	}
+
+	// PAYMENT_STATUS_CHANGED 웹훅을 Toss 서버 재조회 결과와 대조합니다.
+	private void validateShopOrderPaymentStatusWebhook(ShopOrderPaymentVO payment, String paymentKey, String webhookOrdNo, String webhookStatus) {
+		// 결제키가 없는 상태 변경 이벤트는 신뢰할 수 없으므로 거부합니다.
+		if (payment == null || isBlank(paymentKey)) {
+			log.warn("쇼핑몰 주문 결제 상태 웹훅 검증 불가 ordNo={} paymentKey={}", webhookOrdNo, paymentKey);
+			throw new SecurityException("웹훅 검증에 실패했습니다.");
+		}
+
+		// 서버 시크릿키로 Toss 결제 원본을 재조회합니다.
+		String normalizedPaymentKey = paymentKey.trim();
+		JsonNode tossPaymentNode = readShopOrderJsonNode(tossPaymentsClient.getPayment(normalizedPaymentKey));
+		String tossPaymentKey = trimToNull(resolveJsonText(tossPaymentNode, "paymentKey"));
+		String tossOrderId = trimToNull(resolveJsonText(tossPaymentNode, "orderId"));
+		String tossStatus = trimToNull(resolveJsonText(tossPaymentNode, "status"));
+		Long tossTotalAmount = resolveJsonLong(tossPaymentNode, "totalAmount");
+
+		// Toss 원본의 결제키/주문번호/금액/상태가 로컬 결제와 모두 일치해야 상태 반영을 허용합니다.
+		if (!normalizedPaymentKey.equals(tossPaymentKey)
+			|| !safeValue(payment.getOrdNo()).equals(tossOrderId)
+			|| (trimToNull(webhookOrdNo) != null && !safeValue(payment.getOrdNo()).equals(webhookOrdNo.trim()))
+			|| payment.getPayAmt() == null
+			|| tossTotalAmount == null
+			|| payment.getPayAmt().longValue() != tossTotalAmount.longValue()
+			|| !safeValue(webhookStatus).equals(tossStatus)) {
+			log.warn(
+				"쇼핑몰 주문 결제 상태 웹훅 검증 실패 payNo={} localOrdNo={} webhookOrdNo={} tossOrderId={} webhookStatus={} tossStatus={} localAmount={} tossAmount={}",
+				payment.getPayNo(),
+				payment.getOrdNo(),
+				webhookOrdNo,
+				tossOrderId,
+				webhookStatus,
+				tossStatus,
+				payment.getPayAmt(),
+				tossTotalAmount
+			);
+			throw new SecurityException("웹훅 검증에 실패했습니다.");
 		}
 	}
 
@@ -3598,6 +3667,30 @@ public class OrderService {
 		return targetNode.asText("");
 	}
 
+	// JSON 노드에서 지정한 필드 Long 값을 안전하게 조회합니다.
+	private Long resolveJsonLong(JsonNode node, String fieldName) {
+		// 숫자 타입이면 그대로 Long 값으로 변환합니다.
+		if (node == null || isBlank(fieldName)) {
+			return null;
+		}
+		JsonNode targetNode = node.path(fieldName);
+		if (targetNode.isMissingNode() || targetNode.isNull()) {
+			return null;
+		}
+		if (targetNode.isNumber()) {
+			return targetNode.asLong();
+		}
+		String textValue = trimToNull(targetNode.asText(null));
+		if (textValue == null) {
+			return null;
+		}
+		try {
+			return Long.valueOf(textValue);
+		} catch (NumberFormatException exception) {
+			return null;
+		}
+	}
+
 	// 주문 결제용 URL Origin 값을 정규화합니다.
 	private String normalizeShopOrigin(String shopOrigin) {
 		// 끝 슬래시를 제거해 절대 URL 베이스로 정리합니다.
@@ -3606,6 +3699,16 @@ public class OrderService {
 			return "";
 		}
 		return normalizedShopOrigin.endsWith("/") ? normalizedShopOrigin.substring(0, normalizedShopOrigin.length() - 1) : normalizedShopOrigin;
+	}
+
+	// 결제 준비에 사용할 쇼핑몰 Origin 설정을 필수 검증합니다.
+	private String requireShopOriginForPayment(String shopOrigin) {
+		// Toss 리다이렉트 URL은 절대 Origin 설정이 없으면 안전하게 만들 수 없습니다.
+		String normalizedShopOrigin = normalizeShopOrigin(shopOrigin);
+		if (isBlank(normalizedShopOrigin)) {
+			throw new IllegalStateException("쇼핑몰 프론트 Origin 설정을 확인해주세요.");
+		}
+		return normalizedShopOrigin;
 	}
 
 	// 결제 성공 URL 베이스를 반환합니다.

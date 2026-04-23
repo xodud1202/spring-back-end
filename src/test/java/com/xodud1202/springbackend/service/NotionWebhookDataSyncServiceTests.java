@@ -15,6 +15,9 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -291,6 +294,62 @@ class NotionWebhookDataSyncServiceTests {
 	}
 
 	@Test
+	@DisplayName("요청 검증: 서명이 일치하면 예외 없이 통과한다")
+	// 저장 전에 호출하는 공개 검증 메서드가 정상 서명을 허용하는지 검증합니다.
+	void validateWebhookRequest_allowsMatchingSignature() {
+		NotionWebhookDataSyncService service = new NotionWebhookDataSyncService(
+			notionWebhookMapper,
+			notionApiClient,
+			objectMapper,
+			createNotionProperties("verification-secret")
+		);
+		String webhookBody = "{\"entity\":{\"type\":\"page\",\"id\":\"page-id\"}}";
+
+		service.validateWebhookRequest(
+			webhookBody,
+			Map.of("x-notion-signature", buildNotionSignature("verification-secret", webhookBody))
+		);
+
+		verify(notionWebhookMapper, never()).upsertNotionDataList(any());
+	}
+
+	@Test
+	@DisplayName("요청 검증: 바디가 비어 있으면 예외를 발생시킨다")
+	// 빈 바디 요청은 임시 저장 전에 차단되는지 검증합니다.
+	void validateWebhookRequest_throwsWhenBodyBlank() {
+		NotionWebhookDataSyncService service = new NotionWebhookDataSyncService(
+			notionWebhookMapper,
+			notionApiClient,
+			objectMapper,
+			createNotionProperties("verification-secret")
+		);
+
+		assertThrows(
+			IllegalArgumentException.class,
+			() -> service.validateWebhookRequest("   ", Map.of())
+		);
+		verify(notionWebhookMapper, never()).upsertNotionDataList(any());
+	}
+
+	@Test
+	@DisplayName("요청 검증: 서명 헤더가 없으면 예외를 발생시킨다")
+	// 검증 토큰이 설정된 상태에서 서명 누락 요청은 임시 저장 전에 차단되는지 검증합니다.
+	void validateWebhookRequest_throwsWhenSignatureMissing() {
+		NotionWebhookDataSyncService service = new NotionWebhookDataSyncService(
+			notionWebhookMapper,
+			notionApiClient,
+			objectMapper,
+			createNotionProperties("verification-secret")
+		);
+
+		assertThrows(
+			SecurityException.class,
+			() -> service.validateWebhookRequest("{\"entity\":{\"type\":\"page\",\"id\":\"page-id\"}}", Map.of())
+		);
+		verify(notionWebhookMapper, never()).upsertNotionDataList(any());
+	}
+
+	@Test
 	@DisplayName("동기화 처리: 검증 토큰이 설정된 상태에서 서명이 불일치하면 예외를 발생시킨다")
 	// 서명 검증 실패 요청은 DB 처리 전에 차단합니다.
 	void syncNotionDataFromWebhook_throwsWhenSignatureMismatch() {
@@ -310,5 +369,21 @@ class NotionWebhookDataSyncServiceTests {
 		verify(notionApiClient, never()).retrievePage(any());
 		verify(notionWebhookMapper, never()).upsertNotionDataList(any());
 		verify(notionWebhookMapper, never()).upsertNotionCategoryBatch(anyList());
+	}
+
+	// 테스트용 Notion 서명 값을 생성합니다.
+	private String buildNotionSignature(String secret, String message) {
+		try {
+			Mac mac = Mac.getInstance("HmacSHA256");
+			mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+			byte[] digest = mac.doFinal(message.getBytes(StandardCharsets.UTF_8));
+			StringBuilder hexBuilder = new StringBuilder();
+			for (byte value : digest) {
+				hexBuilder.append(String.format("%02x", value));
+			}
+			return "sha256=" + hexBuilder;
+		} catch (Exception exception) {
+			throw new IllegalStateException("테스트 서명 생성에 실패했습니다.", exception);
+		}
 	}
 }

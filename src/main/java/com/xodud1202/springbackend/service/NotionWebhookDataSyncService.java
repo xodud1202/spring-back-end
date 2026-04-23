@@ -58,7 +58,7 @@ public class NotionWebhookDataSyncService {
 		}
 
 		// 서명 검증이 설정된 경우 x-notion-signature를 검증합니다.
-		validateSignatureIfNeeded(normalizedBody, headerMap);
+		validateWebhookRequest(normalizedBody, headerMap);
 
 		JsonNode rootNode = parseJson(normalizedBody);
 
@@ -110,6 +110,17 @@ public class NotionWebhookDataSyncService {
 			notionWebhookMapper.upsertNotionCategoryBatch(categoryRows);
 		}
 		return syncedCount;
+	}
+
+	// 웹훅 저장/동기화 전에 요청 본문과 서명을 검증합니다.
+	public void validateWebhookRequest(String requestBody, Map<String, String> headerMap) {
+		String normalizedBody = trimToNull(requestBody);
+		if (normalizedBody == null) {
+			throw new IllegalArgumentException("웹훅 바디를 확인해주세요.");
+		}
+
+		// 검증 토큰이 설정된 경우 x-notion-signature를 검증합니다.
+		validateSignatureIfNeeded(normalizedBody, headerMap);
 	}
 
 	// page.deleted 이벤트를 NOTION_DATA_LIST 삭제 상태 upsert 파라미터로 변환합니다.

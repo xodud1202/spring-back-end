@@ -1,5 +1,7 @@
 package com.xodud1202.springbackend.controller.bo;
 
+import static com.xodud1202.springbackend.common.util.CommonValidationUtils.isAllowedFileExtension;
+
 import com.xodud1202.springbackend.domain.admin.board.BoardPO;
 import com.xodud1202.springbackend.domain.common.FtpProperties;
 import com.xodud1202.springbackend.service.BoardService;
@@ -118,9 +120,8 @@ public class AdminBoardController {
 			return "파일명이 올바르지 않습니다.";
 		}
 
-		String extension = originalFilename.substring(originalFilename.lastIndexOf(".") + 1).toLowerCase();
 		String allowedExtensions = ftpProperties.getUploadBoardAllowExtension();
-		if (!allowedExtensions.contains(extension)) {
+		if (!isAllowedFileExtension(allowedExtensions, originalFilename)) {
 			return "허용되지 않은 파일 형식입니다. 허용 형식: " + allowedExtensions;
 		}
 

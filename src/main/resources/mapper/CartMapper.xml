@@ -96,6 +96,32 @@
 		 LIMIT 1
 	</select>
 
+	<select id="getShopCartDuplicateItemList" resultType="com.xodud1202.springbackend.domain.shop.cart.ShopCartItemVO">
+		/* CartMapper.getShopCartDuplicateItemList: 쇼핑몰 장바구니의 동일 상품/사이즈 중복 행 목록 조회 */
+		SELECT CART_ID
+		     , CUST_NO
+		     , GOODS_ID
+		     , SIZE_ID
+		     , QTY
+		     , EXHIBITION_NO
+		  FROM CART
+		 WHERE CUST_NO = #{custNo}
+		   AND GOODS_ID = #{goodsId}
+		   AND SIZE_ID = #{sizeId}
+		   AND CART_GB_CD = 'C'
+		 ORDER BY CART_ID ASC
+	</select>
+
+	<select id="lockShopCartForUpdate" resultType="long">
+		/* CartMapper.lockShopCartForUpdate: 동일 고객 일반 장바구니 쓰기 직렬화를 위한 범위 잠금 조회 */
+		SELECT CART_ID
+		  FROM CART FORCE INDEX (IDX_CART_01)
+		 WHERE CUST_NO = #{custNo}
+		   AND CART_GB_CD = 'C'
+		 ORDER BY CART_ID ASC
+		 FOR UPDATE
+	</select>
+
 	<insert id="insertShopCart" useGeneratedKeys="true" keyProperty="cartId" keyColumn="CART_ID">
 		/* CartMapper.insertShopCart: 쇼핑몰 장바구니 등록 */
 		INSERT INTO CART (
@@ -148,6 +174,18 @@
 		/* CartMapper.updateShopCartQtyByCartId: 쇼핑몰 장바구니 수량 수정 */
 		UPDATE CART
 		   SET QTY = #{qty}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE CUST_NO = #{custNo}
+		   AND CART_ID = #{cartId}
+		   AND CART_GB_CD = 'C'
+	</update>
+
+	<update id="addShopCartQtyAndExhibitionByCartId">
+		/* CartMapper.addShopCartQtyAndExhibitionByCartId: 쇼핑몰 장바구니 수량을 원자적으로 증가시키고 기획전 번호를 갱신 */
+		UPDATE CART
+		   SET QTY = QTY + #{qty}
+		     , EXHIBITION_NO = #{exhibitionNo}
 		     , UDT_NO = #{udtNo}
 		     , UDT_DT = NOW()
 		 WHERE CUST_NO = #{custNo}

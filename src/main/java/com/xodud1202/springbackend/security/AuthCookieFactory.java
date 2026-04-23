@@ -1,5 +1,6 @@
 package com.xodud1202.springbackend.security;
 
+import com.xodud1202.springbackend.common.shop.ShopSessionPolicy;
 import com.xodud1202.springbackend.common.snippet.SnippetSessionPolicy;
 import com.xodud1202.springbackend.common.work.WorkSessionPolicy;
 import com.xodud1202.springbackend.config.properties.JwtProperties;
@@ -13,8 +14,6 @@ import java.time.Duration;
 @RequiredArgsConstructor
 // 인증 관련 httpOnly 쿠키 생성 규칙을 중앙화합니다.
 public class AuthCookieFactory {
-	private static final Duration SHOP_SESSION_COOKIE_MAX_AGE = Duration.ofHours(1);
-
 	private final JwtProperties jwtProperties;
 
 	// 백오피스 리프레시 토큰 쿠키를 생성합니다.
@@ -45,9 +44,14 @@ public class AuthCookieFactory {
 			.httpOnly(true)
 			.secure(jwtProperties.cookieSecure())
 			.path("/")
-			.maxAge(SHOP_SESSION_COOKIE_MAX_AGE)
+			.maxAge(ShopSessionPolicy.SESSION_COOKIE_MAX_AGE)
 			.sameSite("Lax")
 			.build();
+	}
+
+	// 쇼핑몰 서명 로그인 쿠키를 생성합니다.
+	public ResponseCookie createShopAuthCookie(String token) {
+		return createShopLoginCookie(ShopSessionPolicy.COOKIE_SHOP_AUTH, token);
 	}
 
 	// 쇼핑몰 로그인 만료 쿠키를 생성합니다.
@@ -59,6 +63,11 @@ public class AuthCookieFactory {
 			.maxAge(Duration.ZERO)
 			.sameSite("Lax")
 			.build();
+	}
+
+	// 쇼핑몰 서명 로그인 만료 쿠키를 생성합니다.
+	public ResponseCookie createExpiredShopAuthCookie() {
+		return createExpiredShopLoginCookie(ShopSessionPolicy.COOKIE_SHOP_AUTH);
 	}
 
 	// 스니펫 로그인 쿠키를 생성합니다.

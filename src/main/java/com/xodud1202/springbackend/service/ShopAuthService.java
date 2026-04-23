@@ -102,6 +102,15 @@ public class ShopAuthService {
 		return ShopGoogleLoginResponse.joinRequired(buildGoogleLoginId(normalizedSub));
 	}
 
+	// 고객번호로 현재 유효한 쇼핑몰 고객 세션 정보를 조회합니다.
+	public ShopCustomerSessionVO getShopCustomerByCustNo(Long custNo) {
+		// 고객번호가 없으면 조회하지 않습니다.
+		if (custNo == null || custNo < 1L) {
+			return null;
+		}
+		return shopAuthMapper.getShopCustomerByCustNo(custNo);
+	}
+
 	@Transactional
 	// 구글 신규 회원가입을 처리하고 로그인 응답을 반환합니다.
 	public ShopGoogleLoginResponse joinWithGoogle(ShopGoogleJoinRequest request) {

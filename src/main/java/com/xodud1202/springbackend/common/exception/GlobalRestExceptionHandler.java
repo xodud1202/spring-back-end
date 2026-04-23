@@ -99,20 +99,21 @@ public class GlobalRestExceptionHandler {
 		return message;
 	}
 
-	// 로그 추적용 요청 메서드/URL/쿼리/IP를 문자열로 조합합니다.
+	// 로그 추적용 요청 메서드/URL/IP를 문자열로 조합합니다.
 	private String buildRequestSummary(HttpServletRequest request) {
 		if (request == null) {
 			return "unknown";
 		}
 
 		String method = resolveValue(request.getMethod(), "UNKNOWN");
-		String requestUri = resolveValue(request.getRequestURI(), "");
-		String queryString = request.getQueryString();
+		String requestPath = buildSanitizedRequestPath(request);
 		String clientIp = resolveClientIp(request);
-		String requestPath = queryString == null || queryString.isBlank()
-			? requestUri
-			: requestUri + "?" + queryString;
 		return method + " " + requestPath + " ip=" + clientIp;
+	}
+
+	// 민감값 노출을 막기 위해 query string을 제외한 요청 경로만 반환합니다.
+	private String buildSanitizedRequestPath(HttpServletRequest request) {
+		return resolveValue(request == null ? null : request.getRequestURI(), "");
 	}
 
 	// 프록시 헤더를 우선해 클라이언트 IP를 추출합니다.

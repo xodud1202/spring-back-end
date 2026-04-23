@@ -54,6 +54,29 @@ public class TossPaymentsClient {
 		}
 	}
 
+	// Toss 결제 단건 조회 API를 호출하고 원본 응답 문자열을 반환합니다.
+	public String getPayment(String paymentKey) {
+		// Basic 인증과 API 버전을 포함해 결제 단건 조회 API를 호출합니다.
+		try {
+			return restClientBuilder
+				.baseUrl(TOSS_API_BASE_URL)
+				.build()
+				.get()
+				.uri("/v1/payments/{paymentKey}", paymentKey)
+				.header(HttpHeaders.AUTHORIZATION, buildAuthorizationHeader())
+				.header("TossPayments-API-Version", TOSS_API_VERSION)
+				.accept(MediaType.APPLICATION_JSON)
+				.retrieve()
+				.body(String.class);
+		} catch (RestClientResponseException exception) {
+			throw new TossPaymentClientException(
+				exception.getStatusCode().value(),
+				exception.getResponseBodyAsString(),
+				exception
+			);
+		}
+	}
+
 	// Toss 결제 취소 API를 호출하고 원본 응답 문자열을 반환합니다.
 	public String cancelPayment(String paymentKey, String cancelReason, Long cancelAmount) {
 		// 환불 수취 계좌 정보가 없는 기본 취소 요청을 위임합니다.

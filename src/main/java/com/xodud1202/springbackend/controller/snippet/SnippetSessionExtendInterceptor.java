@@ -2,6 +2,7 @@ package com.xodud1202.springbackend.controller.snippet;
 
 import com.xodud1202.springbackend.common.snippet.SnippetSessionPolicy;
 import com.xodud1202.springbackend.security.AuthCookieFactory;
+import com.xodud1202.springbackend.security.SignedLoginTokenService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
@@ -16,6 +17,7 @@ import org.springframework.web.servlet.ModelAndView;
 @RequiredArgsConstructor
 public class SnippetSessionExtendInterceptor implements HandlerInterceptor {
 	private final AuthCookieFactory authCookieFactory;
+	private final SignedLoginTokenService signedLoginTokenService;
 
 	@Override
 	// 성공적으로 처리된 스니펫 요청에 대해 세션과 쿠키 유지시간을 다시 갱신합니다.
@@ -41,7 +43,7 @@ public class SnippetSessionExtendInterceptor implements HandlerInterceptor {
 			HttpHeaders.SET_COOKIE,
 			authCookieFactory.createSnippetLoginCookie(
 				SnippetSessionPolicy.COOKIE_SNIPPET_USER_NO,
-				String.valueOf(snippetUserNo)
+				signedLoginTokenService.generateSnippetAuthToken(snippetUserNo)
 			).toString()
 		);
 	}

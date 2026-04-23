@@ -171,6 +171,9 @@ public class ShopOrderController extends ShopControllerSupport {
 			return unauthorizedResponse();
 		} catch (IllegalArgumentException exception) {
 			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (IllegalStateException exception) {
+			log.error("쇼핑몰 주문 결제 준비 설정 오류 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", exception.getMessage()));
 		} catch (Exception exception) {
 			log.error("쇼핑몰 주문 결제 준비 실패 message={}", exception.getMessage(), exception);
 			return ResponseEntity.internalServerError().body(Map.of("message", "주문 결제 준비에 실패했습니다."));
@@ -229,6 +232,10 @@ public class ShopOrderController extends ShopControllerSupport {
 			// 웹훅 본문을 서비스에 전달해 상태를 반영합니다.
 			orderService.handleShopOrderPaymentWebhook(rawBody);
 			return ResponseEntity.ok(Map.of("success", true));
+		} catch (SecurityException exception) {
+			return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", exception.getMessage()));
+		} catch (IllegalArgumentException exception) {
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
 		} catch (Exception exception) {
 			log.error("쇼핑몰 주문 결제 웹훅 반영 실패 message={}", exception.getMessage(), exception);
 			return ResponseEntity.internalServerError().body(Map.of("message", "웹훅 처리에 실패했습니다."));

@@ -1,16 +1,25 @@
 package com.xodud1202.springbackend.controller.bo;
 
+import static com.xodud1202.springbackend.common.util.CommonValidationUtils.isAllowedFileExtension;
+
+import com.xodud1202.springbackend.common.snippet.SnippetSessionPolicy;
+import com.xodud1202.springbackend.common.work.WorkSessionPolicy;
 import com.xodud1202.springbackend.domain.admin.common.AdminMenuLnb;
 import com.xodud1202.springbackend.domain.admin.common.CommonCodeManagePO;
 import com.xodud1202.springbackend.domain.admin.common.MenuManageSavePO;
 import com.xodud1202.springbackend.domain.admin.common.MenuManageVO;
 import com.xodud1202.springbackend.domain.common.CommonCodeVO;
 import com.xodud1202.springbackend.domain.common.FtpProperties;
+import com.xodud1202.springbackend.security.SignedLoginTokenService;
 import com.xodud1202.springbackend.service.AdminCommonService;
 import com.xodud1202.springbackend.service.FtpFileService;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,6 +42,7 @@ public class AdminCommonController {
 	private final AdminCommonService adminCommonService;
 	private final FtpFileService ftpFileService;
 	private final FtpProperties ftpProperties;
+	private final SignedLoginTokenService signedLoginTokenService;
 	
 	@GetMapping("/api/admin/menu/list")
 	public ResponseEntity<List<AdminMenuLnb>> getResumeInfo() {
@@ -175,8 +185,12 @@ public class AdminCommonController {
 	 */
 	@PostMapping("/api/upload/editor-image")
 	public ResponseEntity<?> uploadEditorImage(
-			@RequestParam("image") MultipartFile image
+			@RequestParam("image") MultipartFile image,
+			HttpServletRequest request
 	) {
+		if (!isEditorImageUploadAuthorized(request)) {
+			return ResponseEntity.status(401).body(Map.of("message", "로그인이 필요합니다."));
+		}
 		return handleEditorImageUpload(image);
 	}
 
@@ -279,6 +293,70 @@ public class AdminCommonController {
 	}
 
 	/**
+	 * 에디터 이미지 업로드 권한을 확인합니다.
+	 * @param request 업로드 요청
+	 * @return 업로드 허용 여부
+	 */
+	private boolean isEditorImageUploadAuthorized(HttpServletRequest request) {
+		// 관리자 JWT 인증 또는 업무/스니펫 로그인 세션 중 하나가 있어야 업로드를 허용합니다.
+		return isAdminJwtAuthenticated()
+			|| resolveWorkUploadUserNo(request) != null
+			|| resolveSnippetUploadUserNo(request) != null;
+	}
+
+	/**
+	 * 현재 요청이 관리자 JWT 인증을 통과했는지 확인합니다.
+	 * @return 관리자 인증 여부
+	 */
+	private boolean isAdminJwtAuthenticated() {
+		// Spring Security 컨텍스트에 익명 사용자가 아닌 인증 정보가 있으면 관리자 JWT로 간주합니다.
+		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+		return authentication != null
+			&& authentication.isAuthenticated()
+			&& !"anonymousUser".equals(String.valueOf(authentication.getPrincipal()));
+	}
+
+	/**
+	 * 업무관리 로그인 사용자번호를 세션 또는 서명 쿠키에서 조회합니다.
+	 * @param request 업로드 요청
+	 * @return 인증된 업무관리 사용자번호
+	 */
+	private Long resolveWorkUploadUserNo(HttpServletRequest request) {
+		// 기존 업무관리 세션을 우선 사용하고, 없으면 서명 쿠키로 복구합니다.
+		HttpSession session = request == null ? null : request.getSession(false);
+		Long sessionUserNo = session == null ? null : WorkSessionPolicy.resolveWorkUserNo(session.getAttribute(WorkSessionPolicy.SESSION_ATTR_WORK_USER_NO));
+		if (sessionUserNo != null) {
+			return sessionUserNo;
+		}
+		return normalizePositiveUserNo(WorkSessionPolicy.resolveWorkUserNoFromRequest(request, signedLoginTokenService));
+	}
+
+	/**
+	 * 스니펫 로그인 사용자번호를 세션 또는 서명 쿠키에서 조회합니다.
+	 * @param request 업로드 요청
+	 * @return 인증된 스니펫 사용자번호
+	 */
+	private Long resolveSnippetUploadUserNo(HttpServletRequest request) {
+		// 기존 스니펫 세션을 우선 사용하고, 없으면 서명 쿠키로 복구합니다.
+		HttpSession session = request == null ? null : request.getSession(false);
+		Long sessionUserNo = session == null ? null : SnippetSessionPolicy.resolveSnippetUserNo(session.getAttribute(SnippetSessionPolicy.SESSION_ATTR_SNIPPET_USER_NO));
+		if (sessionUserNo != null) {
+			return sessionUserNo;
+		}
+		return normalizePositiveUserNo(SnippetSessionPolicy.resolveSnippetUserNoFromRequest(request, signedLoginTokenService));
+	}
+
+	/**
+	 * 인증 사용자번호를 양수 Long 또는 null로 정규화합니다.
+	 * @param userNo 인증 정책에서 해석한 사용자번호
+	 * @return 양수 사용자번호 또는 null
+	 */
+	private Long normalizePositiveUserNo(Long userNo) {
+		// 목 객체 기본값이나 비정상 토큰 결과가 인증으로 취급되지 않도록 양수만 허용합니다.
+		return userNo == null || userNo < 1L ? null : userNo;
+	}
+
+	/**
 	 * 브랜드 로고 이미지 업로드를 처리합니다.
 	 * @param image 업로드할 이미지 파일
 	 * @param brandNo 브랜드 번호
@@ -335,9 +413,8 @@ public class AdminCommonController {
 			return "파일명이 올바르지 않습니다.";
 		}
 
-		String extension = originalFilename.substring(originalFilename.lastIndexOf(".") + 1).toLowerCase();
 		String allowedExtensions = ftpProperties.getUploadResumeAllowExtension();
-		if (!allowedExtensions.contains(extension)) {
+		if (!isAllowedFileExtension(allowedExtensions, originalFilename)) {
 			return "허용되지 않은 파일 형식입니다. 허용 형식: " + allowedExtensions;
 		}
 
@@ -364,9 +441,8 @@ public class AdminCommonController {
 			return "파일명이 올바르지 않습니다.";
 		}
 
-		String extension = originalFilename.substring(originalFilename.lastIndexOf(".") + 1).toLowerCase();
 		String allowedExtensions = ftpProperties.getUploadEditorAllowExtension();
-		if (!allowedExtensions.contains(extension)) {
+		if (!isAllowedFileExtension(allowedExtensions, originalFilename)) {
 			return "허용되지 않은 파일 형식입니다. 허용 형식: " + allowedExtensions;
 		}
 
@@ -402,12 +478,11 @@ public class AdminCommonController {
 			return "파일명이 올바르지 않습니다.";
 		}
 
-		String extension = originalFilename.substring(originalFilename.lastIndexOf(".") + 1).toLowerCase();
 		String allowedExtensions = ftpProperties.getUploadBrandAllowExtension();
 		if (allowedExtensions == null || allowedExtensions.trim().isEmpty()) {
 			return "브랜드 로고 업로드 설정이 올바르지 않습니다.";
 		}
-		if (!allowedExtensions.contains(extension)) {
+		if (!isAllowedFileExtension(allowedExtensions, originalFilename)) {
 			return "허용되지 않는 파일 형식입니다. 허용 형식: " + allowedExtensions;
 		}
 

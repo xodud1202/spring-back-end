@@ -16,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -99,13 +100,34 @@ class LoginControllerTests {
 	}
 
 	@Test
-	// 로그인 실패 시 401을 반환하는지 확인합니다.
-	void loginFail() throws Exception {
+	// 존재하지 않는 계정 로그인 실패 시 공통 401 응답을 반환하는지 확인합니다.
+	void loginFailWhenUserMissing() throws Exception {
 		when(userBaseService.loadUserByLoginId("bad")).thenReturn(Optional.empty());
 
 		mockMvc.perform(post("/api/backoffice/login")
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("{\"loginId\":\"bad\",\"pwd\":\"user\",\"rememberMe\":false}"))
-			.andExpect(status().isUnauthorized());
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.result").value("AUTH_FAILED"))
+			.andExpect(jsonPath("$.resultMsg").value("아이디 또는 비밀번호가 일치하지 않습니다."));
+	}
+
+	@Test
+	// 비밀번호 불일치 로그인 실패도 존재하지 않는 계정과 동일한 응답을 반환하는지 확인합니다.
+	void loginFailWhenPasswordMismatch() throws Exception {
+		UserBaseEntity user = new UserBaseEntity();
+		user.setUsrNo(1L);
+		user.setLoginId("xodud1202");
+		user.setUserNm("테스트");
+
+		when(userBaseService.loadUserByLoginId("xodud1202")).thenReturn(Optional.of(user));
+		when(authenticationManager.authenticate(any())).thenThrow(new BadCredentialsException("bad credentials"));
+
+		mockMvc.perform(post("/api/backoffice/login")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"loginId\":\"xodud1202\",\"pwd\":\"wrong\",\"rememberMe\":false}"))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.result").value("AUTH_FAILED"))
+			.andExpect(jsonPath("$.resultMsg").value("아이디 또는 비밀번호가 일치하지 않습니다."));
 	}
 }

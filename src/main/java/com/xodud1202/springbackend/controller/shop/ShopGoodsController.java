@@ -1,8 +1,10 @@
 package com.xodud1202.springbackend.controller.shop;
 
+import com.xodud1202.springbackend.domain.shop.auth.ShopCustomerSessionVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsCouponDownloadRequestPO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsDetailVO;
 import com.xodud1202.springbackend.service.GoodsService;
+import com.xodud1202.springbackend.service.ShopAuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +24,7 @@ import java.util.Map;
 // 쇼핑몰 상품상세 API를 제공합니다.
 public class ShopGoodsController extends ShopControllerSupport {
 	private final GoodsService goodsService;
+	private final ShopAuthService shopAuthService;
 
 	// 쇼핑몰 상품상세 상단 화면 데이터를 조회합니다.
 	@GetMapping("/api/shop/goods/detail")
@@ -35,10 +38,11 @@ public class ShopGoodsController extends ShopControllerSupport {
 				return ResponseEntity.badRequest().body(Map.of("message", "상품코드를 확인해주세요."));
 			}
 
-			// 로그인 쿠키에서 고객번호/등급코드를 읽어 상세 조회에 전달합니다.
-			Long custNo = parseCustNoCookie(request);
-			String custGradeCd = findCookieValue(request, COOKIE_CUST_GRADE_CD);
-			ShopGoodsDetailVO detail = goodsService.getShopGoodsDetail(goodsId, custNo, decodeCookieValue(custGradeCd));
+			// 현재 로그인 세션 기준 고객번호/등급코드를 읽어 상세 조회에 전달합니다.
+			Long custNo = resolveAuthenticatedCustNo(request);
+			ShopCustomerSessionVO customer = shopAuthService.getShopCustomerByCustNo(custNo);
+			String custGradeCd = customer == null ? null : customer.custGradeCd();
+			ShopGoodsDetailVO detail = goodsService.getShopGoodsDetail(goodsId, custNo, custGradeCd);
 			if (detail == null || detail.getGoods() == null) {
 				return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "상품 정보를 찾을 수 없습니다."));
 			}

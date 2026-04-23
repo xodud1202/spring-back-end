@@ -17,6 +17,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -39,7 +40,10 @@ import java.util.Optional;
 // 백오피스 인증/토큰 관련 API를 처리하는 컨트롤러입니다.
 @RestController
 @RequiredArgsConstructor
+@Slf4j
 public class AdminAuthController {
+	private static final String AUTH_FAILED_RESULT = "AUTH_FAILED";
+	private static final String AUTH_FAILED_MESSAGE = "아이디 또는 비밀번호가 일치하지 않습니다.";
 	
 	private final AuthenticationManager authenticationManager;
 	private final JwtTokenProvider tokenProvider;
@@ -60,8 +64,9 @@ public class AdminAuthController {
 			// 먼저 사용자가 존재하는지 확인
 			Optional<UserBaseEntity> existingUser = userBaseService.loadUserByLoginId(loginRequest.loginId());
 			if (existingUser.isEmpty()) {
-				// 사용자가 존재하지 않는 경우 인증 실패 응답을 반환합니다.
-				return unauthorizedResponse("NOT_FOUND_ID", "계정정보가 존재하지 않습니다.");
+				// 계정 존재 여부가 외부 응답으로 노출되지 않도록 공통 인증 실패 응답을 반환합니다.
+				log.warn("백오피스 로그인 실패 reason=user_not_found");
+				return authenticationFailedResponse();
 			}
 			
 			// 사용자가 존재하면 비밀번호 검증 시도
@@ -112,8 +117,9 @@ public class AdminAuthController {
 			// 반환할 사용자 정보를 포함한 성공 응답을 반환합니다.
 			return ResponseEntity.ok(AdminAuthResponse.loginSuccess(accessToken, user));
 		} catch (BadCredentialsException e) {
-			// 비밀번호가 일치하지 않는 경우 인증 실패 응답을 반환합니다.
-			return unauthorizedResponse("NOT_CORRECT_PW", "비밀번호가 일치하지 않습니다.");
+			// 비밀번호 불일치도 계정 미존재와 동일한 외부 응답으로 통합합니다.
+			log.warn("백오피스 로그인 실패 reason=bad_credentials");
+			return authenticationFailedResponse();
 		} catch (Exception e) {
 			// 기타 예외는 기존 계약과 동일한 결과코드/메시지로 반환합니다.
 			return internalServerErrorResponse("ERROR", e.getMessage());
@@ -264,6 +270,11 @@ public class AdminAuthController {
 	// 인증 실패 공통 응답을 생성합니다.
 	private ResponseEntity<AdminAuthResponse> unauthorizedResponse(String result, String resultMsg) {
 		return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(AdminAuthResponse.failure(result, resultMsg));
+	}
+
+	// 로그인 인증 실패 공통 응답을 생성합니다.
+	private ResponseEntity<AdminAuthResponse> authenticationFailedResponse() {
+		return unauthorizedResponse(AUTH_FAILED_RESULT, AUTH_FAILED_MESSAGE);
 	}
 
 	// 서버 오류 공통 응답을 생성합니다.

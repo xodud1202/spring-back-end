@@ -30,6 +30,16 @@ public interface CartMapper {
 		@Param("sizeId") String sizeId
 	);
 
+	// 쇼핑몰 장바구니의 동일 상품/사이즈 중복 행 목록을 조회합니다.
+	List<ShopCartItemVO> getShopCartDuplicateItemList(
+		@Param("custNo") Long custNo,
+		@Param("goodsId") String goodsId,
+		@Param("sizeId") String sizeId
+	);
+
+	// 동일 고객의 일반 장바구니 쓰기를 직렬화하기 위해 범위 잠금을 획득합니다.
+	List<Long> lockShopCartForUpdate(@Param("custNo") Long custNo);
+
 	// 쇼핑몰 장바구니를 등록합니다.
 	int insertShopCart(ShopCartSavePO param);
 
@@ -55,6 +65,15 @@ public interface CartMapper {
 		@Param("custNo") Long custNo,
 		@Param("cartId") Long cartId,
 		@Param("qty") Integer qty,
+		@Param("udtNo") Long udtNo
+	);
+
+	// 쇼핑몰 장바구니 수량을 장바구니번호 기준으로 원자적으로 증가시키고 기획전 번호를 갱신합니다.
+	int addShopCartQtyAndExhibitionByCartId(
+		@Param("custNo") Long custNo,
+		@Param("cartId") Long cartId,
+		@Param("qty") Integer qty,
+		@Param("exhibitionNo") Integer exhibitionNo,
 		@Param("udtNo") Long udtNo
 	);
 

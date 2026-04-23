@@ -1,8 +1,8 @@
 package com.xodud1202.springbackend.controller.bo;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkAttachmentDownloadVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkManualCreateResponseVO;
-import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyFileDownloadVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyFileVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkReplyVO;
 import com.xodud1202.springbackend.service.CompanyWorkService;
@@ -248,8 +248,8 @@ class AdminCompanyWorkControllerTests {
 		authenticateAdmin();
 
 		// 다운로드 응답 파일 메타와 바이트를 구성합니다.
-		AdminCompanyWorkReplyFileDownloadVO response = new AdminCompanyWorkReplyFileDownloadVO();
-		response.setReplyFileNm("회의록 1차.pdf");
+		AdminCompanyWorkAttachmentDownloadVO response = new AdminCompanyWorkAttachmentDownloadVO();
+		response.setFileNm("회의록 1차.pdf");
 		response.setFileData("download-data".getBytes(StandardCharsets.UTF_8));
 		when(companyWorkService.downloadAdminCompanyWorkReplyFile(anyInt())).thenReturn(response);
 

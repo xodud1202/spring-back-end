@@ -1,14 +1,17 @@
 package com.xodud1202.springbackend.controller.shop;
 
+import com.xodud1202.springbackend.common.shop.ShopSessionPolicy;
 import com.xodud1202.springbackend.common.util.CommonTextUtils;
-import jakarta.servlet.http.Cookie;
+import com.xodud1202.springbackend.config.properties.ShopProperties;
+import com.xodud1202.springbackend.domain.shop.auth.ShopCustomerSessionVO;
+import com.xodud1202.springbackend.security.SignedLoginTokenService;
+import com.xodud1202.springbackend.service.ShopAuthService;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.Map;
 
 import static com.xodud1202.springbackend.common.Constants.Shop.DEVICE_GB_MO;
@@ -16,28 +19,48 @@ import static com.xodud1202.springbackend.common.Constants.Shop.DEVICE_GB_PC;
 
 // 쇼핑몰 컨트롤러 공통 요청 해석 기능을 제공합니다.
 abstract class ShopControllerSupport {
-	protected static final String COOKIE_CUST_NO = "cust_no";
-	protected static final String COOKIE_CUST_GRADE_CD = "cust_grade_cd";
+	@Autowired
+	private ShopAuthService shopAuthService;
 
-	// 요청 쿠키에서 고객번호를 파싱해 반환합니다.
-	protected Long parseCustNoCookie(HttpServletRequest request) {
-		// 고객번호 쿠키 값이 없으면 null을 반환합니다.
-		String custNoValue = findCookieValue(request, COOKIE_CUST_NO);
-		if (custNoValue == null || custNoValue.trim().isEmpty()) {
+	@Autowired
+	private SignedLoginTokenService signedLoginTokenService;
+
+	@Autowired
+	private ShopProperties shopProperties;
+
+	// 현재 요청 세션에서 로그인된 고객번호를 조회합니다.
+	protected Long resolveAuthenticatedCustNo(HttpServletRequest request) {
+		// 세션 고객번호가 있으면 가장 먼저 사용합니다.
+		HttpSession session = request == null ? null : request.getSession(false);
+		Long sessionCustNo = session == null ? null : ShopSessionPolicy.resolveShopCustNo(session.getAttribute(ShopSessionPolicy.SESSION_ATTR_CUST_NO));
+		if (sessionCustNo != null) {
+			ShopCustomerSessionVO customer = shopAuthService.getShopCustomerByCustNo(sessionCustNo);
+			if (customer != null && customer.custNo() != null) {
+				ShopSessionPolicy.applyAuthenticatedSession(session, customer.custNo());
+				return customer.custNo();
+			}
+			ShopSessionPolicy.clearAuthenticatedSession(session);
+		}
+
+		// 세션이 없으면 서명된 shop_auth 쿠키로 고객번호 복구를 시도하고 활성 고객인지 재확인합니다.
+		Long cookieCustNo = ShopSessionPolicy.resolveShopCustNoFromRequest(request, signedLoginTokenService);
+		if (cookieCustNo == null) {
 			return null;
 		}
 
-		// 숫자 형식이 아니면 로그인 정보가 없는 것으로 처리합니다.
-		try {
-			return Long.valueOf(custNoValue.trim());
-		} catch (NumberFormatException exception) {
+		ShopCustomerSessionVO customer = shopAuthService.getShopCustomerByCustNo(cookieCustNo);
+		if (customer == null || customer.custNo() == null) {
 			return null;
 		}
+
+		// 보호 API 첫 진입에서도 이후 요청이 세션을 재사용할 수 있도록 세션을 복구합니다.
+		ShopSessionPolicy.applyAuthenticatedSession(request.getSession(true), customer.custNo());
+		return customer.custNo();
 	}
 
 	// 로그인된 고객번호를 필수로 요구하고 미로그인 시 예외를 발생시킵니다.
 	protected Long requireAuthenticatedCustNo(HttpServletRequest request) {
-		Long custNo = parseCustNoCookie(request);
+		Long custNo = resolveAuthenticatedCustNo(request);
 		if (custNo == null) {
 			throw new SecurityException("로그인이 필요합니다.");
 		}
@@ -47,28 +70,6 @@ abstract class ShopControllerSupport {
 	// 미인증 요청에 대한 공통 401 응답을 반환합니다.
 	protected ResponseEntity<Object> unauthorizedResponse() {
 		return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("message", "로그인이 필요합니다."));
-	}
-
-	// 요청 쿠키에서 지정한 이름의 값을 조회합니다.
-	protected String findCookieValue(HttpServletRequest request, String cookieName) {
-		// 쿠키 목록이나 이름이 없으면 null을 반환합니다.
-		if (request == null || request.getCookies() == null || cookieName == null) {
-			return null;
-		}
-		return Arrays.stream(request.getCookies())
-			.filter(cookie -> cookieName.equals(cookie.getName()))
-			.findFirst()
-			.map(Cookie::getValue)
-			.orElse(null);
-	}
-
-	// URL 인코딩된 쿠키 값을 원문 문자열로 디코딩합니다.
-	protected String decodeCookieValue(String value) {
-		// 값이 없으면 null을 그대로 반환합니다.
-		if (value == null) {
-			return null;
-		}
-		return URLDecoder.decode(value, StandardCharsets.UTF_8);
 	}
 
 	// 숫자 또는 문자열 값을 정수로 변환합니다.
@@ -145,27 +146,11 @@ abstract class ShopControllerSupport {
 		return DEVICE_GB_PC;
 	}
 
-	// 요청 헤더를 기준으로 프론트 절대 Origin 값을 추론합니다.
+	// 설정된 쇼핑몰 프론트 절대 Origin 값을 반환합니다.
 	protected String resolveShopOrigin(HttpServletRequest request) {
-		// Origin, X-Forwarded, Referer 순으로 프론트 Origin을 추론합니다.
-		String origin = trimToNull(request == null ? null : request.getHeader("Origin"));
-		if (origin != null) {
-			return origin;
-		}
-		String forwardedHost = trimToNull(request == null ? null : request.getHeader("X-Forwarded-Host"));
-		String forwardedProto = trimToNull(request == null ? null : request.getHeader("X-Forwarded-Proto"));
-		if (forwardedHost != null) {
-			return (forwardedProto == null ? "http" : forwardedProto) + "://" + forwardedHost;
-		}
-		String referer = trimToNull(request == null ? null : request.getHeader("Referer"));
-		if (referer != null) {
-			int slashIndex = referer.indexOf('/', referer.indexOf("://") + 3);
-			return slashIndex > -1 ? referer.substring(0, slashIndex) : referer;
-		}
-		if (request == null) {
-			return "";
-		}
-		return request.getScheme() + "://" + request.getServerName() + ":" + request.getServerPort();
+		// 결제 리다이렉트 호스트는 요청 헤더를 신뢰하지 않고 환경별 설정값만 사용합니다.
+		String configuredOrigin = trimToNull(shopProperties == null ? null : shopProperties.frontBaseUrl());
+		return configuredOrigin == null ? "" : configuredOrigin;
 	}
 
 	// 문자열을 trim 처리하고 비어 있으면 null을 반환합니다.

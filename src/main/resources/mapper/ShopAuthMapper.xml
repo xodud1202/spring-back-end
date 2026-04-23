@@ -51,6 +51,20 @@
 		 LIMIT 1
 	</select>
 
+	<select id="getShopCustomerByCustNo" resultMap="shopCustomerSessionResultMap">
+		/* ShopAuthMapper.getShopCustomerByCustNo: 고객번호로 쇼핑몰 고객 로그인 정보를 조회 */
+		SELECT CUST_NO
+		     , LOGIN_ID
+		     , CUST_NM
+		     , CUST_GRADE_CD
+		     , CI
+		     , EMAIL
+		  FROM CUSTOMER_BASE
+		 WHERE CUST_NO = #{custNo}
+		   AND CUST_STAT_CD = 'CUST_STAT_01'
+		 LIMIT 1
+	</select>
+
 	<select id="getCommonCodeName" resultType="string">
 		/* ShopAuthMapper.getCommonCodeName: 공통코드 코드명 조회 */
 		SELECT CD_NM

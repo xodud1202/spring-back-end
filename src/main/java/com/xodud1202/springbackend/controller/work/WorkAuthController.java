@@ -6,8 +6,8 @@ import com.xodud1202.springbackend.domain.LoginRequest;
 import com.xodud1202.springbackend.domain.work.WorkSessionRefreshResponse;
 import com.xodud1202.springbackend.entity.UserBaseEntity;
 import com.xodud1202.springbackend.security.AuthCookieFactory;
+import com.xodud1202.springbackend.security.SignedLoginTokenService;
 import com.xodud1202.springbackend.service.UserBaseService;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
@@ -22,16 +22,17 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Arrays;
-
 // 업무관리 로그인과 세션 복구 API를 제공합니다.
 @Slf4j
 @RestController
 @RequiredArgsConstructor
 public class WorkAuthController {
+	private static final String AUTH_FAILED_MESSAGE = "아이디 또는 비밀번호가 일치하지 않습니다.";
+
 	private final AuthenticationManager authenticationManager;
 	private final UserBaseService userBaseService;
 	private final AuthCookieFactory authCookieFactory;
+	private final SignedLoginTokenService signedLoginTokenService;
 
 	@PostMapping("/api/work/auth/login")
 	// 로그인 아이디와 비밀번호를 검증하고 업무관리 로그인 세션을 발급합니다.
@@ -39,7 +40,10 @@ public class WorkAuthController {
 		try {
 			// 로그인 아이디 존재 여부를 먼저 확인합니다.
 			UserBaseEntity user = userBaseService.loadUserByLoginId(request.loginId())
-				.orElseThrow(() -> new IllegalArgumentException("계정정보가 존재하지 않습니다."));
+				.orElseThrow(() -> {
+					log.warn("업무관리 로그인 실패 reason=user_not_found");
+					return new SecurityException(AUTH_FAILED_MESSAGE);
+				});
 
 			// 비밀번호를 검증해 인증에 성공하면 세션과 쿠키를 함께 발급합니다.
 			authenticationManager.authenticate(
@@ -48,10 +52,13 @@ public class WorkAuthController {
 
 			WorkSessionRefreshResponse response = WorkSessionRefreshResponse.authenticated(user.getUsrNo(), user.getLoginId(), user.getUserNm());
 			return createLoginSuccessResponse(response, httpRequest);
+		} catch (BadCredentialsException exception) {
+			log.warn("업무관리 로그인 실패 reason=bad_credentials");
+			throw new SecurityException(AUTH_FAILED_MESSAGE);
+		} catch (SecurityException exception) {
+			throw exception;
 		} catch (IllegalArgumentException exception) {
 			throw exception;
-		} catch (BadCredentialsException exception) {
-			throw new IllegalArgumentException("비밀번호가 일치하지 않습니다.");
 		} catch (Exception exception) {
 			log.error("업무관리 로그인 실패 message={}", exception.getMessage(), exception);
 			throw new IllegalStateException("업무관리 로그인 처리에 실패했습니다.", exception);
@@ -59,38 +66,35 @@ public class WorkAuthController {
 	}
 
 	@PostMapping("/api/work/auth/session/refresh")
-	// 업무관리 사용자번호 쿠키를 기준으로 세션을 복구합니다.
+	// 업무관리 현재 세션 기준 로그인 상태를 확인하고 유지시간을 연장합니다.
 	public ResponseEntity<WorkSessionRefreshResponse> refreshWorkSession(HttpServletRequest request) {
 		try {
-			// 사용자번호 쿠키가 없으면 비로그인 응답을 반환합니다.
-			String workUserNoValue = findCookieValue(request, WorkSessionPolicy.COOKIE_WORK_USER_NO);
-			if (isBlank(workUserNoValue)) {
-				return ResponseEntity.ok(WorkSessionRefreshResponse.unauthenticated());
+			// 세션 우선, 없으면 서명된 로그인 쿠키 기준으로 업무관리 사용자번호를 복구합니다.
+			HttpSession session = request.getSession(false);
+			Long workUserNo = session == null ? null : WorkSessionPolicy.resolveWorkUserNo(session.getAttribute(WorkSessionPolicy.SESSION_ATTR_WORK_USER_NO));
+			if (workUserNo == null) {
+				workUserNo = WorkSessionPolicy.resolveWorkUserNoFromRequest(request, signedLoginTokenService);
+			}
+			if (workUserNo == null) {
+				return buildUnauthenticatedWorkSessionResponse();
 			}
 
-			// 쿠키 사용자번호로 실제 사용자를 조회합니다.
-			Long workUserNo = parseWorkUserNo(workUserNoValue);
+			// 세션 사용자번호로 실제 사용자를 조회합니다.
 			UserBaseEntity user = userBaseService.getUserEntityByUsrNo(workUserNo).orElse(null);
 			if (user == null || user.getUsrNo() == null) {
-				invalidateWorkSession(request);
-				return ResponseEntity.ok()
-					.header(
-						HttpHeaders.SET_COOKIE,
-						authCookieFactory.createExpiredWorkLoginCookie(WorkSessionPolicy.COOKIE_WORK_USER_NO).toString()
-					)
-					.body(WorkSessionRefreshResponse.unauthenticated());
+				clearWorkSession(request);
+				return buildUnauthenticatedWorkSessionResponse();
 			}
 
-			// 세션과 로그인 쿠키 만료시간을 함께 갱신합니다.
-			HttpSession session = request.getSession(true);
-			session.setAttribute(WorkSessionPolicy.SESSION_ATTR_WORK_USER_NO, user.getUsrNo());
-			WorkSessionPolicy.refreshSessionTimeout(session);
+			// 세션이 없었다면 새 세션을 복구하고 서명 로그인 쿠키 만료시간도 함께 갱신합니다.
+			HttpSession authenticatedSession = session == null ? request.getSession(true) : session;
+			WorkSessionPolicy.applyAuthenticatedSession(authenticatedSession, user.getUsrNo());
 			return ResponseEntity.ok()
 				.header(
 					HttpHeaders.SET_COOKIE,
 					authCookieFactory.createWorkLoginCookie(
 						WorkSessionPolicy.COOKIE_WORK_USER_NO,
-						String.valueOf(user.getUsrNo())
+						signedLoginTokenService.generateWorkAuthToken(user.getUsrNo())
 					).toString()
 				)
 				.body(WorkSessionRefreshResponse.authenticated(user.getUsrNo(), user.getLoginId(), user.getUserNm()));
@@ -106,8 +110,8 @@ public class WorkAuthController {
 	// 업무관리 로그아웃 시 세션과 로그인 쿠키를 모두 만료 처리합니다.
 	public ResponseEntity<ApiMessageResponse> logoutWork(HttpServletRequest request) {
 		try {
-			// 업무관리 세션을 무효화하고 로그인 쿠키를 제거합니다.
-			invalidateWorkSession(request);
+			// 업무관리 세션 속성만 제거하고 로그인 쿠키를 제거합니다.
+			clearWorkSession(request);
 			return ResponseEntity.ok()
 				.header(
 					HttpHeaders.SET_COOKIE,
@@ -124,54 +128,32 @@ public class WorkAuthController {
 	private ResponseEntity<WorkSessionRefreshResponse> createLoginSuccessResponse(WorkSessionRefreshResponse response, HttpServletRequest httpRequest) {
 		// 세션에 로그인 사용자번호를 기록하고 5시간 만료를 설정합니다.
 		HttpSession session = httpRequest.getSession(true);
-		session.setAttribute(WorkSessionPolicy.SESSION_ATTR_WORK_USER_NO, response.workUserNo());
-		WorkSessionPolicy.refreshSessionTimeout(session);
+		WorkSessionPolicy.applyAuthenticatedSession(session, response.workUserNo());
 
-		// 로그인 쿠키도 함께 발급합니다.
+		// 로그인 쿠키도 서명 토큰으로 함께 발급합니다.
 		return ResponseEntity.ok()
 			.header(
 				HttpHeaders.SET_COOKIE,
 				authCookieFactory.createWorkLoginCookie(
 					WorkSessionPolicy.COOKIE_WORK_USER_NO,
-					String.valueOf(response.workUserNo())
+					signedLoginTokenService.generateWorkAuthToken(response.workUserNo())
 				).toString()
 			)
 			.body(response);
 	}
 
-	// 업무관리 세션을 무효화합니다.
-	private void invalidateWorkSession(HttpServletRequest request) {
-		HttpSession session = request.getSession(false);
-		if (session == null) {
-			return;
-		}
-		session.removeAttribute(WorkSessionPolicy.SESSION_ATTR_WORK_USER_NO);
-		session.invalidate();
+	// 비로그인 업무관리 세션 응답과 만료 쿠키를 생성합니다.
+	private ResponseEntity<WorkSessionRefreshResponse> buildUnauthenticatedWorkSessionResponse() {
+		return ResponseEntity.ok()
+			.header(
+				HttpHeaders.SET_COOKIE,
+				authCookieFactory.createExpiredWorkLoginCookie(WorkSessionPolicy.COOKIE_WORK_USER_NO).toString()
+			)
+			.body(WorkSessionRefreshResponse.unauthenticated());
 	}
 
-	// 요청 쿠키에서 지정한 이름의 값을 찾습니다.
-	private String findCookieValue(HttpServletRequest request, String cookieName) {
-		if (request.getCookies() == null) {
-			return null;
-		}
-		return Arrays.stream(request.getCookies())
-			.filter(cookie -> cookieName.equals(cookie.getName()))
-			.findFirst()
-			.map(Cookie::getValue)
-			.orElse(null);
-	}
-
-	// 쿠키 문자열을 사용자번호 Long 값으로 변환합니다.
-	private Long parseWorkUserNo(String value) {
-		try {
-			return Long.valueOf(value);
-		} catch (NumberFormatException exception) {
-			throw new IllegalArgumentException("업무관리 사용자번호를 확인해주세요.");
-		}
-	}
-
-	// 문자열 공백 여부를 확인합니다.
-	private boolean isBlank(String value) {
-		return value == null || value.trim().isEmpty();
+	// 업무관리 세션 속성만 제거합니다.
+	private void clearWorkSession(HttpServletRequest request) {
+		WorkSessionPolicy.clearAuthenticatedSession(request == null ? null : request.getSession(false));
 	}
 }
