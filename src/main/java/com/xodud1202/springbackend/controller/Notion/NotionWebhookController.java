@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Enumeration;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 
 @Slf4j
@@ -21,6 +22,7 @@ import java.util.Map;
 // Notion 웹훅 요청을 수신하고 요청 원문을 임시 테이블에 저장하는 컨트롤러입니다.
 public class NotionWebhookController {
 	private static final String WEBHOOK_PATH = "/api/notion/webhook";
+	private static final String SIGNATURE_HEADER = "x-notion-signature";
 
 	private final NotionWebhookTempSaveService notionWebhookTempSaveService;
 	private final NotionWebhookDataSyncService notionWebhookDataSyncService;
@@ -37,10 +39,13 @@ public class NotionWebhookController {
 				headerMap.put(headerName, request.getHeader(headerName));
 			}
 
-			// 서비스에 전달해 웹훅 원문을 임시 저장합니다.
+			// 서명 검증을 먼저 수행해 미검증 요청의 임시 저장을 차단합니다.
+			notionWebhookDataSyncService.validateWebhookRequest(requestBody, headerMap);
+
+			// 서비스에 전달해 검증된 웹훅 원문을 임시 저장합니다.
 			int savedCount = notionWebhookTempSaveService.saveWebhookRequest(
 				WEBHOOK_PATH,
-				headerMap,
+				filterStorableWebhookHeaders(headerMap),
 				request.getParameterMap(),
 				requestBody
 			);
@@ -52,10 +57,43 @@ public class NotionWebhookController {
 			// 서명 검증 실패 시 401 응답을 반환합니다.
 			log.warn("Notion 웹훅 서명 검증 실패 message={}", securityException.getMessage());
 			return ResponseEntity.status(401).body(Map.of("message", "웹훅 서명 검증 실패"));
+		} catch (IllegalArgumentException illegalArgumentException) {
+			// 요청값 검증 실패 시 임시 저장 없이 400 응답을 반환합니다.
+			log.warn("Notion 웹훅 요청값 검증 실패 message={}", illegalArgumentException.getMessage());
+			return ResponseEntity.badRequest().body(Map.of("message", "웹훅 요청값 확인 실패"));
 		} catch (Exception exception) {
 			// 처리 실패 시 에러 로그와 500 응답을 반환합니다.
 			log.error("Notion 웹훅 처리 실패 message={}", exception.getMessage(), exception);
 			return ResponseEntity.internalServerError().body(Map.of("message", "웹훅 처리 실패"));
 		}
+	}
+
+	// 임시 저장 가능한 웹훅 헤더만 allowlist 기준으로 필터링합니다.
+	private Map<String, String> filterStorableWebhookHeaders(Map<String, String> headerMap) {
+		Map<String, String> filteredHeaders = new LinkedHashMap<>();
+		if (headerMap == null || headerMap.isEmpty()) {
+			return filteredHeaders;
+		}
+
+		// 민감한 서명/인증 헤더를 제외하고 운영 추적에 필요한 최소 헤더만 저장합니다.
+		for (Map.Entry<String, String> entry : headerMap.entrySet()) {
+			String headerName = entry.getKey();
+			if (isStorableWebhookHeader(headerName)) {
+				filteredHeaders.put(headerName, entry.getValue());
+			}
+		}
+		return filteredHeaders;
+	}
+
+	// 개별 헤더명이 임시 저장 허용 대상인지 확인합니다.
+	private boolean isStorableWebhookHeader(String headerName) {
+		if (headerName == null || headerName.isBlank()) {
+			return false;
+		}
+
+		String normalizedHeaderName = headerName.trim().toLowerCase(Locale.ROOT);
+		return "content-type".equals(normalizedHeaderName)
+			|| "user-agent".equals(normalizedHeaderName)
+			|| (normalizedHeaderName.startsWith("x-notion-") && !SIGNATURE_HEADER.equals(normalizedHeaderName));
 	}
 }
