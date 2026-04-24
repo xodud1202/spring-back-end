@@ -2,6 +2,7 @@ package com.xodud1202.springbackend.controller.shop;
 
 import com.xodud1202.springbackend.common.shop.ShopSessionPolicy;
 import com.xodud1202.springbackend.config.properties.JwtProperties;
+import com.xodud1202.springbackend.config.properties.SecurityCsrfProperties;
 import com.xodud1202.springbackend.config.properties.ShopProperties;
 import com.xodud1202.springbackend.domain.shop.auth.ShopCustomerSessionVO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartSiteInfoVO;
@@ -63,13 +64,18 @@ class ShopOrderControllerTests {
 		ReflectionTestUtils.setField(controller, "shopAuthService", shopAuthService);
 		ReflectionTestUtils.setField(controller, "signedLoginTokenService", signedLoginTokenService);
 		ReflectionTestUtils.setField(controller, "shopProperties", new ShopProperties(SHOP_FRONT_BASE_URL));
+		ReflectionTestUtils.setField(
+			controller,
+			"securityCsrfProperties",
+			new SecurityCsrfProperties(List.of("http://localhost:3014", "http://127.0.0.1:3014"))
+		);
 		mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
 	}
 
 	@Test
-	@DisplayName("주문서 페이지 조회 API는 서명된 shop_auth 쿠키와 설정 Origin으로 서비스를 호출한다")
-	// 주문서 페이지 조회 시 raw 요청 Origin 대신 설정된 쇼핑몰 Origin을 전달하는지 검증합니다.
-	void getShopOrderPage_usesSignedShopAuthAndConfiguredOrigin() throws Exception {
+	@DisplayName("주문서 페이지 조회 API는 허용된 현재 요청 Origin을 서비스에 전달한다")
+	// 주문서 페이지 조회 시 허용 목록에 포함된 현재 요청 Origin을 우선 사용해 서비스에 전달하는지 검증합니다.
+	void getShopOrderPage_usesAllowedRequestOrigin() throws Exception {
 		// 인증 고객과 주문서 페이지 응답을 목으로 구성합니다.
 		mockShopCustomer(7L);
 		ShopCartSiteInfoVO siteInfo = new ShopCartSiteInfoVO();
@@ -79,13 +85,13 @@ class ShopOrderControllerTests {
 		page.setCartList(List.of());
 		page.setCartCount(0);
 		page.setSiteInfo(siteInfo);
-		when(orderService.getShopOrderPage(eq(List.of(12L, 15L)), eq(7L), eq("PC"), eq(SHOP_FRONT_BASE_URL))).thenReturn(page);
+		when(orderService.getShopOrderPage(eq(List.of(12L, 15L)), eq(7L), eq("PC"), eq("http://localhost:3014"))).thenReturn(page);
 
-		// 조작된 Origin 헤더가 있어도 설정 Origin 기준으로 정상 조회되는지 확인합니다.
+		// 허용된 Origin 헤더가 있으면 현재 요청 Origin 기준으로 정상 조회되는지 확인합니다.
 		mockMvc.perform(
 				get("/api/shop/order/page")
 					.cookie(shopAuthCookie(7L))
-					.header("Origin", "https://evil.example")
+					.header("Origin", "http://localhost:3014")
 					.param("cartId", "12")
 					.param("cartId", "15")
 					.contentType(MediaType.APPLICATION_JSON)
@@ -94,8 +100,8 @@ class ShopOrderControllerTests {
 			.andExpect(jsonPath("$.cartCount").value(0))
 			.andExpect(jsonPath("$.siteInfo.deliveryFee").value(3000));
 
-		// 서비스 호출 인자가 설정 Origin으로 고정되는지 검증합니다.
-		verify(orderService).getShopOrderPage(List.of(12L, 15L), 7L, "PC", SHOP_FRONT_BASE_URL);
+		// 서비스 호출 인자가 현재 요청 Origin으로 전달되는지 검증합니다.
+		verify(orderService).getShopOrderPage(List.of(12L, 15L), 7L, "PC", "http://localhost:3014");
 	}
 
 	@Test
@@ -114,10 +120,38 @@ class ShopOrderControllerTests {
 	}
 
 	@Test
-	@DisplayName("주문 결제 준비 API는 조작된 Origin을 무시하고 설정 Origin으로 결제 URL을 반환한다")
-	// 결제 준비 요청의 success/fail URL 기준이 요청 헤더가 아닌 설정값인지 검증합니다.
-	void prepareShopOrderPayment_usesConfiguredOriginOnly() throws Exception {
+	@DisplayName("주문 결제 준비 API는 Origin이 없으면 허용된 Referer Origin으로 결제 URL을 반환한다")
+	// 결제 준비 요청 시 Origin 헤더가 없어도 허용된 Referer Origin을 복원해 success/fail URL 기준으로 사용하는지 검증합니다.
+	void prepareShopOrderPayment_usesAllowedRefererOrigin() throws Exception {
 		// 인증 고객과 결제 준비 응답을 목으로 구성합니다.
+		mockShopCustomer(7L);
+		ShopOrderPaymentPrepareVO result = new ShopOrderPaymentPrepareVO();
+		result.setOrdNo("ORD202604230001");
+		result.setPayNo(101L);
+		result.setSuccessUrl("http://127.0.0.1:3014/order/success?payNo=101");
+		result.setFailUrl("http://127.0.0.1:3014/order/fail?payNo=101");
+		when(orderService.prepareShopOrderPayment(any(), eq(7L), anyString(), eq("http://127.0.0.1:3014"))).thenReturn(result);
+
+		// Origin 없이 허용된 Referer만 있어도 해당 호스트 기준 URL을 반환해야 합니다.
+		mockMvc.perform(
+				post("/api/shop/order/payment/prepare")
+					.cookie(shopAuthCookie(7L))
+					.header("Referer", "http://127.0.0.1:3014/order")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"from":"cart","cartIdList":[12],"addressNm":"집","discountSelection":{},"pointUseAmt":0,"paymentMethodCd":"PAY_METHOD_01"}
+						""")
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.successUrl").value("http://127.0.0.1:3014/order/success?payNo=101"))
+			.andExpect(jsonPath("$.failUrl").value("http://127.0.0.1:3014/order/fail?payNo=101"));
+	}
+
+	@Test
+	@DisplayName("주문 결제 준비 API는 허용되지 않은 Origin이면 설정 fallback Origin으로 결제 URL을 반환한다")
+	// 결제 준비 요청 Origin이 허용 목록에 없으면 설정된 fallback Origin으로 success/fail URL을 생성하는지 검증합니다.
+	void prepareShopOrderPayment_fallsBackToConfiguredOriginWhenOriginNotAllowed() throws Exception {
+		// 인증 고객과 fallback 결제 준비 응답을 목으로 구성합니다.
 		mockShopCustomer(7L);
 		ShopOrderPaymentPrepareVO result = new ShopOrderPaymentPrepareVO();
 		result.setOrdNo("ORD202604230001");
@@ -126,12 +160,39 @@ class ShopOrderControllerTests {
 		result.setFailUrl(SHOP_FRONT_BASE_URL + "/order/fail?payNo=101");
 		when(orderService.prepareShopOrderPayment(any(), eq(7L), anyString(), eq(SHOP_FRONT_BASE_URL))).thenReturn(result);
 
-		// 조작된 프록시 헤더가 있어도 응답 URL은 설정 Origin을 사용해야 합니다.
+		// 허용되지 않은 Origin 헤더와 조작된 프록시 헤더는 무시하고 fallback Origin을 사용해야 합니다.
 		mockMvc.perform(
 				post("/api/shop/order/payment/prepare")
 					.cookie(shopAuthCookie(7L))
 					.header("Origin", "https://evil.example")
 					.header("X-Forwarded-Host", "evil.example")
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{"from":"cart","cartIdList":[12],"addressNm":"집","discountSelection":{},"pointUseAmt":0,"paymentMethodCd":"PAY_METHOD_01"}
+						""")
+			)
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.successUrl").value(SHOP_FRONT_BASE_URL + "/order/success?payNo=101"))
+			.andExpect(jsonPath("$.failUrl").value(SHOP_FRONT_BASE_URL + "/order/fail?payNo=101"));
+	}
+
+	@Test
+	@DisplayName("주문 결제 준비 API는 Origin과 Referer가 모두 없으면 설정 fallback Origin으로 결제 URL을 반환한다")
+	// 결제 준비 요청에서 현재 허용 Origin을 복원할 수 없으면 설정된 fallback Origin을 사용하는지 검증합니다.
+	void prepareShopOrderPayment_fallsBackToConfiguredOriginWhenRequestOriginMissing() throws Exception {
+		// 인증 고객과 fallback 결제 준비 응답을 목으로 구성합니다.
+		mockShopCustomer(7L);
+		ShopOrderPaymentPrepareVO result = new ShopOrderPaymentPrepareVO();
+		result.setOrdNo("ORD202604230001");
+		result.setPayNo(101L);
+		result.setSuccessUrl(SHOP_FRONT_BASE_URL + "/order/success?payNo=101");
+		result.setFailUrl(SHOP_FRONT_BASE_URL + "/order/fail?payNo=101");
+		when(orderService.prepareShopOrderPayment(any(), eq(7L), anyString(), eq(SHOP_FRONT_BASE_URL))).thenReturn(result);
+
+		// 현재 허용 Origin을 복원할 수 없으면 설정값 기준 URL을 반환해야 합니다.
+		mockMvc.perform(
+				post("/api/shop/order/payment/prepare")
+					.cookie(shopAuthCookie(7L))
 					.contentType(MediaType.APPLICATION_JSON)
 					.content("""
 						{"from":"cart","cartIdList":[12],"addressNm":"집","discountSelection":{},"pointUseAmt":0,"paymentMethodCd":"PAY_METHOD_01"}

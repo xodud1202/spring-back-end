@@ -1,5 +1,6 @@
 package com.xodud1202.springbackend.security;
 
+import com.xodud1202.springbackend.common.web.HttpOriginUtils;
 import com.xodud1202.springbackend.config.properties.SecurityCsrfProperties;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -9,7 +10,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.net.URI;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -73,15 +73,8 @@ public class CookieCsrfOriginFilter extends OncePerRequestFilter {
 
 	// Origin 또는 Referer가 허용 목록에 포함되는지 확인합니다.
 	private boolean isAllowedRequestOrigin(HttpServletRequest request) {
-		String requestOrigin = resolveRequestOrigin(request);
-		if (requestOrigin == null) {
-			return false;
-		}
-
-		// 설정 목록을 정규화한 뒤 완전 일치하는 Origin만 허용합니다.
-		return securityCsrfProperties.safeAllowedOrigins().stream()
-			.map(this::normalizeOrigin)
-			.anyMatch(requestOrigin::equals);
+		// 요청 Origin/Referer가 허용 목록에 포함될 때만 상태 변경을 허용합니다.
+		return HttpOriginUtils.resolveAllowedRequestOrigin(request, securityCsrfProperties.safeAllowedOrigins()) != null;
 	}
 
 	// 요청 경로에서 컨텍스트 경로를 제거해 보안 매칭 기준 경로로 변환합니다.
@@ -92,41 +85,5 @@ public class CookieCsrfOriginFilter extends OncePerRequestFilter {
 			return requestUri.substring(contextPath.length());
 		}
 		return requestUri;
-	}
-
-	// Origin 헤더를 우선하고 없으면 Referer 헤더에서 Origin을 복원합니다.
-	private String resolveRequestOrigin(HttpServletRequest request) {
-		String originHeader = request == null ? null : request.getHeader(HttpHeaders.ORIGIN);
-		String normalizedOrigin = normalizeOrigin(originHeader);
-		if (normalizedOrigin != null) {
-			return normalizedOrigin;
-		}
-
-		String refererHeader = request == null ? null : request.getHeader(HttpHeaders.REFERER);
-		return normalizeOrigin(refererHeader);
-	}
-
-	// Origin 또는 URL 문자열을 scheme://host[:port] 형태로 정규화합니다.
-	private String normalizeOrigin(String value) {
-		if (value == null || value.isBlank()) {
-			return null;
-		}
-
-		try {
-			URI uri = URI.create(value.trim());
-			String scheme = uri.getScheme();
-			String host = uri.getHost();
-			if (scheme == null || host == null) {
-				return null;
-			}
-
-			String normalizedOrigin = scheme.toLowerCase(Locale.ROOT) + "://" + host.toLowerCase(Locale.ROOT);
-			if (uri.getPort() >= 0) {
-				normalizedOrigin += ":" + uri.getPort();
-			}
-			return normalizedOrigin;
-		} catch (IllegalArgumentException exception) {
-			return null;
-		}
 	}
 }

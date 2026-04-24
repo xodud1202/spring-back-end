@@ -1,7 +1,9 @@
 package com.xodud1202.springbackend.controller.shop;
 
 import com.xodud1202.springbackend.common.shop.ShopSessionPolicy;
+import com.xodud1202.springbackend.common.web.HttpOriginUtils;
 import com.xodud1202.springbackend.common.util.CommonTextUtils;
+import com.xodud1202.springbackend.config.properties.SecurityCsrfProperties;
 import com.xodud1202.springbackend.config.properties.ShopProperties;
 import com.xodud1202.springbackend.domain.shop.auth.ShopCustomerSessionVO;
 import com.xodud1202.springbackend.security.SignedLoginTokenService;
@@ -27,6 +29,9 @@ abstract class ShopControllerSupport {
 
 	@Autowired
 	private ShopProperties shopProperties;
+
+	@Autowired
+	private SecurityCsrfProperties securityCsrfProperties;
 
 	// 현재 요청 세션에서 로그인된 고객번호를 조회합니다.
 	protected Long resolveAuthenticatedCustNo(HttpServletRequest request) {
@@ -146,9 +151,18 @@ abstract class ShopControllerSupport {
 		return DEVICE_GB_PC;
 	}
 
-	// 설정된 쇼핑몰 프론트 절대 Origin 값을 반환합니다.
+	// 현재 요청의 허용 Origin 또는 설정된 fallback 쇼핑몰 Origin을 반환합니다.
 	protected String resolveShopOrigin(HttpServletRequest request) {
-		// 결제 리다이렉트 호스트는 요청 헤더를 신뢰하지 않고 환경별 설정값만 사용합니다.
+		// 현재 요청 Origin/Referer가 허용 프론트 목록과 일치하면 현재 접속 호스트를 우선 사용합니다.
+		String allowedRequestOrigin = HttpOriginUtils.resolveAllowedRequestOrigin(
+			request,
+			securityCsrfProperties == null ? null : securityCsrfProperties.safeAllowedOrigins()
+		);
+		if (allowedRequestOrigin != null) {
+			return allowedRequestOrigin;
+		}
+
+		// 허용된 현재 요청 Origin을 복원하지 못하면 환경별 fallback Origin 설정값을 사용합니다.
 		String configuredOrigin = trimToNull(shopProperties == null ? null : shopProperties.frontBaseUrl());
 		return configuredOrigin == null ? "" : configuredOrigin;
 	}
