@@ -1,5 +1,6 @@
 package com.xodud1202.springbackend.config;
 
+import com.xodud1202.springbackend.common.web.CommonRequestLoggingFilter;
 import com.xodud1202.springbackend.security.JwtTokenProvider;
 import com.xodud1202.springbackend.config.properties.SecurityCsrfProperties;
 import com.xodud1202.springbackend.security.CookieCsrfOriginFilter;
@@ -67,7 +68,17 @@ public class SecurityConfig {
 	}
 
 	@Bean
-	public SecurityFilterChain filterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
+	public CommonRequestLoggingFilter commonRequestLoggingFilter() {
+		// 모든 요청의 IP/경로/응답상태를 공통 포맷으로 기록하는 필터를 생성합니다.
+		return new CommonRequestLoggingFilter();
+	}
+
+	@Bean
+	public SecurityFilterChain filterChain(
+		HttpSecurity http,
+		JwtAuthenticationFilter jwtAuthenticationFilter,
+		CommonRequestLoggingFilter commonRequestLoggingFilter
+	) throws Exception {
 		// 관리자 JWT와 각 도메인 세션을 함께 사용하는 보안 필터 체인을 구성합니다.
 		http.userDetailsService(userDetailsService)
 			.csrf(AbstractHttpConfigurer::disable)
@@ -79,6 +90,7 @@ public class SecurityConfig {
 				.requestMatchers(CONTROLLER_AUTH_OR_PUBLIC_PATTERNS).permitAll()
 				.anyRequest().denyAll()
 			)
+			.addFilterBefore(commonRequestLoggingFilter, UsernamePasswordAuthenticationFilter.class)
 			.addFilterBefore(new CookieCsrfOriginFilter(securityCsrfProperties), UsernamePasswordAuthenticationFilter.class)
 			.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 		return http.build();
