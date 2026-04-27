@@ -815,7 +815,7 @@
 	</select>
 
 	<select id="getShopPaymentByOrdNo" resultType="com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentVO">
-		/* OrderMapper.getShopPaymentByOrdNo: 주문번호 기준 결제 정보 조회 */
+		/* OrderMapper.getShopPaymentByOrdNo: 웹훅 처리용 신규 주문 결제 정보 조회 */
 		SELECT PAY_NO
 		     , ORD_NO
 		     , CUST_NO
@@ -859,7 +859,111 @@
 		     , WEBHOOK_RAW_JSON
 		  FROM PAYMENT
 		 WHERE ORD_NO = #{ordNo}
-		    OR CLM_NO = #{ordNo}
+		   AND ORD_GB_CD = 'O'
+		   AND PAY_GB_CD = 'PAY_GB_01'
+		 ORDER BY PAY_NO DESC
+		 LIMIT 1
+	</select>
+
+	<select id="getShopExchangePaymentByClmNoForWebhook" resultType="com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentVO">
+		/* OrderMapper.getShopExchangePaymentByClmNoForWebhook: 웹훅 처리용 교환 배송비 결제 정보 조회 */
+		SELECT PAY_NO
+		     , ORD_NO
+		     , CUST_NO
+		     , PAY_STAT_CD
+		     , PAY_GB_CD
+		     , PAY_METHOD_CD
+		     , ORD_GB_CD
+		     , PG_GB_CD
+		     , ORG_PAY_NO
+		     , CLM_NO
+		     , PAY_AMT
+		     , APRV_AMT
+		     , CNL_AMT
+		     , TOSS_PAYMENT_KEY
+		     , TOSS_PAYMENT_KEY_HASH
+		     , TRADE_NO
+		     , APPR_NO
+		     , RSP_CODE
+		     , RSP_MSG
+		     , BANK_CD
+		     , BANK_NO
+		     , VACT_HOLDER_NM
+		     , CASE
+		         WHEN VACT_DUE_DT IS NULL OR VACT_DUE_DT = '0000-00-00 00:00:00' THEN NULL
+		         ELSE DATE_FORMAT(VACT_DUE_DT, '%Y-%m-%d %H:%i:%s')
+		       END AS VACT_DUE_DT
+		     , CARD_CD
+		     , CARD_NO
+		     , DEVICE_GB_CD
+		     , DATE_FORMAT(REQ_DT, '%Y-%m-%d %H:%i:%s') AS REQ_DT
+		     , CASE
+		         WHEN APPR_DT IS NULL OR APPR_DT = '0000-00-00 00:00:00' THEN NULL
+		         ELSE DATE_FORMAT(APPR_DT, '%Y-%m-%d %H:%i:%s')
+		       END AS APPR_DT
+		     , CASE
+		         WHEN WEBHOOK_DT IS NULL OR WEBHOOK_DT = '0000-00-00 00:00:00' THEN NULL
+		         ELSE DATE_FORMAT(WEBHOOK_DT, '%Y-%m-%d %H:%i:%s')
+		       END AS WEBHOOK_DT
+		     , REQ_RAW_JSON
+		     , RSP_RAW_JSON
+		     , WEBHOOK_RAW_JSON
+		  FROM PAYMENT
+		 WHERE CLM_NO = #{clmNo}
+		   AND ORD_GB_CD = 'E'
+		   AND PAY_GB_CD = 'PAY_GB_01'
+		 ORDER BY PAY_NO DESC
+		 LIMIT 1
+	</select>
+
+	<select id="getShopOrderExchangePaymentByClmNo" resultType="com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentVO">
+		/* OrderMapper.getShopOrderExchangePaymentByClmNo: 쇼핑몰 마이페이지 교환 배송비 원결제 조회 */
+		SELECT PAY_NO
+		     , ORD_NO
+		     , CUST_NO
+		     , PAY_STAT_CD
+		     , PAY_GB_CD
+		     , PAY_METHOD_CD
+		     , ORD_GB_CD
+		     , PG_GB_CD
+		     , ORG_PAY_NO
+		     , CLM_NO
+		     , PAY_AMT
+		     , APRV_AMT
+		     , CNL_AMT
+		     , TOSS_PAYMENT_KEY
+		     , TOSS_PAYMENT_KEY_HASH
+		     , TRADE_NO
+		     , APPR_NO
+		     , RSP_CODE
+		     , RSP_MSG
+		     , BANK_CD
+		     , BANK_NO
+		     , VACT_HOLDER_NM
+		     , CASE
+		         WHEN VACT_DUE_DT IS NULL OR VACT_DUE_DT = '0000-00-00 00:00:00' THEN NULL
+		         ELSE DATE_FORMAT(VACT_DUE_DT, '%Y-%m-%d %H:%i:%s')
+		       END AS VACT_DUE_DT
+		     , CARD_CD
+		     , CARD_NO
+		     , DEVICE_GB_CD
+		     , DATE_FORMAT(REQ_DT, '%Y-%m-%d %H:%i:%s') AS REQ_DT
+		     , CASE
+		         WHEN APPR_DT IS NULL OR APPR_DT = '0000-00-00 00:00:00' THEN NULL
+		         ELSE DATE_FORMAT(APPR_DT, '%Y-%m-%d %H:%i:%s')
+		       END AS APPR_DT
+		     , CASE
+		         WHEN WEBHOOK_DT IS NULL OR WEBHOOK_DT = '0000-00-00 00:00:00' THEN NULL
+		         ELSE DATE_FORMAT(WEBHOOK_DT, '%Y-%m-%d %H:%i:%s')
+		       END AS WEBHOOK_DT
+		     , REQ_RAW_JSON
+		     , RSP_RAW_JSON
+		     , WEBHOOK_RAW_JSON
+		  FROM PAYMENT
+		 WHERE CLM_NO = #{clmNo}
+		   AND CUST_NO = #{custNo}
+		   AND ORD_GB_CD = 'E'
+		   AND PAY_GB_CD = 'PAY_GB_01'
 		 ORDER BY PAY_NO DESC
 		 LIMIT 1
 	</select>
@@ -1835,6 +1939,37 @@
 		 LIMIT 1
 	</select>
 
+	<select id="getShopOrderExchangeWithdrawTarget" resultType="com.xodud1202.springbackend.domain.shop.order.ShopOrderExchangeWithdrawResultVO">
+		/* OrderMapper.getShopOrderExchangeWithdrawTarget: 쇼핑몰 마이페이지 교환 철회 대상 주문상품 1건 조회 */
+		SELECT OCB.CLM_NO
+		     , OCB.ORD_NO
+		     , OCD.ORD_DTL_NO
+		     , OCD.CHG_DTL_STAT_CD
+		     , DELIVERY_OCD.CHG_DTL_STAT_CD AS DELIVERY_CHG_DTL_STAT_CD
+		  FROM ORDER_CHANGE_BASE OCB
+		  JOIN ORDER_BASE OB
+		    ON OB.ORD_NO = OCB.ORD_NO
+		   AND OB.CUST_NO = #{custNo}
+		  JOIN ORDER_CHANGE_DETAIL OCD
+		    ON OCD.CLM_NO = OCB.CLM_NO
+		   AND OCD.ORD_NO = OCB.ORD_NO
+		  LEFT JOIN ORDER_CHANGE_DETAIL DELIVERY_OCD
+		    ON DELIVERY_OCD.CLM_NO = OCD.CLM_NO
+		   AND DELIVERY_OCD.ORD_NO = OCD.ORD_NO
+		   AND DELIVERY_OCD.ORD_DTL_NO = OCD.ORD_DTL_NO
+		   AND DELIVERY_OCD.CHG_DTL_GB_CD = 'CHG_DTL_GB_03'
+		 WHERE OCB.ORD_NO = #{ordNo}
+		   AND OCB.CHG_GB_CD = 'E'
+		   AND OCB.CHG_STAT_CD = 'CHG_STAT_01'
+		   AND OCD.ORD_DTL_NO = #{ordDtlNo}
+		   AND OCD.CHG_DTL_GB_CD = 'CHG_DTL_GB_04'
+		   AND OCD.CHG_DTL_STAT_CD IN ('CHG_DTL_STAT_21', 'CHG_DTL_STAT_22')
+		 ORDER BY COALESCE(OCB.CHG_DT, OCB.REG_DT) DESC
+		        , OCB.CLM_NO DESC
+		        , OCD.REG_DT DESC
+		 LIMIT 1
+	</select>
+
 	<update id="withdrawShopOrderChangeDetail">
 		/* OrderMapper.withdrawShopOrderChangeDetail: 쇼핑몰 마이페이지 반품 상세 1건을 철회 상태로 변경 */
 		UPDATE ORDER_CHANGE_DETAIL
@@ -1856,6 +1991,29 @@
 		   AND ORD_NO = #{ordNo}
 		   AND CHG_DTL_GB_CD = 'CHG_DTL_GB_02'
 		   AND COALESCE(CHG_DTL_STAT_CD, '') != 'CHG_DTL_STAT_19'
+	</select>
+
+	<update id="withdrawShopOrderExchangeDetail">
+		/* OrderMapper.withdrawShopOrderExchangeDetail: 쇼핑몰 마이페이지 교환 상세 1건을 철회 상태로 변경 */
+		UPDATE ORDER_CHANGE_DETAIL
+		   SET CHG_DTL_STAT_CD = #{toChgDtlStatCd}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE CLM_NO = #{clmNo}
+		   AND ORD_NO = #{ordNo}
+		   AND ORD_DTL_NO = #{ordDtlNo}
+		   AND CHG_DTL_GB_CD = #{chgDtlGbCd}
+		   AND CHG_DTL_STAT_CD = #{fromChgDtlStatCd}
+	</update>
+
+	<select id="countShopOrderRemainingExchangePickupDetailByClaim" resultType="Integer">
+		/* OrderMapper.countShopOrderRemainingExchangePickupDetailByClaim: 같은 클레임에 남아 있는 교환 회수 상세 건수 조회 */
+		SELECT COUNT(*)
+		  FROM ORDER_CHANGE_DETAIL
+		 WHERE CLM_NO = #{clmNo}
+		   AND ORD_NO = #{ordNo}
+		   AND CHG_DTL_GB_CD = 'CHG_DTL_GB_04'
+		   AND COALESCE(CHG_DTL_STAT_CD, '') != 'CHG_DTL_STAT_29'
 	</select>
 
 	<update id="withdrawShopOrderChangeBase">

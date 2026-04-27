@@ -19,6 +19,8 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderExchangePaymentCon
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderExchangePaymentConfirmVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderExchangePaymentFailPO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderExchangeResultVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderExchangeWithdrawPO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderExchangeWithdrawResultVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnPO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnResultVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderDetailStatusUpdatePO;
@@ -391,6 +393,27 @@ public class ShopMypageController extends ShopControllerSupport {
 		} catch (Exception exception) {
 			log.error("쇼핑몰 마이페이지 반품 철회 처리 실패 message={}", exception.getMessage(), exception);
 			return ResponseEntity.internalServerError().body(Map.of("message", "반품 철회 처리에 실패했습니다."));
+		}
+	}
+
+	// 쇼핑몰 마이페이지 교환 신청 상품 1건을 철회합니다.
+	@PostMapping("/api/shop/mypage/order/exchange/withdraw")
+	public ResponseEntity<Object> withdrawShopMypageOrderExchange(
+		@RequestBody(required = false) ShopOrderExchangeWithdrawPO param,
+		HttpServletRequest request
+	) {
+		try {
+			Long custNo = requireAuthenticatedCustNo(request);
+
+			ShopOrderExchangeWithdrawResultVO result = orderExchangeService.withdrawShopMypageOrderExchange(param, custNo);
+			return ResponseEntity.ok(result);
+		} catch (SecurityException exception) {
+			return unauthorizedResponse();
+		} catch (IllegalArgumentException exception) {
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			log.error("쇼핑몰 마이페이지 교환 철회 처리 실패 message={}", exception.getMessage(), exception);
+			return ResponseEntity.internalServerError().body(Map.of("message", "교환 철회 처리에 실패했습니다."));
 		}
 	}
 

@@ -27,6 +27,8 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderExchangePaymentCon
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderExchangePaymentConfirmVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderExchangePaymentFailPO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderExchangeResultVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderExchangeWithdrawPO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderExchangeWithdrawResultVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentPrepareVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentVO;
@@ -85,6 +87,25 @@ public class OrderExchangeService {
 		boolean companyFaultYn,
 		long payDelvAmt,
 		String initialChgDtlStatCd
+	) {
+	}
+
+	// 교환 철회 결제 취소 처리 결과를 전달합니다.
+	private record ShopOrderExchangeWithdrawPaymentResult(
+		boolean paymentCancelYn,
+		Long refundPayNo,
+		String payStatCd
+	) {
+	}
+
+	// 교환 철회 PG 취소 결과를 전달합니다.
+	private record ShopOrderExchangeWithdrawPgResult(
+		String rawResponse,
+		String rspCode,
+		String rspMsg,
+		String tradeNo,
+		String approvedDt,
+		long canceledAmount
 	) {
 	}
 
@@ -313,6 +334,373 @@ public class OrderExchangeService {
 			custNo
 		);
 		withdrawShopOrderExchangeClaim(clmNo, custNo);
+	}
+
+	// 쇼핑몰 마이페이지 교환 신청 상품 1건을 철회합니다.
+	@Transactional
+	public ShopOrderExchangeWithdrawResultVO withdrawShopMypageOrderExchange(ShopOrderExchangeWithdrawPO param, Long custNo) {
+		// 로그인 고객번호와 요청 본문 기본값을 먼저 검증합니다.
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException("로그인이 필요합니다.");
+		}
+		if (param == null) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_EXCHANGE_WITHDRAW_UNAVAILABLE_MESSAGE);
+		}
+
+		String ordNo = trimToNull(param.getOrdNo());
+		Integer ordDtlNo = param.getOrdDtlNo();
+		if (ordNo == null || ordDtlNo == null || ordDtlNo < 1) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_EXCHANGE_WITHDRAW_UNAVAILABLE_MESSAGE);
+		}
+
+		// 현재 로그인 고객이 철회할 수 있는 최신 교환 신청 회수 상세 1건을 조회합니다.
+		ShopOrderExchangeWithdrawResultVO withdrawTarget = orderMapper.getShopOrderExchangeWithdrawTarget(custNo, ordNo, ordDtlNo);
+		if (withdrawTarget == null || !isShopOrderExchangeWithdrawableStatus(withdrawTarget.getChgDtlStatCd())) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_EXCHANGE_WITHDRAW_UNAVAILABLE_MESSAGE);
+		}
+		if (!SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_DELIVERY_WAIT.equals(trimToNull(withdrawTarget.getDeliveryChgDtlStatCd()))) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_EXCHANGE_WITHDRAW_UNAVAILABLE_MESSAGE);
+		}
+
+		// 선택 상품의 교환 회수 행과 교환 배송 행을 각각 철회 상태로 변경합니다.
+		int pickupUpdatedCount = orderMapper.withdrawShopOrderExchangeDetail(
+			withdrawTarget.getClmNo(),
+			withdrawTarget.getOrdNo(),
+			withdrawTarget.getOrdDtlNo(),
+			SHOP_ORDER_CHANGE_DTL_GB_EXCHANGE_PICKUP,
+			withdrawTarget.getChgDtlStatCd(),
+			SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_WITHDRAW,
+			custNo
+		);
+		int deliveryUpdatedCount = orderMapper.withdrawShopOrderExchangeDetail(
+			withdrawTarget.getClmNo(),
+			withdrawTarget.getOrdNo(),
+			withdrawTarget.getOrdDtlNo(),
+			SHOP_ORDER_CHANGE_DTL_GB_EXCHANGE_DELIVERY,
+			SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_DELIVERY_WAIT,
+			SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_DELIVERY_WITHDRAW,
+			custNo
+		);
+		if (pickupUpdatedCount != 1 || deliveryUpdatedCount != 1) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_EXCHANGE_WITHDRAW_UNAVAILABLE_MESSAGE);
+		}
+
+		// 같은 클레임에 남아 있는 교환 회수 상세가 없으면 클레임과 교환 배송비 결제를 함께 닫습니다.
+		int remainingExchangeDetailCount = orderMapper.countShopOrderRemainingExchangePickupDetailByClaim(
+			withdrawTarget.getClmNo(),
+			withdrawTarget.getOrdNo()
+		);
+		boolean claimClosedYn = remainingExchangeDetailCount < 1;
+		int claimUpdatedCount = 0;
+		ShopOrderExchangeWithdrawPaymentResult paymentResult = new ShopOrderExchangeWithdrawPaymentResult(false, null, null);
+		if (claimClosedYn) {
+			paymentResult = cancelShopOrderExchangeWithdrawPaymentIfNeeded(withdrawTarget.getClmNo(), withdrawTarget.getOrdNo(), custNo);
+			claimUpdatedCount = orderMapper.withdrawShopOrderChangeBase(
+				withdrawTarget.getClmNo(),
+				withdrawTarget.getOrdNo(),
+				SHOP_ORDER_CHANGE_STAT_WITHDRAW,
+				custNo
+			);
+			if (claimUpdatedCount != 1) {
+				throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_EXCHANGE_WITHDRAW_UNAVAILABLE_MESSAGE);
+			}
+		}
+
+		// 프론트 새로고침 분기용 응답 객체를 구성합니다.
+		ShopOrderExchangeWithdrawResultVO result = new ShopOrderExchangeWithdrawResultVO();
+		result.setClmNo(withdrawTarget.getClmNo());
+		result.setOrdNo(withdrawTarget.getOrdNo());
+		result.setOrdDtlNo(withdrawTarget.getOrdDtlNo());
+		result.setChgDtlStatCd(SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_WITHDRAW);
+		result.setDeliveryChgDtlStatCd(SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_DELIVERY_WITHDRAW);
+		result.setClaimClosedYn(claimClosedYn);
+		result.setPaymentCancelYn(paymentResult.paymentCancelYn());
+		result.setRefundPayNo(paymentResult.refundPayNo());
+		result.setPayStatCd(paymentResult.payStatCd());
+		result.setUpdatedCount(pickupUpdatedCount + deliveryUpdatedCount + claimUpdatedCount);
+		return result;
+	}
+
+	// 교환 철회 가능한 교환 회수 상세 상태인지 반환합니다.
+	private boolean isShopOrderExchangeWithdrawableStatus(String chgDtlStatCd) {
+		// 결제대기 또는 교환신청 상태만 고객 철회를 허용합니다.
+		String normalizedChgDtlStatCd = trimToNull(chgDtlStatCd);
+		return SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_PAYMENT_WAIT.equals(normalizedChgDtlStatCd)
+			|| SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_APPLY.equals(normalizedChgDtlStatCd);
+	}
+
+	// 교환 클레임 종료 시 교환 배송비 결제를 취소하거나 환불합니다.
+	private ShopOrderExchangeWithdrawPaymentResult cancelShopOrderExchangeWithdrawPaymentIfNeeded(
+		String clmNo,
+		String ordNo,
+		Long custNo
+	) {
+		// 고객 귀책 교환 배송비 결제 row가 없으면 회사 귀책 교환으로 보고 별도 결제 처리를 생략합니다.
+		ShopOrderPaymentVO payment = orderMapper.getShopOrderExchangePaymentByClmNo(clmNo, custNo);
+		if (payment == null || payment.getPayNo() == null) {
+			return new ShopOrderExchangeWithdrawPaymentResult(false, null, null);
+		}
+
+		// Toss 결제창 진입 전 대기 row는 PG 호출 없이 취소 상태로 닫습니다.
+		String payStatCd = trimToNull(payment.getPayStatCd());
+		if (SHOP_ORDER_PAY_STAT_READY.equals(payStatCd)) {
+			orderMapper.updateShopPaymentFailure(
+				payment.getPayNo(),
+				SHOP_ORDER_PAY_STAT_CANCEL,
+				"EXCHANGE_WITHDRAW",
+				"교환 철회",
+				buildShopOrderExchangeWithdrawPaymentCancelRawJson(payment, "READY_CANCEL"),
+				custNo
+			);
+			return new ShopOrderExchangeWithdrawPaymentResult(true, null, SHOP_ORDER_PAY_STAT_CANCEL);
+		}
+
+		// 무통장입금 입금대기는 Toss 가상계좌를 취소하고 원결제 row를 취소 상태로 변경합니다.
+		if (SHOP_ORDER_PAY_STAT_WAITING_DEPOSIT.equals(payStatCd)) {
+			try {
+				ShopOrderExchangeWithdrawPgResult pgResult = cancelShopOrderExchangeWithdrawPaymentWithPg(payment, null, null);
+				orderMapper.updateShopPaymentFailure(
+					payment.getPayNo(),
+					SHOP_ORDER_PAY_STAT_CANCEL,
+					pgResult.rspCode(),
+					pgResult.rspMsg(),
+					pgResult.rawResponse(),
+					custNo
+				);
+				return new ShopOrderExchangeWithdrawPaymentResult(true, null, SHOP_ORDER_PAY_STAT_CANCEL);
+			} catch (TossPaymentClientException exception) {
+				throw new IllegalArgumentException(resolveShopOrderExchangeWithdrawPgErrorMessage(exception));
+			}
+		}
+
+		// 결제 완료된 교환 배송비는 환불 PAYMENT row를 만들고 Toss 취소 결과를 환불 row에 저장합니다.
+		if (SHOP_ORDER_PAY_STAT_DONE.equals(payStatCd)) {
+			ShopOrderCancelOrderBaseVO orderBase = orderMapper.getShopOrderCancelOrderBase(custNo, ordNo);
+			long cancelAmount = resolveShopOrderExchangeCancelableAmount(payment);
+			if (orderBase == null || cancelAmount < 1L) {
+				throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_EXCHANGE_PAYMENT_INVALID_MESSAGE);
+			}
+			ShopOrderPaymentSavePO refundPayment = createShopOrderExchangeWithdrawRefundPayment(orderBase, payment, cancelAmount, custNo);
+			try {
+				ShopOrderExchangeWithdrawPgResult pgResult = cancelShopOrderExchangeWithdrawPaymentWithPg(payment, orderBase, cancelAmount);
+				orderMapper.updateShopPaymentCancelSuccess(
+					refundPayment.getPayNo(),
+					SHOP_ORDER_PAY_STAT_CANCEL,
+					pgResult.canceledAmount(),
+					pgResult.tradeNo(),
+					pgResult.rspCode(),
+					pgResult.rspMsg(),
+					pgResult.rawResponse(),
+					pgResult.approvedDt(),
+					custNo
+				);
+				return new ShopOrderExchangeWithdrawPaymentResult(true, refundPayment.getPayNo(), SHOP_ORDER_PAY_STAT_CANCEL);
+			} catch (TossPaymentClientException exception) {
+				throw new IllegalArgumentException(resolveShopOrderExchangeWithdrawPgErrorMessage(exception));
+			}
+		}
+
+		// 이미 실패/취소된 결제 row는 추가 PG 처리 없이 현재 상태만 응답에 전달합니다.
+		if (SHOP_ORDER_PAY_STAT_FAIL.equals(payStatCd) || SHOP_ORDER_PAY_STAT_CANCEL.equals(payStatCd)) {
+			return new ShopOrderExchangeWithdrawPaymentResult(false, null, payStatCd);
+		}
+		throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_EXCHANGE_PAYMENT_INVALID_MESSAGE);
+	}
+
+	// 교환 철회 환불 PAYMENT row를 생성합니다.
+	private ShopOrderPaymentSavePO createShopOrderExchangeWithdrawRefundPayment(
+		ShopOrderCancelOrderBaseVO orderBase,
+		ShopOrderPaymentVO originalPayment,
+		long cancelAmount,
+		Long custNo
+	) {
+		// 환불 추적과 가상계좌 환불계좌 확인을 위해 요청 스냅샷을 함께 저장합니다.
+		Map<String, Object> refundSnapshot = new LinkedHashMap<>();
+		refundSnapshot.put("type", "exchangeDeliveryFeeWithdrawRefund");
+		refundSnapshot.put("ordNo", orderBase == null ? null : orderBase.getOrdNo());
+		refundSnapshot.put("clmNo", originalPayment == null ? null : originalPayment.getClmNo());
+		refundSnapshot.put("originalPayNo", originalPayment == null ? null : originalPayment.getPayNo());
+		refundSnapshot.put("cancelPgReason", resolveShopOrderExchangeWithdrawPgReason());
+		refundSnapshot.put("refundDeliveryFeeAmt", cancelAmount);
+		refundSnapshot.put("refundReceiveAccount", buildShopOrderExchangeRefundReceiveAccountSnapshot(orderBase));
+
+		// 환불 PAYMENT row는 교환 배송비 원결제와 같은 주문/클레임/결제수단으로 연결합니다.
+		ShopOrderPaymentSavePO refundPaymentSavePO = new ShopOrderPaymentSavePO();
+		refundPaymentSavePO.setOrdNo(orderBase == null ? null : orderBase.getOrdNo());
+		refundPaymentSavePO.setCustNo(orderBase == null ? custNo : orderBase.getCustNo());
+		refundPaymentSavePO.setPayStatCd(SHOP_ORDER_PAY_STAT_READY);
+		refundPaymentSavePO.setPayGbCd(SHOP_ORDER_PAY_GB_REFUND);
+		refundPaymentSavePO.setPayMethodCd(originalPayment == null ? null : originalPayment.getPayMethodCd());
+		refundPaymentSavePO.setOrdGbCd(SHOP_ORDER_ORD_GB_EXCHANGE);
+		refundPaymentSavePO.setPgGbCd(originalPayment == null ? SHOP_ORDER_PG_GB_TOSS : firstNonBlank(trimToNull(originalPayment.getPgGbCd()), SHOP_ORDER_PG_GB_TOSS));
+		refundPaymentSavePO.setOrgPayNo(originalPayment == null ? null : originalPayment.getPayNo());
+		refundPaymentSavePO.setClmNo(originalPayment == null ? null : originalPayment.getClmNo());
+		refundPaymentSavePO.setPayAmt(resolveShopOrderExchangeRefundPaymentAmt(cancelAmount));
+		refundPaymentSavePO.setDeviceGbCd(firstNonBlank(trimToNull(originalPayment == null ? null : originalPayment.getDeviceGbCd()), firstNonBlank(trimToNull(orderBase == null ? null : orderBase.getDeviceGbCd()), "PC")));
+		refundPaymentSavePO.setReqRawJson(orderService.writeShopOrderJson(refundSnapshot));
+		refundPaymentSavePO.setRegNo(custNo);
+		refundPaymentSavePO.setUdtNo(custNo);
+		orderMapper.insertShopPayment(refundPaymentSavePO);
+		if (refundPaymentSavePO.getPayNo() == null || refundPaymentSavePO.getPayNo() < 1L) {
+			throw new IllegalStateException("환불 결제 준비에 실패했습니다.");
+		}
+		return refundPaymentSavePO;
+	}
+
+	// 교환 철회 PG 취소 API를 호출하고 성공 응답을 해석합니다.
+	private ShopOrderExchangeWithdrawPgResult cancelShopOrderExchangeWithdrawPaymentWithPg(
+		ShopOrderPaymentVO payment,
+		ShopOrderCancelOrderBaseVO orderBase,
+		Long cancelAmount
+	) {
+		// Toss 결제키가 없으면 PG 취소를 진행할 수 없습니다.
+		if (payment == null || isBlank(payment.getTossPaymentKey())) {
+			throw new IllegalArgumentException("취소 가능한 교환 배송비 결제 정보를 찾을 수 없습니다.");
+		}
+
+		// 입금대기는 금액 없이 가상계좌를 닫고, 입금완료 가상계좌는 환불계좌를 함께 전달합니다.
+		Long tossCancelAmount = SHOP_ORDER_PAY_STAT_WAITING_DEPOSIT.equals(payment.getPayStatCd()) ? null : cancelAmount;
+		TossPaymentRefundReceiveAccount refundReceiveAccount =
+			SHOP_ORDER_PAYMENT_METHOD_VIRTUAL_ACCOUNT.equals(payment.getPayMethodCd())
+				&& !SHOP_ORDER_PAY_STAT_WAITING_DEPOSIT.equals(payment.getPayStatCd())
+				? buildShopOrderExchangeTossRefundReceiveAccount(orderBase)
+				: null;
+		String rawResponse = refundReceiveAccount == null
+			? tossPaymentsClient.cancelPayment(payment.getTossPaymentKey().trim(), resolveShopOrderExchangeWithdrawPgReason(), tossCancelAmount)
+			: tossPaymentsClient.cancelPayment(payment.getTossPaymentKey().trim(), resolveShopOrderExchangeWithdrawPgReason(), tossCancelAmount, refundReceiveAccount);
+		JsonNode responseNode = orderService.readShopOrderJsonNode(rawResponse);
+		String paymentStatus = firstNonBlank(orderService.resolveJsonText(responseNode, "status"), "");
+		if (!"CANCELED".equals(paymentStatus) && !"PARTIAL_CANCELED".equals(paymentStatus)) {
+			throw new IllegalArgumentException("교환 철회 처리에 실패했습니다.");
+		}
+
+		// Toss 취소 응답에서 거래키와 취소일시와 실제 취소금액을 추출합니다.
+		JsonNode cancelNode = responseNode.path("cancels").isArray() && !responseNode.path("cancels").isEmpty()
+			? responseNode.path("cancels").get(responseNode.path("cancels").size() - 1)
+			: responseNode;
+		long canceledAmount = resolveShopOrderExchangeJsonLong(cancelNode, "cancelAmount");
+		if (canceledAmount < 1L && cancelAmount != null) {
+			canceledAmount = cancelAmount;
+		}
+		String approvedDt = orderService.normalizeShopOrderDateTime(
+			firstNonBlank(
+				orderService.resolveJsonText(cancelNode, "canceledAt"),
+				orderService.resolveJsonText(responseNode, "approvedAt")
+			)
+		);
+		String tradeNo = firstNonBlank(
+			orderService.resolveJsonText(cancelNode, "transactionKey"),
+			firstNonBlank(orderService.resolveJsonText(responseNode, "lastTransactionKey"), payment.getTradeNo())
+		);
+		return new ShopOrderExchangeWithdrawPgResult(
+			rawResponse,
+			paymentStatus,
+			"교환 철회 완료",
+			tradeNo,
+			approvedDt,
+			canceledAmount
+		);
+	}
+
+	// 교환 배송비 취소 가능 금액을 반환합니다.
+	private long resolveShopOrderExchangeCancelableAmount(ShopOrderPaymentVO payment) {
+		// 승인금액이 있으면 우선 사용하고 없으면 결제금액을 사용합니다.
+		Long aprvAmt = payment == null ? null : payment.getAprvAmt();
+		if (aprvAmt != null && aprvAmt > 0L) {
+			return aprvAmt;
+		}
+		Long payAmt = payment == null ? null : payment.getPayAmt();
+		return payAmt == null ? 0L : Math.max(payAmt, 0L);
+	}
+
+	// 환불 PAYMENT 저장금액을 음수 기준으로 변환합니다.
+	private long resolveShopOrderExchangeRefundPaymentAmt(long cancelAmount) {
+		// 환불 저장금액은 절댓값 기준으로 음수화합니다.
+		return Math.abs(cancelAmount) * -1L;
+	}
+
+	// 환불 PAYMENT 요청 스냅샷에 저장할 환불 수취 계좌 정보를 구성합니다.
+	private Map<String, Object> buildShopOrderExchangeRefundReceiveAccountSnapshot(ShopOrderCancelOrderBaseVO orderBase) {
+		// 주문 마스터 환불계좌 정보가 없으면 null을 반환합니다.
+		String refundBankCd = trimToNull(orderBase == null ? null : orderBase.getRefundBankCd());
+		String refundBankNo = trimToNull(orderBase == null ? null : orderBase.getRefundBankNo());
+		String refundHolderNm = trimToNull(orderBase == null ? null : orderBase.getRefundHolderNm());
+		if (refundBankCd == null && refundBankNo == null && refundHolderNm == null) {
+			return null;
+		}
+
+		// 추적 가능한 동일 구조로 은행코드와 계좌번호와 예금주명을 저장합니다.
+		Map<String, Object> result = new LinkedHashMap<>();
+		result.put("bank", refundBankCd);
+		result.put("accountNumber", refundBankNo);
+		result.put("holderName", refundHolderNm);
+		return result;
+	}
+
+	// 교환 배송비 가상계좌 환불 수취 계좌 파라미터를 구성합니다.
+	private TossPaymentRefundReceiveAccount buildShopOrderExchangeTossRefundReceiveAccount(ShopOrderCancelOrderBaseVO orderBase) {
+		// 주문 마스터에 저장된 환불계좌 3개 필드가 모두 있어야 Toss 취소 API를 호출합니다.
+		String refundBankCd = trimToNull(orderBase == null ? null : orderBase.getRefundBankCd());
+		String refundBankNo = trimToNull(orderBase == null ? null : orderBase.getRefundBankNo());
+		String refundHolderNm = trimToNull(orderBase == null ? null : orderBase.getRefundHolderNm());
+		if (refundBankCd == null || refundBankNo == null || refundHolderNm == null) {
+			throw new IllegalArgumentException("무통장입금 환불 계좌 정보를 확인해주세요.");
+		}
+		if (!refundBankNo.matches("\\d+")) {
+			throw new IllegalArgumentException("무통장입금 환불 계좌 정보를 확인해주세요.");
+		}
+		orderService.validateShopOrderRefundBankCode(refundBankCd);
+		return new TossPaymentRefundReceiveAccount(refundBankCd, refundBankNo, refundHolderNm);
+	}
+
+	// 교환 철회 결제 취소 사유를 반환합니다.
+	private String resolveShopOrderExchangeWithdrawPgReason() {
+		// Toss 취소 사유와 PAYMENT 요청 스냅샷에서 동일 문구를 사용합니다.
+		return "교환 철회";
+	}
+
+	// 교환 철회 결제 준비 row 취소 원본 JSON을 구성합니다.
+	private String buildShopOrderExchangeWithdrawPaymentCancelRawJson(ShopOrderPaymentVO payment, String cancelType) {
+		// PG 호출이 없는 결제 취소도 추적 가능하도록 취소 사유를 저장합니다.
+		Map<String, Object> rawJson = new LinkedHashMap<>();
+		rawJson.put("type", "exchangeDeliveryFeeWithdrawCancel");
+		rawJson.put("cancelType", cancelType);
+		rawJson.put("ordNo", payment == null ? null : payment.getOrdNo());
+		rawJson.put("clmNo", payment == null ? null : payment.getClmNo());
+		rawJson.put("payNo", payment == null ? null : payment.getPayNo());
+		rawJson.put("cancelPgReason", resolveShopOrderExchangeWithdrawPgReason());
+		return orderService.writeShopOrderJson(rawJson);
+	}
+
+	// Toss 취소 오류 응답에서 사용자 표시 메시지를 추출합니다.
+	private String resolveShopOrderExchangeWithdrawPgErrorMessage(TossPaymentClientException exception) {
+		// Toss 오류 메시지가 있으면 우선 사용하고 없으면 기본 문구를 반환합니다.
+		JsonNode errorNode = orderService.readShopOrderJsonNode(exception == null ? null : exception.getResponseBody());
+		return firstNonBlank(orderService.resolveJsonText(errorNode, "message"), "교환 철회 처리에 실패했습니다.");
+	}
+
+	// JSON 노드에서 지정한 필드 Long 값을 안전하게 조회합니다.
+	private long resolveShopOrderExchangeJsonLong(JsonNode node, String fieldName) {
+		// 숫자 또는 숫자 문자열을 long 값으로 변환하고 실패하면 0을 반환합니다.
+		if (node == null || isBlank(fieldName)) {
+			return 0L;
+		}
+		JsonNode targetNode = node.path(fieldName);
+		if (targetNode.isMissingNode() || targetNode.isNull()) {
+			return 0L;
+		}
+		if (targetNode.isNumber()) {
+			return targetNode.asLong();
+		}
+		String textValue = trimToNull(targetNode.asText(null));
+		if (textValue == null) {
+			return 0L;
+		}
+		try {
+			return Long.parseLong(textValue);
+		} catch (NumberFormatException exception) {
+			return 0L;
+		}
 	}
 
 	// 교환 신청 화면 진입 시 주문상세번호와 교환 가능 상태를 검증합니다.

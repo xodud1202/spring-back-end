@@ -125,6 +125,7 @@ public final class Constants {
 		public static final String SHOP_ORDER_CHANGE_ADDR_GB_EXCHANGE_DELIVERY_DESTINATION = "CLM_ADDR_GB_14";
 		public static final String SHOP_MYPAGE_ORDER_EXCHANGE_UNAVAILABLE_MESSAGE = "교환 신청 가능한 주문상품 정보를 찾을 수 없습니다.";
 		public static final String SHOP_MYPAGE_ORDER_EXCHANGE_PAYMENT_INVALID_MESSAGE = "교환 배송비 결제 정보를 확인해주세요.";
+		public static final String SHOP_MYPAGE_ORDER_EXCHANGE_WITHDRAW_UNAVAILABLE_MESSAGE = "교환 철회 가능한 주문상품 정보를 찾을 수 없습니다.";
 		public static final String CUST_GRADE_GRP_CD = "CUST_GRADE";
 		public static final String DEFAULT_CUST_STAT_CD = "CUST_STAT_01";
 		public static final String GOOGLE_JOIN_GB = "GOOGLE";

@@ -75,6 +75,7 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderChangeDetailSavePO
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderCustomerInfoVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderDetailSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderExchangePaymentClaimVO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderExchangeWithdrawResultVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPointBaseVO;
@@ -220,8 +221,11 @@ public interface OrderMapper {
 	// Toss 결제키 해시 기준 결제 정보를 조회합니다.
 	ShopOrderPaymentVO getShopPaymentByTossPaymentKeyHash(@Param("tossPaymentKeyHash") String tossPaymentKeyHash);
 
-	// 주문번호 기준 결제 정보를 조회합니다.
+	// 웹훅 처리용 신규 주문 결제 정보를 주문번호 기준으로 조회합니다.
 	ShopOrderPaymentVO getShopPaymentByOrdNo(@Param("ordNo") String ordNo);
+
+	// 웹훅 처리용 교환 배송비 결제 정보를 클레임번호 기준으로 조회합니다.
+	ShopOrderPaymentVO getShopExchangePaymentByClmNoForWebhook(@Param("clmNo") String clmNo);
 
 	// 교환 배송비 결제 대상 클레임 정보를 조회합니다.
 	ShopOrderExchangePaymentClaimVO getShopOrderExchangePaymentClaim(
@@ -416,6 +420,12 @@ public interface OrderMapper {
 		@Param("udtNo") Long udtNo
 	);
 
+	// 쇼핑몰 마이페이지 교환 배송비 원결제 정보를 클레임번호 기준으로 조회합니다.
+	ShopOrderPaymentVO getShopOrderExchangePaymentByClmNo(
+		@Param("clmNo") String clmNo,
+		@Param("custNo") Long custNo
+	);
+
 	// 선택 고객쿠폰을 사용 처리합니다.
 	int updateShopCustomerCouponUse(
 		@Param("custNo") Long custNo,
@@ -570,6 +580,13 @@ public interface OrderMapper {
 		@Param("ordDtlNo") Integer ordDtlNo
 	);
 
+	// 쇼핑몰 마이페이지 교환 철회 대상 주문상품 1건을 조회합니다.
+	ShopOrderExchangeWithdrawResultVO getShopOrderExchangeWithdrawTarget(
+		@Param("custNo") Long custNo,
+		@Param("ordNo") String ordNo,
+		@Param("ordDtlNo") Integer ordDtlNo
+	);
+
 	// 쇼핑몰 마이페이지 반품 상세 1건을 철회 상태로 변경합니다.
 	int withdrawShopOrderChangeDetail(
 		@Param("clmNo") String clmNo,
@@ -582,6 +599,23 @@ public interface OrderMapper {
 
 	// 같은 클레임에 남아 있는 반품 상세 건수를 조회합니다.
 	int countShopOrderRemainingReturnDetailByClaim(
+		@Param("clmNo") String clmNo,
+		@Param("ordNo") String ordNo
+	);
+
+	// 쇼핑몰 마이페이지 교환 상세 1건을 상세구분 기준으로 철회 상태로 변경합니다.
+	int withdrawShopOrderExchangeDetail(
+		@Param("clmNo") String clmNo,
+		@Param("ordNo") String ordNo,
+		@Param("ordDtlNo") Integer ordDtlNo,
+		@Param("chgDtlGbCd") String chgDtlGbCd,
+		@Param("fromChgDtlStatCd") String fromChgDtlStatCd,
+		@Param("toChgDtlStatCd") String toChgDtlStatCd,
+		@Param("udtNo") Long udtNo
+	);
+
+	// 같은 클레임에 남아 있는 교환 회수 상세 건수를 조회합니다.
+	int countShopOrderRemainingExchangePickupDetailByClaim(
 		@Param("clmNo") String clmNo,
 		@Param("ordNo") String ordNo
 	);

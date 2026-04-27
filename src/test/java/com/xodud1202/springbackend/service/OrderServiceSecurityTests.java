@@ -24,9 +24,17 @@ import org.springframework.transaction.support.DefaultTransactionStatus;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_ORDER_CHANGE_DTL_GB_EXCHANGE_DELIVERY;
+import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_ORDER_CHANGE_DTL_GB_EXCHANGE_PICKUP;
+import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_APPLY;
+import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_DELIVERY_WITHDRAW;
+import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_WITHDRAW;
+import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_ORDER_CHANGE_STAT_WITHDRAW;
+import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_ORDER_ORD_GB_EXCHANGE;
 import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_ORDER_PAYMENT_METHOD_VIRTUAL_ACCOUNT;
 import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_ORDER_DTL_STAT_CANCEL;
 import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_ORDER_DTL_STAT_DONE;
+import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_ORDER_PAY_STAT_CANCEL;
 import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_ORDER_PAY_STAT_DONE;
 import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_ORDER_PAY_STAT_FAIL;
 import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_ORDER_PAY_STAT_READY;
@@ -185,6 +193,116 @@ class OrderServiceSecurityTests {
 		verify(orderMapper).updateShopOrderDetailStatus("ORD202604230001", SHOP_ORDER_DTL_STAT_DONE, 7L);
 	}
 
+	@Test
+	@DisplayName("교환 배송비 DEPOSIT_CALLBACK 웹훅은 클레임번호 기준으로 입금완료를 반영한다")
+	// Toss orderId가 C로 시작하면 클레임번호 기준 교환 배송비 결제를 찾아 회수 상세를 교환 신청 상태로 변경합니다.
+	void handleShopOrderPaymentWebhook_processesExchangeDepositCallbackByClaimNo() {
+		// 클레임번호로 조회되는 교환 배송비 입금대기 결제 row를 목으로 구성합니다.
+		ShopOrderPaymentVO payment = createWaitingDepositExchangePayment();
+		when(orderMapper.getShopExchangePaymentByClmNoForWebhook("C220260427164521077")).thenReturn(payment);
+
+		// 정상 secret이 포함된 Toss 입금완료 콜백을 반영합니다.
+		orderService.handleShopOrderPaymentWebhook("""
+			{"eventType":"DEPOSIT_CALLBACK","createdAt":"2026-04-27T17:01:02+09:00","orderId":"C220260427164521077","status":"DONE","secret":"deposit-secret"}
+			""");
+
+		// 교환 배송비 결제 상태와 교환 회수 상세 상태가 함께 변경되어야 합니다.
+		verify(orderMapper).updateShopPaymentWebhook(
+			eq(202L),
+			eq(SHOP_ORDER_PAY_STAT_DONE),
+			eq("DONE"),
+			eq("교환 배송비 무통장입금 완료"),
+			anyString(),
+			eq("2026-04-27 17:01:02"),
+			eq(7L)
+		);
+		verify(orderMapper).updateShopOrderChangeDetailStatusByClaimAndGb(
+			"C220260427164521077",
+			SHOP_ORDER_CHANGE_DTL_GB_EXCHANGE_PICKUP,
+			SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_APPLY,
+			7L
+		);
+		verify(orderMapper, never()).updateShopOrderDetailStatus("O220260406094219437", SHOP_ORDER_DTL_STAT_DONE, 7L);
+	}
+
+	@Test
+	@DisplayName("교환 배송비 PAYMENT_STATUS_CHANGED 웹훅은 Toss 재조회 정보가 일치할 때만 입금완료를 반영한다")
+	// 클레임번호, 결제키, 금액, 상태가 모두 일치하면 교환 배송비 입금완료 후처리를 실행합니다.
+	void handleShopOrderPaymentWebhook_processesVerifiedExchangePaymentStatusChanged() {
+		// 교환 배송비 입금대기 결제와 Toss 재조회 결과를 목으로 구성합니다.
+		ShopOrderPaymentVO payment = createWaitingDepositExchangePayment();
+		when(orderMapper.getShopPaymentByTossPaymentKeyHash(anyString())).thenReturn(payment);
+		when(tossPaymentsClient.getPayment("exchange-payment-key")).thenReturn("""
+			{"paymentKey":"exchange-payment-key","orderId":"C220260427164521077","status":"DONE","totalAmount":6000,"approvedAt":"2026-04-27T17:02:01+09:00"}
+			""");
+
+		// 검증 가능한 교환 배송비 결제 상태 변경 웹훅을 반영합니다.
+		orderService.handleShopOrderPaymentWebhook("""
+			{"eventType":"PAYMENT_STATUS_CHANGED","createdAt":"2026-04-27T17:02:03+09:00","data":{"paymentKey":"exchange-payment-key","orderId":"C220260427164521077","status":"DONE"}}
+			""");
+
+		// 교환 배송비 결제 완료 메시지와 회수 상세 상태 변경이 호출되어야 합니다.
+		verify(orderMapper).updateShopPaymentWebhook(
+			eq(202L),
+			eq(SHOP_ORDER_PAY_STAT_DONE),
+			eq("DONE"),
+			eq("교환 배송비 무통장입금 완료"),
+			anyString(),
+			eq("2026-04-27 17:02:03"),
+			eq(7L)
+		);
+		verify(orderMapper).updateShopOrderChangeDetailStatusByClaimAndGb(
+			"C220260427164521077",
+			SHOP_ORDER_CHANGE_DTL_GB_EXCHANGE_PICKUP,
+			SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_APPLY,
+			7L
+		);
+	}
+
+	@Test
+	@DisplayName("교환 배송비 PAYMENT_STATUS_CHANGED 웹훅은 Toss 재조회 주문번호가 다르면 상태를 변경하지 않는다")
+	// paymentKey가 맞아도 Toss 원본 orderId가 클레임번호와 다르면 위조 웹훅으로 보고 차단합니다.
+	void handleShopOrderPaymentWebhook_rejectsExchangePaymentStatusChangedWhenTossOrderIdDiffers() {
+		// 교환 배송비 입금대기 결제와 불일치 Toss 재조회 결과를 목으로 구성합니다.
+		ShopOrderPaymentVO payment = createWaitingDepositExchangePayment();
+		when(orderMapper.getShopPaymentByTossPaymentKeyHash(anyString())).thenReturn(payment);
+		when(tossPaymentsClient.getPayment("exchange-payment-key")).thenReturn("""
+			{"paymentKey":"exchange-payment-key","orderId":"O220260406094219437","status":"DONE","totalAmount":6000}
+			""");
+
+		// 교환 배송비 클레임번호와 Toss 원본 주문번호가 다르면 보안 예외가 발생해야 합니다.
+		assertThatThrownBy(() -> orderService.handleShopOrderPaymentWebhook("""
+			{"eventType":"PAYMENT_STATUS_CHANGED","data":{"paymentKey":"exchange-payment-key","orderId":"C220260427164521077","status":"DONE"}}
+			"""))
+			.isInstanceOf(SecurityException.class)
+			.hasMessage("웹훅 검증에 실패했습니다.");
+		verify(orderMapper, never()).updateShopPaymentWebhook(
+			eq(202L),
+			eq(SHOP_ORDER_PAY_STAT_DONE),
+			eq("DONE"),
+			eq("교환 배송비 무통장입금 완료"),
+			anyString(),
+			anyString(),
+			eq(7L)
+		);
+	}
+
+	@Test
+	@DisplayName("교환 배송비 EXPIRED 웹훅은 결제 실패와 클레임 철회를 반영한다")
+	// 무통장입금 기한이 만료되면 교환 배송비 결제 실패와 교환 클레임 철회 상태를 함께 저장합니다.
+	void handleShopOrderPaymentWebhook_expiresExchangeDepositPayment() {
+		// 교환 배송비 만료 웹훅 처리 결과를 검증합니다.
+		assertExchangeDepositClosedWebhook("EXPIRED", SHOP_ORDER_PAY_STAT_FAIL, "교환 배송비 무통장입금 만료");
+	}
+
+	@Test
+	@DisplayName("교환 배송비 CANCELED 웹훅은 결제 취소와 클레임 철회를 반영한다")
+	// 무통장입금이 취소되면 교환 배송비 결제 취소와 교환 클레임 철회 상태를 함께 저장합니다.
+	void handleShopOrderPaymentWebhook_cancelsExchangeDepositPayment() {
+		// 교환 배송비 취소 웹훅 처리 결과를 검증합니다.
+		assertExchangeDepositClosedWebhook("CANCELED", SHOP_ORDER_PAY_STAT_CANCEL, "교환 배송비 무통장입금 취소");
+	}
+
 	// 입금대기 상태의 가상계좌 결제 row를 생성합니다.
 	private ShopOrderPaymentVO createWaitingDepositPayment() {
 		// 웹훅 검증에 필요한 최소 결제 필드를 채웁니다.
@@ -197,6 +315,61 @@ class OrderServiceSecurityTests {
 		payment.setPayAmt(39000L);
 		payment.setTossPaymentKey("payment-key");
 		return payment;
+	}
+
+	// 입금대기 상태의 교환 배송비 가상계좌 결제 row를 생성합니다.
+	private ShopOrderPaymentVO createWaitingDepositExchangePayment() {
+		// 교환 배송비 웹훅 검증에 필요한 최소 결제 필드를 채웁니다.
+		ShopOrderPaymentVO payment = new ShopOrderPaymentVO();
+		payment.setPayNo(202L);
+		payment.setOrdNo("O220260406094219437");
+		payment.setClmNo("C220260427164521077");
+		payment.setCustNo(7L);
+		payment.setPayStatCd(SHOP_ORDER_PAY_STAT_WAITING_DEPOSIT);
+		payment.setPayMethodCd(SHOP_ORDER_PAYMENT_METHOD_VIRTUAL_ACCOUNT);
+		payment.setOrdGbCd(SHOP_ORDER_ORD_GB_EXCHANGE);
+		payment.setPayAmt(6000L);
+		payment.setTossPaymentKey("exchange-payment-key");
+		payment.setRspRawJson("""
+			{"secret":"deposit-secret"}
+			""");
+		return payment;
+	}
+
+	// 교환 배송비 입금 만료 또는 취소 웹훅 처리 결과를 검증합니다.
+	private void assertExchangeDepositClosedWebhook(String paymentStatus, String expectedPayStatCd, String expectedMessage) {
+		// 클레임번호로 조회되는 교환 배송비 입금대기 결제 row를 목으로 구성합니다.
+		ShopOrderPaymentVO payment = createWaitingDepositExchangePayment();
+		when(orderMapper.getShopExchangePaymentByClmNoForWebhook("C220260427164521077")).thenReturn(payment);
+
+		// Toss 입금 만료 또는 취소 콜백을 반영합니다.
+		orderService.handleShopOrderPaymentWebhook("""
+			{"eventType":"DEPOSIT_CALLBACK","createdAt":"2026-04-27T17:03:04+09:00","orderId":"C220260427164521077","status":"%s","secret":"deposit-secret"}
+			""".formatted(paymentStatus));
+
+		// 결제 상태와 클레임 철회 상태가 함께 변경되어야 합니다.
+		verify(orderMapper).updateShopPaymentWebhook(
+			eq(202L),
+			eq(expectedPayStatCd),
+			eq(paymentStatus),
+			eq(expectedMessage),
+			anyString(),
+			eq("2026-04-27 17:03:04"),
+			eq(7L)
+		);
+		verify(orderMapper).updateShopOrderChangeBaseStatus("C220260427164521077", SHOP_ORDER_CHANGE_STAT_WITHDRAW, 7L);
+		verify(orderMapper).updateShopOrderChangeDetailStatusByClaimAndGb(
+			"C220260427164521077",
+			SHOP_ORDER_CHANGE_DTL_GB_EXCHANGE_PICKUP,
+			SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_WITHDRAW,
+			7L
+		);
+		verify(orderMapper).updateShopOrderChangeDetailStatusByClaimAndGb(
+			"C220260427164521077",
+			SHOP_ORDER_CHANGE_DTL_GB_EXCHANGE_DELIVERY,
+			SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_DELIVERY_WITHDRAW,
+			7L
+		);
 	}
 
 	// 결제 승인 실패 테스트용 준비 상태 결제 row를 생성합니다.

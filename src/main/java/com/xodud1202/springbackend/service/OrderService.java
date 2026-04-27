@@ -79,6 +79,7 @@ public class OrderService {
 	private static final int ADMIN_ORDER_MAX_PAGE_SIZE = 200;
 	private static final String ADMIN_ORDER_START_DELIVERY_COMPANY_GRP_CD = "DELV_COMP";
 	private static final int ADMIN_ORDER_START_DELIVERY_INVOICE_NO_MAX_LENGTH = 20;
+	private static final String SHOP_ORDER_CLAIM_PREFIX = "C";
 	private static final Set<String> ADMIN_ORDER_START_DELIVERY_STATUS_SET = Set.of(
 		SHOP_ORDER_DTL_STAT_PREPARING,
 		SHOP_ORDER_DTL_STAT_DELIVERY_PREPARING,
@@ -1667,11 +1668,12 @@ public class OrderService {
 			if (SHOP_ORDER_PAY_STAT_DONE.equals(payment.getPayStatCd())) {
 				return;
 			}
+			String paymentDoneMessage = isShopOrderExchangePayment(payment) ? "교환 배송비 무통장입금 완료" : "무통장입금 완료";
 			orderMapper.updateShopPaymentWebhook(
 				payment.getPayNo(),
 				SHOP_ORDER_PAY_STAT_DONE,
 				paymentStatus,
-				"무통장입금 완료",
+				paymentDoneMessage,
 				normalizedRawBody,
 				normalizedWebhookDt,
 				payment.getCustNo()
@@ -1703,11 +1705,12 @@ public class OrderService {
 			return;
 		}
 		String payStatCd = "CANCELED".equals(paymentStatus) ? SHOP_ORDER_PAY_STAT_CANCEL : SHOP_ORDER_PAY_STAT_FAIL;
+		String paymentResultMessage = buildShopOrderDepositWebhookResultMessage(payment, paymentStatus);
 		orderMapper.updateShopPaymentWebhook(
 			payment.getPayNo(),
 			payStatCd,
 			paymentStatus,
-			"CANCELED".equals(paymentStatus) ? "무통장입금 취소" : "무통장입금 만료",
+			paymentResultMessage,
 			normalizedRawBody,
 			normalizedWebhookDt,
 			payment.getCustNo()
@@ -1732,6 +1735,16 @@ public class OrderService {
 		orderMapper.updateShopOrderBaseStatus(payment.getOrdNo(), SHOP_ORDER_STAT_CANCEL, payment.getCustNo());
 		orderMapper.updateShopOrderDetailStatus(payment.getOrdNo(), SHOP_ORDER_DTL_STAT_CANCEL, payment.getCustNo());
 		restoreShopOrderSuccessSideEffects(payment, payment.getCustNo());
+	}
+
+	// 무통장입금 웹훅 처리 결과 메시지를 반환합니다.
+	private String buildShopOrderDepositWebhookResultMessage(ShopOrderPaymentVO payment, String paymentStatus) {
+		// 교환 배송비 결제와 신규 주문 결제의 운영 로그 메시지를 분리합니다.
+		boolean exchangePayment = isShopOrderExchangePayment(payment);
+		if ("CANCELED".equals(paymentStatus)) {
+			return exchangePayment ? "교환 배송비 무통장입금 취소" : "무통장입금 취소";
+		}
+		return exchangePayment ? "교환 배송비 무통장입금 만료" : "무통장입금 만료";
 	}
 
 	// 결제 row가 교환 배송비 결제인지 반환합니다.
@@ -1765,11 +1778,18 @@ public class OrderService {
 			}
 		}
 
-		// DEPOSIT_CALLBACK처럼 orderId만 전달되면 주문번호 기준으로 최신 결제 row를 조회합니다.
-		if (isBlank(ordNo)) {
+		// DEPOSIT_CALLBACK처럼 orderId만 전달되면 접두사별 결제 row를 조회합니다.
+		String normalizedOrderId = trimToNull(ordNo);
+		if (normalizedOrderId == null) {
 			return null;
 		}
-		return orderMapper.getShopPaymentByOrdNo(ordNo.trim());
+		if (normalizedOrderId.startsWith(SHOP_ORDER_ORD_GB_ORDER)) {
+			return orderMapper.getShopPaymentByOrdNo(normalizedOrderId);
+		}
+		if (normalizedOrderId.startsWith(SHOP_ORDER_CLAIM_PREFIX)) {
+			return orderMapper.getShopExchangePaymentByClmNoForWebhook(normalizedOrderId);
+		}
+		return null;
 	}
 
 	// DEPOSIT_CALLBACK secret 값이 승인 응답의 secret과 같은지 확인합니다.
