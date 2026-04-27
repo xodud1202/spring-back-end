@@ -11,6 +11,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -71,6 +72,16 @@ public class SecurityConfig {
 	public CommonRequestLoggingFilter commonRequestLoggingFilter() {
 		// 모든 요청의 IP/경로/응답상태를 공통 포맷으로 기록하는 필터를 생성합니다.
 		return new CommonRequestLoggingFilter();
+	}
+
+	@Bean
+	public FilterRegistrationBean<CommonRequestLoggingFilter> commonRequestLoggingFilterRegistration(
+		CommonRequestLoggingFilter commonRequestLoggingFilter
+	) {
+		// Spring Security 체인에서만 실행되도록 서블릿 컨테이너 자동 등록을 끕니다.
+		FilterRegistrationBean<CommonRequestLoggingFilter> registrationBean = new FilterRegistrationBean<>(commonRequestLoggingFilter);
+		registrationBean.setEnabled(false);
+		return registrationBean;
 	}
 
 	@Bean

@@ -5,21 +5,17 @@
 
     <appender name="ROLLING" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>${LOG_PATH}/spring-back-end.log</file>
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <fileNamePattern>${LOG_PATH}/spring-back-end-%d{yyyy-MM-dd}.log</fileNamePattern>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/spring-back-end-%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <maxFileSize>100MB</maxFileSize>
             <maxHistory>30</maxHistory>
+            <totalSizeCap>3GB</totalSizeCap>
         </rollingPolicy>
         <encoder>
             <charset>UTF-8</charset>
             <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
         </encoder>
     </appender>
-
-    <!-- 운영에서는 MyBatis SQL은 출력하고 파라미터 값은 인터셉터 정책으로 마스킹합니다. -->
-    <logger name="com.xodud1202.springbackend.config.SqlLoggingInterceptor" level="DEBUG"/>
-
-    <!-- JPA SQL은 쿼리만 출력하고 바인딩 파라미터 로거는 열지 않습니다. -->
-    <logger name="org.hibernate.SQL" level="DEBUG"/>
 
     <root level="INFO">
         <appender-ref ref="ROLLING"/>

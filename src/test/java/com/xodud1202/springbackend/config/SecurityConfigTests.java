@@ -1,5 +1,6 @@
 package com.xodud1202.springbackend.config;
 
+import com.xodud1202.springbackend.common.web.CommonRequestLoggingFilter;
 import com.xodud1202.springbackend.security.JwtTokenProvider;
 import com.xodud1202.springbackend.service.CustomUserDetailService;
 import org.junit.jupiter.api.DisplayName;
@@ -10,6 +11,7 @@ import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +23,7 @@ import jakarta.servlet.http.Cookie;
 
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -37,6 +40,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class SecurityConfigTests {
 	@Autowired
 	private MockMvc mockMvc;
+
+	@Autowired
+	private CommonRequestLoggingFilter commonRequestLoggingFilter;
+
+	@Autowired
+	private FilterRegistrationBean<CommonRequestLoggingFilter> commonRequestLoggingFilterRegistration;
 
 	@MockBean
 	private JwtTokenProvider jwtTokenProvider;
@@ -113,6 +122,16 @@ class SecurityConfigTests {
 	void cookieCsrf_skipsRequestWithoutCookie() throws Exception {
 		mockMvc.perform(post("/api/shop/cart/delete"))
 			.andExpect(status().isOk());
+	}
+
+	@Test
+	@DisplayName("공통 요청 로그 필터는 서블릿 자동 등록을 비활성화한다")
+	// 공통 요청 로그 필터가 Security 체인에서만 실행되도록 자동 등록이 꺼져 있는지 검증합니다.
+	void commonRequestLoggingFilterRegistration_disablesServletAutoRegistration() {
+		// 등록 빈이 같은 필터 인스턴스를 대상으로 자동 등록만 비활성화했는지 확인합니다.
+		assertThat(commonRequestLoggingFilter).isNotNull();
+		assertThat(commonRequestLoggingFilterRegistration.getFilter()).isSameAs(commonRequestLoggingFilter);
+		assertThat(commonRequestLoggingFilterRegistration.isEnabled()).isFalse();
 	}
 
 	@SpringBootConfiguration
