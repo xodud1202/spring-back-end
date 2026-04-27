@@ -1060,7 +1060,7 @@ public class OrderService {
 	}
 
 	// 주문 당시 배송지 정보를 반품 회수지 기본값 형식으로 변환합니다.
-	private ShopOrderAddressVO createShopOrderPickupAddress(Long custNo, ShopOrderCancelOrderBaseVO orderBase) {
+	ShopOrderAddressVO createShopOrderPickupAddress(Long custNo, ShopOrderCancelOrderBaseVO orderBase) {
 		// 주문 배송지 정보가 없으면 기본 회수지를 생성하지 않습니다.
 		if (orderBase == null) {
 			return null;
@@ -1676,6 +1676,15 @@ public class OrderService {
 				normalizedWebhookDt,
 				payment.getCustNo()
 			);
+			if (isShopOrderExchangePayment(payment)) {
+				orderMapper.updateShopOrderChangeDetailStatusByClaimAndGb(
+					resolveShopOrderExchangePaymentClmNo(payment),
+					SHOP_ORDER_CHANGE_DTL_GB_EXCHANGE_PICKUP,
+					SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_APPLY,
+					payment.getCustNo()
+				);
+				return;
+			}
 			orderMapper.updateShopOrderBaseStatusAndDates(
 				payment.getOrdNo(),
 				SHOP_ORDER_STAT_DONE,
@@ -1703,9 +1712,47 @@ public class OrderService {
 			normalizedWebhookDt,
 			payment.getCustNo()
 		);
+		if (isShopOrderExchangePayment(payment)) {
+			String clmNo = resolveShopOrderExchangePaymentClmNo(payment);
+			orderMapper.updateShopOrderChangeBaseStatus(clmNo, SHOP_ORDER_CHANGE_STAT_WITHDRAW, payment.getCustNo());
+			orderMapper.updateShopOrderChangeDetailStatusByClaimAndGb(
+				clmNo,
+				SHOP_ORDER_CHANGE_DTL_GB_EXCHANGE_PICKUP,
+				SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_WITHDRAW,
+				payment.getCustNo()
+			);
+			orderMapper.updateShopOrderChangeDetailStatusByClaimAndGb(
+				clmNo,
+				SHOP_ORDER_CHANGE_DTL_GB_EXCHANGE_DELIVERY,
+				SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_DELIVERY_WITHDRAW,
+				payment.getCustNo()
+			);
+			return;
+		}
 		orderMapper.updateShopOrderBaseStatus(payment.getOrdNo(), SHOP_ORDER_STAT_CANCEL, payment.getCustNo());
 		orderMapper.updateShopOrderDetailStatus(payment.getOrdNo(), SHOP_ORDER_DTL_STAT_CANCEL, payment.getCustNo());
 		restoreShopOrderSuccessSideEffects(payment, payment.getCustNo());
+	}
+
+	// 결제 row가 교환 배송비 결제인지 반환합니다.
+	private boolean isShopOrderExchangePayment(ShopOrderPaymentVO payment) {
+		// 주문구분 코드를 기준으로 교환 배송비 결제를 판단합니다.
+		return payment != null && SHOP_ORDER_ORD_GB_EXCHANGE.equals(payment.getOrdGbCd());
+	}
+
+	// 교환 배송비 결제 row에서 클레임번호를 반환합니다.
+	private String resolveShopOrderExchangePaymentClmNo(ShopOrderPaymentVO payment) {
+		// CLM_NO가 있으면 우선 사용하고 없으면 이전 데이터 호환을 위해 ORD_NO를 사용합니다.
+		return firstNonBlank(trimToNull(payment == null ? null : payment.getClmNo()), trimToNull(payment == null ? null : payment.getOrdNo()));
+	}
+
+	// 결제 row 기준 Toss orderId 기대값을 반환합니다.
+	private String resolveShopOrderPaymentExpectedTossOrderId(ShopOrderPaymentVO payment) {
+		// 교환 배송비 결제는 Toss orderId로 클레임번호를 사용하고, 일반 주문은 주문번호를 사용합니다.
+		if (isShopOrderExchangePayment(payment)) {
+			return resolveShopOrderExchangePaymentClmNo(payment);
+		}
+		return trimToNull(payment == null ? null : payment.getOrdNo());
 	}
 
 	// 웹훅 본문에서 결제키 또는 주문번호 기준으로 현재 결제 row를 조회합니다.
@@ -1773,17 +1820,19 @@ public class OrderService {
 		Long tossTotalAmount = resolveJsonLong(tossPaymentNode, "totalAmount");
 
 		// Toss 원본의 결제키/주문번호/금액/상태가 로컬 결제와 모두 일치해야 상태 반영을 허용합니다.
+		String expectedTossOrderId = safeValue(firstNonBlank(resolveShopOrderPaymentExpectedTossOrderId(payment), ""));
 		if (!normalizedPaymentKey.equals(tossPaymentKey)
-			|| !safeValue(payment.getOrdNo()).equals(tossOrderId)
-			|| (trimToNull(webhookOrdNo) != null && !safeValue(payment.getOrdNo()).equals(webhookOrdNo.trim()))
+			|| !expectedTossOrderId.equals(tossOrderId)
+			|| (trimToNull(webhookOrdNo) != null && !expectedTossOrderId.equals(webhookOrdNo.trim()))
 			|| payment.getPayAmt() == null
 			|| tossTotalAmount == null
 			|| payment.getPayAmt().longValue() != tossTotalAmount.longValue()
 			|| !safeValue(webhookStatus).equals(tossStatus)) {
 			log.warn(
-				"쇼핑몰 주문 결제 상태 웹훅 검증 실패 payNo={} localOrdNo={} webhookOrdNo={} tossOrderId={} webhookStatus={} tossStatus={} localAmount={} tossAmount={}",
+				"쇼핑몰 주문 결제 상태 웹훅 검증 실패 payNo={} localOrdNo={} expectedTossOrderId={} webhookOrdNo={} tossOrderId={} webhookStatus={} tossStatus={} localAmount={} tossAmount={}",
 				payment.getPayNo(),
 				payment.getOrdNo(),
+				expectedTossOrderId,
 				webhookOrdNo,
 				tossOrderId,
 				webhookStatus,
@@ -2987,7 +3036,7 @@ public class OrderService {
 	}
 
 	// 현재 주문 고객의 기본 결제 정보를 조회합니다.
-	private ShopOrderCustomerInfoVO resolveShopOrderCustomerInfo(Long custNo, String deviceGbCd) {
+	ShopOrderCustomerInfoVO resolveShopOrderCustomerInfo(Long custNo, String deviceGbCd) {
 		// 고객번호 기준 기본 정보를 조회하고 Toss 고객 식별키를 보정합니다.
 		ShopOrderCustomerInfoVO customerInfo = orderMapper.getShopOrderCustomerInfo(custNo);
 		if (customerInfo == null || customerInfo.getCustNo() == null) {
@@ -3084,7 +3133,7 @@ public class OrderService {
 	}
 
 	// 결제수단 코드를 필수값 기준으로 검증합니다.
-	private String resolveRequiredShopOrderPaymentMethodCd(String paymentMethodCd) {
+	String resolveRequiredShopOrderPaymentMethodCd(String paymentMethodCd) {
 		// 지원하는 결제수단 코드만 허용합니다.
 		String normalizedPaymentMethodCd = trimToNull(paymentMethodCd);
 		if (SHOP_ORDER_PAYMENT_METHOD_CARD.equals(normalizedPaymentMethodCd)
@@ -3146,7 +3195,7 @@ public class OrderService {
 	}
 
 	// 결제수단 코드 기준 Toss method 값을 반환합니다.
-	private String resolveTossMethodByPayMethodCd(String paymentMethodCd) {
+	String resolveTossMethodByPayMethodCd(String paymentMethodCd) {
 		// 내부 결제수단 코드와 Toss 결제수단 코드를 매핑합니다.
 		if (SHOP_ORDER_PAYMENT_METHOD_CARD.equals(paymentMethodCd)) {
 			return SHOP_ORDER_TOSS_METHOD_CARD;
@@ -3702,7 +3751,7 @@ public class OrderService {
 	}
 
 	// 결제 준비에 사용할 쇼핑몰 Origin 설정을 필수 검증합니다.
-	private String requireShopOriginForPayment(String shopOrigin) {
+	String requireShopOriginForPayment(String shopOrigin) {
 		// Toss 리다이렉트 URL은 절대 Origin 설정이 없으면 안전하게 만들 수 없습니다.
 		String normalizedShopOrigin = normalizeShopOrigin(shopOrigin);
 		if (isBlank(normalizedShopOrigin)) {
@@ -3757,7 +3806,7 @@ public class OrderService {
 	}
 
 	// Toss 클라이언트 키를 반환합니다.
-	private String resolveShopOrderClientKey() {
+	String resolveShopOrderClientKey() {
 		return safeValue(firstNonBlank(trimToNull(tossProperties.clientKey()), ""));
 	}
 
@@ -3781,7 +3830,7 @@ public class OrderService {
 	}
 
 	// SHA-256 해시 문자열을 생성합니다.
-	private String sha256Hex(String value) {
+	String sha256Hex(String value) {
 		// 입력 문자열이 비어 있으면 빈 문자열을 반환합니다.
 		String normalizedValue = trimToNull(value);
 		if (normalizedValue == null) {
@@ -3808,7 +3857,7 @@ public class OrderService {
 	}
 
 	// 현재 고객의 배송지 목록을 기본 배송지 우선 순서로 조회합니다.
-	private List<ShopOrderAddressVO> resolveShopOrderAddressList(Long custNo) {
+	List<ShopOrderAddressVO> resolveShopOrderAddressList(Long custNo) {
 		List<ShopOrderAddressVO> addressList = orderMapper.getShopOrderAddressList(custNo);
 		return addressList == null ? List.of() : addressList;
 	}

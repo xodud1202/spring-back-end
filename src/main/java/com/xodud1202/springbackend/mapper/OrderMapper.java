@@ -74,6 +74,7 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderChangeExchangeAddr
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderChangeDetailSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderCustomerInfoVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderDetailSavePO;
+import com.xodud1202.springbackend.domain.shop.order.ShopOrderExchangePaymentClaimVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPointBaseVO;
@@ -176,6 +177,9 @@ public interface OrderMapper {
 	// 쇼핑몰 마이페이지 반품 사유 코드 목록을 조회합니다.
 	List<ShopMypageOrderCancelReasonVO> getShopMypageOrderReturnReasonList();
 
+	// 쇼핑몰 마이페이지 교환 사유 코드 목록을 조회합니다.
+	List<ShopMypageOrderCancelReasonVO> getShopMypageOrderExchangeReasonList();
+
 	// 쇼핑몰 마이페이지 반품 배송비 계산 이력 컨텍스트를 조회합니다.
 	ShopMypageOrderReturnFeeContextVO getShopMypageOrderReturnFeeContext(@Param("ordNo") String ordNo);
 
@@ -218,6 +222,12 @@ public interface OrderMapper {
 
 	// 주문번호 기준 결제 정보를 조회합니다.
 	ShopOrderPaymentVO getShopPaymentByOrdNo(@Param("ordNo") String ordNo);
+
+	// 교환 배송비 결제 대상 클레임 정보를 조회합니다.
+	ShopOrderExchangePaymentClaimVO getShopOrderExchangePaymentClaim(
+		@Param("clmNo") String clmNo,
+		@Param("custNo") Long custNo
+	);
 
 	// 주문취소 대상 원결제 정보를 조회합니다.
 	ShopOrderPaymentVO getShopOrderPaymentForCancel(@Param("ordNo") String ordNo);
@@ -388,6 +398,21 @@ public interface OrderMapper {
 		@Param("rspMsg") String rspMsg,
 		@Param("webhookRawJson") String webhookRawJson,
 		@Param("webhookDt") String webhookDt,
+		@Param("udtNo") Long udtNo
+	);
+
+	// 주문변경 마스터 상태를 클레임번호 기준으로 변경합니다.
+	int updateShopOrderChangeBaseStatus(
+		@Param("clmNo") String clmNo,
+		@Param("chgStatCd") String chgStatCd,
+		@Param("udtNo") Long udtNo
+	);
+
+	// 주문변경 상세 상태를 클레임번호와 상세구분 기준으로 변경합니다.
+	int updateShopOrderChangeDetailStatusByClaimAndGb(
+		@Param("clmNo") String clmNo,
+		@Param("chgDtlGbCd") String chgDtlGbCd,
+		@Param("toChgDtlStatCd") String toChgDtlStatCd,
 		@Param("udtNo") Long udtNo
 	);
 
