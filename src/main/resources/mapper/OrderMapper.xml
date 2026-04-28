@@ -984,6 +984,7 @@
 		    ON OCD.CLM_NO = OCB.CLM_NO
 		   AND OCD.ORD_NO = OCB.ORD_NO
 		   AND OCD.CHG_DTL_GB_CD = 'CHG_DTL_GB_04'
+		   AND OCD.CHG_DTL_STAT_CD != 'CHG_DTL_STAT_29'
 		 WHERE OCB.CLM_NO = #{clmNo}
 		   AND OCB.CHG_GB_CD = 'E'
 		 GROUP BY OCB.CLM_NO
@@ -1436,8 +1437,19 @@
 		   SET CHG_DTL_STAT_CD = #{toChgDtlStatCd}
 		     , UDT_NO = #{udtNo}
 		     , UDT_DT = NOW()
+		  WHERE CLM_NO = #{clmNo}
+		   AND CHG_DTL_GB_CD = #{chgDtlGbCd}
+	</update>
+
+	<update id="updateShopOrderChangeDetailStatusByClaimGbAndStatus">
+		/* OrderMapper.updateShopOrderChangeDetailStatusByClaimGbAndStatus: 주문변경 상세 상태 현재값 확인 후 변경 */
+		UPDATE ORDER_CHANGE_DETAIL
+		   SET CHG_DTL_STAT_CD = #{toChgDtlStatCd}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
 		 WHERE CLM_NO = #{clmNo}
 		   AND CHG_DTL_GB_CD = #{chgDtlGbCd}
+		   AND CHG_DTL_STAT_CD = #{fromChgDtlStatCd}
 	</update>
 
 	<update id="updateShopCustomerCouponUse">

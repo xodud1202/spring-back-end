@@ -420,6 +420,15 @@ public interface OrderMapper {
 		@Param("udtNo") Long udtNo
 	);
 
+	// 주문변경 상세 상태를 클레임번호와 상세구분과 현재 상태 기준으로 변경합니다.
+	int updateShopOrderChangeDetailStatusByClaimGbAndStatus(
+		@Param("clmNo") String clmNo,
+		@Param("chgDtlGbCd") String chgDtlGbCd,
+		@Param("fromChgDtlStatCd") String fromChgDtlStatCd,
+		@Param("toChgDtlStatCd") String toChgDtlStatCd,
+		@Param("udtNo") Long udtNo
+	);
+
 	// 쇼핑몰 마이페이지 교환 배송비 원결제 정보를 클레임번호 기준으로 조회합니다.
 	ShopOrderPaymentVO getShopOrderExchangePaymentByClmNo(
 		@Param("clmNo") String clmNo,

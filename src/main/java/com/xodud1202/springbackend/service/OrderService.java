@@ -1668,7 +1668,33 @@ public class OrderService {
 			if (SHOP_ORDER_PAY_STAT_DONE.equals(payment.getPayStatCd())) {
 				return;
 			}
+			if (!SHOP_ORDER_PAY_STAT_WAITING_DEPOSIT.equals(payment.getPayStatCd())) {
+				log.warn(
+					"쇼핑몰 주문 결제 완료 웹훅 무시 payNo={} localPayStatCd={} webhookStatus={}",
+					payment.getPayNo(),
+					payment.getPayStatCd(),
+					paymentStatus
+				);
+				return;
+			}
 			String paymentDoneMessage = isShopOrderExchangePayment(payment) ? "교환 배송비 무통장입금 완료" : "무통장입금 완료";
+			if (isShopOrderExchangePayment(payment)) {
+				int exchangeApplyUpdatedCount = orderMapper.updateShopOrderChangeDetailStatusByClaimGbAndStatus(
+					resolveShopOrderExchangePaymentClmNo(payment),
+					SHOP_ORDER_CHANGE_DTL_GB_EXCHANGE_PICKUP,
+					SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_PAYMENT_WAIT,
+					SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_APPLY,
+					payment.getCustNo()
+				);
+				if (exchangeApplyUpdatedCount < 1) {
+					log.warn(
+						"교환 배송비 입금완료 웹훅 대상 상세 없음 clmNo={} payNo={}",
+						resolveShopOrderExchangePaymentClmNo(payment),
+						payment.getPayNo()
+					);
+					return;
+				}
+			}
 			orderMapper.updateShopPaymentWebhook(
 				payment.getPayNo(),
 				SHOP_ORDER_PAY_STAT_DONE,
@@ -1679,12 +1705,6 @@ public class OrderService {
 				payment.getCustNo()
 			);
 			if (isShopOrderExchangePayment(payment)) {
-				orderMapper.updateShopOrderChangeDetailStatusByClaimAndGb(
-					resolveShopOrderExchangePaymentClmNo(payment),
-					SHOP_ORDER_CHANGE_DTL_GB_EXCHANGE_PICKUP,
-					SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_APPLY,
-					payment.getCustNo()
-				);
 				return;
 			}
 			orderMapper.updateShopOrderBaseStatusAndDates(

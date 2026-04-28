@@ -27,6 +27,7 @@ import java.util.List;
 import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_ORDER_CHANGE_DTL_GB_EXCHANGE_DELIVERY;
 import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_ORDER_CHANGE_DTL_GB_EXCHANGE_PICKUP;
 import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_APPLY;
+import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_PAYMENT_WAIT;
 import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_DELIVERY_WITHDRAW;
 import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_WITHDRAW;
 import static com.xodud1202.springbackend.common.Constants.Shop.SHOP_ORDER_CHANGE_STAT_WITHDRAW;
@@ -200,6 +201,13 @@ class OrderServiceSecurityTests {
 		// 클레임번호로 조회되는 교환 배송비 입금대기 결제 row를 목으로 구성합니다.
 		ShopOrderPaymentVO payment = createWaitingDepositExchangePayment();
 		when(orderMapper.getShopExchangePaymentByClmNoForWebhook("C220260427164521077")).thenReturn(payment);
+		when(orderMapper.updateShopOrderChangeDetailStatusByClaimGbAndStatus(
+			"C220260427164521077",
+			SHOP_ORDER_CHANGE_DTL_GB_EXCHANGE_PICKUP,
+			SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_PAYMENT_WAIT,
+			SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_APPLY,
+			7L
+		)).thenReturn(1);
 
 		// 정상 secret이 포함된 Toss 입금완료 콜백을 반영합니다.
 		orderService.handleShopOrderPaymentWebhook("""
@@ -216,9 +224,10 @@ class OrderServiceSecurityTests {
 			eq("2026-04-27 17:01:02"),
 			eq(7L)
 		);
-		verify(orderMapper).updateShopOrderChangeDetailStatusByClaimAndGb(
+		verify(orderMapper).updateShopOrderChangeDetailStatusByClaimGbAndStatus(
 			"C220260427164521077",
 			SHOP_ORDER_CHANGE_DTL_GB_EXCHANGE_PICKUP,
+			SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_PAYMENT_WAIT,
 			SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_APPLY,
 			7L
 		);
@@ -235,6 +244,13 @@ class OrderServiceSecurityTests {
 		when(tossPaymentsClient.getPayment("exchange-payment-key")).thenReturn("""
 			{"paymentKey":"exchange-payment-key","orderId":"C220260427164521077","status":"DONE","totalAmount":6000,"approvedAt":"2026-04-27T17:02:01+09:00"}
 			""");
+		when(orderMapper.updateShopOrderChangeDetailStatusByClaimGbAndStatus(
+			"C220260427164521077",
+			SHOP_ORDER_CHANGE_DTL_GB_EXCHANGE_PICKUP,
+			SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_PAYMENT_WAIT,
+			SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_APPLY,
+			7L
+		)).thenReturn(1);
 
 		// 검증 가능한 교환 배송비 결제 상태 변경 웹훅을 반영합니다.
 		orderService.handleShopOrderPaymentWebhook("""
@@ -251,9 +267,43 @@ class OrderServiceSecurityTests {
 			eq("2026-04-27 17:02:03"),
 			eq(7L)
 		);
-		verify(orderMapper).updateShopOrderChangeDetailStatusByClaimAndGb(
+		verify(orderMapper).updateShopOrderChangeDetailStatusByClaimGbAndStatus(
 			"C220260427164521077",
 			SHOP_ORDER_CHANGE_DTL_GB_EXCHANGE_PICKUP,
+			SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_PAYMENT_WAIT,
+			SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_APPLY,
+			7L
+		);
+	}
+
+	@Test
+	@DisplayName("취소된 교환 배송비 DONE 웹훅은 결제와 클레임 상태를 되살리지 않는다")
+	// 로컬 결제가 이미 취소된 뒤 도착한 DONE 웹훅은 지연 콜백으로 보고 무시합니다.
+	void handleShopOrderPaymentWebhook_ignoresDoneWhenExchangePaymentAlreadyCanceled() {
+		// 취소 상태의 교환 배송비 결제 row를 목으로 구성합니다.
+		ShopOrderPaymentVO payment = createWaitingDepositExchangePayment();
+		payment.setPayStatCd(SHOP_ORDER_PAY_STAT_CANCEL);
+		when(orderMapper.getShopExchangePaymentByClmNoForWebhook("C220260427164521077")).thenReturn(payment);
+
+		// 취소 후 지연 도착한 Toss 입금완료 콜백을 반영합니다.
+		orderService.handleShopOrderPaymentWebhook("""
+			{"eventType":"DEPOSIT_CALLBACK","createdAt":"2026-04-27T17:04:05+09:00","orderId":"C220260427164521077","status":"DONE","secret":"deposit-secret"}
+			""");
+
+		// 결제 완료와 교환 신청 상태 전이는 호출되지 않아야 합니다.
+		verify(orderMapper, never()).updateShopPaymentWebhook(
+			eq(202L),
+			eq(SHOP_ORDER_PAY_STAT_DONE),
+			eq("DONE"),
+			eq("교환 배송비 무통장입금 완료"),
+			anyString(),
+			anyString(),
+			eq(7L)
+		);
+		verify(orderMapper, never()).updateShopOrderChangeDetailStatusByClaimGbAndStatus(
+			"C220260427164521077",
+			SHOP_ORDER_CHANGE_DTL_GB_EXCHANGE_PICKUP,
+			SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_PAYMENT_WAIT,
 			SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_APPLY,
 			7L
 		);
