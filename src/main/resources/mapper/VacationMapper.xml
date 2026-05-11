@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+		"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.xodud1202.springbackend.mapper.VacationMapper">
+	<select id="getVacationCompanyList" resultType="com.xodud1202.springbackend.domain.work.vacation.WorkVacationCompanyVO">
+		/* VacationMapper.getVacationCompanyList: 휴가 사용 가능 회사 목록 조회 */
+		SELECT WORK_COMPANY_SEQ
+		     , WORK_COMPANY_NM
+		     , WORK_PLATFORM_NM
+		     , VACATION_LIMIT_CNT
+		     , DISP_ORD
+		  FROM WORK_COMPANY_INFO
+		 WHERE VACATION_LIMIT_CNT >= 1
+		 ORDER BY DISP_ORD ASC, WORK_COMPANY_SEQ ASC
+	</select>
+
+	<select id="getVacationPersonList" resultType="com.xodud1202.springbackend.domain.work.vacation.WorkVacationPersonVO">
+		/* VacationMapper.getVacationPersonList: 휴가자 목록 조회 */
+		SELECT PERSON_SEQ
+		     , PERSON_NM
+		     , FAVORITE_YN
+		     , DISP_ORD
+		  FROM PERSON
+		 WHERE DEL_YN = 'N'
+		 ORDER BY CASE WHEN FAVORITE_YN = 'Y' THEN 0 ELSE 1 END ASC
+		        , DISP_ORD ASC
+		        , PERSON_NM ASC
+		        , PERSON_SEQ ASC
+	</select>
+
+	<select id="countActiveVacationPerson" resultType="int">
+		/* VacationMapper.countActiveVacationPerson: 활성 휴가자 존재 여부 조회 */
+		SELECT COUNT(1)
+		  FROM PERSON
+		 WHERE PERSON_SEQ = #{personSeq}
+		   AND DEL_YN = 'N'
+	</select>
+
+	<select id="countVacationCompany" resultType="int">
+		/* VacationMapper.countVacationCompany: 휴가 사용 가능 회사 존재 여부 조회 */
+		SELECT COUNT(1)
+		  FROM WORK_COMPANY_INFO
+		 WHERE WORK_COMPANY_SEQ = #{workCompanySeq}
+		   AND VACATION_LIMIT_CNT >= 1
+	</select>
+
+	<sql id="workVacationSearchWhere">
+		<if test="personSeq != null">
+		   AND P.PERSON_SEQ = #{personSeq}
+		</if>
+		<if test="workCompanySeq != null">
+		   AND C.WORK_COMPANY_SEQ = #{workCompanySeq}
+		</if>
+	</sql>
+
+	<sql id="workVacationYearWhere">
+		<if test="vacationYear != null">
+		   AND YEAR(V.START_DT) = #{vacationYear}
+		</if>
+	</sql>
+
+	<sql id="workVacationUseDayExpression">
+		CASE
+		  WHEN V.VACATION_CD = 'VACATION_01' THEN DATEDIFF(V.END_DT, V.START_DT) + 1
+		  WHEN V.VACATION_CD IN ('VACATION_02', 'VACATION_03') THEN 0.5
+		  ELSE 0
+		END
+	</sql>
+
+	<select id="getDefaultVacationCompanySeq" resultType="int">
+		/* VacationMapper.getDefaultVacationCompanySeq: 휴가가 존재하는 회사 중 기본 선택할 회사 번호 조회 */
+		SELECT C.WORK_COMPANY_SEQ
+		  FROM VACATION V
+		  JOIN PERSON P
+		    ON P.PERSON_SEQ = V.PERSON_SEQ
+		   AND P.DEL_YN = 'N'
+		  JOIN WORK_COMPANY_INFO C
+		    ON C.WORK_COMPANY_SEQ = V.WORK_COMPANY_SEQ
+		   AND C.VACATION_LIMIT_CNT >= 1
+		 WHERE V.DEL_YN = 'N'
+		<if test="personSeq != null">
+		   AND P.PERSON_SEQ = #{personSeq}
+		</if>
+		 GROUP BY C.WORK_COMPANY_SEQ
+		        , C.DISP_ORD
+		 ORDER BY C.DISP_ORD ASC
+		        , C.WORK_COMPANY_SEQ ASC
+		 LIMIT 1
+	</select>
+
+	<select id="getVacationYearList" resultType="int">
+		/* VacationMapper.getVacationYearList: 선택 조건에 해당하는 휴가년도 목록 조회 */
+		SELECT DISTINCT YEAR(V.START_DT) AS VACATION_YEAR
+		  FROM VACATION V
+		  JOIN PERSON P
+		    ON P.PERSON_SEQ = V.PERSON_SEQ
+		   AND P.DEL_YN = 'N'
+		  JOIN WORK_COMPANY_INFO C
+		    ON C.WORK_COMPANY_SEQ = V.WORK_COMPANY_SEQ
+		   AND C.VACATION_LIMIT_CNT >= 1
+		 WHERE V.DEL_YN = 'N'
+		   AND V.START_DT IS NOT NULL
+		<include refid="workVacationSearchWhere" />
+		 ORDER BY VACATION_YEAR DESC
+	</select>
+
+	<select id="getVacationSummaryList" resultType="com.xodud1202.springbackend.domain.work.vacation.WorkVacationSummaryRowVO">
+		/* VacationMapper.getVacationSummaryList: 휴가자별 회사별 연차 사용 요약 목록 조회 */
+		SELECT P.PERSON_SEQ
+		     , P.PERSON_NM
+		     , C.WORK_COMPANY_SEQ
+		     , C.WORK_COMPANY_NM
+		     , C.VACATION_LIMIT_CNT
+		     , CAST(COALESCE(SUM(<include refid="workVacationUseDayExpression" />), 0) AS DECIMAL(10,1)) AS USED_VACATION_CNT
+		     , CAST(COALESCE(SUM(CASE WHEN V.VACATION_CD = 'VACATION_01' THEN DATEDIFF(V.END_DT, V.START_DT) + 1 ELSE 0 END), 0) AS DECIMAL(10,1)) AS FULL_VACATION_CNT
+		     , CAST(COALESCE(SUM(CASE WHEN V.VACATION_CD = 'VACATION_02' THEN 0.5 ELSE 0 END), 0) AS DECIMAL(10,1)) AS MORNING_HALF_CNT
+		     , CAST(COALESCE(SUM(CASE WHEN V.VACATION_CD = 'VACATION_03' THEN 0.5 ELSE 0 END), 0) AS DECIMAL(10,1)) AS AFTERNOON_HALF_CNT
+		     , CAST(C.VACATION_LIMIT_CNT - COALESCE(SUM(<include refid="workVacationUseDayExpression" />), 0) AS DECIMAL(10,1)) AS REMAINING_VACATION_CNT
+		  FROM PERSON P
+		  JOIN WORK_COMPANY_INFO C
+		    ON C.VACATION_LIMIT_CNT >= 1
+		  LEFT JOIN VACATION V
+		    ON V.PERSON_SEQ = P.PERSON_SEQ
+		   AND V.WORK_COMPANY_SEQ = C.WORK_COMPANY_SEQ
+		   AND V.DEL_YN = 'N'
+		<include refid="workVacationYearWhere" />
+		 WHERE P.DEL_YN = 'N'
+		<include refid="workVacationSearchWhere" />
+		 GROUP BY P.PERSON_SEQ
+		        , P.PERSON_NM
+		        , P.FAVORITE_YN
+		        , P.DISP_ORD
+		        , C.WORK_COMPANY_SEQ
+		        , C.WORK_COMPANY_NM
+		        , C.VACATION_LIMIT_CNT
+		        , C.DISP_ORD
+		 ORDER BY CASE WHEN P.FAVORITE_YN = 'Y' THEN 0 ELSE 1 END ASC
+		        , P.DISP_ORD ASC
+		        , P.PERSON_NM ASC
+		        , P.PERSON_SEQ ASC
+		        , C.DISP_ORD ASC
+		        , C.WORK_COMPANY_SEQ ASC
+	</select>
+
+	<select id="getVacationList" resultType="com.xodud1202.springbackend.domain.work.vacation.WorkVacationListRowVO">
+		/* VacationMapper.getVacationList: 휴가 사용 상세 목록 조회 */
+		SELECT V.VACATION_SEQ
+		     , P.PERSON_SEQ
+		     , P.PERSON_NM
+		     , C.WORK_COMPANY_SEQ
+		     , C.WORK_COMPANY_NM
+		     , V.VACATION_CD
+		     , VC.CD_NM AS VACATION_NM
+		     , DATE_FORMAT(V.START_DT, '%Y-%m-%d') AS START_DT
+		     , DATE_FORMAT(V.END_DT, '%Y-%m-%d') AS END_DT
+		     , CAST(<include refid="workVacationUseDayExpression" /> AS DECIMAL(10,1)) AS USE_DAY_CNT
+		     , V.VACATION_MEMO
+		     , DATE_FORMAT(V.REG_DT, '%Y-%m-%d %H:%i:%s') AS REG_DT
+		     , DATE_FORMAT(V.UDT_DT, '%Y-%m-%d %H:%i:%s') AS UDT_DT
+		  FROM VACATION V
+		  JOIN PERSON P
+		    ON P.PERSON_SEQ = V.PERSON_SEQ
+		   AND P.DEL_YN = 'N'
+		  JOIN WORK_COMPANY_INFO C
+		    ON C.WORK_COMPANY_SEQ = V.WORK_COMPANY_SEQ
+		   AND C.VACATION_LIMIT_CNT >= 1
+		  JOIN COMMON_CODE VC
+		    ON VC.GRP_CD = 'VACATION'
+		   AND VC.CD = V.VACATION_CD
+		   AND VC.USE_YN = 'Y'
+		 WHERE V.DEL_YN = 'N'
+		<include refid="workVacationYearWhere" />
+		<include refid="workVacationSearchWhere" />
+		 ORDER BY V.START_DT DESC
+		        , V.VACATION_SEQ DESC
+	</select>
+
+	<insert id="insertVacation" useGeneratedKeys="true" keyProperty="vacationSeq" keyColumn="VACATION_SEQ">
+		/* VacationMapper.insertVacation: 휴가 사용 정보 저장 */
+		INSERT INTO VACATION (
+		       WORK_COMPANY_SEQ
+		     , PERSON_SEQ
+		     , VACATION_CD
+		     , START_DT
+		     , END_DT
+		     , VACATION_MEMO
+		     , DEL_YN
+		     , REG_NO
+		     , UDT_NO
+		) VALUES (
+		       #{workCompanySeq}
+		     , #{personSeq}
+		     , #{vacationCd}
+		     , STR_TO_DATE(#{startDt}, '%Y-%m-%d')
+		     , STR_TO_DATE(#{endDt}, '%Y-%m-%d')
+		     , #{vacationMemo}
+		     , 'N'
+		     , #{regNo}
+		     , #{udtNo}
+		)
+	</insert>
+</mapper>

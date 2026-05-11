@@ -1,7 +1,6 @@
 package com.xodud1202.springbackend.controller.work;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.xodud1202.springbackend.common.work.WorkSessionPolicy;
 import com.xodud1202.springbackend.domain.admin.common.UserInfoVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkAttachmentDownloadVO;
 import com.xodud1202.springbackend.domain.admin.companywork.AdminCompanyWorkCompanyVO;
@@ -25,7 +24,6 @@ import com.xodud1202.springbackend.domain.work.WorkFileDeletePO;
 import com.xodud1202.springbackend.service.CompanyWorkService;
 import com.xodud1202.springbackend.service.UserBaseService;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -52,7 +50,7 @@ import java.util.Map;
 @RestController
 @RequiredArgsConstructor
 // 업무관리 워크스페이스 화면에서 사용하는 인증 후 API를 제공합니다.
-public class WorkController {
+public class WorkController extends WorkControllerSupport {
 	private final CompanyWorkService companyWorkService;
 	private final UserBaseService userBaseService;
 	private final ObjectMapper objectMapper;
@@ -397,20 +395,6 @@ public class WorkController {
 			log.error("업무관리 첨부 다운로드 실패 message={}", exception.getMessage(), exception);
 			throw new IllegalStateException("업무 첨부파일 다운로드에 실패했습니다.", exception);
 		}
-	}
-
-	// 세션에서 로그인된 업무관리 사용자번호를 읽어옵니다.
-	private Long resolveRequiredWorkUserNo(HttpServletRequest request) {
-		HttpSession session = request.getSession(false);
-		if (session == null) {
-			throw new SecurityException("로그인이 필요합니다.");
-		}
-
-		Long workUserNo = WorkSessionPolicy.resolveWorkUserNo(session.getAttribute(WorkSessionPolicy.SESSION_ATTR_WORK_USER_NO));
-		if (workUserNo != null) {
-			return workUserNo;
-		}
-		throw new SecurityException("로그인이 필요합니다.");
 	}
 
 	// 바이너리 첨부파일 다운로드 응답을 공통 형식으로 생성합니다.
