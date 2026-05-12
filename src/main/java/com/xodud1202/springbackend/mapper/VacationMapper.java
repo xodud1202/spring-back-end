@@ -29,6 +29,9 @@ public interface VacationMapper {
 	// 휴가가 존재하는 회사 중 기본 선택할 회사 번호를 조회합니다.
 	Integer getDefaultVacationCompanySeq(WorkVacationListSearchPO param);
 
+	// 휴가 등록 이력이 있는 회사 필터 목록을 조회합니다.
+	List<WorkVacationCompanyVO> getVacationFilterCompanyList(WorkVacationListSearchPO param);
+
 	// 선택 조건에 해당하는 휴가년도 목록을 조회합니다.
 	List<Integer> getVacationYearList(WorkVacationListSearchPO param);
 

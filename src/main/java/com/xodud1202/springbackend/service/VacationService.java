@@ -51,6 +51,8 @@ public class VacationService {
 	// 휴가자와 회사 조건 기준으로 선택 회사, 연도 목록, 연차 요약, 휴가 사용 목록을 조회합니다.
 	public WorkVacationListResponseVO getWorkVacationList(Integer personSeq, Integer workCompanySeq, Integer vacationYear, String defaultCompanyYn) {
 		Integer selectedWorkCompanySeq = resolveSelectedWorkCompanySeq(personSeq, workCompanySeq, defaultCompanyYn);
+		WorkVacationListSearchPO companySearchParam = buildVacationSearchParam(personSeq, null, null);
+		List<WorkVacationCompanyVO> companyList = vacationMapper.getVacationFilterCompanyList(companySearchParam);
 		WorkVacationListSearchPO yearSearchParam = buildVacationSearchParam(personSeq, selectedWorkCompanySeq, null);
 		List<Integer> yearList = vacationMapper.getVacationYearList(yearSearchParam);
 		Integer selectedYear = resolveSelectedVacationYear(vacationYear, yearList);
@@ -60,6 +62,7 @@ public class VacationService {
 
 		WorkVacationListResponseVO response = new WorkVacationListResponseVO();
 		response.setSelectedWorkCompanySeq(selectedWorkCompanySeq);
+		response.setCompanyList(companyList == null ? List.of() : companyList);
 		response.setYearList(yearList == null ? List.of() : yearList);
 		response.setSelectedYear(selectedYear);
 		response.setSummaryList(summaryList == null ? List.of() : summaryList);
