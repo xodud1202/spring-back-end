@@ -97,4 +97,35 @@
 		   AND SN.USE_YN = 'Y'
 		<include refid="stockSaleSearchWhere" />
 	</select>
+	<insert id="insertStockSaleHistory">
+		/* StockSaleHistoryMapper.insertStockSaleHistory: 매매일지 거래 이력 등록 */
+		INSERT INTO MY_STOCK_SALE_HISTORY
+		(
+		       SALE_DT
+		     , STOCK_NM_CD
+		     , STOCK_ACCOUNT_CD
+		     , SALE_CNT
+		     , SALE_AMT
+		     , PROFIT_AMT
+		     , MEMO
+		     , REG_NO
+		     , REG_DT
+		     , UDT_NO
+		     , UDT_DT
+		)
+		VALUES
+		(
+		       #{saleDt}
+		     , #{stockNmCd}
+		     , #{stockAccountCd}
+		     , #{saleCnt}
+		     , #{saleAmt}
+		     , #{profitAmt}
+		     , #{memo}
+		     , #{regNo}
+		     , NOW()
+		     , #{udtNo}
+		     , NOW()
+		)
+	</insert>
 </mapper>

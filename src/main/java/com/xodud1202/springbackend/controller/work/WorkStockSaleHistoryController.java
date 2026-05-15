@@ -2,6 +2,7 @@ package com.xodud1202.springbackend.controller.work;
 
 import com.xodud1202.springbackend.domain.admin.common.UserInfoVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleBootstrapResponseVO;
+import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleCreateRequestVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleListResponseVO;
 import com.xodud1202.springbackend.service.StockSaleHistoryService;
 import com.xodud1202.springbackend.service.UserBaseService;
@@ -11,10 +12,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Validated
@@ -68,6 +72,24 @@ public class WorkStockSaleHistoryController extends WorkControllerSupport {
 		} catch (Exception exception) {
 			log.error("매매일지 목록 조회 실패 message={}", exception.getMessage(), exception);
 			throw new IllegalStateException("매매일지 목록 조회에 실패했습니다.", exception);
+		}
+	}
+
+	@PostMapping("/api/work/stock-sale-history")
+	// 매매일지 거래 이력을 등록합니다.
+	public ResponseEntity<Map<String, String>> createStockSaleHistory(
+		HttpServletRequest request,
+		@RequestBody WorkStockSaleCreateRequestVO createRequest
+	) {
+		try {
+			Long workUserNo = resolveRequiredWorkUserNo(request);
+			stockSaleHistoryService.createStockSaleHistory(createRequest, workUserNo);
+			return ResponseEntity.ok(Map.of("message", "매매일지를 등록했습니다."));
+		} catch (SecurityException | IllegalArgumentException exception) {
+			throw exception;
+		} catch (Exception exception) {
+			log.error("매매일지 등록 실패 message={}", exception.getMessage(), exception);
+			throw new IllegalStateException("매매일지 등록에 실패했습니다.", exception);
 		}
 	}
 }

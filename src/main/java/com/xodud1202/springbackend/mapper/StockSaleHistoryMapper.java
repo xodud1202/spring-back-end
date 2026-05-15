@@ -1,5 +1,6 @@
 package com.xodud1202.springbackend.mapper;
 
+import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleCreateRequestVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleRowVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleSearchPO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleSummaryRowVO;
@@ -18,4 +19,7 @@ public interface StockSaleHistoryMapper {
 
 	// 검색 조건에 맞는 매매 상세 목록 전체 건수를 조회합니다.
 	int getStockSaleRowCount(WorkStockSaleSearchPO param);
+
+	// 매매일지 거래 이력을 등록합니다.
+	int insertStockSaleHistory(WorkStockSaleCreateRequestVO param);
 }
