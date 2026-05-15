@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+		"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.xodud1202.springbackend.mapper.StockSaleHistoryMapper">
+	<sql id="stockSaleSearchWhere">
+		/* StockSaleHistoryMapper.stockSaleSearchWhere: 매매일지 공통 검색 조건 */
+		WHERE 1 = 1
+		<if test="startSaleDt != null and startSaleDt != ''">
+		   AND H.SALE_DT &gt;= #{startSaleDt}
+		</if>
+		<if test="endSaleDt != null and endSaleDt != ''">
+		   AND H.SALE_DT &lt;= #{endSaleDt}
+		</if>
+		<if test="stockAccountCdList != null and stockAccountCdList.size() > 0">
+		   AND H.STOCK_ACCOUNT_CD IN
+		   <foreach collection="stockAccountCdList" item="stockAccountCd" open="(" separator="," close=")">
+		     #{stockAccountCd}
+		   </foreach>
+		</if>
+		<if test="stockNmCdList != null and stockNmCdList.size() > 0">
+		   AND H.STOCK_NM_CD IN
+		   <foreach collection="stockNmCdList" item="stockNmCd" open="(" separator="," close=")">
+		     #{stockNmCd}
+		   </foreach>
+		</if>
+	</sql>
+
+	<select id="getStockSaleSummaryList" resultType="com.xodud1202.springbackend.domain.work.stock.WorkStockSaleSummaryRowVO">
+		/* StockSaleHistoryMapper.getStockSaleSummaryList: 검색 조건별 주식 종목 합계 조회 */
+		SELECT H.STOCK_NM_CD
+		     , SN.CD_NM AS STOCK_NM
+		     , COALESCE(SUM(H.SALE_CNT), 0) AS SALE_CNT
+		     , COALESCE(SUM(H.SALE_AMT), 0) AS SALE_AMT
+		     , CASE
+		         WHEN COALESCE(SUM(H.SALE_CNT), 0) = 0 THEN NULL
+		         ELSE ROUND(COALESCE(SUM(H.SALE_AMT), 0) / COALESCE(SUM(H.SALE_CNT), 0), 2)
+		       END AS AVERAGE_SALE_AMT
+		     , COALESCE(SUM(H.PROFIT_AMT), 0) AS PROFIT_AMT
+		  FROM MY_STOCK_SALE_HISTORY H
+		  JOIN COMMON_CODE SN
+		    ON SN.GRP_CD = 'STOCK_NM'
+		   AND SN.CD = H.STOCK_NM_CD
+		   AND SN.USE_YN = 'Y'
+		  JOIN COMMON_CODE SA
+		    ON SA.GRP_CD = 'STOCK_ACCOUNT'
+		   AND SA.CD = H.STOCK_ACCOUNT_CD
+		   AND SA.USE_YN = 'Y'
+		<include refid="stockSaleSearchWhere" />
+		 GROUP BY H.STOCK_NM_CD
+		        , SN.CD_NM
+		        , SN.DISP_ORD
+		 ORDER BY SN.DISP_ORD ASC
+		        , H.STOCK_NM_CD ASC
+	</select>
+
+	<select id="getStockSaleRowList" resultType="com.xodud1202.springbackend.domain.work.stock.WorkStockSaleRowVO">
+		/* StockSaleHistoryMapper.getStockSaleRowList: 매매일지 상세 목록 페이징 조회 */
+		SELECT H.SALE_HIST_SEQ
+		     , DATE_FORMAT(STR_TO_DATE(H.SALE_DT, '%Y%m%d'), '%Y-%m-%d') AS SALE_DT
+		     , H.STOCK_ACCOUNT_CD
+		     , SA.CD_NM AS STOCK_ACCOUNT_NM
+		     , H.STOCK_NM_CD
+		     , SN.CD_NM AS STOCK_NM
+		     , H.SALE_CNT
+		     , H.SALE_AMT
+		     , COALESCE(H.PROFIT_AMT, 0) AS PROFIT_AMT
+		     , H.MEMO
+		  FROM MY_STOCK_SALE_HISTORY H
+		  JOIN COMMON_CODE SA
+		    ON SA.GRP_CD = 'STOCK_ACCOUNT'
+		   AND SA.CD = H.STOCK_ACCOUNT_CD
+		   AND SA.USE_YN = 'Y'
+		  JOIN COMMON_CODE SN
+		    ON SN.GRP_CD = 'STOCK_NM'
+		   AND SN.CD = H.STOCK_NM_CD
+		   AND SN.USE_YN = 'Y'
+		<include refid="stockSaleSearchWhere" />
+		 ORDER BY H.SALE_DT DESC
+		        , SA.DISP_ORD ASC
+		        , SN.DISP_ORD ASC
+		        , H.SALE_HIST_SEQ DESC
+		 LIMIT #{pageSize} OFFSET #{offset}
+	</select>
+
+	<select id="getStockSaleRowCount" resultType="int">
+		/* StockSaleHistoryMapper.getStockSaleRowCount: 매매일지 상세 목록 전체 건수 조회 */
+		SELECT COUNT(1)
+		  FROM MY_STOCK_SALE_HISTORY H
+		  JOIN COMMON_CODE SA
+		    ON SA.GRP_CD = 'STOCK_ACCOUNT'
+		   AND SA.CD = H.STOCK_ACCOUNT_CD
+		   AND SA.USE_YN = 'Y'
+		  JOIN COMMON_CODE SN
+		    ON SN.GRP_CD = 'STOCK_NM'
+		   AND SN.CD = H.STOCK_NM_CD
+		   AND SN.USE_YN = 'Y'
+		<include refid="stockSaleSearchWhere" />
+	</select>
+</mapper>
