@@ -42,6 +42,14 @@ public interface CommonMapper {
 	// 관리자용 공통 코드를 수정합니다.
 	int updateAdminCommonCode(CommonCodeManagePO param);
 
+	// 사용 중인 공통 코드의 노출순서를 수정합니다.
+	int updateCommonCodeDispOrd(
+		@Param("grpCd") String grpCd,
+		@Param("cd") String cd,
+		@Param("dispOrd") Integer dispOrd,
+		@Param("udtNo") Long udtNo
+	);
+
 	// 상위 코드 변경 시 하위 코드의 그룹코드를 일괄 수정합니다.
 	int updateAdminCommonCodeChildrenGrpCd(@Param("originGrpCd") String originGrpCd, @Param("nextGrpCd") String nextGrpCd);
 }

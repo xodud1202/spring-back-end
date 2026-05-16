@@ -7,6 +7,9 @@ import com.xodud1202.springbackend.domain.admin.common.UserInfoVO;
 import com.xodud1202.springbackend.domain.common.CommonCodeVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleBootstrapResponseVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleCreateRequestVO;
+import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleDisplayOrderItemPO;
+import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleDisplayOrderUpdateRequestVO;
+import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleDisplayOrderUpdateResponseVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleListResponseVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleRowVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleSearchPO;
@@ -15,10 +18,12 @@ import com.xodud1202.springbackend.mapper.CommonMapper;
 import com.xodud1202.springbackend.mapper.StockSaleHistoryMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 
@@ -57,6 +62,37 @@ public class StockSaleHistoryService {
 		stockSaleHistoryMapper.insertStockSaleHistory(param);
 	}
 
+	@Transactional
+	// 매매일지 계좌와 주식 선택 목록의 노출순서를 저장합니다.
+	public WorkStockSaleDisplayOrderUpdateResponseVO updateStockSaleDisplayOrder(WorkStockSaleDisplayOrderUpdateRequestVO request, Long workUserNo) {
+		if (request == null) {
+			throw new IllegalArgumentException("저장할 노출순서 정보를 입력해주세요.");
+		}
+		if (workUserNo == null || workUserNo <= 0) {
+			throw new IllegalArgumentException("로그인 정보를 확인해주세요.");
+		}
+
+		List<WorkStockSaleDisplayOrderItemPO> accountOrderList = buildDisplayOrderUpdateList(
+			request.getAccountOrderList(),
+			getStockAccountList(),
+			"계좌 노출순서를 확인해주세요."
+		);
+		List<WorkStockSaleDisplayOrderItemPO> stockOrderList = buildDisplayOrderUpdateList(
+			request.getStockOrderList(),
+			getStockNameList(),
+			"주식 노출순서를 확인해주세요."
+		);
+
+		int accountUpdatedCount = updateDisplayOrderList(STOCK_ACCOUNT_GROUP_CODE, accountOrderList, workUserNo);
+		int stockUpdatedCount = updateDisplayOrderList(STOCK_NAME_GROUP_CODE, stockOrderList, workUserNo);
+
+		WorkStockSaleDisplayOrderUpdateResponseVO response = new WorkStockSaleDisplayOrderUpdateResponseVO();
+		response.setMessage("노출순서를 저장했습니다.");
+		response.setAccountUpdatedCount(accountUpdatedCount);
+		response.setStockUpdatedCount(stockUpdatedCount);
+		return response;
+	}
+
 	// 검색 조건에 맞는 종목별 합계와 상세 목록 페이지를 조회합니다.
 	public WorkStockSaleListResponseVO getStockSaleList(
 		String startSaleDt,
@@ -84,6 +120,59 @@ public class StockSaleHistoryService {
 		response.setPageSize(param.getPageSize());
 		response.setTotalPageCount(totalPageCount);
 		return response;
+	}
+
+	// 요청 순서 목록이 현재 활성 공통코드 전체와 일치하는지 확인하고 저장 순서를 재계산합니다.
+	private List<WorkStockSaleDisplayOrderItemPO> buildDisplayOrderUpdateList(
+		List<WorkStockSaleDisplayOrderItemPO> requestOrderList,
+		List<CommonCodeVO> optionList,
+		String invalidMessage
+	) {
+		if (requestOrderList == null) {
+			throw new IllegalArgumentException(invalidMessage);
+		}
+
+		LinkedHashSet<String> validCodeSet = new LinkedHashSet<>();
+		for (CommonCodeVO optionItem : optionList) {
+			String optionCode = trimToNull(optionItem == null ? null : optionItem.getCd());
+			if (optionCode != null) {
+				validCodeSet.add(optionCode);
+			}
+		}
+		if (requestOrderList.size() != validCodeSet.size()) {
+			throw new IllegalArgumentException(invalidMessage);
+		}
+
+		LinkedHashSet<String> requestedCodeSet = new LinkedHashSet<>();
+		List<WorkStockSaleDisplayOrderItemPO> normalizedOrderList = new ArrayList<>();
+		int nextDispOrd = 1;
+		for (WorkStockSaleDisplayOrderItemPO requestItem : requestOrderList) {
+			String requestCode = trimToNull(requestItem == null ? null : requestItem.getCd());
+			if (requestCode == null || !validCodeSet.contains(requestCode) || !requestedCodeSet.add(requestCode)) {
+				throw new IllegalArgumentException(invalidMessage);
+			}
+
+			WorkStockSaleDisplayOrderItemPO normalizedItem = new WorkStockSaleDisplayOrderItemPO();
+			normalizedItem.setCd(requestCode);
+			normalizedItem.setDispOrd(nextDispOrd++);
+			normalizedOrderList.add(normalizedItem);
+		}
+		if (!requestedCodeSet.equals(validCodeSet)) {
+			throw new IllegalArgumentException(invalidMessage);
+		}
+		return List.copyOf(normalizedOrderList);
+	}
+
+	// 공통코드 그룹의 노출순서를 전달된 순서대로 수정합니다.
+	private int updateDisplayOrderList(String groupCode, List<WorkStockSaleDisplayOrderItemPO> orderList, Long workUserNo) {
+		int updatedCount = 0;
+		for (WorkStockSaleDisplayOrderItemPO orderItem : orderList) {
+			updatedCount += commonMapper.updateCommonCodeDispOrd(groupCode, orderItem.getCd(), orderItem.getDispOrd(), workUserNo);
+		}
+		if (updatedCount != orderList.size()) {
+			throw new IllegalStateException("노출순서 저장 대상이 변경되었습니다. 새로고침 후 다시 시도해주세요.");
+		}
+		return updatedCount;
 	}
 
 	// 계좌 공통코드 목록을 조회합니다.

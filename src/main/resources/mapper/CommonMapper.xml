@@ -140,6 +140,17 @@
 		   AND CD = #{originCd}
 	</update>
 
+	<update id="updateCommonCodeDispOrd">
+		/* CommonMapper.updateCommonCodeDispOrd: 사용 중인 공통 코드 노출순서 수정 */
+		UPDATE COMMON_CODE
+		   SET DISP_ORD = #{dispOrd}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE GRP_CD = #{grpCd}
+		   AND CD = #{cd}
+		   AND USE_YN = 'Y'
+	</update>
+
 	<update id="updateAdminCommonCodeChildrenGrpCd">
 		/* CommonMapper.updateAdminCommonCodeChildrenGrpCd: 관리자 상위 코드 변경 시 하위 그룹코드 수정 */
 		UPDATE COMMON_CODE

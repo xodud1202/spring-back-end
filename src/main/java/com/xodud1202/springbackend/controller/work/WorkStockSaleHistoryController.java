@@ -3,6 +3,8 @@ package com.xodud1202.springbackend.controller.work;
 import com.xodud1202.springbackend.domain.admin.common.UserInfoVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleBootstrapResponseVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleCreateRequestVO;
+import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleDisplayOrderUpdateRequestVO;
+import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleDisplayOrderUpdateResponseVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleListResponseVO;
 import com.xodud1202.springbackend.service.StockSaleHistoryService;
 import com.xodud1202.springbackend.service.UserBaseService;
@@ -72,6 +74,23 @@ public class WorkStockSaleHistoryController extends WorkControllerSupport {
 		} catch (Exception exception) {
 			log.error("매매일지 목록 조회 실패 message={}", exception.getMessage(), exception);
 			throw new IllegalStateException("매매일지 목록 조회에 실패했습니다.", exception);
+		}
+	}
+
+	@PostMapping("/api/work/stock-sale-history/display-order")
+	// 매매일지 계좌와 주식 선택 목록의 노출순서를 저장합니다.
+	public ResponseEntity<WorkStockSaleDisplayOrderUpdateResponseVO> updateStockSaleDisplayOrder(
+		HttpServletRequest request,
+		@RequestBody WorkStockSaleDisplayOrderUpdateRequestVO updateRequest
+	) {
+		try {
+			Long workUserNo = resolveRequiredWorkUserNo(request);
+			return ResponseEntity.ok(stockSaleHistoryService.updateStockSaleDisplayOrder(updateRequest, workUserNo));
+		} catch (SecurityException | IllegalArgumentException exception) {
+			throw exception;
+		} catch (Exception exception) {
+			log.error("매매일지 노출순서 저장 실패 message={}", exception.getMessage(), exception);
+			throw new IllegalStateException("매매일지 노출순서 저장에 실패했습니다.", exception);
 		}
 	}
 
