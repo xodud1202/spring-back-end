@@ -5,6 +5,10 @@ import static com.xodud1202.springbackend.common.Constants.Shop.*;
 import static com.xodud1202.springbackend.common.util.CommonTextUtils.*;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderClaimRowVO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderExchangeWithdrawItemPO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderExchangeWithdrawPO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderExchangeWithdrawVO;
 import com.xodud1202.springbackend.domain.common.CommonCodeVO;
 import com.xodud1202.springbackend.domain.shop.cart.ShopCartSiteInfoVO;
 import com.xodud1202.springbackend.domain.shop.goods.ShopGoodsSizeItemVO;
@@ -33,11 +37,14 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentPrepareVO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentSavePO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderPaymentVO;
 import com.xodud1202.springbackend.domain.shop.site.ShopSiteInfoVO;
+import com.xodud1202.springbackend.entity.UserBaseEntity;
 import com.xodud1202.springbackend.mapper.CommonMapper;
 import com.xodud1202.springbackend.mapper.GoodsMapper;
 import com.xodud1202.springbackend.mapper.OrderMapper;
 import com.xodud1202.springbackend.mapper.SiteInfoMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -66,6 +73,9 @@ public class OrderExchangeService {
 	private static final String CUSTOMER_FAULT_REASON_PREFIX = "E_1";
 	private static final String COMPANY_FAULT_REASON_PREFIX = "E_2";
 	private static final String EXCHANGE_ORDER_NAME = "교환 배송비";
+	private static final String ADMIN_ORDER_EXCHANGE_WITHDRAW_EMPTY_MESSAGE = "철회할 교환건을 선택해주세요.";
+	private static final String ADMIN_ORDER_EXCHANGE_WITHDRAW_INVALID_MESSAGE = "교환 신청건만 철회가 가능합니다.";
+	private static final String ADMIN_LOGIN_INVALID_MESSAGE = "관리자 로그인 정보를 확인해주세요.";
 
 	private final OrderService orderService;
 	private final OrderMapper orderMapper;
@@ -344,27 +354,110 @@ public class OrderExchangeService {
 	// 쇼핑몰 마이페이지 교환 신청 상품 1건을 철회합니다.
 	@Transactional
 	public ShopOrderExchangeWithdrawResultVO withdrawShopMypageOrderExchange(ShopOrderExchangeWithdrawPO param, Long custNo) {
-		// 로그인 고객번호와 요청 본문 기본값을 먼저 검증합니다.
+		// 쇼핑몰 철회는 고객번호를 수정자 번호로 사용해 기존 처리 흐름을 유지합니다.
+		return withdrawShopOrderExchange(param, custNo, custNo, null, SHOP_MYPAGE_ORDER_EXCHANGE_WITHDRAW_UNAVAILABLE_MESSAGE);
+	}
+
+	// 관리자 주문교환 신청 상품 여러 건을 철회합니다.
+	@Transactional
+	public AdminOrderExchangeWithdrawVO withdrawAdminOrderExchange(AdminOrderExchangeWithdrawPO param) {
+		// 관리자 로그인 번호와 요청 본문을 먼저 검증합니다.
+		Long udtNo = resolveCurrentAdminUserNo();
+		if (udtNo == null || udtNo < 1L) {
+			throw new IllegalArgumentException(ADMIN_LOGIN_INVALID_MESSAGE);
+		}
+		if (param == null) {
+			throw new IllegalArgumentException(ADMIN_ORDER_EXCHANGE_WITHDRAW_EMPTY_MESSAGE);
+		}
+
+		String ordNo = trimToNull(param.getOrdNo());
+		if (ordNo == null) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_NO_INVALID_MESSAGE);
+		}
+
+		// 중복을 제거한 철회 대상 목록과 현재 주문의 고객번호/클레임 목록을 준비합니다.
+		List<AdminOrderExchangeWithdrawItemPO> claimItemList = normalizeAdminOrderExchangeWithdrawItemList(param.getClaimItemList());
+		if (claimItemList.isEmpty()) {
+			throw new IllegalArgumentException(ADMIN_ORDER_EXCHANGE_WITHDRAW_EMPTY_MESSAGE);
+		}
+		Long custNo = orderMapper.getOrderCustNo(ordNo);
+		if (custNo == null || custNo < 1L) {
+			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_NO_INVALID_MESSAGE);
+		}
+		List<AdminOrderClaimRowVO> claimRowList = orderMapper.getAdminOrderClaimList(ordNo);
+
+		// 검증을 통과한 교환 회수 상세만 기존 쇼핑몰 교환 철회 공통 로직으로 처리합니다.
+		int updatedCount = 0;
+		int closedClaimCount = 0;
+		int paymentCancelCount = 0;
+		for (AdminOrderExchangeWithdrawItemPO claimItem : claimItemList) {
+			AdminOrderClaimRowVO claimRow = findAdminOrderExchangeWithdrawableClaimRow(claimRowList, claimItem);
+			if (claimRow == null) {
+				throw new IllegalArgumentException(ADMIN_ORDER_EXCHANGE_WITHDRAW_INVALID_MESSAGE);
+			}
+
+			ShopOrderExchangeWithdrawPO shopParam = new ShopOrderExchangeWithdrawPO();
+			shopParam.setOrdNo(ordNo);
+			shopParam.setOrdDtlNo(claimRow.getOrdDtlNo());
+			ShopOrderExchangeWithdrawResultVO result = withdrawShopOrderExchange(
+				shopParam,
+				custNo,
+				udtNo,
+				claimRow.getClmNo(),
+				ADMIN_ORDER_EXCHANGE_WITHDRAW_INVALID_MESSAGE
+			);
+			updatedCount += result.getUpdatedCount() == null ? 0 : result.getUpdatedCount();
+			if (Boolean.TRUE.equals(result.getClaimClosedYn())) {
+				closedClaimCount += 1;
+			}
+			if (Boolean.TRUE.equals(result.getPaymentCancelYn())) {
+				paymentCancelCount += 1;
+			}
+		}
+
+		// 관리자 화면 재조회에 사용할 결과 객체를 구성합니다.
+		AdminOrderExchangeWithdrawVO result = new AdminOrderExchangeWithdrawVO();
+		result.setOrdNo(ordNo);
+		result.setUpdatedCount(updatedCount);
+		result.setClosedClaimCount(closedClaimCount);
+		result.setPaymentCancelCount(paymentCancelCount);
+		return result;
+	}
+
+	// 주문교환 철회 공통 로직을 수행합니다.
+	private ShopOrderExchangeWithdrawResultVO withdrawShopOrderExchange(
+		ShopOrderExchangeWithdrawPO param,
+		Long custNo,
+		Long auditNo,
+		String expectedClmNo,
+		String unavailableMessage
+	) {
+		// 고객번호와 요청 본문 기본값을 먼저 검증합니다.
 		if (custNo == null || custNo < 1L) {
 			throw new IllegalArgumentException("로그인이 필요합니다.");
 		}
 		if (param == null) {
-			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_EXCHANGE_WITHDRAW_UNAVAILABLE_MESSAGE);
+			throw new IllegalArgumentException(unavailableMessage);
 		}
 
 		String ordNo = trimToNull(param.getOrdNo());
 		Integer ordDtlNo = param.getOrdDtlNo();
 		if (ordNo == null || ordDtlNo == null || ordDtlNo < 1) {
-			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_EXCHANGE_WITHDRAW_UNAVAILABLE_MESSAGE);
+			throw new IllegalArgumentException(unavailableMessage);
 		}
+		Long udtNo = auditNo == null || auditNo < 1L ? custNo : auditNo;
+		String normalizedExpectedClmNo = trimToNull(expectedClmNo);
 
-		// 현재 로그인 고객이 철회할 수 있는 최신 교환 신청 회수 상세 1건을 조회합니다.
+		// 현재 고객 기준으로 철회할 수 있는 최신 교환 신청 회수 상세 1건을 조회합니다.
 		ShopOrderExchangeWithdrawResultVO withdrawTarget = orderMapper.getShopOrderExchangeWithdrawTarget(custNo, ordNo, ordDtlNo);
 		if (withdrawTarget == null || !isShopOrderExchangeWithdrawableStatus(withdrawTarget.getChgDtlStatCd())) {
-			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_EXCHANGE_WITHDRAW_UNAVAILABLE_MESSAGE);
+			throw new IllegalArgumentException(unavailableMessage);
+		}
+		if (normalizedExpectedClmNo != null && !normalizedExpectedClmNo.equals(trimToNull(withdrawTarget.getClmNo()))) {
+			throw new IllegalArgumentException(unavailableMessage);
 		}
 		if (!SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_DELIVERY_WAIT.equals(trimToNull(withdrawTarget.getDeliveryChgDtlStatCd()))) {
-			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_EXCHANGE_WITHDRAW_UNAVAILABLE_MESSAGE);
+			throw new IllegalArgumentException(unavailableMessage);
 		}
 
 		// 선택 상품의 교환 회수 행과 교환 배송 행을 각각 철회 상태로 변경합니다.
@@ -375,7 +468,7 @@ public class OrderExchangeService {
 			SHOP_ORDER_CHANGE_DTL_GB_EXCHANGE_PICKUP,
 			withdrawTarget.getChgDtlStatCd(),
 			SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_WITHDRAW,
-			custNo
+			udtNo
 		);
 		int deliveryUpdatedCount = orderMapper.withdrawShopOrderExchangeDetail(
 			withdrawTarget.getClmNo(),
@@ -384,10 +477,10 @@ public class OrderExchangeService {
 			SHOP_ORDER_CHANGE_DTL_GB_EXCHANGE_DELIVERY,
 			SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_DELIVERY_WAIT,
 			SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_DELIVERY_WITHDRAW,
-			custNo
+			udtNo
 		);
 		if (pickupUpdatedCount != 1 || deliveryUpdatedCount != 1) {
-			throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_EXCHANGE_WITHDRAW_UNAVAILABLE_MESSAGE);
+			throw new IllegalArgumentException(unavailableMessage);
 		}
 
 		// 같은 클레임에 남아 있는 교환 회수 상세가 없으면 클레임과 교환 배송비 결제를 함께 닫습니다.
@@ -403,12 +496,12 @@ public class OrderExchangeService {
 				withdrawTarget.getClmNo(),
 				withdrawTarget.getOrdNo(),
 				SHOP_ORDER_CHANGE_STAT_WITHDRAW,
-				custNo
+				udtNo
 			);
 			if (claimUpdatedCount != 1) {
-				throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_EXCHANGE_WITHDRAW_UNAVAILABLE_MESSAGE);
+				throw new IllegalArgumentException(unavailableMessage);
 			}
-			paymentResult = cancelShopOrderExchangeWithdrawPaymentIfNeeded(withdrawTarget.getClmNo(), withdrawTarget.getOrdNo(), custNo);
+			paymentResult = cancelShopOrderExchangeWithdrawPaymentIfNeeded(withdrawTarget.getClmNo(), withdrawTarget.getOrdNo(), custNo, udtNo);
 		}
 
 		// 프론트 새로고침 분기용 응답 객체를 구성합니다.
@@ -434,13 +527,78 @@ public class OrderExchangeService {
 			|| SHOP_ORDER_CHANGE_DTL_STAT_EXCHANGE_APPLY.equals(normalizedChgDtlStatCd);
 	}
 
+	// 관리자 교환 철회 요청 목록을 정규화하고 중복을 제거합니다.
+	private List<AdminOrderExchangeWithdrawItemPO> normalizeAdminOrderExchangeWithdrawItemList(
+		List<AdminOrderExchangeWithdrawItemPO> claimItemList
+	) {
+		// 요청 목록이 없으면 빈 목록을 반환합니다.
+		if (claimItemList == null || claimItemList.isEmpty()) {
+			return List.of();
+		}
+
+		// 클레임번호와 주문상세번호가 유효한 행만 중복 없이 유지합니다.
+		Map<String, AdminOrderExchangeWithdrawItemPO> normalizedItemMap = new LinkedHashMap<>();
+		for (AdminOrderExchangeWithdrawItemPO claimItem : claimItemList) {
+			String clmNo = trimToNull(claimItem == null ? null : claimItem.getClmNo());
+			Integer ordDtlNo = claimItem == null ? null : claimItem.getOrdDtlNo();
+			if (clmNo == null || ordDtlNo == null || ordDtlNo < 1) {
+				throw new IllegalArgumentException(ADMIN_ORDER_EXCHANGE_WITHDRAW_INVALID_MESSAGE);
+			}
+
+			AdminOrderExchangeWithdrawItemPO normalizedItem = new AdminOrderExchangeWithdrawItemPO();
+			normalizedItem.setClmNo(clmNo);
+			normalizedItem.setOrdDtlNo(ordDtlNo);
+			normalizedItemMap.putIfAbsent(buildAdminOrderExchangeWithdrawItemKey(clmNo, ordDtlNo), normalizedItem);
+		}
+		return List.copyOf(normalizedItemMap.values());
+	}
+
+	// 관리자 주문 클레임 목록에서 교환 철회 가능한 행을 찾습니다.
+	private AdminOrderClaimRowVO findAdminOrderExchangeWithdrawableClaimRow(
+		List<AdminOrderClaimRowVO> claimRowList,
+		AdminOrderExchangeWithdrawItemPO claimItem
+	) {
+		// 클레임번호와 주문상세번호가 일치하는 교환 회수 상세 행만 반환합니다.
+		String clmNo = trimToNull(claimItem == null ? null : claimItem.getClmNo());
+		Integer ordDtlNo = claimItem == null ? null : claimItem.getOrdDtlNo();
+		if (clmNo == null || ordDtlNo == null || ordDtlNo < 1) {
+			return null;
+		}
+		for (AdminOrderClaimRowVO claimRow : claimRowList == null ? List.<AdminOrderClaimRowVO>of() : claimRowList) {
+			if (!clmNo.equals(trimToNull(claimRow.getClmNo())) || !ordDtlNo.equals(claimRow.getOrdDtlNo())) {
+				continue;
+			}
+			if (isAdminOrderExchangeWithdrawableClaimRow(claimRow)) {
+				return claimRow;
+			}
+		}
+		return null;
+	}
+
+	// 관리자 주문 클레임 행이 교환 철회 가능한 상태인지 반환합니다.
+	private boolean isAdminOrderExchangeWithdrawableClaimRow(AdminOrderClaimRowVO claimRow) {
+		// 교환 회수 클레임이면서 현재 결제대기 또는 교환신청 상태인 행만 철회할 수 있습니다.
+		if (claimRow == null) {
+			return false;
+		}
+		return SHOP_ORDER_CHANGE_DTL_GB_EXCHANGE_PICKUP.equals(trimToNull(claimRow.getChgDtlGbCd()))
+			&& isShopOrderExchangeWithdrawableStatus(claimRow.getChgDtlStatCd());
+	}
+
+	// 관리자 교환 철회 요청 항목의 복합키 문자열을 생성합니다.
+	private String buildAdminOrderExchangeWithdrawItemKey(String clmNo, Integer ordDtlNo) {
+		return clmNo + ":" + ordDtlNo;
+	}
+
 	// 교환 클레임 종료 시 교환 배송비 결제를 취소하거나 환불합니다.
 	private ShopOrderExchangeWithdrawPaymentResult cancelShopOrderExchangeWithdrawPaymentIfNeeded(
 		String clmNo,
 		String ordNo,
-		Long custNo
+		Long custNo,
+		Long auditNo
 	) {
 		// 고객 귀책 교환 배송비 결제 row가 없으면 회사 귀책 교환으로 보고 별도 결제 처리를 생략합니다.
+		Long resolvedAuditNo = auditNo == null || auditNo < 1L ? custNo : auditNo;
 		ShopOrderPaymentVO payment = orderMapper.getShopOrderExchangePaymentByClmNo(clmNo, custNo);
 		if (payment == null || payment.getPayNo() == null) {
 			return new ShopOrderExchangeWithdrawPaymentResult(false, null, null);
@@ -455,7 +613,7 @@ public class OrderExchangeService {
 				"EXCHANGE_WITHDRAW",
 				"교환 철회",
 				buildShopOrderExchangeWithdrawPaymentCancelRawJson(payment, "READY_CANCEL"),
-				custNo
+				resolvedAuditNo
 			);
 			return new ShopOrderExchangeWithdrawPaymentResult(true, null, SHOP_ORDER_PAY_STAT_CANCEL);
 		}
@@ -470,7 +628,7 @@ public class OrderExchangeService {
 					pgResult.rspCode(),
 					pgResult.rspMsg(),
 					pgResult.rawResponse(),
-					custNo
+					resolvedAuditNo
 				);
 				return new ShopOrderExchangeWithdrawPaymentResult(true, null, SHOP_ORDER_PAY_STAT_CANCEL);
 			} catch (TossPaymentClientException exception) {
@@ -485,13 +643,13 @@ public class OrderExchangeService {
 			if (orderBase == null || cancelAmount < 1L) {
 				throw new IllegalArgumentException(SHOP_MYPAGE_ORDER_EXCHANGE_PAYMENT_INVALID_MESSAGE);
 			}
-			ShopOrderPaymentSavePO refundPayment = createShopOrderExchangeWithdrawRefundPayment(orderBase, payment, cancelAmount, custNo);
+			ShopOrderPaymentSavePO refundPayment = createShopOrderExchangeWithdrawRefundPayment(orderBase, payment, cancelAmount, custNo, resolvedAuditNo);
 			try {
 				ShopOrderExchangeWithdrawPgResult pgResult = cancelShopOrderExchangeWithdrawPaymentWithPg(payment, orderBase, cancelAmount);
-				updateShopOrderExchangeWithdrawRefundSuccess(refundPayment.getPayNo(), pgResult, custNo);
+				updateShopOrderExchangeWithdrawRefundSuccess(refundPayment.getPayNo(), pgResult, resolvedAuditNo);
 				return new ShopOrderExchangeWithdrawPaymentResult(true, refundPayment.getPayNo(), SHOP_ORDER_PAY_STAT_CANCEL);
 			} catch (TossPaymentClientException exception) {
-				handleShopOrderExchangeWithdrawRefundFailure(refundPayment.getPayNo(), exception, custNo);
+				handleShopOrderExchangeWithdrawRefundFailure(refundPayment.getPayNo(), exception, resolvedAuditNo);
 				throw new IllegalArgumentException(resolveShopOrderExchangeWithdrawPgErrorMessage(exception));
 			}
 		}
@@ -508,7 +666,8 @@ public class OrderExchangeService {
 		ShopOrderCancelOrderBaseVO orderBase,
 		ShopOrderPaymentVO originalPayment,
 		long cancelAmount,
-		Long custNo
+		Long custNo,
+		Long auditNo
 	) {
 		// 환불 추적과 가상계좌 환불계좌 확인을 위해 요청 스냅샷을 함께 저장합니다.
 		Map<String, Object> refundSnapshot = new LinkedHashMap<>();
@@ -535,8 +694,8 @@ public class OrderExchangeService {
 			refundPaymentSavePO.setPayAmt(resolveShopOrderExchangeRefundPaymentAmt(cancelAmount));
 			refundPaymentSavePO.setDeviceGbCd(firstNonBlank(trimToNull(originalPayment == null ? null : originalPayment.getDeviceGbCd()), firstNonBlank(trimToNull(orderBase == null ? null : orderBase.getDeviceGbCd()), "PC")));
 			refundPaymentSavePO.setReqRawJson(orderService.writeShopOrderJson(refundSnapshot));
-			refundPaymentSavePO.setRegNo(custNo);
-			refundPaymentSavePO.setUdtNo(custNo);
+			refundPaymentSavePO.setRegNo(auditNo);
+			refundPaymentSavePO.setUdtNo(auditNo);
 			orderMapper.insertShopPayment(refundPaymentSavePO);
 			if (refundPaymentSavePO.getPayNo() == null || refundPaymentSavePO.getPayNo() < 1L) {
 				throw new IllegalStateException("환불 결제 준비에 실패했습니다.");
@@ -1372,6 +1531,20 @@ public class OrderExchangeService {
 		String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS"));
 		long safeCustNo = custNo == null ? 0L : Math.max(custNo, 0L);
 		return "C" + safeCustNo + timestamp;
+	}
+
+	// 현재 로그인한 관리자 번호를 조회합니다.
+	private Long resolveCurrentAdminUserNo() {
+		// 스프링 시큐리티 인증정보에서 관리자 사용자번호를 추출합니다.
+		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+		if (authentication == null) {
+			return null;
+		}
+		Object principal = authentication.getPrincipal();
+		if (principal instanceof UserBaseEntity userBaseEntity) {
+			return userBaseEntity.getUsrNo();
+		}
+		return null;
 	}
 
 	// 0 이상 숫자값을 안전한 int 값으로 보정합니다.

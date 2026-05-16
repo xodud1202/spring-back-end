@@ -1,6 +1,8 @@
 package com.xodud1202.springbackend.controller.bo;
 
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderDetailStatusUpdatePO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderExchangeWithdrawPO;
+import com.xodud1202.springbackend.domain.admin.order.AdminOrderExchangeWithdrawVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManageListResponseVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupCompletePageVO;
 import com.xodud1202.springbackend.domain.admin.order.AdminOrderReturnManagePickupCompleteResultVO;
@@ -17,6 +19,7 @@ import com.xodud1202.springbackend.domain.shop.order.ShopOrderCancelPO;
 import com.xodud1202.springbackend.domain.shop.order.ShopOrderReturnResultVO;
 import com.xodud1202.springbackend.service.DeliveryService;
 import com.xodud1202.springbackend.service.OrderCancelService;
+import com.xodud1202.springbackend.service.OrderExchangeService;
 import com.xodud1202.springbackend.service.OrderReturnService;
 import com.xodud1202.springbackend.service.OrderService;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +41,7 @@ public class AdminOrderController {
 	private final OrderService orderService;
 	private final OrderCancelService orderCancelService;
 	private final OrderReturnService orderReturnService;
+	private final OrderExchangeService orderExchangeService;
 	private final DeliveryService deliveryService;
 
 	// 관리자 주문 상세 정보를 조회합니다.
@@ -133,6 +137,24 @@ public class AdminOrderController {
 		} catch (Exception exception) {
 			// 예상치 못한 오류는 500 응답으로 반환합니다.
 			return ResponseEntity.internalServerError().body(Map.of("message", "반품 철회 처리 중 오류가 발생했습니다."));
+		}
+	}
+
+	// 관리자 주문교환 철회를 저장합니다.
+	@PostMapping("/api/admin/order/exchange/withdraw")
+	public ResponseEntity<Object> withdrawAdminOrderExchange(
+		@RequestBody(required = false) AdminOrderExchangeWithdrawPO param
+	) {
+		try {
+			// 교환 철회 요청을 처리하고 결과를 반환합니다.
+			AdminOrderExchangeWithdrawVO result = orderExchangeService.withdrawAdminOrderExchange(param);
+			return ResponseEntity.ok(result);
+		} catch (IllegalArgumentException exception) {
+			// 요청값 오류는 400 응답으로 반환합니다.
+			return ResponseEntity.badRequest().body(Map.of("message", exception.getMessage()));
+		} catch (Exception exception) {
+			// 예상치 못한 오류는 500 응답으로 반환합니다.
+			return ResponseEntity.internalServerError().body(Map.of("message", "교환 철회 처리 중 오류가 발생했습니다."));
 		}
 	}
 
