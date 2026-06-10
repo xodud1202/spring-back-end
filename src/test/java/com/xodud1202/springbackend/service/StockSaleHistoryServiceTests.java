@@ -1,6 +1,8 @@
 package com.xodud1202.springbackend.service;
 
 import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleListResponseVO;
+import com.xodud1202.springbackend.domain.common.CommonCodeVO;
+import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleCreateRequestVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleRowVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleSearchPO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleSummaryRowVO;
@@ -19,7 +21,10 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -137,6 +142,71 @@ class StockSaleHistoryServiceTests {
 		assertEquals(List.of("STOCK_A"), holdingParam.getStockNmCdList());
 	}
 
+	@Test
+	@DisplayName("매매등록: 매도는 음수만 입력 가능")
+	// 매도 수량에 양수 금액이 들어오면 저장 전에 차단합니다.
+	void createStockSaleHistory_rejectsPositiveAmountWhenSaleCountIsNegative() {
+		stubStockSaleOptionLists();
+		WorkStockSaleCreateRequestVO request = createStockSaleCreateRequest(-10, 10000L, 0L);
+
+		IllegalArgumentException exception = assertThrows(
+			IllegalArgumentException.class,
+			() -> stockSaleHistoryService.createStockSaleHistory(request, 1L)
+		);
+
+		assertEquals("매도는 음수만 입력 할 수 있습니다.", exception.getMessage());
+		verify(stockSaleHistoryMapper, never()).insertStockSaleHistory(any(WorkStockSaleCreateRequestVO.class));
+	}
+
+	@Test
+	@DisplayName("매매등록: 매수는 양수만 입력 가능")
+	// 매수 수량에 음수 금액이 들어오면 저장 전에 차단합니다.
+	void createStockSaleHistory_rejectsNegativeAmountWhenSaleCountIsPositive() {
+		stubStockSaleOptionLists();
+		WorkStockSaleCreateRequestVO request = createStockSaleCreateRequest(10, -10000L, 0L);
+
+		IllegalArgumentException exception = assertThrows(
+			IllegalArgumentException.class,
+			() -> stockSaleHistoryService.createStockSaleHistory(request, 1L)
+		);
+
+		assertEquals("매수는 양수만 입력 할 수 있습니다.", exception.getMessage());
+		verify(stockSaleHistoryMapper, never()).insertStockSaleHistory(any(WorkStockSaleCreateRequestVO.class));
+	}
+
+	@Test
+	@DisplayName("매매등록: 매수 수량에는 손익금액을 입력할 수 없음")
+	// 매수 등록에 손익금액이 들어오면 저장 전에 차단합니다.
+	void createStockSaleHistory_rejectsProfitAmountWhenSaleCountIsPositive() {
+		stubStockSaleOptionLists();
+		WorkStockSaleCreateRequestVO request = createStockSaleCreateRequest(10, 10000L, 1000L);
+
+		IllegalArgumentException exception = assertThrows(
+			IllegalArgumentException.class,
+			() -> stockSaleHistoryService.createStockSaleHistory(request, 1L)
+		);
+
+		assertEquals("매수 등록 시 손익금액은 입력할 수 없습니다.", exception.getMessage());
+		verify(stockSaleHistoryMapper, never()).insertStockSaleHistory(any(WorkStockSaleCreateRequestVO.class));
+	}
+
+	@Test
+	@DisplayName("매매등록: 매수 수량의 빈 손익금액은 0으로 저장")
+	// 매수 등록에서 손익금액이 비어 있으면 입력하지 않은 것으로 보고 0으로 저장합니다.
+	void createStockSaleHistory_allowsPositiveSaleCountWhenProfitAmountIsEmpty() {
+		stubStockSaleOptionLists();
+		WorkStockSaleCreateRequestVO request = createStockSaleCreateRequest(10, 10000L, null);
+		when(stockSaleHistoryMapper.insertStockSaleHistory(any(WorkStockSaleCreateRequestVO.class))).thenReturn(1);
+
+		stockSaleHistoryService.createStockSaleHistory(request, 1L);
+
+		ArgumentCaptor<WorkStockSaleCreateRequestVO> createCaptor = ArgumentCaptor.forClass(WorkStockSaleCreateRequestVO.class);
+		verify(stockSaleHistoryMapper).insertStockSaleHistory(createCaptor.capture());
+		assertEquals(10, createCaptor.getValue().getSaleCnt());
+		assertEquals(10000L, createCaptor.getValue().getSaleAmt());
+		assertEquals(0L, createCaptor.getValue().getProfitAmt());
+	}
+
 	// 매매일지 목록 조회에 필요한 매퍼 응답을 구성합니다.
 	private void stubStockSaleList(List<WorkStockSaleSummaryRowVO> summaryList, List<WorkStockSaleRowVO> holdingSourceRowList) {
 		when(stockSaleHistoryMapper.getStockSaleRowCount(any(WorkStockSaleSearchPO.class))).thenReturn(0);
@@ -152,7 +222,34 @@ class StockSaleHistoryServiceTests {
 		return response.getSummaryList().get(0);
 	}
 
-	// 테스트용 종목별 기존 합계 행을 생성합니다.
+	// 매매등록 검증에 필요한 계좌와 종목 공통코드 목록을 구성합니다.
+	private void stubStockSaleOptionLists() {
+		when(commonMapper.getCommonCodeList(eq("STOCK_ACCOUNT"))).thenReturn(List.of(createCommonCode("ACCOUNT_A", "계좌A")));
+		when(commonMapper.getCommonCodeList(eq("STOCK_NM"))).thenReturn(List.of(createCommonCode("STOCK_A", "종목A")));
+	}
+
+	// 공통코드를 생성합니다.
+	private CommonCodeVO createCommonCode(String code, String codeName) {
+		CommonCodeVO commonCode = new CommonCodeVO();
+		commonCode.setCd(code);
+		commonCode.setCdNm(codeName);
+		return commonCode;
+	}
+
+	// 매매등록 요청을 생성합니다.
+	private WorkStockSaleCreateRequestVO createStockSaleCreateRequest(Integer saleCnt, Long saleAmt, Long profitAmt) {
+		WorkStockSaleCreateRequestVO request = new WorkStockSaleCreateRequestVO();
+		request.setSaleDt("2026-06-10");
+		request.setStockAccountCd("ACCOUNT_A");
+		request.setStockNmCd("STOCK_A");
+		request.setSaleCnt(saleCnt);
+		request.setSaleAmt(saleAmt);
+		request.setProfitAmt(profitAmt);
+		request.setMemo("");
+		return request;
+	}
+
+	// 종목별 기존 합계 행을 생성합니다.
 	private WorkStockSaleSummaryRowVO createSummary(String stockNmCd, String stockNm, long saleAmt, long profitAmt) {
 		WorkStockSaleSummaryRowVO summary = new WorkStockSaleSummaryRowVO();
 		summary.setStockNmCd(stockNmCd);
@@ -164,7 +261,7 @@ class StockSaleHistoryServiceTests {
 		return summary;
 	}
 
-	// 테스트용 매매 원천 거래 행을 생성합니다.
+	// 매매 원천 거래 행을 생성합니다.
 	private WorkStockSaleRowVO createRow(Long saleHistSeq, String stockAccountCd, String stockNmCd, int saleCnt, long saleAmt, long profitAmt) {
 		WorkStockSaleRowVO row = new WorkStockSaleRowVO();
 		row.setSaleHistSeq(saleHistSeq);

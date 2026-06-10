@@ -317,6 +317,7 @@ public class StockSaleHistoryService {
 		validateRequiredCode(normalizedStockNmCd, getStockNameList(), "주식명을 선택해주세요.");
 		validateRequiredInteger(request.getSaleCnt(), "매매수를 입력해주세요.");
 		validateRequiredLong(request.getSaleAmt(), "매매금액을 입력해주세요.");
+		validateStockSaleCreateAmountRule(request.getSaleCnt(), request.getSaleAmt(), request.getProfitAmt());
 
 		WorkStockSaleCreateRequestVO param = new WorkStockSaleCreateRequestVO();
 		param.setSaleDt(normalizedSaleDt);
@@ -329,6 +330,25 @@ public class StockSaleHistoryService {
 		param.setRegNo(workUserNo);
 		param.setUdtNo(workUserNo);
 		return param;
+	}
+
+	// 매매수 방향에 맞는 매매금액과 손익금액 입력 규칙을 검증합니다.
+	private void validateStockSaleCreateAmountRule(Integer saleCnt, Long saleAmt, Long profitAmt) {
+		if (saleCnt == null || saleCnt == 0) {
+			throw new IllegalArgumentException("매매수를 입력해주세요.");
+		}
+		if (saleAmt == null || saleAmt == 0L) {
+			throw new IllegalArgumentException("매매금액을 입력해주세요.");
+		}
+		if (saleCnt > 0 && saleAmt < 0L) {
+			throw new IllegalArgumentException("매수는 양수만 입력 할 수 있습니다.");
+		}
+		if (saleCnt < 0 && saleAmt > 0L) {
+			throw new IllegalArgumentException("매도는 음수만 입력 할 수 있습니다.");
+		}
+		if (saleCnt > 0 && normalizeLong(profitAmt) != 0L) {
+			throw new IllegalArgumentException("매수 등록 시 손익금액은 입력할 수 없습니다.");
+		}
 	}
 
 	// 필수 코드가 공통코드 목록에 존재하는지 확인합니다.
