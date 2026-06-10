@@ -20,12 +20,16 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -42,6 +46,16 @@ public class StockSaleHistoryService {
 
 	private final CommonMapper commonMapper;
 	private final StockSaleHistoryMapper stockSaleHistoryMapper;
+
+	// 계좌와 종목으로 현재 보유 포지션을 구분하는 키입니다.
+	private record StockSalePositionKey(String stockAccountCd, String stockNmCd) {
+	}
+
+	// 계좌와 종목별 현재 보유 상태를 누적합니다.
+	private static final class StockSaleHoldingState {
+		private long holdingCnt;
+		private long holdingPrincipalAmt;
+	}
 
 	// 매매일지 화면 초기 선택 목록을 조회합니다.
 	public WorkStockSaleBootstrapResponseVO getStockSaleBootstrap(UserInfoVO currentUser) {
@@ -109,17 +123,116 @@ public class StockSaleHistoryService {
 		param.setPageNo(resolvedPageNo);
 		param.setOffset(calculateOffset(resolvedPageNo, param.getPageSize()));
 
-		List<WorkStockSaleSummaryRowVO> summaryList = stockSaleHistoryMapper.getStockSaleSummaryList(param);
+		WorkStockSaleSearchPO holdingParam = buildCurrentHoldingSearchParam(param);
+		List<WorkStockSaleSummaryRowVO> summaryList = stockSaleHistoryMapper.getStockSaleSummaryList(holdingParam);
+		List<WorkStockSaleRowVO> holdingSourceRowList = stockSaleHistoryMapper.getStockSaleHoldingSourceRowList(holdingParam);
 		List<WorkStockSaleRowVO> rowList = stockSaleHistoryMapper.getStockSaleRowList(param);
 
 		WorkStockSaleListResponseVO response = new WorkStockSaleListResponseVO();
-		response.setSummaryList(summaryList == null ? List.of() : summaryList);
+		response.setSummaryList(buildCurrentHoldingSummaryList(summaryList, holdingSourceRowList));
 		response.setRowList(rowList == null ? List.of() : rowList);
 		response.setTotalCount(totalCount);
 		response.setPageNo(resolvedPageNo);
 		response.setPageSize(param.getPageSize());
 		response.setTotalPageCount(totalPageCount);
 		return response;
+	}
+
+	// 현재 보유원금 계산은 날짜 조건 없이 선택 계좌와 종목 조건만 사용합니다.
+	private WorkStockSaleSearchPO buildCurrentHoldingSearchParam(WorkStockSaleSearchPO searchParam) {
+		WorkStockSaleSearchPO holdingParam = new WorkStockSaleSearchPO();
+		holdingParam.setStockAccountCdList(searchParam == null ? List.of() : searchParam.getStockAccountCdList());
+		holdingParam.setStockNmCdList(searchParam == null ? List.of() : searchParam.getStockNmCdList());
+		return holdingParam;
+	}
+
+	// 거래 이력을 계좌+종목 포지션으로 계산한 뒤 종목별 합계 행에 반영합니다.
+	private List<WorkStockSaleSummaryRowVO> buildCurrentHoldingSummaryList(
+		List<WorkStockSaleSummaryRowVO> summaryList,
+		List<WorkStockSaleRowVO> holdingSourceRowList
+	) {
+		Map<String, StockSaleHoldingState> holdingStateMap = buildStockSaleHoldingStateMap(holdingSourceRowList);
+		List<WorkStockSaleSummaryRowVO> adjustedSummaryList = new ArrayList<>();
+		for (WorkStockSaleSummaryRowVO summaryItem : summaryList == null ? List.<WorkStockSaleSummaryRowVO>of() : summaryList) {
+			if (summaryItem == null) {
+				continue;
+			}
+
+			// 종목별 열린 포지션만 더해 현재 보유수량과 보유원금을 만든다.
+			StockSaleHoldingState stockHoldingState = holdingStateMap.getOrDefault(summaryItem.getStockNmCd(), new StockSaleHoldingState());
+			long holdingCnt = stockHoldingState.holdingCnt;
+			long holdingPrincipalAmt = stockHoldingState.holdingPrincipalAmt;
+			summaryItem.setSaleCnt(holdingCnt);
+			summaryItem.setHoldingPrincipalAmt(holdingPrincipalAmt);
+			summaryItem.setAverageSaleAmt(calculateHoldingAverageSaleAmt(holdingCnt, holdingPrincipalAmt));
+			adjustedSummaryList.add(summaryItem);
+		}
+		return adjustedSummaryList;
+	}
+
+	// 원천 거래 목록을 계좌+종목별 포지션으로 계산하고 종목 단위로 다시 합산합니다.
+	private Map<String, StockSaleHoldingState> buildStockSaleHoldingStateMap(List<WorkStockSaleRowVO> holdingSourceRowList) {
+		Map<StockSalePositionKey, StockSaleHoldingState> positionStateMap = new HashMap<>();
+		for (WorkStockSaleRowVO rowItem : holdingSourceRowList == null ? List.<WorkStockSaleRowVO>of() : holdingSourceRowList) {
+			String stockAccountCd = trimToNull(rowItem == null ? null : rowItem.getStockAccountCd());
+			String stockNmCd = trimToNull(rowItem == null ? null : rowItem.getStockNmCd());
+			if (stockAccountCd == null || stockNmCd == null) {
+				continue;
+			}
+
+			// 계좌별 전량 매도와 재매수를 독립된 포지션으로 처리한다.
+			StockSalePositionKey positionKey = new StockSalePositionKey(stockAccountCd, stockNmCd);
+			StockSaleHoldingState positionState = positionStateMap.computeIfAbsent(positionKey, ignored -> new StockSaleHoldingState());
+			applyStockSaleHoldingRow(positionState, rowItem);
+		}
+
+		Map<String, StockSaleHoldingState> stockHoldingStateMap = new HashMap<>();
+		for (Map.Entry<StockSalePositionKey, StockSaleHoldingState> entry : positionStateMap.entrySet()) {
+			StockSaleHoldingState positionState = entry.getValue();
+			if (positionState.holdingCnt <= 0L) {
+				continue;
+			}
+
+			// 열린 계좌별 포지션을 종목별 표시 합계로 모읍니다.
+			StockSaleHoldingState stockState = stockHoldingStateMap.computeIfAbsent(entry.getKey().stockNmCd(), ignored -> new StockSaleHoldingState());
+			stockState.holdingCnt += positionState.holdingCnt;
+			stockState.holdingPrincipalAmt += positionState.holdingPrincipalAmt;
+		}
+		return stockHoldingStateMap;
+	}
+
+	// 거래 한 건을 현재 포지션 상태에 반영합니다.
+	private void applyStockSaleHoldingRow(StockSaleHoldingState positionState, WorkStockSaleRowVO rowItem) {
+		long saleCnt = normalizeLong(rowItem.getSaleCnt());
+		long saleAmt = normalizeLong(rowItem.getSaleAmt());
+		long profitAmt = normalizeLong(rowItem.getProfitAmt());
+		if (saleCnt > 0L) {
+			positionState.holdingCnt += saleCnt;
+			positionState.holdingPrincipalAmt += saleAmt;
+		} else if (saleCnt < 0L) {
+			long soldPrincipalAmt = Math.abs(saleAmt) - profitAmt;
+			positionState.holdingCnt += saleCnt;
+			positionState.holdingPrincipalAmt -= soldPrincipalAmt;
+		}
+
+		// 전량 매도 후 같은 계좌+종목을 다시 매수하면 새 포지션이 0원부터 시작되도록 리셋합니다.
+		if (positionState.holdingCnt <= 0L) {
+			positionState.holdingCnt = 0L;
+			positionState.holdingPrincipalAmt = 0L;
+		}
+	}
+
+	// 현재 보유수량과 보유원금으로 보유평단을 계산합니다.
+	private BigDecimal calculateHoldingAverageSaleAmt(long holdingCnt, long holdingPrincipalAmt) {
+		if (holdingCnt <= 0L) {
+			return null;
+		}
+		return BigDecimal.valueOf(holdingPrincipalAmt).divide(BigDecimal.valueOf(holdingCnt), 2, RoundingMode.HALF_UP);
+	}
+
+	// nullable 숫자 값을 계산용 long 기본값으로 정규화합니다.
+	private long normalizeLong(Number value) {
+		return value == null ? 0L : value.longValue();
 	}
 
 	// 요청 순서 목록이 현재 활성 공통코드 전체와 일치하는지 확인하고 저장 순서를 재계산합니다.

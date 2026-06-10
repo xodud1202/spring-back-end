@@ -11,6 +11,7 @@ public class WorkStockSaleSummaryRowVO {
 	private String stockNm;
 	private Long saleCnt;
 	private Long saleAmt;
+	private Long holdingPrincipalAmt;
 	private BigDecimal averageSaleAmt;
 	private Long profitAmt;
 }

@@ -26,12 +26,30 @@
 		</if>
 	</sql>
 
+	<sql id="stockSaleAccountStockSearchWhere">
+		/* StockSaleHistoryMapper.stockSaleAccountStockSearchWhere: 현재 보유 포지션용 계좌/종목 조건 */
+		WHERE 1 = 1
+		<if test="stockAccountCdList != null and stockAccountCdList.size() > 0">
+		   AND H.STOCK_ACCOUNT_CD IN
+		   <foreach collection="stockAccountCdList" item="stockAccountCd" open="(" separator="," close=")">
+		     #{stockAccountCd}
+		   </foreach>
+		</if>
+		<if test="stockNmCdList != null and stockNmCdList.size() > 0">
+		   AND H.STOCK_NM_CD IN
+		   <foreach collection="stockNmCdList" item="stockNmCd" open="(" separator="," close=")">
+		     #{stockNmCd}
+		   </foreach>
+		</if>
+	</sql>
+
 	<select id="getStockSaleSummaryList" resultType="com.xodud1202.springbackend.domain.work.stock.WorkStockSaleSummaryRowVO">
-		/* StockSaleHistoryMapper.getStockSaleSummaryList: 검색 조건별 주식 종목 합계 조회 */
+		/* StockSaleHistoryMapper.getStockSaleSummaryList: 선택 계좌/종목 기준 주식 종목 합계 조회 */
 		SELECT H.STOCK_NM_CD
 		     , SN.CD_NM AS STOCK_NM
 		     , COALESCE(SUM(H.SALE_CNT), 0) AS SALE_CNT
 		     , COALESCE(SUM(H.SALE_AMT), 0) AS SALE_AMT
+		     , 0 AS HOLDING_PRINCIPAL_AMT
 		     , CASE
 		         WHEN COALESCE(SUM(H.SALE_CNT), 0) = 0 THEN NULL
 		         ELSE ROUND(COALESCE(SUM(H.SALE_AMT), 0) / COALESCE(SUM(H.SALE_CNT), 0), 2)
@@ -46,12 +64,40 @@
 		    ON SA.GRP_CD = 'STOCK_ACCOUNT'
 		   AND SA.CD = H.STOCK_ACCOUNT_CD
 		   AND SA.USE_YN = 'Y'
-		<include refid="stockSaleSearchWhere" />
+		<include refid="stockSaleAccountStockSearchWhere" />
 		 GROUP BY H.STOCK_NM_CD
 		        , SN.CD_NM
 		        , SN.DISP_ORD
 		 ORDER BY SN.DISP_ORD ASC
 		        , H.STOCK_NM_CD ASC
+	</select>
+
+	<select id="getStockSaleHoldingSourceRowList" resultType="com.xodud1202.springbackend.domain.work.stock.WorkStockSaleRowVO">
+		/* StockSaleHistoryMapper.getStockSaleHoldingSourceRowList: 현재 보유원금 계산용 거래 이력 조회 */
+		SELECT H.SALE_HIST_SEQ
+		     , H.SALE_DT
+		     , H.STOCK_ACCOUNT_CD
+		     , SA.CD_NM AS STOCK_ACCOUNT_NM
+		     , H.STOCK_NM_CD
+		     , SN.CD_NM AS STOCK_NM
+		     , H.SALE_CNT
+		     , H.SALE_AMT
+		     , COALESCE(H.PROFIT_AMT, 0) AS PROFIT_AMT
+		     , H.MEMO
+		  FROM MY_STOCK_SALE_HISTORY H
+		  JOIN COMMON_CODE SA
+		    ON SA.GRP_CD = 'STOCK_ACCOUNT'
+		   AND SA.CD = H.STOCK_ACCOUNT_CD
+		   AND SA.USE_YN = 'Y'
+		  JOIN COMMON_CODE SN
+		    ON SN.GRP_CD = 'STOCK_NM'
+		   AND SN.CD = H.STOCK_NM_CD
+		   AND SN.USE_YN = 'Y'
+		<include refid="stockSaleAccountStockSearchWhere" />
+		 ORDER BY H.STOCK_ACCOUNT_CD ASC
+		        , H.STOCK_NM_CD ASC
+		        , H.SALE_DT ASC
+		        , H.SALE_HIST_SEQ ASC
 	</select>
 
 	<select id="getStockSaleRowList" resultType="com.xodud1202.springbackend.domain.work.stock.WorkStockSaleRowVO">

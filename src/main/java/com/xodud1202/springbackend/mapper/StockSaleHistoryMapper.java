@@ -14,6 +14,9 @@ public interface StockSaleHistoryMapper {
 	// 검색 조건에 맞는 종목별 매매 합계를 조회합니다.
 	List<WorkStockSaleSummaryRowVO> getStockSaleSummaryList(WorkStockSaleSearchPO param);
 
+	// 선택 계좌와 종목 기준으로 현재 보유원금 계산용 거래 목록을 조회합니다.
+	List<WorkStockSaleRowVO> getStockSaleHoldingSourceRowList(WorkStockSaleSearchPO param);
+
 	// 검색 조건에 맞는 매매 상세 목록을 페이징 조회합니다.
 	List<WorkStockSaleRowVO> getStockSaleRowList(WorkStockSaleSearchPO param);
 
