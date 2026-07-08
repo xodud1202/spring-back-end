@@ -31,6 +31,9 @@ public interface StockAccountHistoryMapper {
 	// 일자별 입출금 순원금 합계를 조회합니다.
 	List<WorkStockAccountDailySaleAmountVO> getDailySaleAmountList(WorkStockAccountHistorySearchPO param);
 
+	// 계좌 입출금 이력 목록을 최신순으로 조회합니다.
+	List<WorkStockAccountCashHistoryCreateRequestVO> getCashHistoryRowList(WorkStockAccountHistorySearchPO param);
+
 	// 계좌와 확인일이 같은 확인 평가금을 수정합니다.
 	int updateStockAccountCheckAmount(WorkStockAccountCheckRowVO param);
 
@@ -39,4 +42,7 @@ public interface StockAccountHistoryMapper {
 
 	// 계좌 입출금 이력을 등록합니다.
 	int insertStockAccountCashHistory(WorkStockAccountCashHistoryCreateRequestVO param);
+
+	// 계좌 입출금 이력을 수정합니다.
+	int updateStockAccountCashHistory(WorkStockAccountCashHistoryCreateRequestVO param);
 }

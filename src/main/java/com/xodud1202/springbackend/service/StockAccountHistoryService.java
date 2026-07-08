@@ -47,6 +47,7 @@ public class StockAccountHistoryService {
 	private static final String VALUE_TYPE_RATE = "RATE";
 	private static final int HISTORY_DEFAULT_OFFSET = 0;
 	private static final int HISTORY_PAGE_SIZE = 50;
+	private static final int CASH_HISTORY_PAGE_SIZE = 50;
 	private static final BigDecimal ZERO_RATE = BigDecimal.ZERO.setScale(2);
 	private static final YearMonth MONTHLY_START_MONTH = YearMonth.of(2026, 6);
 	private static final DateTimeFormatter REQUEST_DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
@@ -74,7 +75,17 @@ public class StockAccountHistoryService {
 		List<String> stockAccountCdList,
 		Integer historyOffset
 	) {
-		List<CommonCodeVO> accountList = getSelectedAccountList(stockAccountCdList);
+		return getStockAccountHistory(stockAccountCdList, historyOffset, null);
+	}
+
+	// 주식계좌이력 화면 데이터를 조회합니다.
+	public WorkStockAccountHistoryResponseVO getStockAccountHistory(
+		List<String> stockAccountCdList,
+		Integer historyOffset,
+		Integer cashHistoryOffset
+	) {
+		List<CommonCodeVO> activeAccountList = getStockAccountList();
+		List<CommonCodeVO> accountList = getSelectedAccountList(stockAccountCdList, activeAccountList);
 		WorkStockAccountHistorySearchPO searchParam = buildSearchParam(accountList);
 		List<WorkStockAccountHistoryMonthVO> monthList = buildMonthList(searchParam);
 		Map<String, WorkStockAccountMonthlySaleAmountVO> saleAmountMap = buildMonthlySaleAmountMap(
@@ -94,12 +105,22 @@ public class StockAccountHistoryService {
 		);
 		List<WorkStockAccountHistoryAccountGroupVO> accountGroupList = buildAccountGroupList(accountList, accountMonthlyStateMap);
 		List<WorkStockAccountHistoryValueRowVO> summaryRowList = buildSummaryRowList(monthList, accountMonthlyStateMap);
+		List<WorkStockAccountCheckRowVO> activeCheckRowList = accountList.size() == activeAccountList.size()
+			? checkRowList
+			: stockAccountHistoryMapper.getStockAccountCheckRowList(buildSearchParam(activeAccountList));
 		List<WorkStockAccountDailyHistoryRowVO> allHistoryRowList = buildDailyHistoryRowList(
 			checkRowList,
-			stockAccountHistoryMapper.getDailySaleAmountList(searchParam)
+			stockAccountHistoryMapper.getDailySaleAmountList(searchParam),
+			activeCheckRowList,
+			activeAccountList
 		);
 		int resolvedOffset = normalizeHistoryOffset(historyOffset);
 		List<WorkStockAccountDailyHistoryRowVO> pageHistoryRowList = sliceHistoryRowList(allHistoryRowList, resolvedOffset);
+		int resolvedCashHistoryOffset = normalizeHistoryOffset(cashHistoryOffset);
+		List<WorkStockAccountCashHistoryCreateRequestVO> cashHistoryRowList = buildCashHistoryRowList(
+			accountList,
+			resolvedCashHistoryOffset
+		);
 
 		WorkStockAccountHistoryResponseVO response = new WorkStockAccountHistoryResponseVO();
 		response.setMonthList(monthList);
@@ -109,6 +130,9 @@ public class StockAccountHistoryService {
 		response.setHistoryTotalCount(allHistoryRowList.size());
 		response.setHistoryPageSize(HISTORY_PAGE_SIZE);
 		response.setHistoryHasMore(resolvedOffset + pageHistoryRowList.size() < allHistoryRowList.size());
+		response.setCashHistoryRowList(sliceCashHistoryRowList(cashHistoryRowList));
+		response.setCashHistoryPageSize(CASH_HISTORY_PAGE_SIZE);
+		response.setCashHistoryHasMore(cashHistoryRowList.size() > CASH_HISTORY_PAGE_SIZE);
 		return response;
 	}
 
@@ -140,19 +164,35 @@ public class StockAccountHistoryService {
 		return true;
 	}
 
+	@Transactional
 	// 계좌 입출금 이력을 등록합니다.
 	public void createStockAccountCashHistory(WorkStockAccountCashHistoryCreateRequestVO request, Long workUserNo) {
 		if (request == null) {
 			throw new IllegalArgumentException("등록할 입출금 내역을 입력해주세요.");
 		}
 
-		WorkStockAccountCashHistoryCreateRequestVO param = buildCashHistoryCreateParam(request, workUserNo);
+		WorkStockAccountCashHistoryCreateRequestVO param = buildCashHistorySaveParam(request, workUserNo);
 		stockAccountHistoryMapper.insertStockAccountCashHistory(param);
 	}
 
+	@Transactional
+	// 계좌 입출금 이력을 수정합니다.
+	public void updateStockAccountCashHistory(WorkStockAccountCashHistoryCreateRequestVO request, Long workUserNo) {
+		if (request == null) {
+			throw new IllegalArgumentException("수정할 입출금 내역을 입력해주세요.");
+		}
+		validateCashHistSeq(request.getCashHistSeq());
+
+		WorkStockAccountCashHistoryCreateRequestVO param = buildCashHistorySaveParam(request, workUserNo);
+		param.setCashHistSeq(request.getCashHistSeq());
+		int updatedCount = stockAccountHistoryMapper.updateStockAccountCashHistory(param);
+		if (updatedCount <= 0) {
+			throw new IllegalArgumentException("수정할 입출금 내역을 확인해주세요.");
+		}
+	}
+
 	// 선택된 계좌가 없으면 활성 계좌 전체를 사용합니다.
-	private List<CommonCodeVO> getSelectedAccountList(List<String> stockAccountCdList) {
-		List<CommonCodeVO> activeAccountList = getStockAccountList();
+	private List<CommonCodeVO> getSelectedAccountList(List<String> stockAccountCdList, List<CommonCodeVO> activeAccountList) {
 		List<String> normalizedAccountCodeList = normalizeCodeList(stockAccountCdList);
 		if (normalizedAccountCodeList.isEmpty()) {
 			return activeAccountList;
@@ -248,8 +288,8 @@ public class StockAccountHistoryService {
 		return paramList;
 	}
 
-	// 입출금 등록 요청 값을 DB 저장 형식으로 정규화하고 검증합니다.
-	private WorkStockAccountCashHistoryCreateRequestVO buildCashHistoryCreateParam(
+	// 입출금 요청 값을 DB 저장 형식으로 정규화하고 검증합니다.
+	private WorkStockAccountCashHistoryCreateRequestVO buildCashHistorySaveParam(
 		WorkStockAccountCashHistoryCreateRequestVO request,
 		Long workUserNo
 	) {
@@ -271,6 +311,13 @@ public class StockAccountHistoryService {
 		param.setRegNo(workUserNo);
 		param.setUdtNo(workUserNo);
 		return param;
+	}
+
+	// 입출금 이력 식별자를 검증합니다.
+	private void validateCashHistSeq(Long cashHistSeq) {
+		if (cashHistSeq == null || cashHistSeq <= 0) {
+			throw new IllegalArgumentException("수정할 입출금 내역을 확인해주세요.");
+		}
 	}
 
 	// 로그인 사용자 번호를 저장 가능 값으로 검증합니다.
@@ -522,9 +569,12 @@ public class StockAccountHistoryService {
 	// 일별 확인 이력 목록을 구성합니다.
 	private List<WorkStockAccountDailyHistoryRowVO> buildDailyHistoryRowList(
 		List<WorkStockAccountCheckRowVO> checkRowList,
-		List<WorkStockAccountDailySaleAmountVO> saleAmountList
+		List<WorkStockAccountDailySaleAmountVO> saleAmountList,
+		List<WorkStockAccountCheckRowVO> activeCheckRowList,
+		List<CommonCodeVO> activeAccountList
 	) {
 		Map<String, Map<String, WorkStockAccountCheckRowVO>> checkRowByDateMap = buildLatestCheckRowByDateMap(checkRowList);
+		Map<String, Map<String, WorkStockAccountCheckRowVO>> activeCheckRowByDateMap = buildLatestCheckRowByDateMap(activeCheckRowList);
 		NavigableMap<String, Long> cumulativePrincipalMap = buildCumulativePrincipalMap(saleAmountList);
 		List<String> checkDateList = new ArrayList<>(checkRowByDateMap.keySet());
 		checkDateList.sort(Comparator.reverseOrder());
@@ -532,6 +582,7 @@ public class StockAccountHistoryService {
 		List<WorkStockAccountDailyHistoryRowVO> historyRowList = new ArrayList<>();
 		for (String checkDate : checkDateList) {
 			long checkAmt = sumDailyCheckAmount(checkRowByDateMap.get(checkDate));
+			Map<String, Long> checkAccountAmountMap = buildDailyCheckAccountAmountMap(activeAccountList, activeCheckRowByDateMap.get(checkDate));
 			long principalAmt = resolveCumulativePrincipalAmt(cumulativePrincipalMap, checkDate);
 			long profitAmt = calculateProfitAmt(checkAmt, principalAmt);
 			WorkStockAccountDailyHistoryRowVO historyRow = new WorkStockAccountDailyHistoryRowVO();
@@ -540,6 +591,7 @@ public class StockAccountHistoryService {
 			historyRow.setCheckAmt(checkAmt);
 			historyRow.setProfitAmt(profitAmt);
 			historyRow.setProfitRate(calculateProfitRate(profitAmt, principalAmt));
+			historyRow.setCheckAccountAmountMap(checkAccountAmountMap);
 			historyRowList.add(historyRow);
 		}
 		return historyRowList;
@@ -589,6 +641,23 @@ public class StockAccountHistoryService {
 		return checkAmt;
 	}
 
+	// 활성 계좌 순서대로 해당일의 계좌별 확인금액 Map을 생성합니다.
+	private Map<String, Long> buildDailyCheckAccountAmountMap(
+		List<CommonCodeVO> activeAccountList,
+		Map<String, WorkStockAccountCheckRowVO> checkRowByAccountMap
+	) {
+		Map<String, Long> checkAccountAmountMap = new LinkedHashMap<>();
+		for (CommonCodeVO activeAccount : activeAccountList == null ? List.<CommonCodeVO>of() : activeAccountList) {
+			String accountCode = trimToNull(activeAccount == null ? null : activeAccount.getCd());
+			if (accountCode == null) {
+				continue;
+			}
+			WorkStockAccountCheckRowVO checkRow = checkRowByAccountMap == null ? null : checkRowByAccountMap.get(accountCode);
+			checkAccountAmountMap.put(accountCode, normalizeLong(checkRow == null ? null : checkRow.getStockTotalAmt()));
+		}
+		return checkAccountAmountMap;
+	}
+
 	// 전체 이력 더보기 offset을 정규화합니다.
 	private int normalizeHistoryOffset(Integer historyOffset) {
 		if (historyOffset == null || historyOffset < 0) {
@@ -604,6 +673,32 @@ public class StockAccountHistoryService {
 		}
 		int endIndex = Math.min(offset + HISTORY_PAGE_SIZE, allHistoryRowList.size());
 		return new ArrayList<>(allHistoryRowList.subList(offset, endIndex));
+	}
+
+	// 입출금 이력 페이지 목록을 최신순으로 조회하고 날짜를 화면 형식으로 변환합니다.
+	private List<WorkStockAccountCashHistoryCreateRequestVO> buildCashHistoryRowList(List<CommonCodeVO> accountList, int offset) {
+		WorkStockAccountHistorySearchPO cashHistorySearchParam = buildSearchParam(accountList);
+		cashHistorySearchParam.setCashHistoryOffset(offset);
+		cashHistorySearchParam.setCashHistoryLimit(CASH_HISTORY_PAGE_SIZE + 1);
+		List<WorkStockAccountCashHistoryCreateRequestVO> cashHistoryRowList = stockAccountHistoryMapper.getCashHistoryRowList(cashHistorySearchParam);
+		if (cashHistoryRowList == null || cashHistoryRowList.isEmpty()) {
+			return List.of();
+		}
+		for (WorkStockAccountCashHistoryCreateRequestVO cashHistoryRow : cashHistoryRowList) {
+			if (cashHistoryRow != null) {
+				cashHistoryRow.setCashDt(formatDisplayDate(cashHistoryRow.getCashDt()));
+			}
+		}
+		return cashHistoryRowList;
+	}
+
+	// 입출금 이력 목록에서 화면 노출 페이지 크기만 잘라냅니다.
+	private List<WorkStockAccountCashHistoryCreateRequestVO> sliceCashHistoryRowList(List<WorkStockAccountCashHistoryCreateRequestVO> cashHistoryRowList) {
+		if (cashHistoryRowList == null || cashHistoryRowList.isEmpty()) {
+			return List.of();
+		}
+		int endIndex = Math.min(CASH_HISTORY_PAGE_SIZE, cashHistoryRowList.size());
+		return new ArrayList<>(cashHistoryRowList.subList(0, endIndex));
 	}
 
 	// 일자 문자열을 화면 표시 날짜로 변환합니다.

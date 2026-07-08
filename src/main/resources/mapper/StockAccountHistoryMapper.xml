@@ -135,6 +135,30 @@
 		 ORDER BY REPLACE(H.CASH_DT, '-', '') ASC
 	</select>
 
+	<select id="getCashHistoryRowList" resultType="com.xodud1202.springbackend.domain.work.stock.WorkStockAccountCashHistoryCreateRequestVO">
+		/* StockAccountHistoryMapper.getCashHistoryRowList: 계좌 입출금 이력 목록 최신순 조회 */
+		SELECT H.CASH_HIST_SEQ
+		     , REPLACE(H.CASH_DT, '-', '') AS CASH_DT
+		     , H.STOCK_ACCOUNT_CD
+		     , SA.CD_NM AS STOCK_ACCOUNT_NM
+		     , H.CASH_IN_OUT_CD
+		     , CIO.CD_NM AS CASH_IN_OUT_NM
+		     , H.CASH_AMT
+		  FROM MY_STOCK_ACCOUNT_CASH_HISTORY H
+		  JOIN COMMON_CODE SA
+		    ON SA.GRP_CD = 'STOCK_ACCOUNT'
+		   AND SA.CD = H.STOCK_ACCOUNT_CD
+		   AND SA.USE_YN = 'Y'
+		  LEFT JOIN COMMON_CODE CIO
+		    ON CIO.GRP_CD = 'CASH_IN_OUT'
+		   AND CIO.CD = H.CASH_IN_OUT_CD
+		   AND CIO.USE_YN = 'Y'
+		<include refid="stockAccountHistoryAccountWhere" />
+		 ORDER BY REPLACE(H.CASH_DT, '-', '') DESC
+		        , H.CASH_HIST_SEQ DESC
+		 LIMIT #{cashHistoryOffset}, #{cashHistoryLimit}
+	</select>
+
 	<update id="updateStockAccountCheckAmount">
 		/* StockAccountHistoryMapper.updateStockAccountCheckAmount: 계좌와 확인일이 같은 확인 평가금 수정 */
 		UPDATE MY_STOCK_ACCOUNT_STOCK_CHECK
@@ -194,4 +218,16 @@
 		     , NOW()
 		)
 	</insert>
+
+	<update id="updateStockAccountCashHistory">
+		/* StockAccountHistoryMapper.updateStockAccountCashHistory: 계좌 입출금 이력 수정 */
+		UPDATE MY_STOCK_ACCOUNT_CASH_HISTORY
+		   SET CASH_DT = #{cashDt}
+		     , STOCK_ACCOUNT_CD = #{stockAccountCd}
+		     , CASH_IN_OUT_CD = #{cashInOutCd}
+		     , CASH_AMT = #{cashAmt}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE CASH_HIST_SEQ = #{cashHistSeq}
+	</update>
 </mapper>

@@ -10,7 +10,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -31,11 +33,12 @@ public class WorkStockAccountHistoryController extends WorkControllerSupport {
 	public ResponseEntity<WorkStockAccountHistoryResponseVO> getStockAccountHistory(
 		HttpServletRequest request,
 		@RequestParam(required = false) List<String> stockAccountCdList,
-		@RequestParam(required = false) Integer historyOffset
+		@RequestParam(required = false) Integer historyOffset,
+		@RequestParam(required = false) Integer cashHistoryOffset
 	) {
 		try {
 			resolveRequiredWorkUserNo(request);
-			return ResponseEntity.ok(stockAccountHistoryService.getStockAccountHistory(stockAccountCdList, historyOffset));
+			return ResponseEntity.ok(stockAccountHistoryService.getStockAccountHistory(stockAccountCdList, historyOffset, cashHistoryOffset));
 		} catch (SecurityException | IllegalArgumentException exception) {
 			throw exception;
 		} catch (Exception exception) {
@@ -77,6 +80,29 @@ public class WorkStockAccountHistoryController extends WorkControllerSupport {
 		} catch (Exception exception) {
 			log.error("입출금 내역 등록 실패 message={}", exception.getMessage(), exception);
 			throw new IllegalStateException("입출금 내역 등록에 실패했습니다.", exception);
+		}
+	}
+
+	@PutMapping("/api/work/stock-account-history/cash-history/{cashHistSeq}")
+	// 계좌 입출금 이력을 수정합니다.
+	public ResponseEntity<Map<String, String>> updateStockAccountCashHistory(
+		HttpServletRequest request,
+		@PathVariable Long cashHistSeq,
+		@RequestBody WorkStockAccountCashHistoryCreateRequestVO updateRequest
+	) {
+		try {
+			Long workUserNo = resolveRequiredWorkUserNo(request);
+			if (updateRequest == null) {
+				updateRequest = new WorkStockAccountCashHistoryCreateRequestVO();
+			}
+			updateRequest.setCashHistSeq(cashHistSeq);
+			stockAccountHistoryService.updateStockAccountCashHistory(updateRequest, workUserNo);
+			return ResponseEntity.ok(Map.of("message", "입출금 내역을 수정했습니다."));
+		} catch (SecurityException | IllegalArgumentException exception) {
+			throw exception;
+		} catch (Exception exception) {
+			log.error("입출금 내역 수정 실패 cashHistSeq={} message={}", cashHistSeq, exception.getMessage(), exception);
+			throw new IllegalStateException("입출금 내역 수정에 실패했습니다.", exception);
 		}
 	}
 }

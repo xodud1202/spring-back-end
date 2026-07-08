@@ -14,4 +14,7 @@ public class WorkStockAccountHistoryResponseVO {
 	private Integer historyTotalCount;
 	private Integer historyPageSize;
 	private Boolean historyHasMore;
+	private List<WorkStockAccountCashHistoryCreateRequestVO> cashHistoryRowList;
+	private Integer cashHistoryPageSize;
+	private Boolean cashHistoryHasMore;
 }

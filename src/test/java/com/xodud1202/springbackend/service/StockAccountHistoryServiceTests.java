@@ -7,6 +7,7 @@ import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountDailyHistor
 import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountDailySaleAmountVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountHistoryAccountGroupVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountHistoryResponseVO;
+import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountHistorySearchPO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountHistoryValueRowVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountMonthlyCashAmountVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountMonthlySaleAmountVO;
@@ -21,6 +22,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -125,10 +127,18 @@ class StockAccountHistoryServiceTests {
 		when(stockAccountHistoryMapper.getLatestStockSaleDate(any())).thenReturn("20260615");
 		when(stockAccountHistoryMapper.getMonthlySaleAmountList(any())).thenReturn(List.of());
 		when(stockAccountHistoryMapper.getMonthlyCashAmountList(any())).thenReturn(List.of());
-		when(stockAccountHistoryMapper.getStockAccountCheckRowList(any())).thenReturn(List.of(
+		List<WorkStockAccountCheckRowVO> selectedCheckRowList = List.of(
 			createCheckRow(1L, "20260610", "202606", "ACCOUNT_A", 1500L),
 			createCheckRow(2L, "20260620", "202606", "ACCOUNT_A", 1800L)
-		));
+		);
+		List<WorkStockAccountCheckRowVO> activeCheckRowList = List.of(
+			createCheckRow(1L, "20260610", "202606", "ACCOUNT_A", 1500L),
+			createCheckRow(2L, "20260620", "202606", "ACCOUNT_A", 1800L),
+			createCheckRow(3L, "20260620", "202606", "ACCOUNT_B", 700L)
+		);
+		when(stockAccountHistoryMapper.getStockAccountCheckRowList(any()))
+			.thenReturn(selectedCheckRowList)
+			.thenReturn(activeCheckRowList);
 		when(stockAccountHistoryMapper.getDailySaleAmountList(any())).thenReturn(List.of(
 			createDailySale("20260601", 1000L),
 			createDailySale("20260615", 500L)
@@ -144,6 +154,34 @@ class StockAccountHistoryServiceTests {
 		assertEquals(1800L, latestRow.getCheckAmt());
 		assertEquals(300L, latestRow.getProfitAmt());
 		assertEquals(new BigDecimal("20.00"), latestRow.getProfitRate());
+		assertEquals(1800L, latestRow.getCheckAccountAmountMap().get("ACCOUNT_A"));
+		assertEquals(700L, latestRow.getCheckAccountAmountMap().get("ACCOUNT_B"));
+	}
+
+	@Test
+	@DisplayName("입출금 내역: 선택 계좌의 최신순 목록을 50건 단위로 조회")
+	// 입출금 내역 탭의 스크롤 페이지는 51건을 조회해 다음 페이지 존재 여부를 판단합니다.
+	void getStockAccountHistory_returnsCashHistoryRowsByPage() {
+		// 선택 계좌와 51건의 입출금 조회 결과를 구성합니다.
+		stubAccountList();
+		List<WorkStockAccountCashHistoryCreateRequestVO> cashHistoryRowList = new ArrayList<>();
+		for (int index = 0; index < 51; index++) {
+			cashHistoryRowList.add(createCashHistoryRow(100L + index, "20260730", "ACCOUNT_A", "계좌A", "CASH_IN_OUT_01", "입금", 1000L + index));
+		}
+		when(stockAccountHistoryMapper.getCashHistoryRowList(any())).thenReturn(cashHistoryRowList);
+
+		// 화면에는 50건만 반환하고 날짜는 date input과 같은 형식으로 변환합니다.
+		WorkStockAccountHistoryResponseVO response = stockAccountHistoryService.getStockAccountHistory(List.of("ACCOUNT_A"), null, 0);
+		ArgumentCaptor<WorkStockAccountHistorySearchPO> searchCaptor = ArgumentCaptor.forClass(WorkStockAccountHistorySearchPO.class);
+		verify(stockAccountHistoryMapper).getCashHistoryRowList(searchCaptor.capture());
+		assertEquals(List.of("ACCOUNT_A"), searchCaptor.getValue().getStockAccountCdList());
+		assertEquals(0, searchCaptor.getValue().getCashHistoryOffset());
+		assertEquals(51, searchCaptor.getValue().getCashHistoryLimit());
+		assertEquals(50, response.getCashHistoryRowList().size());
+		assertEquals(50, response.getCashHistoryPageSize());
+		assertEquals(true, response.getCashHistoryHasMore());
+		assertEquals("2026-07-30", response.getCashHistoryRowList().get(0).getCashDt());
+		assertEquals(100L, response.getCashHistoryRowList().get(0).getCashHistSeq());
 	}
 
 	@Test
@@ -270,6 +308,32 @@ class StockAccountHistoryServiceTests {
 		assertEquals(9L, insertCaptor.getValue().getUdtNo());
 	}
 
+	@Test
+	@DisplayName("계좌 입출금 수정: 기존 입출금 이력을 식별자로 수정")
+	// 입출금 수정은 기존 CASH_HIST_SEQ 행의 일자, 계좌, 구분, 금액을 갱신합니다.
+	void updateStockAccountCashHistory_updatesCashHistory() {
+		// 활성 계좌와 입출금구분 공통코드, 수정 대상 요청을 구성합니다.
+		stubAccountList();
+		when(commonMapper.getCommonCodeList(eq("CASH_IN_OUT"))).thenReturn(List.of(
+			createCommonCode("CASH_IN_OUT_01", "입금"),
+			createCommonCode("CASH_IN_OUT_02", "출금")
+		));
+		when(stockAccountHistoryMapper.updateStockAccountCashHistory(any())).thenReturn(1);
+		WorkStockAccountCashHistoryCreateRequestVO request = createCashHistoryRequest("2026-07-08", "ACCOUNT_A", "CASH_IN_OUT_02", 2000L);
+		request.setCashHistSeq(15L);
+
+		// 수정 요청 값은 저장용 날짜와 사용자 번호로 정규화됩니다.
+		stockAccountHistoryService.updateStockAccountCashHistory(request, 9L);
+		ArgumentCaptor<WorkStockAccountCashHistoryCreateRequestVO> updateCaptor = ArgumentCaptor.forClass(WorkStockAccountCashHistoryCreateRequestVO.class);
+		verify(stockAccountHistoryMapper).updateStockAccountCashHistory(updateCaptor.capture());
+		assertEquals(15L, updateCaptor.getValue().getCashHistSeq());
+		assertEquals("20260708", updateCaptor.getValue().getCashDt());
+		assertEquals("ACCOUNT_A", updateCaptor.getValue().getStockAccountCd());
+		assertEquals("CASH_IN_OUT_02", updateCaptor.getValue().getCashInOutCd());
+		assertEquals(2000L, updateCaptor.getValue().getCashAmt());
+		assertEquals(9L, updateCaptor.getValue().getUdtNo());
+	}
+
 	// 테스트 계좌 공통코드 목록을 구성합니다.
 	private void stubAccountList() {
 		when(commonMapper.getCommonCodeList(eq("STOCK_ACCOUNT"))).thenReturn(List.of(
@@ -342,6 +406,23 @@ class StockAccountHistoryServiceTests {
 		request.setCashInOutCd(cashInOutCd);
 		request.setCashAmt(cashAmt);
 		return request;
+	}
+
+	// 입출금 목록 테스트 객체를 생성합니다.
+	private WorkStockAccountCashHistoryCreateRequestVO createCashHistoryRow(
+		Long cashHistSeq,
+		String cashDt,
+		String accountCode,
+		String accountName,
+		String cashInOutCd,
+		String cashInOutName,
+		long cashAmt
+	) {
+		WorkStockAccountCashHistoryCreateRequestVO row = createCashHistoryRequest(cashDt, accountCode, cashInOutCd, cashAmt);
+		row.setCashHistSeq(cashHistSeq);
+		row.setStockAccountNm(accountName);
+		row.setCashInOutNm(cashInOutName);
+		return row;
 	}
 
 	// 일별 입출금 순원금 테스트 객체를 생성합니다.
