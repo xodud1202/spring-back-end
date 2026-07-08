@@ -6,6 +6,7 @@ import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleCreateRequestV
 import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleRowVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleSearchPO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleSummaryRowVO;
+import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleUpdateRequestVO;
 import com.xodud1202.springbackend.mapper.CommonMapper;
 import com.xodud1202.springbackend.mapper.StockSaleHistoryMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -207,6 +208,44 @@ class StockSaleHistoryServiceTests {
 		assertEquals(0L, createCaptor.getValue().getProfitAmt());
 	}
 
+	@Test
+	@DisplayName("매매수정: 매매 이력 번호 기준으로 기존 거래 내용을 수정")
+	// 수정 요청 값을 정규화한 뒤 매매 이력 번호로 업데이트합니다.
+	void updateStockSaleHistory_updatesTradeHistoryBySaleHistorySequence() {
+		stubStockSaleOptionLists();
+		WorkStockSaleUpdateRequestVO request = createStockSaleUpdateRequest(7L, -5, -15000L, 3000L);
+		when(stockSaleHistoryMapper.updateStockSaleHistory(any(WorkStockSaleUpdateRequestVO.class))).thenReturn(1);
+
+		stockSaleHistoryService.updateStockSaleHistory(request, 2L);
+
+		ArgumentCaptor<WorkStockSaleUpdateRequestVO> updateCaptor = ArgumentCaptor.forClass(WorkStockSaleUpdateRequestVO.class);
+		verify(stockSaleHistoryMapper).updateStockSaleHistory(updateCaptor.capture());
+		assertEquals(7L, updateCaptor.getValue().getSaleHistSeq());
+		assertEquals("20260610", updateCaptor.getValue().getSaleDt());
+		assertEquals("ACCOUNT_A", updateCaptor.getValue().getStockAccountCd());
+		assertEquals("STOCK_A", updateCaptor.getValue().getStockNmCd());
+		assertEquals(-5, updateCaptor.getValue().getSaleCnt());
+		assertEquals(-15000L, updateCaptor.getValue().getSaleAmt());
+		assertEquals(3000L, updateCaptor.getValue().getProfitAmt());
+		assertEquals(2L, updateCaptor.getValue().getUdtNo());
+	}
+
+	@Test
+	@DisplayName("매매수정: 매수는 양수만 입력 가능")
+	// 수정에서도 등록과 같은 매수 금액 부호 규칙을 적용합니다.
+	void updateStockSaleHistory_rejectsNegativeAmountWhenSaleCountIsPositive() {
+		stubStockSaleOptionLists();
+		WorkStockSaleUpdateRequestVO request = createStockSaleUpdateRequest(7L, 10, -10000L, 0L);
+
+		IllegalArgumentException exception = assertThrows(
+			IllegalArgumentException.class,
+			() -> stockSaleHistoryService.updateStockSaleHistory(request, 1L)
+		);
+
+		assertEquals("매수는 양수만 입력 할 수 있습니다.", exception.getMessage());
+		verify(stockSaleHistoryMapper, never()).updateStockSaleHistory(any(WorkStockSaleUpdateRequestVO.class));
+	}
+
 	// 매매일지 목록 조회에 필요한 매퍼 응답을 구성합니다.
 	private void stubStockSaleList(List<WorkStockSaleSummaryRowVO> summaryList, List<WorkStockSaleRowVO> holdingSourceRowList) {
 		when(stockSaleHistoryMapper.getStockSaleRowCount(any(WorkStockSaleSearchPO.class))).thenReturn(0);
@@ -239,6 +278,20 @@ class StockSaleHistoryServiceTests {
 	// 매매등록 요청을 생성합니다.
 	private WorkStockSaleCreateRequestVO createStockSaleCreateRequest(Integer saleCnt, Long saleAmt, Long profitAmt) {
 		WorkStockSaleCreateRequestVO request = new WorkStockSaleCreateRequestVO();
+		request.setSaleDt("2026-06-10");
+		request.setStockAccountCd("ACCOUNT_A");
+		request.setStockNmCd("STOCK_A");
+		request.setSaleCnt(saleCnt);
+		request.setSaleAmt(saleAmt);
+		request.setProfitAmt(profitAmt);
+		request.setMemo("");
+		return request;
+	}
+
+	// 매매수정 요청을 생성합니다.
+	private WorkStockSaleUpdateRequestVO createStockSaleUpdateRequest(Long saleHistSeq, Integer saleCnt, Long saleAmt, Long profitAmt) {
+		WorkStockSaleUpdateRequestVO request = new WorkStockSaleUpdateRequestVO();
+		request.setSaleHistSeq(saleHistSeq);
 		request.setSaleDt("2026-06-10");
 		request.setStockAccountCd("ACCOUNT_A");
 		request.setStockNmCd("STOCK_A");

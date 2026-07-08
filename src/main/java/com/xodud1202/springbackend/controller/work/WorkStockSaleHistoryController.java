@@ -6,6 +6,7 @@ import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleCreateRequestV
 import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleDisplayOrderUpdateRequestVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleDisplayOrderUpdateResponseVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleListResponseVO;
+import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleUpdateRequestVO;
 import com.xodud1202.springbackend.service.StockSaleHistoryService;
 import com.xodud1202.springbackend.service.UserBaseService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -26,7 +27,7 @@ import java.util.Map;
 @Validated
 @RestController
 @RequiredArgsConstructor
-// 업무 로그인 세션을 사용하는 매매일지 조회 API를 제공합니다.
+// 업무 로그인 세션을 사용하는 매매일지 API를 제공합니다.
 public class WorkStockSaleHistoryController extends WorkControllerSupport {
 	private final StockSaleHistoryService stockSaleHistoryService;
 	private final UserBaseService userBaseService;
@@ -109,6 +110,24 @@ public class WorkStockSaleHistoryController extends WorkControllerSupport {
 		} catch (Exception exception) {
 			log.error("매매일지 등록 실패 message={}", exception.getMessage(), exception);
 			throw new IllegalStateException("매매일지 등록에 실패했습니다.", exception);
+		}
+	}
+
+	@PostMapping("/api/work/stock-sale-history/update")
+	// 매매일지 거래 이력을 수정합니다.
+	public ResponseEntity<Map<String, String>> updateStockSaleHistory(
+		HttpServletRequest request,
+		@RequestBody WorkStockSaleUpdateRequestVO updateRequest
+	) {
+		try {
+			Long workUserNo = resolveRequiredWorkUserNo(request);
+			stockSaleHistoryService.updateStockSaleHistory(updateRequest, workUserNo);
+			return ResponseEntity.ok(Map.of("message", "매매일지를 수정했습니다."));
+		} catch (SecurityException | IllegalArgumentException exception) {
+			throw exception;
+		} catch (Exception exception) {
+			log.error("매매일지 수정 실패 message={}", exception.getMessage(), exception);
+			throw new IllegalStateException("매매일지 수정에 실패했습니다.", exception);
 		}
 	}
 }

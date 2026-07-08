@@ -14,6 +14,7 @@ import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleListResponseVO
 import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleRowVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleSearchPO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleSummaryRowVO;
+import com.xodud1202.springbackend.domain.work.stock.WorkStockSaleUpdateRequestVO;
 import com.xodud1202.springbackend.mapper.CommonMapper;
 import com.xodud1202.springbackend.mapper.StockSaleHistoryMapper;
 import lombok.RequiredArgsConstructor;
@@ -74,6 +75,19 @@ public class StockSaleHistoryService {
 
 		WorkStockSaleCreateRequestVO param = buildCreateParam(request, workUserNo);
 		stockSaleHistoryMapper.insertStockSaleHistory(param);
+	}
+
+	// 매매일지 거래 이력을 수정합니다.
+	public void updateStockSaleHistory(WorkStockSaleUpdateRequestVO request, Long workUserNo) {
+		if (request == null) {
+			throw new IllegalArgumentException("수정할 매매일지 내용을 입력해주세요.");
+		}
+
+		WorkStockSaleUpdateRequestVO param = buildUpdateParam(request, workUserNo);
+		int updatedCount = stockSaleHistoryMapper.updateStockSaleHistory(param);
+		if (updatedCount != 1) {
+			throw new IllegalStateException("수정할 매매일지를 찾을 수 없습니다.");
+		}
 	}
 
 	@Transactional
@@ -302,6 +316,24 @@ public class StockSaleHistoryService {
 
 	// 등록 요청 값을 DB 저장 형식으로 정규화하고 검증합니다.
 	private WorkStockSaleCreateRequestVO buildCreateParam(WorkStockSaleCreateRequestVO request, Long workUserNo) {
+		WorkStockSaleCreateRequestVO param = buildStockSaleSaveParam(request, workUserNo, new WorkStockSaleCreateRequestVO());
+		param.setRegNo(workUserNo);
+		return param;
+	}
+
+	// 수정 요청 값을 DB 저장 형식으로 정규화하고 검증합니다.
+	private WorkStockSaleUpdateRequestVO buildUpdateParam(WorkStockSaleUpdateRequestVO request, Long workUserNo) {
+		if (request.getSaleHistSeq() == null || request.getSaleHistSeq() <= 0) {
+			throw new IllegalArgumentException("수정할 매매일지 정보를 확인해주세요.");
+		}
+
+		WorkStockSaleUpdateRequestVO param = buildStockSaleSaveParam(request, workUserNo, new WorkStockSaleUpdateRequestVO());
+		param.setSaleHistSeq(request.getSaleHistSeq());
+		return param;
+	}
+
+	// 등록과 수정 요청의 공통 입력값을 정규화하고 검증합니다.
+	private <T extends WorkStockSaleCreateRequestVO> T buildStockSaleSaveParam(WorkStockSaleCreateRequestVO request, Long workUserNo, T param) {
 		if (workUserNo == null || workUserNo <= 0) {
 			throw new IllegalArgumentException("로그인 정보를 확인해주세요.");
 		}
@@ -317,9 +349,8 @@ public class StockSaleHistoryService {
 		validateRequiredCode(normalizedStockNmCd, getStockNameList(), "주식명을 선택해주세요.");
 		validateRequiredInteger(request.getSaleCnt(), "매매수를 입력해주세요.");
 		validateRequiredLong(request.getSaleAmt(), "매매금액을 입력해주세요.");
-		validateStockSaleCreateAmountRule(request.getSaleCnt(), request.getSaleAmt(), request.getProfitAmt());
+		validateStockSaleAmountRule(request.getSaleCnt(), request.getSaleAmt(), request.getProfitAmt());
 
-		WorkStockSaleCreateRequestVO param = new WorkStockSaleCreateRequestVO();
 		param.setSaleDt(normalizedSaleDt);
 		param.setStockAccountCd(normalizedAccountCd);
 		param.setStockNmCd(normalizedStockNmCd);
@@ -327,13 +358,12 @@ public class StockSaleHistoryService {
 		param.setSaleAmt(request.getSaleAmt());
 		param.setProfitAmt(request.getProfitAmt() == null ? 0L : request.getProfitAmt());
 		param.setMemo(normalizedMemo);
-		param.setRegNo(workUserNo);
 		param.setUdtNo(workUserNo);
 		return param;
 	}
 
 	// 매매수 방향에 맞는 매매금액과 손익금액 입력 규칙을 검증합니다.
-	private void validateStockSaleCreateAmountRule(Integer saleCnt, Long saleAmt, Long profitAmt) {
+	private void validateStockSaleAmountRule(Integer saleCnt, Long saleAmt, Long profitAmt) {
 		if (saleCnt == null || saleCnt == 0) {
 			throw new IllegalArgumentException("매매수를 입력해주세요.");
 		}

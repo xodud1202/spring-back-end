@@ -174,4 +174,18 @@
 		     , NOW()
 		)
 	</insert>
+	<update id="updateStockSaleHistory">
+		/* StockSaleHistoryMapper.updateStockSaleHistory: 매매일지 거래 이력 수정 */
+		UPDATE MY_STOCK_SALE_HISTORY
+		   SET SALE_DT = #{saleDt}
+		     , STOCK_NM_CD = #{stockNmCd}
+		     , STOCK_ACCOUNT_CD = #{stockAccountCd}
+		     , SALE_CNT = #{saleCnt}
+		     , SALE_AMT = #{saleAmt}
+		     , PROFIT_AMT = #{profitAmt}
+		     , MEMO = #{memo}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE SALE_HIST_SEQ = #{saleHistSeq}
+	</update>
 </mapper>
