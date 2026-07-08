@@ -38,6 +38,7 @@ import java.util.Map;
 public class StockSaleHistoryService {
 	private static final String STOCK_ACCOUNT_GROUP_CODE = "STOCK_ACCOUNT";
 	private static final String STOCK_NAME_GROUP_CODE = "STOCK_NM";
+	private static final String CASH_IN_OUT_GROUP_CODE = "CASH_IN_OUT";
 	private static final int STOCK_SALE_DEFAULT_PAGE = 1;
 	private static final int STOCK_SALE_DEFAULT_PAGE_SIZE = 20;
 	private static final int STOCK_SALE_MAX_PAGE_SIZE = 10000;
@@ -64,6 +65,7 @@ public class StockSaleHistoryService {
 		response.setCurrentUser(currentUser);
 		response.setAccountList(getStockAccountList());
 		response.setStockList(getStockNameList());
+		response.setCashInOutList(getCashInOutList());
 		return response;
 	}
 
@@ -312,6 +314,12 @@ public class StockSaleHistoryService {
 	private List<CommonCodeVO> getStockNameList() {
 		List<CommonCodeVO> stockList = commonMapper.getCommonCodeList(STOCK_NAME_GROUP_CODE);
 		return stockList == null ? List.of() : stockList;
+	}
+
+	// 입출금구분 공통코드 목록을 조회합니다.
+	private List<CommonCodeVO> getCashInOutList() {
+		List<CommonCodeVO> cashInOutList = commonMapper.getCommonCodeList(CASH_IN_OUT_GROUP_CODE);
+		return cashInOutList == null ? List.of() : cashInOutList;
 	}
 
 	// 등록 요청 값을 DB 저장 형식으로 정규화하고 검증합니다.

@@ -12,4 +12,5 @@ public class WorkStockSaleBootstrapResponseVO {
 	private UserInfoVO currentUser;
 	private List<CommonCodeVO> accountList;
 	private List<CommonCodeVO> stockList;
+	private List<CommonCodeVO> cashInOutList;
 }

@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+		"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.xodud1202.springbackend.mapper.StockAccountHistoryMapper">
+	<sql id="stockAccountHistoryAccountWhere">
+		/* StockAccountHistoryMapper.stockAccountHistoryAccountWhere: 주식계좌이력 계좌 공통 조건 */
+		WHERE 1 = 1
+		<if test="stockAccountCdList != null and stockAccountCdList.size() > 0">
+		   AND H.STOCK_ACCOUNT_CD IN
+		   <foreach collection="stockAccountCdList" item="stockAccountCd" open="(" separator="," close=")">
+		     #{stockAccountCd}
+		   </foreach>
+		</if>
+	</sql>
+
+	<select id="getLatestStockAccountHistoryDate" resultType="string">
+		/* StockAccountHistoryMapper.getLatestStockAccountHistoryDate: 입출금과 확인금액의 최신 기준일 조회 */
+		SELECT MAX(LATEST_DT)
+		  FROM (
+		        SELECT MAX(REPLACE(H.CASH_DT, '-', '')) AS LATEST_DT
+		          FROM MY_STOCK_ACCOUNT_CASH_HISTORY H
+		          JOIN COMMON_CODE SA
+		            ON SA.GRP_CD = 'STOCK_ACCOUNT'
+		           AND SA.CD = H.STOCK_ACCOUNT_CD
+		           AND SA.USE_YN = 'Y'
+		        <include refid="stockAccountHistoryAccountWhere" />
+		         UNION ALL
+		        SELECT MAX(REPLACE(H.CASH_DT, '-', '')) AS LATEST_DT
+		          FROM MY_STOCK_ACCOUNT_STOCK_CHECK H
+		          JOIN COMMON_CODE SA
+		            ON SA.GRP_CD = 'STOCK_ACCOUNT'
+		           AND SA.CD = H.STOCK_ACCOUNT_CD
+		           AND SA.USE_YN = 'Y'
+		        <include refid="stockAccountHistoryAccountWhere" />
+		       ) LATEST_SOURCE
+	</select>
+
+	<select id="getLatestStockSaleDate" resultType="string">
+		/* StockAccountHistoryMapper.getLatestStockSaleDate: 매매일지 최신 기준일 조회 */
+		SELECT MAX(REPLACE(H.SALE_DT, '-', ''))
+		  FROM MY_STOCK_SALE_HISTORY H
+		  JOIN COMMON_CODE SA
+		    ON SA.GRP_CD = 'STOCK_ACCOUNT'
+		   AND SA.CD = H.STOCK_ACCOUNT_CD
+		   AND SA.USE_YN = 'Y'
+		<include refid="stockAccountHistoryAccountWhere" />
+	</select>
+
+	<select id="getMonthlySaleAmountList" resultType="com.xodud1202.springbackend.domain.work.stock.WorkStockAccountMonthlySaleAmountVO">
+		/* StockAccountHistoryMapper.getMonthlySaleAmountList: 계좌별 월간 매수/매도/순원금 합계 조회 */
+		SELECT CASE
+		         WHEN REPLACE(H.SALE_DT, '-', '') &lt; '20260601' THEN 'BEFORE'
+		         ELSE SUBSTRING(REPLACE(H.SALE_DT, '-', ''), 1, 6)
+		       END AS MONTH_KEY
+		     , H.STOCK_ACCOUNT_CD
+		     , COALESCE(SUM(CASE WHEN H.SALE_AMT &gt; 0 THEN H.SALE_AMT ELSE 0 END), 0) AS BUY_AMT
+		     , COALESCE(SUM(CASE WHEN H.SALE_AMT &lt; 0 THEN ABS(H.SALE_AMT) ELSE 0 END), 0) AS SELL_AMT
+		     , COALESCE(SUM(H.SALE_AMT), 0) AS NET_SALE_AMT
+		  FROM MY_STOCK_SALE_HISTORY H
+		  JOIN COMMON_CODE SA
+		    ON SA.GRP_CD = 'STOCK_ACCOUNT'
+		   AND SA.CD = H.STOCK_ACCOUNT_CD
+		   AND SA.USE_YN = 'Y'
+		<include refid="stockAccountHistoryAccountWhere" />
+		 GROUP BY CASE
+		            WHEN REPLACE(H.SALE_DT, '-', '') &lt; '20260601' THEN 'BEFORE'
+		            ELSE SUBSTRING(REPLACE(H.SALE_DT, '-', ''), 1, 6)
+		          END
+		        , H.STOCK_ACCOUNT_CD
+		 ORDER BY H.STOCK_ACCOUNT_CD ASC
+		        , MONTH_KEY ASC
+	</select>
+
+	<select id="getMonthlyCashAmountList" resultType="com.xodud1202.springbackend.domain.work.stock.WorkStockAccountMonthlyCashAmountVO">
+		/* StockAccountHistoryMapper.getMonthlyCashAmountList: 계좌별 월간 입금/출금 합계 조회 */
+		SELECT CASE
+		         WHEN REPLACE(H.CASH_DT, '-', '') &lt; '20260601' THEN 'BEFORE'
+		         ELSE SUBSTRING(REPLACE(H.CASH_DT, '-', ''), 1, 6)
+		       END AS MONTH_KEY
+		     , H.STOCK_ACCOUNT_CD
+		     , COALESCE(SUM(CASE WHEN H.CASH_IN_OUT_CD = 'CASH_IN_OUT_01' THEN ABS(H.CASH_AMT) ELSE 0 END), 0) AS DEPOSIT_AMT
+		     , COALESCE(SUM(CASE WHEN H.CASH_IN_OUT_CD = 'CASH_IN_OUT_02' THEN ABS(H.CASH_AMT) ELSE 0 END), 0) AS WITHDRAW_AMT
+		  FROM MY_STOCK_ACCOUNT_CASH_HISTORY H
+		  JOIN COMMON_CODE SA
+		    ON SA.GRP_CD = 'STOCK_ACCOUNT'
+		   AND SA.CD = H.STOCK_ACCOUNT_CD
+		   AND SA.USE_YN = 'Y'
+		<include refid="stockAccountHistoryAccountWhere" />
+		 GROUP BY CASE
+		            WHEN REPLACE(H.CASH_DT, '-', '') &lt; '20260601' THEN 'BEFORE'
+		            ELSE SUBSTRING(REPLACE(H.CASH_DT, '-', ''), 1, 6)
+		          END
+		        , H.STOCK_ACCOUNT_CD
+		 ORDER BY H.STOCK_ACCOUNT_CD ASC
+		        , MONTH_KEY ASC
+	</select>
+
+	<select id="getStockAccountCheckRowList" resultType="com.xodud1202.springbackend.domain.work.stock.WorkStockAccountCheckRowVO">
+		/* StockAccountHistoryMapper.getStockAccountCheckRowList: 계좌 확인금액 원천 행 조회 */
+		SELECT H.STOCK_CHECK_SEQ
+		     , REPLACE(H.CASH_DT, '-', '') AS CHECK_DT
+		     , CASE
+		         WHEN REPLACE(H.CASH_DT, '-', '') &lt; '20260601' THEN 'BEFORE'
+		         ELSE SUBSTRING(REPLACE(H.CASH_DT, '-', ''), 1, 6)
+		       END AS MONTH_KEY
+		     , H.STOCK_ACCOUNT_CD
+		     , H.STOCK_TOTAL_AMT
+		  FROM MY_STOCK_ACCOUNT_STOCK_CHECK H
+		  JOIN COMMON_CODE SA
+		    ON SA.GRP_CD = 'STOCK_ACCOUNT'
+		   AND SA.CD = H.STOCK_ACCOUNT_CD
+		   AND SA.USE_YN = 'Y'
+		<include refid="stockAccountHistoryAccountWhere" />
+		 ORDER BY H.STOCK_ACCOUNT_CD ASC
+		        , REPLACE(H.CASH_DT, '-', '') ASC
+		        , H.STOCK_CHECK_SEQ ASC
+	</select>
+
+	<select id="getDailySaleAmountList" resultType="com.xodud1202.springbackend.domain.work.stock.WorkStockAccountDailySaleAmountVO">
+		/* StockAccountHistoryMapper.getDailySaleAmountList: 일자별 입출금 순원금 합계 조회 */
+		SELECT REPLACE(H.CASH_DT, '-', '') AS SALE_DT
+		     , COALESCE(SUM(CASE
+		         WHEN H.CASH_IN_OUT_CD = 'CASH_IN_OUT_01' THEN H.CASH_AMT
+		         WHEN H.CASH_IN_OUT_CD = 'CASH_IN_OUT_02' THEN -H.CASH_AMT
+		         ELSE 0
+		       END), 0) AS NET_SALE_AMT
+		  FROM MY_STOCK_ACCOUNT_CASH_HISTORY H
+		  JOIN COMMON_CODE SA
+		    ON SA.GRP_CD = 'STOCK_ACCOUNT'
+		   AND SA.CD = H.STOCK_ACCOUNT_CD
+		   AND SA.USE_YN = 'Y'
+		<include refid="stockAccountHistoryAccountWhere" />
+		 GROUP BY REPLACE(H.CASH_DT, '-', '')
+		 ORDER BY REPLACE(H.CASH_DT, '-', '') ASC
+	</select>
+
+	<update id="updateStockAccountCheckAmount">
+		/* StockAccountHistoryMapper.updateStockAccountCheckAmount: 계좌와 확인일이 같은 확인 평가금 수정 */
+		UPDATE MY_STOCK_ACCOUNT_STOCK_CHECK
+		   SET STOCK_TOTAL_AMT = #{stockTotalAmt}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE CASH_DT = #{checkDt}
+		   AND STOCK_ACCOUNT_CD = #{stockAccountCd}
+	</update>
+
+	<insert id="insertStockAccountCheckAmount">
+		/* StockAccountHistoryMapper.insertStockAccountCheckAmount: 계좌 확인 평가금 등록 */
+		INSERT INTO MY_STOCK_ACCOUNT_STOCK_CHECK
+		(
+		       CASH_DT
+		     , STOCK_ACCOUNT_CD
+		     , STOCK_TOTAL_AMT
+		     , REG_NO
+		     , REG_DT
+		     , UDT_NO
+		     , UDT_DT
+		)
+		VALUES
+		(
+		       #{checkDt}
+		     , #{stockAccountCd}
+		     , #{stockTotalAmt}
+		     , #{regNo}
+		     , NOW()
+		     , #{udtNo}
+		     , NOW()
+		)
+	</insert>
+
+	<insert id="insertStockAccountCashHistory">
+		/* StockAccountHistoryMapper.insertStockAccountCashHistory: 계좌 입출금 이력 등록 */
+		INSERT INTO MY_STOCK_ACCOUNT_CASH_HISTORY
+		(
+		       CASH_DT
+		     , STOCK_ACCOUNT_CD
+		     , CASH_IN_OUT_CD
+		     , CASH_AMT
+		     , REG_NO
+		     , REG_DT
+		     , UDT_NO
+		     , UDT_DT
+		)
+		VALUES
+		(
+		       #{cashDt}
+		     , #{stockAccountCd}
+		     , #{cashInOutCd}
+		     , #{cashAmt}
+		     , #{regNo}
+		     , NOW()
+		     , #{udtNo}
+		     , NOW()
+		)
+	</insert>
+</mapper>
