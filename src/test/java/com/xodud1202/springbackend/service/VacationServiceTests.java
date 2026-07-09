@@ -1,8 +1,11 @@
 package com.xodud1202.springbackend.service;
 
+import com.xodud1202.springbackend.domain.common.CommonCodeVO;
 import com.xodud1202.springbackend.domain.work.vacation.WorkVacationCompanyVO;
+import com.xodud1202.springbackend.domain.work.vacation.WorkVacationDeletePO;
 import com.xodud1202.springbackend.domain.work.vacation.WorkVacationListResponseVO;
 import com.xodud1202.springbackend.domain.work.vacation.WorkVacationListSearchPO;
+import com.xodud1202.springbackend.domain.work.vacation.WorkVacationUpdatePO;
 import com.xodud1202.springbackend.mapper.CommonMapper;
 import com.xodud1202.springbackend.mapper.VacationMapper;
 import org.junit.jupiter.api.DisplayName;
@@ -17,6 +20,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -67,5 +71,63 @@ class VacationServiceTests {
 		ArgumentCaptor<WorkVacationListSearchPO> listCaptor = ArgumentCaptor.forClass(WorkVacationListSearchPO.class);
 		verify(vacationMapper).getVacationSummaryList(listCaptor.capture());
 		assertEquals(1, listCaptor.getValue().getWorkCompanySeq());
+	}
+
+	@Test
+	@DisplayName("수정: 입력값을 정규화하고 휴가 사용 내역을 갱신한다")
+	// 수정 요청도 등록과 같은 휴가자, 회사, 휴가구분, 날짜 검증 규칙을 사용합니다.
+	void updateWorkVacation_normalizesAndUpdatesVacation() {
+		// 저장 가능한 휴가 코드와 유효한 참조 데이터를 목으로 구성합니다.
+		CommonCodeVO vacationCode = new CommonCodeVO();
+		vacationCode.setCd("VACATION_01");
+		when(vacationMapper.countActiveVacationPerson(2)).thenReturn(1);
+		when(vacationMapper.countVacationCompany(1)).thenReturn(1);
+		when(commonMapper.getCommonCodeList("VACATION")).thenReturn(List.of(vacationCode));
+		when(vacationMapper.updateVacation(any(WorkVacationUpdatePO.class))).thenReturn(1);
+
+		// 앞뒤 공백이 포함된 수정 요청을 전달합니다.
+		WorkVacationUpdatePO request = new WorkVacationUpdatePO();
+		request.setVacationSeq(10L);
+		request.setPersonSeq(2);
+		request.setWorkCompanySeq(1);
+		request.setVacationCd(" VACATION_01 ");
+		request.setStartDt("2026-07-10");
+		request.setEndDt("2026-07-10");
+		request.setVacationMemo(" 개인 일정 ");
+		vacationService.updateWorkVacation(request, 5L);
+
+		// 매퍼에는 정규화된 값과 수정자 번호가 전달되는지 검증합니다.
+		ArgumentCaptor<WorkVacationUpdatePO> updateCaptor = ArgumentCaptor.forClass(WorkVacationUpdatePO.class);
+		verify(vacationMapper).updateVacation(updateCaptor.capture());
+		WorkVacationUpdatePO updateParam = updateCaptor.getValue();
+		assertEquals(10L, updateParam.getVacationSeq());
+		assertEquals(2, updateParam.getPersonSeq());
+		assertEquals(1, updateParam.getWorkCompanySeq());
+		assertEquals("VACATION_01", updateParam.getVacationCd());
+		assertEquals("2026-07-10", updateParam.getStartDt());
+		assertEquals("2026-07-10", updateParam.getEndDt());
+		assertEquals("개인 일정", updateParam.getVacationMemo());
+		assertEquals(5L, updateParam.getUdtNo());
+	}
+
+	@Test
+	@DisplayName("삭제: 대상 휴가가 없으면 예외를 던진다")
+	// 이미 삭제됐거나 없는 휴가 번호는 삭제 성공으로 처리하지 않습니다.
+	void deleteWorkVacation_throwsWhenVacationDoesNotExist() {
+		// 삭제 매퍼가 영향 행 없음으로 응답하도록 구성합니다.
+		WorkVacationDeletePO request = new WorkVacationDeletePO();
+		request.setVacationSeq(99L);
+		when(vacationMapper.softDeleteVacation(any(WorkVacationDeletePO.class))).thenReturn(0);
+
+		// 삭제 대상 없음 예외와 매퍼 전달 값을 함께 검증합니다.
+		IllegalStateException exception = assertThrows(
+			IllegalStateException.class,
+			() -> vacationService.deleteWorkVacation(request, 5L)
+		);
+		assertEquals("삭제할 휴가 사용 내역을 찾을 수 없습니다.", exception.getMessage());
+		ArgumentCaptor<WorkVacationDeletePO> deleteCaptor = ArgumentCaptor.forClass(WorkVacationDeletePO.class);
+		verify(vacationMapper).softDeleteVacation(deleteCaptor.capture());
+		assertEquals(99L, deleteCaptor.getValue().getVacationSeq());
+		assertEquals(5L, deleteCaptor.getValue().getUdtNo());
 	}
 }

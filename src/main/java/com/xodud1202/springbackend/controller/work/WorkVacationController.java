@@ -4,7 +4,10 @@ import com.xodud1202.springbackend.domain.admin.common.UserInfoVO;
 import com.xodud1202.springbackend.domain.work.vacation.WorkVacationBootstrapResponseVO;
 import com.xodud1202.springbackend.domain.work.vacation.WorkVacationCreatePO;
 import com.xodud1202.springbackend.domain.work.vacation.WorkVacationCreateResponseVO;
+import com.xodud1202.springbackend.domain.work.vacation.WorkVacationDeletePO;
 import com.xodud1202.springbackend.domain.work.vacation.WorkVacationListResponseVO;
+import com.xodud1202.springbackend.domain.work.vacation.WorkVacationMutationResponseVO;
+import com.xodud1202.springbackend.domain.work.vacation.WorkVacationUpdatePO;
 import com.xodud1202.springbackend.service.UserBaseService;
 import com.xodud1202.springbackend.service.VacationService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -79,6 +82,42 @@ public class WorkVacationController extends WorkControllerSupport {
 		} catch (Exception exception) {
 			log.error("휴가 등록 실패 message={}", exception.getMessage(), exception);
 			throw new IllegalStateException("휴가 등록에 실패했습니다.", exception);
+		}
+	}
+
+	@PostMapping("/api/work/vacation/update")
+	// 휴가 사용 내역을 수정합니다.
+	public ResponseEntity<WorkVacationMutationResponseVO> updateVacation(
+		HttpServletRequest request,
+		@RequestBody WorkVacationUpdatePO command
+	) {
+		try {
+			// 로그인 사용자번호를 수정자로 사용합니다.
+			Long workUserNo = resolveRequiredWorkUserNo(request);
+			return ResponseEntity.ok(vacationService.updateWorkVacation(command, workUserNo));
+		} catch (SecurityException | IllegalArgumentException exception) {
+			throw exception;
+		} catch (Exception exception) {
+			log.error("휴가 수정 실패 message={}", exception.getMessage(), exception);
+			throw new IllegalStateException("휴가 수정에 실패했습니다.", exception);
+		}
+	}
+
+	@PostMapping("/api/work/vacation/delete")
+	// 휴가 사용 내역을 삭제합니다.
+	public ResponseEntity<WorkVacationMutationResponseVO> deleteVacation(
+		HttpServletRequest request,
+		@RequestBody WorkVacationDeletePO command
+	) {
+		try {
+			// 로그인 사용자번호를 삭제 처리 수정자로 사용합니다.
+			Long workUserNo = resolveRequiredWorkUserNo(request);
+			return ResponseEntity.ok(vacationService.deleteWorkVacation(command, workUserNo));
+		} catch (SecurityException | IllegalArgumentException exception) {
+			throw exception;
+		} catch (Exception exception) {
+			log.error("휴가 삭제 실패 message={}", exception.getMessage(), exception);
+			throw new IllegalStateException("휴가 삭제에 실패했습니다.", exception);
 		}
 	}
 

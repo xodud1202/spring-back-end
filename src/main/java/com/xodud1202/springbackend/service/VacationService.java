@@ -9,11 +9,14 @@ import com.xodud1202.springbackend.domain.work.vacation.WorkVacationBootstrapRes
 import com.xodud1202.springbackend.domain.work.vacation.WorkVacationCompanyVO;
 import com.xodud1202.springbackend.domain.work.vacation.WorkVacationCreatePO;
 import com.xodud1202.springbackend.domain.work.vacation.WorkVacationCreateResponseVO;
+import com.xodud1202.springbackend.domain.work.vacation.WorkVacationDeletePO;
 import com.xodud1202.springbackend.domain.work.vacation.WorkVacationListResponseVO;
 import com.xodud1202.springbackend.domain.work.vacation.WorkVacationListRowVO;
 import com.xodud1202.springbackend.domain.work.vacation.WorkVacationListSearchPO;
+import com.xodud1202.springbackend.domain.work.vacation.WorkVacationMutationResponseVO;
 import com.xodud1202.springbackend.domain.work.vacation.WorkVacationPersonVO;
 import com.xodud1202.springbackend.domain.work.vacation.WorkVacationSummaryRowVO;
+import com.xodud1202.springbackend.domain.work.vacation.WorkVacationUpdatePO;
 import com.xodud1202.springbackend.mapper.CommonMapper;
 import com.xodud1202.springbackend.mapper.VacationMapper;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +30,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-// 휴가관리 조회와 등록 비즈니스 로직을 처리합니다.
+// 휴가관리 조회와 변경 비즈니스 로직을 처리합니다.
 public class VacationService {
 	private static final String VACATION_GROUP_CODE = "VACATION";
 	private static final String MORNING_HALF_VACATION_CODE = "VACATION_02";
@@ -74,12 +77,41 @@ public class VacationService {
 	// 휴가 사용 내역을 등록합니다.
 	public WorkVacationCreateResponseVO createWorkVacation(WorkVacationCreatePO command, Long workUserNo) {
 		WorkVacationCreatePO normalizedCommand = normalizeVacationCreateCommand(command, workUserNo);
-		validateVacationCreateCommand(normalizedCommand);
+		validateVacationSaveCommand(normalizedCommand);
 		vacationMapper.insertVacation(normalizedCommand);
 
 		WorkVacationCreateResponseVO response = new WorkVacationCreateResponseVO();
 		response.setMessage("휴가가 등록되었습니다.");
 		response.setVacationSeq(normalizedCommand.getVacationSeq());
+		return response;
+	}
+
+	@Transactional
+	// 휴가 사용 내역을 수정합니다.
+	public WorkVacationMutationResponseVO updateWorkVacation(WorkVacationUpdatePO command, Long workUserNo) {
+		WorkVacationUpdatePO normalizedCommand = normalizeVacationUpdateCommand(command, workUserNo);
+		validateVacationSaveCommand(normalizedCommand);
+		int updatedCount = vacationMapper.updateVacation(normalizedCommand);
+		if (updatedCount != 1) {
+			throw new IllegalStateException("수정할 휴가 사용 내역을 찾을 수 없습니다.");
+		}
+
+		WorkVacationMutationResponseVO response = new WorkVacationMutationResponseVO();
+		response.setMessage("휴가가 수정되었습니다.");
+		return response;
+	}
+
+	@Transactional
+	// 휴가 사용 내역을 삭제 처리합니다.
+	public WorkVacationMutationResponseVO deleteWorkVacation(WorkVacationDeletePO command, Long workUserNo) {
+		WorkVacationDeletePO normalizedCommand = normalizeVacationDeleteCommand(command, workUserNo);
+		int deletedCount = vacationMapper.softDeleteVacation(normalizedCommand);
+		if (deletedCount != 1) {
+			throw new IllegalStateException("삭제할 휴가 사용 내역을 찾을 수 없습니다.");
+		}
+
+		WorkVacationMutationResponseVO response = new WorkVacationMutationResponseVO();
+		response.setMessage("휴가가 삭제되었습니다.");
 		return response;
 	}
 
@@ -152,19 +184,48 @@ public class VacationService {
 		}
 
 		WorkVacationCreatePO normalizedCommand = new WorkVacationCreatePO();
-		normalizedCommand.setPersonSeq(requirePositiveInt(command.getPersonSeq(), "이름을 선택해주세요."));
-		normalizedCommand.setWorkCompanySeq(requirePositiveInt(command.getWorkCompanySeq(), "회사를 선택해주세요."));
-		normalizedCommand.setVacationCd(requireVacationCodeText(command.getVacationCd()));
-		normalizedCommand.setStartDt(requireVacationDateText(command.getStartDt(), "시작일을 선택해주세요."));
-		normalizedCommand.setEndDt(requireVacationDateText(command.getEndDt(), "종료일을 선택해주세요."));
-		normalizedCommand.setVacationMemo(normalizeVacationMemo(command.getVacationMemo()));
-		normalizedCommand.setRegNo(requirePositiveLong(workUserNo, "로그인이 필요합니다."));
-		normalizedCommand.setUdtNo(workUserNo);
+		applyVacationSaveValues(command, normalizedCommand, workUserNo);
+		normalizedCommand.setRegNo(normalizedCommand.getUdtNo());
 		return normalizedCommand;
 	}
 
-	// 휴가 등록 요청의 DB 정합성을 검증합니다.
-	private void validateVacationCreateCommand(WorkVacationCreatePO command) {
+	// 수정 요청 값을 저장 가능한 값으로 정규화합니다.
+	private WorkVacationUpdatePO normalizeVacationUpdateCommand(WorkVacationUpdatePO command, Long workUserNo) {
+		if (command == null) {
+			throw new IllegalArgumentException("휴가 수정 요청 정보를 확인해주세요.");
+		}
+
+		WorkVacationUpdatePO normalizedCommand = new WorkVacationUpdatePO();
+		normalizedCommand.setVacationSeq(requirePositiveLong(command.getVacationSeq(), "수정할 휴가 사용 내역을 확인해주세요."));
+		applyVacationSaveValues(command, normalizedCommand, workUserNo);
+		return normalizedCommand;
+	}
+
+	// 삭제 요청 값을 저장 가능한 값으로 정규화합니다.
+	private WorkVacationDeletePO normalizeVacationDeleteCommand(WorkVacationDeletePO command, Long workUserNo) {
+		if (command == null) {
+			throw new IllegalArgumentException("휴가 삭제 요청 정보를 확인해주세요.");
+		}
+
+		WorkVacationDeletePO normalizedCommand = new WorkVacationDeletePO();
+		normalizedCommand.setVacationSeq(requirePositiveLong(command.getVacationSeq(), "삭제할 휴가 사용 내역을 확인해주세요."));
+		normalizedCommand.setUdtNo(requirePositiveLong(workUserNo, "로그인이 필요합니다."));
+		return normalizedCommand;
+	}
+
+	// 등록과 수정 요청의 공통 저장 값을 정규화합니다.
+	private void applyVacationSaveValues(WorkVacationCreatePO sourceCommand, WorkVacationCreatePO targetCommand, Long workUserNo) {
+		targetCommand.setPersonSeq(requirePositiveInt(sourceCommand.getPersonSeq(), "이름을 선택해주세요."));
+		targetCommand.setWorkCompanySeq(requirePositiveInt(sourceCommand.getWorkCompanySeq(), "회사를 선택해주세요."));
+		targetCommand.setVacationCd(requireVacationCodeText(sourceCommand.getVacationCd()));
+		targetCommand.setStartDt(requireVacationDateText(sourceCommand.getStartDt(), "시작일을 선택해주세요."));
+		targetCommand.setEndDt(requireVacationDateText(sourceCommand.getEndDt(), "종료일을 선택해주세요."));
+		targetCommand.setVacationMemo(normalizeVacationMemo(sourceCommand.getVacationMemo()));
+		targetCommand.setUdtNo(requirePositiveLong(workUserNo, "로그인이 필요합니다."));
+	}
+
+	// 휴가 저장 요청의 DB 정합성을 검증합니다.
+	private void validateVacationSaveCommand(WorkVacationCreatePO command) {
 		validateActiveVacationPerson(command.getPersonSeq());
 		validateVacationCompany(command.getWorkCompanySeq());
 		validateVacationCode(command.getVacationCd());

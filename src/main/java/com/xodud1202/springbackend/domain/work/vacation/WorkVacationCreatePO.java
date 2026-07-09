@@ -5,7 +5,7 @@ import lombok.Data;
 @Data
 // 휴가 등록 요청 정보를 정의합니다.
 public class WorkVacationCreatePO {
-	// 등록된 휴가 번호입니다.
+	// 휴가 번호입니다.
 	private Long vacationSeq;
 	// 회사 번호입니다.
 	private Integer workCompanySeq;

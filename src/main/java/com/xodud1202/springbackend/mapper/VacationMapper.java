@@ -2,10 +2,12 @@ package com.xodud1202.springbackend.mapper;
 
 import com.xodud1202.springbackend.domain.work.vacation.WorkVacationCompanyVO;
 import com.xodud1202.springbackend.domain.work.vacation.WorkVacationCreatePO;
+import com.xodud1202.springbackend.domain.work.vacation.WorkVacationDeletePO;
 import com.xodud1202.springbackend.domain.work.vacation.WorkVacationListRowVO;
 import com.xodud1202.springbackend.domain.work.vacation.WorkVacationListSearchPO;
 import com.xodud1202.springbackend.domain.work.vacation.WorkVacationPersonVO;
 import com.xodud1202.springbackend.domain.work.vacation.WorkVacationSummaryRowVO;
+import com.xodud1202.springbackend.domain.work.vacation.WorkVacationUpdatePO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -43,4 +45,10 @@ public interface VacationMapper {
 
 	// 휴가 사용 정보를 저장합니다.
 	int insertVacation(WorkVacationCreatePO param);
+
+	// 휴가 사용 정보를 수정합니다.
+	int updateVacation(WorkVacationUpdatePO param);
+
+	// 휴가 사용 정보를 삭제 처리합니다.
+	int softDeleteVacation(WorkVacationDeletePO param);
 }

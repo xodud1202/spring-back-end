@@ -227,4 +227,28 @@
 		     , #{udtNo}
 		)
 	</insert>
+	<update id="updateVacation">
+		/* VacationMapper.updateVacation: 휴가 사용 정보 수정 */
+		UPDATE VACATION
+		   SET WORK_COMPANY_SEQ = #{workCompanySeq}
+		     , PERSON_SEQ = #{personSeq}
+		     , VACATION_CD = #{vacationCd}
+		     , START_DT = STR_TO_DATE(#{startDt}, '%Y-%m-%d')
+		     , END_DT = STR_TO_DATE(#{endDt}, '%Y-%m-%d')
+		     , VACATION_MEMO = #{vacationMemo}
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE VACATION_SEQ = #{vacationSeq}
+		   AND DEL_YN = 'N'
+	</update>
+
+	<update id="softDeleteVacation">
+		/* VacationMapper.softDeleteVacation: 휴가 사용 정보 삭제 처리 */
+		UPDATE VACATION
+		   SET DEL_YN = 'Y'
+		     , UDT_NO = #{udtNo}
+		     , UDT_DT = NOW()
+		 WHERE VACATION_SEQ = #{vacationSeq}
+		   AND DEL_YN = 'N'
+	</update>
 </mapper>
