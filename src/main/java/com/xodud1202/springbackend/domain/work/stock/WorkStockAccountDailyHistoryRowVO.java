@@ -13,5 +13,7 @@ public class WorkStockAccountDailyHistoryRowVO {
 	private Long checkAmt;
 	private Long profitAmt;
 	private BigDecimal profitRate;
+	private Long previousCompareProfitAmt;
+	private BigDecimal previousCompareProfitRate;
 	private Map<String, Long> checkAccountAmountMap;
 }

@@ -154,8 +154,13 @@ class StockAccountHistoryServiceTests {
 		assertEquals(1800L, latestRow.getCheckAmt());
 		assertEquals(300L, latestRow.getProfitAmt());
 		assertEquals(new BigDecimal("20.00"), latestRow.getProfitRate());
+		assertEquals(-200L, latestRow.getPreviousCompareProfitAmt());
+		assertEquals(new BigDecimal("-11.11"), latestRow.getPreviousCompareProfitRate());
 		assertEquals(1800L, latestRow.getCheckAccountAmountMap().get("ACCOUNT_A"));
 		assertEquals(700L, latestRow.getCheckAccountAmountMap().get("ACCOUNT_B"));
+		WorkStockAccountDailyHistoryRowVO previousRow = response.getHistoryRowList().get(1);
+		assertEquals(0L, previousRow.getPreviousCompareProfitAmt());
+		assertEquals(new BigDecimal("0.00"), previousRow.getPreviousCompareProfitRate());
 	}
 
 	@Test

@@ -594,7 +594,46 @@ public class StockAccountHistoryService {
 			historyRow.setCheckAccountAmountMap(checkAccountAmountMap);
 			historyRowList.add(historyRow);
 		}
+		applyPreviousCompareProfit(historyRowList);
 		return historyRowList;
+	}
+
+	// 이전 확인일과 비교한 손익금과 손익률을 전체 이력 기준으로 채웁니다.
+	private void applyPreviousCompareProfit(List<WorkStockAccountDailyHistoryRowVO> historyRowList) {
+		if (historyRowList == null || historyRowList.isEmpty()) {
+			return;
+		}
+		for (int rowIndex = 0; rowIndex < historyRowList.size(); rowIndex++) {
+			WorkStockAccountDailyHistoryRowVO currentRow = historyRowList.get(rowIndex);
+			if (currentRow == null) {
+				continue;
+			}
+			WorkStockAccountDailyHistoryRowVO previousRow = rowIndex + 1 < historyRowList.size() ? historyRowList.get(rowIndex + 1) : null;
+			long previousCompareProfitAmt = calculatePreviousCompareProfitAmt(currentRow, previousRow);
+			currentRow.setPreviousCompareProfitAmt(previousCompareProfitAmt);
+			currentRow.setPreviousCompareProfitRate(calculatePreviousCompareProfitRate(previousCompareProfitAmt, normalizeLong(currentRow.getCheckAmt())));
+		}
+	}
+
+	// 현재 확인일 손익금에서 이전 확인일 손익금을 뺀 금액을 계산합니다.
+	private long calculatePreviousCompareProfitAmt(
+		WorkStockAccountDailyHistoryRowVO currentRow,
+		WorkStockAccountDailyHistoryRowVO previousRow
+	) {
+		if (previousRow == null) {
+			return 0L;
+		}
+		return normalizeLong(currentRow.getProfitAmt()) - normalizeLong(previousRow.getProfitAmt());
+	}
+
+	// 이전대비 손익금을 해당일 월중 확인 평가금 대비 퍼센트로 계산합니다.
+	private BigDecimal calculatePreviousCompareProfitRate(long previousCompareProfitAmt, long checkAmt) {
+		if (checkAmt == 0L) {
+			return ZERO_RATE;
+		}
+		return BigDecimal.valueOf(previousCompareProfitAmt)
+			.multiply(BigDecimal.valueOf(100L))
+			.divide(BigDecimal.valueOf(checkAmt), 2, RoundingMode.HALF_UP);
 	}
 
 	// 확인금액 원천 목록에서 날짜와 계좌별 최신 행만 남깁니다.
