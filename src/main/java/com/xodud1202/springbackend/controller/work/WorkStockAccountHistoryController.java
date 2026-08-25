@@ -3,6 +3,7 @@ package com.xodud1202.springbackend.controller.work;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountCashHistoryCreateRequestVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountCheckRowVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountHistoryResponseVO;
+import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountHistoryViewType;
 import com.xodud1202.springbackend.service.StockAccountHistoryService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -34,11 +35,17 @@ public class WorkStockAccountHistoryController extends WorkControllerSupport {
 		HttpServletRequest request,
 		@RequestParam(required = false) List<String> stockAccountCdList,
 		@RequestParam(required = false) Integer historyOffset,
-		@RequestParam(required = false) Integer cashHistoryOffset
+		@RequestParam(required = false) Integer cashHistoryOffset,
+		@RequestParam(defaultValue = "ALL") WorkStockAccountHistoryViewType historyViewType
 	) {
 		try {
 			resolveRequiredWorkUserNo(request);
-			return ResponseEntity.ok(stockAccountHistoryService.getStockAccountHistory(stockAccountCdList, historyOffset, cashHistoryOffset));
+			return ResponseEntity.ok(stockAccountHistoryService.getStockAccountHistory(
+				stockAccountCdList,
+				historyOffset,
+				cashHistoryOffset,
+				historyViewType
+			));
 		} catch (SecurityException | IllegalArgumentException exception) {
 			throw exception;
 		} catch (Exception exception) {

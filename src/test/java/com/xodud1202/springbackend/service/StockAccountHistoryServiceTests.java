@@ -9,6 +9,7 @@ import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountHistoryAcco
 import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountHistoryResponseVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountHistorySearchPO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountHistoryValueRowVO;
+import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountHistoryViewType;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountMonthlyCashAmountVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountMonthlySaleAmountVO;
 import com.xodud1202.springbackend.mapper.CommonMapper;
@@ -161,6 +162,50 @@ class StockAccountHistoryServiceTests {
 		WorkStockAccountDailyHistoryRowVO previousRow = response.getHistoryRowList().get(1);
 		assertEquals(0L, previousRow.getPreviousCompareProfitAmt());
 		assertEquals(new BigDecimal("0.00"), previousRow.getPreviousCompareProfitRate());
+	}
+
+	@Test
+	@DisplayName("월초 보기: 50건을 넘는 전체 이력에서 년월별 첫 확인일과 전달 월초 비교값 계산")
+	// 월초 보기는 페이지를 나누기 전에 월별 첫 확인일을 선택하고 전달 월초와 비교합니다.
+	void getStockAccountHistory_returnsFirstCheckDateOfEachMonth() {
+		// 두 달에 걸친 52건의 확인일 이력을 구성합니다.
+		stubMonthlyBoundaryHistoryRows();
+
+		// 7월과 6월의 첫 확인일만 최신 월부터 노출하고 전달 월초 손익과 비교합니다.
+		WorkStockAccountHistoryResponseVO response = stockAccountHistoryService.getStockAccountHistory(
+			List.of("STOCK_ACCOUNT_04"),
+			null,
+			null,
+			WorkStockAccountHistoryViewType.MONTH_START
+		);
+		assertEquals(2, response.getHistoryTotalCount());
+		assertEquals(false, response.getHistoryHasMore());
+		assertEquals(List.of("2026-07-01", "2026-06-01"), response.getHistoryRowList().stream().map(WorkStockAccountDailyHistoryRowVO::getCheckDt).toList());
+		assertEquals(200L, response.getHistoryRowList().get(0).getPreviousCompareProfitAmt());
+		assertEquals(new BigDecimal("16.65"), response.getHistoryRowList().get(0).getPreviousCompareProfitRate());
+		assertEquals(0L, response.getHistoryRowList().get(1).getPreviousCompareProfitAmt());
+	}
+
+	@Test
+	@DisplayName("월말 보기: 50건을 넘는 전체 이력에서 년월별 마지막 확인일과 전달 월말 비교값 계산")
+	// 월말 보기는 페이지를 나누기 전에 월별 마지막 확인일을 선택하고 전달 월말과 비교합니다.
+	void getStockAccountHistory_returnsLastCheckDateOfEachMonth() {
+		// 두 달에 걸친 52건의 확인일 이력을 구성합니다.
+		stubMonthlyBoundaryHistoryRows();
+
+		// 7월과 6월의 마지막 확인일만 최신 월부터 노출하고 전달 월말 손익과 비교합니다.
+		WorkStockAccountHistoryResponseVO response = stockAccountHistoryService.getStockAccountHistory(
+			List.of("STOCK_ACCOUNT_04"),
+			null,
+			null,
+			WorkStockAccountHistoryViewType.MONTH_END
+		);
+		assertEquals(2, response.getHistoryTotalCount());
+		assertEquals(false, response.getHistoryHasMore());
+		assertEquals(List.of("2026-07-22", "2026-06-30"), response.getHistoryRowList().stream().map(WorkStockAccountDailyHistoryRowVO::getCheckDt).toList());
+		assertEquals(192L, response.getHistoryRowList().get(0).getPreviousCompareProfitAmt());
+		assertEquals(new BigDecimal("15.71"), response.getHistoryRowList().get(0).getPreviousCompareProfitRate());
+		assertEquals(0L, response.getHistoryRowList().get(1).getPreviousCompareProfitAmt());
 	}
 
 	@Test
@@ -337,6 +382,41 @@ class StockAccountHistoryServiceTests {
 		assertEquals("CASH_IN_OUT_02", updateCaptor.getValue().getCashInOutCd());
 		assertEquals(2000L, updateCaptor.getValue().getCashAmt());
 		assertEquals(9L, updateCaptor.getValue().getUdtNo());
+	}
+
+	// 월초·월말 표시 기준과 50건 페이지 경계를 검증할 두 달의 확인일 이력을 구성합니다.
+	private void stubMonthlyBoundaryHistoryRows() {
+		stubSamsungAccountList();
+		when(stockAccountHistoryMapper.getLatestStockAccountHistoryDate(any())).thenReturn("20260722");
+		when(stockAccountHistoryMapper.getLatestStockSaleDate(any())).thenReturn("20260722");
+		when(stockAccountHistoryMapper.getMonthlySaleAmountList(any())).thenReturn(List.of());
+		when(stockAccountHistoryMapper.getMonthlyCashAmountList(any())).thenReturn(List.of());
+
+		// 6월 30건과 7월 22건을 합쳐 기본 페이지 크기보다 많은 원천 행을 만듭니다.
+		List<WorkStockAccountCheckRowVO> checkRowList = new ArrayList<>();
+		long checkSequence = 1L;
+		for (int day = 1; day <= 30; day++) {
+			checkRowList.add(createCheckRow(
+				checkSequence++,
+				String.format("202606%02d", day),
+				"202606",
+				"STOCK_ACCOUNT_04",
+				1000L + day
+			));
+		}
+		for (int day = 1; day <= 22; day++) {
+			checkRowList.add(createCheckRow(
+				checkSequence++,
+				String.format("202607%02d", day),
+				"202607",
+				"STOCK_ACCOUNT_04",
+				1200L + day
+			));
+		}
+		when(stockAccountHistoryMapper.getStockAccountCheckRowList(any())).thenReturn(checkRowList);
+		when(stockAccountHistoryMapper.getDailySaleAmountList(any())).thenReturn(List.of(
+			createDailySale("20260601", 1000L)
+		));
 	}
 
 	// 테스트 계좌 공통코드 목록을 구성합니다.

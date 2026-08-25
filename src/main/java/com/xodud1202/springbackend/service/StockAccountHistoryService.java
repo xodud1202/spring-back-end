@@ -12,6 +12,7 @@ import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountHistoryMont
 import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountHistoryResponseVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountHistorySearchPO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountHistoryValueRowVO;
+import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountHistoryViewType;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountMonthlyCashAmountVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountMonthlySaleAmountVO;
 import com.xodud1202.springbackend.mapper.CommonMapper;
@@ -75,14 +76,24 @@ public class StockAccountHistoryService {
 		List<String> stockAccountCdList,
 		Integer historyOffset
 	) {
-		return getStockAccountHistory(stockAccountCdList, historyOffset, null);
+		return getStockAccountHistory(stockAccountCdList, historyOffset, null, WorkStockAccountHistoryViewType.ALL);
 	}
 
-	// 주식계좌이력 화면 데이터를 조회합니다.
+	// 전체 확인일 기준으로 주식계좌이력과 입출금 이력을 조회합니다.
 	public WorkStockAccountHistoryResponseVO getStockAccountHistory(
 		List<String> stockAccountCdList,
 		Integer historyOffset,
 		Integer cashHistoryOffset
+	) {
+		return getStockAccountHistory(stockAccountCdList, historyOffset, cashHistoryOffset, WorkStockAccountHistoryViewType.ALL);
+	}
+
+	// 표시 기준에 맞는 주식계좌이력 화면 데이터를 조회합니다.
+	public WorkStockAccountHistoryResponseVO getStockAccountHistory(
+		List<String> stockAccountCdList,
+		Integer historyOffset,
+		Integer cashHistoryOffset,
+		WorkStockAccountHistoryViewType historyViewType
 	) {
 		List<CommonCodeVO> activeAccountList = getStockAccountList();
 		List<CommonCodeVO> accountList = getSelectedAccountList(stockAccountCdList, activeAccountList);
@@ -108,12 +119,14 @@ public class StockAccountHistoryService {
 		List<WorkStockAccountCheckRowVO> activeCheckRowList = accountList.size() == activeAccountList.size()
 			? checkRowList
 			: stockAccountHistoryMapper.getStockAccountCheckRowList(buildSearchParam(activeAccountList));
-		List<WorkStockAccountDailyHistoryRowVO> allHistoryRowList = buildDailyHistoryRowList(
+		List<WorkStockAccountDailyHistoryRowVO> dailyHistoryRowList = buildDailyHistoryRowList(
 			checkRowList,
 			stockAccountHistoryMapper.getDailySaleAmountList(searchParam),
 			activeCheckRowList,
 			activeAccountList
 		);
+		List<WorkStockAccountDailyHistoryRowVO> allHistoryRowList = buildViewedDailyHistoryRowList(dailyHistoryRowList, historyViewType);
+		applyPreviousCompareProfit(allHistoryRowList);
 		int resolvedOffset = normalizeHistoryOffset(historyOffset);
 		List<WorkStockAccountDailyHistoryRowVO> pageHistoryRowList = sliceHistoryRowList(allHistoryRowList, resolvedOffset);
 		int resolvedCashHistoryOffset = normalizeHistoryOffset(cashHistoryOffset);
@@ -594,11 +607,51 @@ public class StockAccountHistoryService {
 			historyRow.setCheckAccountAmountMap(checkAccountAmountMap);
 			historyRowList.add(historyRow);
 		}
-		applyPreviousCompareProfit(historyRowList);
 		return historyRowList;
 	}
 
-	// 이전 확인일과 비교한 손익금과 손익률을 전체 이력 기준으로 채웁니다.
+	// 표시 기준에 따라 전체 확인일 또는 년월별 첫 번째와 마지막 확인일만 남깁니다.
+	private List<WorkStockAccountDailyHistoryRowVO> buildViewedDailyHistoryRowList(
+		List<WorkStockAccountDailyHistoryRowVO> historyRowList,
+		WorkStockAccountHistoryViewType historyViewType
+	) {
+		if (historyRowList == null || historyRowList.isEmpty()) {
+			return List.of();
+		}
+		WorkStockAccountHistoryViewType resolvedViewType = historyViewType == null
+			? WorkStockAccountHistoryViewType.ALL
+			: historyViewType;
+		if (resolvedViewType == WorkStockAccountHistoryViewType.ALL) {
+			return new ArrayList<>(historyRowList);
+		}
+
+		// 최신순 목록을 월별 Map에 담아 월말은 최초 행, 월초는 마지막 행을 선택합니다.
+		Map<String, WorkStockAccountDailyHistoryRowVO> monthlyHistoryRowMap = new LinkedHashMap<>();
+		for (WorkStockAccountDailyHistoryRowVO historyRow : historyRowList) {
+			String monthKey = resolveDailyHistoryMonthKey(historyRow);
+			if (monthKey == null) {
+				continue;
+			}
+			if (resolvedViewType == WorkStockAccountHistoryViewType.MONTH_START) {
+				monthlyHistoryRowMap.put(monthKey, historyRow);
+			} else {
+				monthlyHistoryRowMap.putIfAbsent(monthKey, historyRow);
+			}
+		}
+		return new ArrayList<>(monthlyHistoryRowMap.values());
+	}
+
+	// 확인일별 이력 행의 yyyy-MM 월 식별값을 반환합니다.
+	private String resolveDailyHistoryMonthKey(WorkStockAccountDailyHistoryRowVO historyRow) {
+		String checkDate = trimToNull(historyRow == null ? null : historyRow.getCheckDt());
+		if (checkDate == null) {
+			return null;
+		}
+		YearMonth checkMonth = parseYearMonth(checkDate.replace("-", ""));
+		return checkMonth == null ? null : checkMonth.format(MONTH_KEY_FORMATTER);
+	}
+
+	// 선택된 표시 목록의 이전 행과 비교한 손익금과 손익률을 채웁니다.
 	private void applyPreviousCompareProfit(List<WorkStockAccountDailyHistoryRowVO> historyRowList) {
 		if (historyRowList == null || historyRowList.isEmpty()) {
 			return;
