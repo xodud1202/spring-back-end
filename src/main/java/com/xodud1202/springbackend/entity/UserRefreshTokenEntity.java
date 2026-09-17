@@ -45,10 +45,12 @@ public class UserRefreshTokenEntity {
 	@Column(name = "IS_REVOKED", nullable = false)
 	private String isRevoked;
 
-	@Column(name = "REG_DT")
+	// 등록일시는 INSERT에서 제외해 DB 기본값으로 생성하고 이후에도 변경하지 않습니다.
+	@Column(name = "REG_DT", insertable = false, updatable = false)
 	private Date regDt;
 
-	@Column(name = "UDT_DT")
+	// 수정일시는 INSERT에서 DB 기본값을 사용하고 토큰 사용·폐기 시 기존 쿼리로 갱신합니다.
+	@Column(name = "UDT_DT", insertable = false)
 	private Date udtDt;
 
 	// 신규 리프레시 토큰 발급 정보를 엔티티에 반영합니다.
