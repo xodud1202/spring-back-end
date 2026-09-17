@@ -41,7 +41,7 @@ public class NewsArticleScheduler {
 		this.schedulerWorkerExecutor = createSchedulerWorkerExecutor();
 	}
 
-	@Scheduled(cron = "10 0,30 * * * *", zone = "Asia/Seoul")
+	// @Scheduled(cron = "10 0,30 * * * *", zone = "Asia/Seoul")
 	// 30분 주기 배치로 뉴스 메타+언론사 shard JSON 파일 생성/업로드를 실행합니다.
 	public void collectNewsArticleEveryThirtyMinutes() {
 		// 타임아웃 제어가 가능한 전용 워커에서 뉴스 발행 작업을 실행합니다.
