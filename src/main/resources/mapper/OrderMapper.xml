@@ -743,7 +743,7 @@
 		     , BANK_NO
 		     , VACT_HOLDER_NM
 		     , CASE
-		         WHEN VACT_DUE_DT IS NULL OR VACT_DUE_DT = '0000-00-00 00:00:00' THEN NULL
+		         WHEN VACT_DUE_DT IS NULL THEN NULL
 		         ELSE DATE_FORMAT(VACT_DUE_DT, '%Y-%m-%d %H:%i:%s')
 		       END AS VACT_DUE_DT
 		     , CARD_CD
@@ -751,11 +751,11 @@
 		     , DEVICE_GB_CD
 		     , DATE_FORMAT(REQ_DT, '%Y-%m-%d %H:%i:%s') AS REQ_DT
 		     , CASE
-		         WHEN APPR_DT IS NULL OR APPR_DT = '0000-00-00 00:00:00' THEN NULL
+		         WHEN APPR_DT IS NULL THEN NULL
 		         ELSE DATE_FORMAT(APPR_DT, '%Y-%m-%d %H:%i:%s')
 		       END AS APPR_DT
 		     , CASE
-		         WHEN WEBHOOK_DT IS NULL OR WEBHOOK_DT = '0000-00-00 00:00:00' THEN NULL
+		         WHEN WEBHOOK_DT IS NULL THEN NULL
 		         ELSE DATE_FORMAT(WEBHOOK_DT, '%Y-%m-%d %H:%i:%s')
 		       END AS WEBHOOK_DT
 		     , REQ_RAW_JSON
@@ -791,7 +791,7 @@
 		     , BANK_NO
 		     , VACT_HOLDER_NM
 		     , CASE
-		         WHEN VACT_DUE_DT IS NULL OR VACT_DUE_DT = '0000-00-00 00:00:00' THEN NULL
+		         WHEN VACT_DUE_DT IS NULL THEN NULL
 		         ELSE DATE_FORMAT(VACT_DUE_DT, '%Y-%m-%d %H:%i:%s')
 		       END AS VACT_DUE_DT
 		     , CARD_CD
@@ -799,11 +799,11 @@
 		     , DEVICE_GB_CD
 		     , DATE_FORMAT(REQ_DT, '%Y-%m-%d %H:%i:%s') AS REQ_DT
 		     , CASE
-		         WHEN APPR_DT IS NULL OR APPR_DT = '0000-00-00 00:00:00' THEN NULL
+		         WHEN APPR_DT IS NULL THEN NULL
 		         ELSE DATE_FORMAT(APPR_DT, '%Y-%m-%d %H:%i:%s')
 		       END AS APPR_DT
 		     , CASE
-		         WHEN WEBHOOK_DT IS NULL OR WEBHOOK_DT = '0000-00-00 00:00:00' THEN NULL
+		         WHEN WEBHOOK_DT IS NULL THEN NULL
 		         ELSE DATE_FORMAT(WEBHOOK_DT, '%Y-%m-%d %H:%i:%s')
 		       END AS WEBHOOK_DT
 		     , REQ_RAW_JSON
@@ -847,11 +847,11 @@
 		     , DEVICE_GB_CD
 		     , DATE_FORMAT(REQ_DT, '%Y-%m-%d %H:%i:%s') AS REQ_DT
 		     , CASE
-		         WHEN APPR_DT IS NULL OR APPR_DT = '0000-00-00 00:00:00' THEN NULL
+		         WHEN APPR_DT IS NULL THEN NULL
 		         ELSE DATE_FORMAT(APPR_DT, '%Y-%m-%d %H:%i:%s')
 		       END AS APPR_DT
 		     , CASE
-		         WHEN WEBHOOK_DT IS NULL OR WEBHOOK_DT = '0000-00-00 00:00:00' THEN NULL
+		         WHEN WEBHOOK_DT IS NULL THEN NULL
 		         ELSE DATE_FORMAT(WEBHOOK_DT, '%Y-%m-%d %H:%i:%s')
 		       END AS WEBHOOK_DT
 		     , REQ_RAW_JSON
@@ -1521,15 +1521,9 @@
 		   SET CPN_USE_YN = 'N'
 		     , ORD_NO = NULL
 		     , CPN_USABLE_START_DT = CPN_USABLE_START_DT
-		     , CPN_USABLE_END_DT = CASE
-		         WHEN #{extendUsableEndDt}
-		           THEN CASE
-		                  WHEN CPN_USABLE_END_DT IS NULL OR CPN_USABLE_END_DT = '0000-00-00 00:00:00'
-		                    THEN CPN_USABLE_END_DT
-		                  ELSE GREATEST(CPN_USABLE_END_DT, #{minimumUsableEndDt})
-		                END
-		         ELSE CPN_USABLE_END_DT
-		       END
+		     , CPN_USABLE_END_DT = CASE WHEN #{extendUsableEndDt} THEN CASE WHEN CPN_USABLE_END_DT IS NULL THEN CPN_USABLE_END_DT
+		                                                                    ELSE GREATEST(CPN_USABLE_END_DT, #{minimumUsableEndDt}) END
+		                                ELSE CPN_USABLE_END_DT END
 		     , UDT_NO = #{udtNo}
 		     , UDT_DT = NOW()
 		 WHERE CUST_NO = #{custNo}
@@ -1548,7 +1542,7 @@
 		     , USE_AMT
 		     , RMN_AMT
 		     , CASE
-		         WHEN EXPIRE_DT IS NULL OR EXPIRE_DT = '0000-00-00 00:00:00' THEN NULL
+		         WHEN EXPIRE_DT IS NULL THEN NULL
 		         ELSE DATE_FORMAT(EXPIRE_DT, '%Y-%m-%d %H:%i:%s')
 		       END AS EXPIRE_DT
 		     , DATE_FORMAT(SAVE_DT, '%Y-%m-%d %H:%i:%s') AS SAVE_DT
@@ -1558,13 +1552,9 @@
 		   AND RMN_AMT > 0
 		   AND (
 		       EXPIRE_DT IS NULL
-		       OR EXPIRE_DT = '0000-00-00 00:00:00'
 		       OR EXPIRE_DT >= NOW()
 		   )
-		 ORDER BY CASE
-		            WHEN EXPIRE_DT IS NULL OR EXPIRE_DT = '0000-00-00 00:00:00' THEN 1
-		            ELSE 0
-		          END ASC
+		 ORDER BY CASE WHEN EXPIRE_DT IS NULL THEN 1 ELSE 0 END ASC
 		        , EXPIRE_DT ASC
 		        , SAVE_DT ASC
 		        , PNT_NO ASC
@@ -1729,11 +1719,7 @@
 		  FROM CUSTOMER_POINT_BASE CPB
 		 WHERE CPB.CUST_NO = #{custNo}
 		   AND CPB.RMN_AMT &gt; 0
-		   AND (
-		       CPB.EXPIRE_DT IS NULL
-		       OR CPB.EXPIRE_DT = '0000-00-00 00:00:00'
-		       OR CPB.EXPIRE_DT &gt;= NOW()
-		   )
+		   AND (CPB.EXPIRE_DT IS NULL OR CPB.EXPIRE_DT &gt;= NOW())
 	</select>
 
 	<select id="countShopMypageCancelHistory" resultType="int">
@@ -2069,7 +2055,6 @@
 		 WHERE CUST_NO = #{custNo}
 		   AND RMN_AMT &gt; 0
 		   AND EXPIRE_DT IS NOT NULL
-		   AND EXPIRE_DT != '0000-00-00 00:00:00'
 		   AND EXPIRE_DT &gt;= NOW()
 		   AND EXPIRE_DT &lt; DATE_ADD(NOW(), INTERVAL 7 DAY)
 	</select>

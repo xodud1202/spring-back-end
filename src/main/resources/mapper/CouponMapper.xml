@@ -10,19 +10,10 @@
 		     , FN_GET_CODE_NM('CPN_STAT', CB.CPN_STAT_CD) AS CPN_STAT_NM
 		     , FN_GET_CODE_NM('CPN_GB', CB.CPN_GB_CD) AS CPN_GB_NM
 		     , FN_GET_CODE_NM('CPN_TARGET', CB.CPN_TARGET_CD) AS CPN_TARGET_NM
-		     , CASE
-		         WHEN CB.CPN_DOWN_START_DT IS NULL OR CB.CPN_DOWN_START_DT = '0000-00-00 00:00:00' THEN ''
-		         ELSE DATE_FORMAT(CB.CPN_DOWN_START_DT, '%Y-%m-%d %H')
-		       END AS CPN_DOWN_START_DT
-		     , CASE
-		         WHEN CB.CPN_DOWN_END_DT IS NULL OR CB.CPN_DOWN_END_DT = '0000-00-00 00:00:00' THEN ''
-		         ELSE DATE_FORMAT(CB.CPN_DOWN_END_DT, '%Y-%m-%d %H')
-		       END AS CPN_DOWN_END_DT
+		     , DATE_FORMAT(CB.CPN_DOWN_START_DT, '%Y-%m-%d %H') AS CPN_DOWN_START_DT
+		     , IF(CB.CPN_DOWN_END_DT IS NULL, '', DATE_FORMAT(CB.CPN_DOWN_END_DT, '%Y-%m-%d %H')) AS CPN_DOWN_END_DT
 		     , CB.CPN_DOWN_ABLE_YN
-		     , CASE
-		         WHEN CB.STAT_STOP_DT IS NULL OR CB.STAT_STOP_DT = '0000-00-00 00:00:00' THEN ''
-		         ELSE DATE_FORMAT(CB.STAT_STOP_DT, '%Y-%m-%d %H')
-		       END AS STAT_STOP_DT
+		     , IF(CB.STAT_STOP_DT IS NULL, '', DATE_FORMAT(CB.STAT_STOP_DT, '%Y-%m-%d %H')) AS STAT_STOP_DT
 		  FROM COUPON_BASE CB
 		 WHERE IFNULL(CB.DEL_YN, 'N') = 'N'
 		<if test="searchGb == 'CPN_NO' and searchValue != null and searchValue != ''">
@@ -105,27 +96,24 @@
 		     , CB.CPN_TARGET_CD
 		     , CB.CPN_DC_GB_CD
 		     , CB.CPN_DC_VAL
+		     , DATE_FORMAT(CB.CPN_DOWN_START_DT, '%Y-%m-%d %H:%i:%s') AS CPN_DOWN_START_DT
 		     , CASE
-		         WHEN CB.CPN_DOWN_START_DT IS NULL OR CB.CPN_DOWN_START_DT = '0000-00-00 00:00:00' THEN NULL
-		         ELSE DATE_FORMAT(CB.CPN_DOWN_START_DT, '%Y-%m-%d %H:%i:%s')
-		       END AS CPN_DOWN_START_DT
-		     , CASE
-		         WHEN CB.CPN_DOWN_END_DT IS NULL OR CB.CPN_DOWN_END_DT = '0000-00-00 00:00:00' THEN NULL
+		         WHEN CB.CPN_DOWN_END_DT IS NULL THEN NULL
 		         ELSE DATE_FORMAT(CB.CPN_DOWN_END_DT, '%Y-%m-%d %H:%i:%s')
 		       END AS CPN_DOWN_END_DT
 		     , CB.CPN_USE_DT_GB
 		     , CB.CPN_USABLE_DT
 		     , CASE
-		         WHEN CB.CPN_USE_START_DT IS NULL OR CB.CPN_USE_START_DT = '0000-00-00 00:00:00' THEN NULL
+		         WHEN CB.CPN_USE_START_DT IS NULL THEN NULL
 		         ELSE DATE_FORMAT(CB.CPN_USE_START_DT, '%Y-%m-%d %H:%i:%s')
 		       END AS CPN_USE_START_DT
 		     , CASE
-		         WHEN CB.CPN_USE_END_DT IS NULL OR CB.CPN_USE_END_DT = '0000-00-00 00:00:00' THEN NULL
+		         WHEN CB.CPN_USE_END_DT IS NULL THEN NULL
 		         ELSE DATE_FORMAT(CB.CPN_USE_END_DT, '%Y-%m-%d %H:%i:%s')
 		       END AS CPN_USE_END_DT
 		     , CB.CPN_DOWN_ABLE_YN
 		     , CASE
-		         WHEN CB.STAT_STOP_DT IS NULL OR CB.STAT_STOP_DT = '0000-00-00 00:00:00' THEN NULL
+		         WHEN CB.STAT_STOP_DT IS NULL THEN NULL
 		         ELSE DATE_FORMAT(CB.STAT_STOP_DT, '%Y-%m-%d %H:%i:%s')
 		       END AS STAT_STOP_DT
 		  FROM COUPON_BASE CB
@@ -242,14 +230,14 @@
 		     , COALESCE(NULLIF(#{cpnDcGbCd}, ''), 'CPN_DC_GB_01')
 		     , COALESCE(#{cpnDcVal}, 0)
 		     , COALESCE(NULLIF(#{cpnDownStartDt}, ''), NOW())
-		     , COALESCE(NULLIF(#{cpnDownEndDt}, ''), '0000-00-00 00:00:00')
+		     , #{cpnDownEndDt}
 		     , #{cpnUseDtGb}
 		     , #{cpnUsableDt}
-		     , COALESCE(NULLIF(#{cpnUseStartDt}, ''), '0000-00-00 00:00:00')
-		     , COALESCE(NULLIF(#{cpnUseEndDt}, ''), '0000-00-00 00:00:00')
+		     , #{cpnUseStartDt}
+		     , #{cpnUseEndDt}
 		     , 'N'
 		     , COALESCE(NULLIF(#{cpnDownAbleYn}, ''), 'Y')
-		     , COALESCE(NULLIF(#{statStopDt}, ''), '0000-00-00 00:00:00')
+		     , #{statStopDt}
 		     , #{regNo}
 		     , #{udtNo}
 		)
@@ -265,13 +253,13 @@
 		     , CPN_DC_GB_CD = COALESCE(NULLIF(#{cpnDcGbCd}, ''), 'CPN_DC_GB_01')
 		     , CPN_DC_VAL = COALESCE(#{cpnDcVal}, 0)
 		     , CPN_DOWN_START_DT = COALESCE(NULLIF(#{cpnDownStartDt}, ''), NOW())
-		     , CPN_DOWN_END_DT = COALESCE(NULLIF(#{cpnDownEndDt}, ''), '0000-00-00 00:00:00')
+		     , CPN_DOWN_END_DT = #{cpnDownEndDt}
 		     , CPN_USE_DT_GB = #{cpnUseDtGb}
 		     , CPN_USABLE_DT = #{cpnUsableDt}
-		     , CPN_USE_START_DT = COALESCE(NULLIF(#{cpnUseStartDt}, ''), '0000-00-00 00:00:00')
-		     , CPN_USE_END_DT = COALESCE(NULLIF(#{cpnUseEndDt}, ''), '0000-00-00 00:00:00')
+		     , CPN_USE_START_DT = #{cpnUseStartDt}
+		     , CPN_USE_END_DT = #{cpnUseEndDt}
 		     , CPN_DOWN_ABLE_YN = COALESCE(NULLIF(#{cpnDownAbleYn}, ''), 'Y')
-		     , STAT_STOP_DT = COALESCE(NULLIF(#{statStopDt}, ''), '0000-00-00 00:00:00')
+		     , STAT_STOP_DT = #{statStopDt}
 		     , UDT_NO = #{udtNo}
 		     , UDT_DT = NOW()
 		 WHERE CPN_NO = #{cpnNo}
