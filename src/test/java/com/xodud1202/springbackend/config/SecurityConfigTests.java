@@ -1,6 +1,7 @@
 package com.xodud1202.springbackend.config;
 
 import com.xodud1202.springbackend.common.web.CommonRequestLoggingFilter;
+import com.xodud1202.springbackend.controller.HealthCheckController;
 import com.xodud1202.springbackend.security.JwtTokenProvider;
 import com.xodud1202.springbackend.service.CustomUserDetailService;
 import org.junit.jupiter.api.DisplayName;
@@ -26,6 +27,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(
@@ -52,6 +54,25 @@ class SecurityConfigTests {
 
 	@MockBean
 	private CustomUserDetailService customUserDetailService;
+
+	@Test
+	@DisplayName("헬스체크는 인증 정보 없이 정상 상태를 반환한다")
+	// 외부 헬스체크 요청이 실제 컨트롤러까지 도달해 정상 응답을 받는지 검증합니다.
+	void healthCheck_allowsAnonymousRequest() throws Exception {
+		// 인증 헤더와 세션 없이 공개 헬스체크 경로를 호출합니다.
+		mockMvc.perform(get("/healthcheck"))
+			.andExpect(status().isOk())
+			.andExpect(content().string("OK"));
+	}
+
+	@Test
+	@DisplayName("헬스체크 공개 설정은 하위 경로까지 허용하지 않는다")
+	// 헬스체크 경로를 공개해도 지정하지 않은 하위 경로는 차단하는지 검증합니다.
+	void healthCheck_rejectsAnonymousSubpathRequest() throws Exception {
+		// 공개 목록에 없는 하위 경로에는 기존 접근 거부 정책이 적용됩니다.
+		mockMvc.perform(get("/healthcheck/private"))
+			.andExpect(status().isForbidden());
+	}
 
 	@Test
 	@DisplayName("운영성 업로드 API는 비인증 요청을 거부한다")
@@ -136,7 +157,7 @@ class SecurityConfigTests {
 
 	@SpringBootConfiguration
 	@EnableAutoConfiguration
-	@Import({SecurityConfig.class, TestEndpointController.class})
+	@Import({SecurityConfig.class, HealthCheckController.class, TestEndpointController.class})
 	// 테스트에 필요한 MVC/Security 구성만 로딩하는 부트스트랩 설정입니다.
 	static class TestApplication {
 	}

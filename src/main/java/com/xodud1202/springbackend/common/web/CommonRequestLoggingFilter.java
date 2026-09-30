@@ -9,7 +9,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -47,7 +46,7 @@ public class CommonRequestLoggingFilter extends OncePerRequestFilter {
 			// 실제 요청 처리는 다음 필터와 컨트롤러에 위임합니다.
 			filterChain.doFilter(request, response);
 		} finally {
-			// 응답 상태와 처리시간을 함께 기록해 운영 추적성을 확보합니다.
+			// 본문 값은 로그에서 제외하고 응답 상태와 처리시간을 함께 기록합니다.
 			long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
 			log.info(
 				"HTTP 요청 ip={} method={} path={} status={} durationMs={}",
@@ -74,20 +73,20 @@ public class CommonRequestLoggingFilter extends OncePerRequestFilter {
 		return request == null ? "" : safeValue(request.getRemoteAddr());
 	}
 
-	// 요청 URI와 마스킹된 쿼리스트링을 합쳐 로그용 경로 문자열을 만듭니다.
+	// 요청 URI와 원본 쿼리스트링을 합쳐 로그용 경로 문자열을 만듭니다.
 	String buildLoggedRequestTarget(HttpServletRequest request) {
 		// 요청 자체가 없으면 빈 문자열을 반환합니다.
 		if (request == null) {
 			return "";
 		}
 
-		// 경로는 그대로 두고 쿼리값만 마스킹합니다.
+		// 쿼리값과 인코딩을 변경하지 않고 요청받은 문자열 그대로 기록합니다.
 		String requestUri = safeValue(request.getRequestURI());
-		String sanitizedQueryString = sanitizeQueryString(request.getQueryString());
-		if (sanitizedQueryString.isEmpty()) {
+		String queryString = request.getQueryString();
+		if (queryString == null || queryString.isBlank()) {
 			return requestUri;
 		}
-		return requestUri + "?" + sanitizedQueryString;
+		return requestUri + "?" + queryString;
 	}
 
 	// 전달 헤더 문자열에서 첫 번째 유효 IP만 추출합니다.
@@ -106,40 +105,6 @@ public class CommonRequestLoggingFilter extends OncePerRequestFilter {
 			return normalizedToken;
 		}
 		return "";
-	}
-
-	// 쿼리스트링 값을 모두 마스킹해 로그용 문자열로 정리합니다.
-	private String sanitizeQueryString(String queryString) {
-		// 쿼리스트링이 없으면 빈 문자열을 반환합니다.
-		if (queryString == null || queryString.isBlank()) {
-			return "";
-		}
-
-		// 각 쿼리 항목의 값만 가리고 키는 유지합니다.
-		List<String> sanitizedTokenList = new ArrayList<>();
-		for (String queryToken : queryString.split("&")) {
-			String sanitizedToken = sanitizeQueryToken(queryToken);
-			if (!sanitizedToken.isEmpty()) {
-				sanitizedTokenList.add(sanitizedToken);
-			}
-		}
-		return String.join("&", sanitizedTokenList);
-	}
-
-	// 개별 쿼리 항목에서 값만 마스킹하고 키는 유지합니다.
-	private String sanitizeQueryToken(String queryToken) {
-		// 빈 토큰은 로그에 남기지 않습니다.
-		if (queryToken == null || queryToken.isBlank()) {
-			return "";
-		}
-
-		// key=value 형태면 value만 마스킹하고 key만 있는 경우는 그대로 남깁니다.
-		int separatorIndex = queryToken.indexOf('=');
-		if (separatorIndex < 0) {
-			return queryToken.trim();
-		}
-		String key = queryToken.substring(0, separatorIndex).trim();
-		return key.isEmpty() ? "" : key + "=*";
 	}
 
 	// null 문자열을 빈 문자열로 보정합니다.

@@ -33,6 +33,8 @@ public class SecurityConfig {
 
 	private static final String[] PUBLIC_PATTERNS = {
 		"/hello",
+		// 외부 상태 확인 요청을 위해 고정 응답만 제공하는 헬스체크 경로를 공개합니다.
+		"/healthcheck",
 		"/shop/login",
 		"/api/backoffice/login",
 		"/api/backoffice/logout",
