@@ -48,6 +48,7 @@ public class SecurityConfig {
 		"/api/upload/image",
 		"/api/upload/education-logo",
 		"/api/upload/brand-logo",
+		"/api/news/daily/batches", "/api/news/daily/batches/**", "/api/news/daily/source", "/api/news/mcp",
 		"/api/news/refresh/file"
 	};
 	private static final String[] CONTROLLER_AUTH_OR_PUBLIC_PATTERNS = {

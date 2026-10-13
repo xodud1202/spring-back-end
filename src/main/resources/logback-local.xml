@@ -53,4 +53,6 @@
         <appender-ref ref="CONSOLE"/>
         <appender-ref ref="ROLLING"/>
     </root>
+    <!-- Daily summaries must not appear in MyBatis parameter/result DEBUG logs. -->
+    <logger name="com.xodud1202.springbackend.mapper.NewsDailyMapper" level="WARN"/>
 </configuration>

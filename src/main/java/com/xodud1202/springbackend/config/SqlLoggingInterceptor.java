@@ -83,10 +83,10 @@ public class SqlLoggingInterceptor implements Interceptor {
 					String propertyName = parameterMapping.getProperty();
 					if (metaObject.hasGetter(propertyName)) {
 						Object obj = metaObject.getValue(propertyName);
-						formattedSql = replaceNextParameter(formattedSql, getParameterValue(obj, exposeParameterValues));
+						formattedSql = replaceNextParameter(formattedSql, getParameterValue(obj, exposeParameterValues && !propertyName.endsWith("newsContent")));
 					} else if (boundSql.hasAdditionalParameter(propertyName)) {
 						Object obj = boundSql.getAdditionalParameter(propertyName);
-						formattedSql = replaceNextParameter(formattedSql, getParameterValue(obj, exposeParameterValues));
+						formattedSql = replaceNextParameter(formattedSql, getParameterValue(obj, exposeParameterValues && !propertyName.endsWith("newsContent")));
 					}
 				}
 			}

@@ -1,0 +1,107 @@
+{
+  "yyyymmdd": "20261013",
+  "requestId": "demo-20261013-001",
+  "sourceGeneratedAt": "2026-10-13 09:12:00",
+  "articles": [
+    {
+      "categoryNm": "사회",
+      "dispOrd": 1,
+      "newsContent": "로컬 테스트용 자리표시자 1. 실제 뉴스가 아니며 운영 저장에 사용하지 마세요."
+    },
+    {
+      "categoryNm": "사회",
+      "dispOrd": 2,
+      "newsContent": "로컬 테스트용 자리표시자 2. 실제 뉴스가 아니며 운영 저장에 사용하지 마세요."
+    },
+    {
+      "categoryNm": "사회",
+      "dispOrd": 3,
+      "newsContent": "로컬 테스트용 자리표시자 3. 실제 뉴스가 아니며 운영 저장에 사용하지 마세요."
+    },
+    {
+      "categoryNm": "사회",
+      "dispOrd": 4,
+      "newsContent": "로컬 테스트용 자리표시자 4. 실제 뉴스가 아니며 운영 저장에 사용하지 마세요."
+    },
+    {
+      "categoryNm": "경제",
+      "dispOrd": 5,
+      "newsContent": "로컬 테스트용 자리표시자 5. 실제 뉴스가 아니며 운영 저장에 사용하지 마세요."
+    },
+    {
+      "categoryNm": "경제",
+      "dispOrd": 6,
+      "newsContent": "로컬 테스트용 자리표시자 6. 실제 뉴스가 아니며 운영 저장에 사용하지 마세요."
+    },
+    {
+      "categoryNm": "경제",
+      "dispOrd": 7,
+      "newsContent": "로컬 테스트용 자리표시자 7. 실제 뉴스가 아니며 운영 저장에 사용하지 마세요."
+    },
+    {
+      "categoryNm": "경제",
+      "dispOrd": 8,
+      "newsContent": "로컬 테스트용 자리표시자 8. 실제 뉴스가 아니며 운영 저장에 사용하지 마세요."
+    },
+    {
+      "categoryNm": "국제",
+      "dispOrd": 9,
+      "newsContent": "로컬 테스트용 자리표시자 9. 실제 뉴스가 아니며 운영 저장에 사용하지 마세요."
+    },
+    {
+      "categoryNm": "국제",
+      "dispOrd": 10,
+      "newsContent": "로컬 테스트용 자리표시자 10. 실제 뉴스가 아니며 운영 저장에 사용하지 마세요."
+    },
+    {
+      "categoryNm": "국제",
+      "dispOrd": 11,
+      "newsContent": "로컬 테스트용 자리표시자 11. 실제 뉴스가 아니며 운영 저장에 사용하지 마세요."
+    },
+    {
+      "categoryNm": "국제",
+      "dispOrd": 12,
+      "newsContent": "로컬 테스트용 자리표시자 12. 실제 뉴스가 아니며 운영 저장에 사용하지 마세요."
+    },
+    {
+      "categoryNm": "정치",
+      "dispOrd": 13,
+      "newsContent": "로컬 테스트용 자리표시자 13. 실제 뉴스가 아니며 운영 저장에 사용하지 마세요."
+    },
+    {
+      "categoryNm": "정치",
+      "dispOrd": 14,
+      "newsContent": "로컬 테스트용 자리표시자 14. 실제 뉴스가 아니며 운영 저장에 사용하지 마세요."
+    },
+    {
+      "categoryNm": "정치",
+      "dispOrd": 15,
+      "newsContent": "로컬 테스트용 자리표시자 15. 실제 뉴스가 아니며 운영 저장에 사용하지 마세요."
+    },
+    {
+      "categoryNm": "정치",
+      "dispOrd": 16,
+      "newsContent": "로컬 테스트용 자리표시자 16. 실제 뉴스가 아니며 운영 저장에 사용하지 마세요."
+    },
+    {
+      "categoryNm": "정치",
+      "dispOrd": 17,
+      "newsContent": "로컬 테스트용 자리표시자 17. 실제 뉴스가 아니며 운영 저장에 사용하지 마세요."
+    },
+    {
+      "categoryNm": "정치",
+      "dispOrd": 18,
+      "newsContent": "로컬 테스트용 자리표시자 18. 실제 뉴스가 아니며 운영 저장에 사용하지 마세요."
+    },
+    {
+      "categoryNm": "스포츠",
+      "dispOrd": 19,
+      "newsContent": "로컬 테스트용 자리표시자 19. 실제 뉴스가 아니며 운영 저장에 사용하지 마세요."
+    },
+    {
+      "categoryNm": "날씨",
+      "dispOrd": 20,
+      "newsContent": "로컬 테스트용 자리표시자 20. 실제 뉴스가 아니며 운영 저장에 사용하지 마세요."
+    }
+  ]
+}

@@ -11,3 +11,7 @@
 - 서비스, 매퍼, DTO, 보조 타입, 테스트는 도메인 책임 기준으로 관리한다.
 - 공통 테이블 조회는 기능별 중복 쿼리보다 도메인 공용 매퍼 재사용을 우선한다.
 - 배송비 계산 기준은 `../../AGENTS/references/DELIVERY_FEE.md`를 따른다.
+
+### 일일 뉴스 요약
+- 원자적 묶음 저장, 조회, MCP 사용 및 운영 연결 조건: [news-daily-api.md](news-daily-api.md)
+- 자동 실행하지 않는 보조 테이블 제안: [news-daily-migration-proposal.sql](news-daily-migration-proposal.sql)

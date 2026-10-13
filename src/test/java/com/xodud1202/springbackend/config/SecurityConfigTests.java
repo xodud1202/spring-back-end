@@ -40,6 +40,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 // Spring Security 경로 보호 정책을 검증합니다.
 class SecurityConfigTests {
+    @Test
+    void dailyWriteStatusSourceAndMcpRequireAuthentication() throws Exception {
+        mockMvc.perform(post("/api/news/daily/batches").contentType("application/json").content("{}")).andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/news/daily/batches/start").contentType("application/json").content("{}")).andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/news/daily/batches/fail").contentType("application/json").content("{}")).andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/news/daily/batches/status")).andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/news/daily/source")).andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/news/mcp").contentType("application/json").content("{}")).andExpect(status().isForbidden());
+    }
 	@Autowired
 	private MockMvc mockMvc;
 

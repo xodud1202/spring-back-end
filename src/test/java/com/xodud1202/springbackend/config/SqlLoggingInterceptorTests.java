@@ -13,6 +13,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 // MyBatis SQL 로그 인터셉터의 프로필별 파라미터 노출 정책을 확인합니다.
 class SqlLoggingInterceptorTests {
+    @Test
+    void articleBodyIsMaskedEvenInLocalProfile() {
+        SqlLoggingInterceptor interceptor=new SqlLoggingInterceptor(createEnvironment("local"));
+        Configuration configuration=new Configuration();
+        BoundSql sql=new BoundSql(configuration,"INSERT INTO NEWS_DAILY(NEWS_CONTENT) VALUES(?)",
+            List.of(new ParameterMapping.Builder(configuration,"article.newsContent",String.class).build()),
+            java.util.Map.of("article",java.util.Map.of("newsContent","DO_NOT_LOG_ARTICLE_BODY")));
+        assertThat(interceptor.getSql(configuration,sql,true)).contains("[MASKED]").doesNotContain("DO_NOT_LOG_ARTICLE_BODY");
+    }
+
 
 	@Test
 	@DisplayName("운영 프로필 SQL 로그는 파라미터 원문을 마스킹한다")
