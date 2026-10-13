@@ -11,6 +11,8 @@ public class WorkStockAccountHistoryResponseVO {
 	private List<WorkStockAccountHistoryValueRowVO> summaryRowList;
 	private List<WorkStockAccountHistoryAccountGroupVO> accountGroupList;
 	private List<WorkStockAccountDailyHistoryRowVO> historyRowList;
+	// 이력 표의 표시 기준과 페이지에 영향을 받지 않는 전체 그래프 원천입니다.
+	private List<WorkStockAccountProfitGraphPointVO> profitGraphPointList;
 	private Integer historyTotalCount;
 	private Integer historyPageSize;
 	private Boolean historyHasMore;

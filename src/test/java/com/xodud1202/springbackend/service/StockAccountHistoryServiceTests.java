@@ -209,6 +209,47 @@ class StockAccountHistoryServiceTests {
 	}
 
 	@Test
+	@DisplayName("손익율 그래프: 월초 보기와 50건 페이지를 넘어 전체 확인일 원천을 반환")
+	// 표의 표시 기준과 offset을 바꿔도 그래프가 전체 원천을 재사용하는지 확인합니다.
+	void getStockAccountHistory_returnsAllGraphPointsWithoutExtraQueries() {
+		stubMonthlyBoundaryHistoryRows();
+		// 월초 표의 두 번째 페이지가 비어 있어도 그래프의 52일은 유지합니다.
+		WorkStockAccountHistoryResponseVO response = stockAccountHistoryService.getStockAccountHistory(
+			List.of("STOCK_ACCOUNT_04"), 50, null, WorkStockAccountHistoryViewType.MONTH_START
+		);
+		assertEquals(0, response.getHistoryRowList().size());
+		assertEquals(52, response.getProfitGraphPointList().size());
+		assertEquals("2026-06-01", response.getProfitGraphPointList().get(0).getCheckDt());
+		assertEquals("2026-07-22", response.getProfitGraphPointList().get(51).getCheckDt());
+		assertEquals(new BigDecimal("122.20"), response.getProfitGraphPointList().get(51).getPrincipalRatio());
+		// 동일 원천을 다시 조회하는 쿼리를 추가하지 않았는지 검증합니다.
+		verify(stockAccountHistoryMapper, times(1)).getStockAccountCheckRowList(any());
+		verify(stockAccountHistoryMapper, times(1)).getDailySaleAmountList(any());
+	}
+
+	@Test
+	@DisplayName("손익율 그래프: 원금 0은 계산 불가이며 평가금 0은 0%")
+	// 기존 표의 손익 계산과 분리해 그래프의 100% 기준 공식을 검증합니다.
+	void getStockAccountHistory_handlesUndefinedAndZeroGraphRatios() {
+		stubAccountList();
+		when(stockAccountHistoryMapper.getStockAccountCheckRowList(any())).thenReturn(List.of(
+			createCheckRow(1L, "20260601", "202606", "ACCOUNT_A", 500L),
+			createCheckRow(2L, "20260602", "202606", "ACCOUNT_A", 0L),
+			createCheckRow(3L, "20260603", "202606", "ACCOUNT_A", 1500L),
+			createCheckRow(4L, "20260604", "202606", "ACCOUNT_A", 1500L)
+		));
+		when(stockAccountHistoryMapper.getDailySaleAmountList(any())).thenReturn(List.of(
+			createDailySale("20260602", 1000L), createDailySale("20260604", -2000L)
+		));
+		// 원금 0·양수·음수와 50% 수익의 평가금 비율을 확인합니다.
+		WorkStockAccountHistoryResponseVO response = stockAccountHistoryService.getStockAccountHistory(List.of(), null);
+		assertEquals(null, response.getProfitGraphPointList().get(0).getPrincipalRatio());
+		assertEquals(new BigDecimal("0.00"), response.getProfitGraphPointList().get(1).getPrincipalRatio());
+		assertEquals(new BigDecimal("150.00"), response.getProfitGraphPointList().get(2).getPrincipalRatio());
+		assertEquals(null, response.getProfitGraphPointList().get(3).getPrincipalRatio());
+	}
+
+	@Test
 	@DisplayName("입출금 내역: 선택 계좌의 최신순 목록을 50건 단위로 조회")
 	// 입출금 내역 탭의 스크롤 페이지는 51건을 조회해 다음 페이지 존재 여부를 판단합니다.
 	void getStockAccountHistory_returnsCashHistoryRowsByPage() {

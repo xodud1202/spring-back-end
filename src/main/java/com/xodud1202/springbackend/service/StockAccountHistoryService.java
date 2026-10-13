@@ -15,6 +15,7 @@ import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountHistoryValu
 import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountHistoryViewType;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountMonthlyCashAmountVO;
 import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountMonthlySaleAmountVO;
+import com.xodud1202.springbackend.domain.work.stock.WorkStockAccountProfitGraphPointVO;
 import com.xodud1202.springbackend.mapper.CommonMapper;
 import com.xodud1202.springbackend.mapper.StockAccountHistoryMapper;
 import lombok.RequiredArgsConstructor;
@@ -140,6 +141,7 @@ public class StockAccountHistoryService {
 		response.setSummaryRowList(summaryRowList);
 		response.setAccountGroupList(accountGroupList);
 		response.setHistoryRowList(pageHistoryRowList);
+		response.setProfitGraphPointList(buildProfitGraphPointList(dailyHistoryRowList));
 		response.setHistoryTotalCount(allHistoryRowList.size());
 		response.setHistoryPageSize(HISTORY_PAGE_SIZE);
 		response.setHistoryHasMore(resolvedOffset + pageHistoryRowList.size() < allHistoryRowList.size());
@@ -608,6 +610,27 @@ public class StockAccountHistoryService {
 			historyRowList.add(historyRow);
 		}
 		return historyRowList;
+	}
+
+	// 이미 계산한 전체 확인일 이력을 재사용해 추가 조회 없이 그래프 원천을 생성합니다.
+	private List<WorkStockAccountProfitGraphPointVO> buildProfitGraphPointList(List<WorkStockAccountDailyHistoryRowVO> dailyHistoryRowList) {
+		List<WorkStockAccountProfitGraphPointVO> graphPointList = new ArrayList<>();
+		// 최신순 원천을 역순으로 순회해 날짜 오름차순으로 반환합니다.
+		for (int index = dailyHistoryRowList.size() - 1; index >= 0; index--) {
+			WorkStockAccountDailyHistoryRowVO historyRow = dailyHistoryRowList.get(index);
+			long principalAmt = normalizeLong(historyRow.getPrincipalAmt());
+			long checkAmt = normalizeLong(historyRow.getCheckAmt());
+			WorkStockAccountProfitGraphPointVO point = new WorkStockAccountProfitGraphPointVO();
+			point.setCheckDt(historyRow.getCheckDt());
+			point.setPrincipalAmt(principalAmt);
+			point.setCheckAmt(checkAmt);
+			// 평가금 0은 0%이며, 원금 0 이하만 비율 계산에서 제외합니다.
+			point.setPrincipalRatio(principalAmt <= 0L ? null : BigDecimal.valueOf(checkAmt)
+				.multiply(BigDecimal.valueOf(100L))
+				.divide(BigDecimal.valueOf(principalAmt), 2, RoundingMode.HALF_UP));
+			graphPointList.add(point);
+		}
+		return graphPointList;
 	}
 
 	// 표시 기준에 따라 전체 확인일 또는 년월별 첫 번째와 마지막 확인일만 남깁니다.
