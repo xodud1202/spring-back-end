@@ -69,6 +69,12 @@ class NewsDailyServiceTests {
     }
     int count(String table) { return jdbc.queryForObject("SELECT COUNT(*) FROM news."+table,Integer.class); }
 
+    // 검증된 뉴스 전용 계정이 모든 기사와 시도에 기록되는지 실제 INSERT로 확인합니다.
+    @Test void dedicatedActorThreeIsPersistedForEveryArticle() {
+        service.save(request("actor-three"),3L);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM news.NEWS_DAILY WHERE REG_NO=3 AND UDT_NO=3",Integer.class)).isEqualTo(20);
+        assertThat(jdbc.queryForObject("SELECT REG_NO FROM news.NEWS_DAILY_BATCH",Long.class)).isEqualTo(3L);
+    }
     @Test void startIsDurableIdempotentAndOwned() {
         NewsDailyResult first=service.start(attempt("start-001"),7L);
         assertThat(first.status()).isEqualTo("PENDING"); assertThat(first.seq()).isEqualTo(1);
@@ -289,5 +295,3 @@ class NewsDailyServiceTests {
         }finally{pool.shutdownNow();pool.awaitTermination(5,TimeUnit.SECONDS);}
     }
 }
-
-

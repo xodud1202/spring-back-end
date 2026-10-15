@@ -37,7 +37,7 @@ public class NewsMcpController {
 
     @PostMapping
     public ResponseEntity<?> rpc(@RequestBody(required = false) String body, HttpServletRequest request, Authentication authentication) {
-        Long actor = NewsDailyController.actor(authentication);
+        Long actor = com.xodud1202.springbackend.security.news.NewsOAuthAccess.actor(authentication);
         if (!originAllowed(request)) return ResponseEntity.status(403).build();
         String version = request.getHeader("MCP-Protocol-Version");
         if (version != null && !VERSION.equals(version)) return ResponseEntity.badRequest().build();
@@ -68,6 +68,10 @@ public class NewsMcpController {
         if (!id.isTextual() && !id.isIntegralNumber())
             return ResponseEntity.ok(error(NullNode.instance, -32600, "Invalid id"));
         JsonNode params = message.path("params");
+        // 변경 도구는 읽기 권한 외에 명시적인 쓰기 scope가 필요합니다.
+        if ("tools/call".equals(method) && Set.of("news_attempt_start", "news_attempt_fail", "news_summary_save")
+                .contains(params.path("name").asText()))
+            com.xodud1202.springbackend.security.news.NewsOAuthAccess.requireScope(authentication, "news.write");
         try {
             Object result;
             switch (method) {
@@ -115,6 +119,13 @@ public class NewsMcpController {
         }
     }
 
+    // MVC 전역 예외 처리와 무관하게 scope 부족을 표준 HTTP 403으로 전달합니다.
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<?> insufficientScope() {
+        return ResponseEntity.status(403)
+                .header("WWW-Authenticate", "Bearer error=\"insufficient_scope\", scope=\"news.read news.write\"")
+                .body(Map.of("error", "insufficient_scope"));
+    }
     @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
     public ResponseEntity<?> parseError() {
         return ResponseEntity.badRequest().body(error(NullNode.instance, -32700, "Parse error"));
@@ -183,6 +194,7 @@ public class NewsMcpController {
     private Map<String,Object> tool(String name, String description, Map<String,?> properties, List<String> required, boolean readOnly) {
         return Map.of("name", name, "description", description,
                 "inputSchema", Map.of("type", "object", "properties", properties, "required", required, "additionalProperties", false),
+                "securitySchemes", List.of(Map.of("type", "oauth2", "scopes", readOnly ? List.of("news.read") : List.of("news.read", "news.write"))),
                 "annotations", Map.of("readOnlyHint", readOnly, "destructiveHint", false, "idempotentHint", true));
     }
 }

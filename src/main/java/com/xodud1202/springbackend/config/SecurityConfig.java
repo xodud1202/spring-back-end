@@ -48,7 +48,7 @@ public class SecurityConfig {
 		"/api/upload/image",
 		"/api/upload/education-logo",
 		"/api/upload/brand-logo",
-		"/api/news/daily/batches", "/api/news/daily/batches/**", "/api/news/daily/source", "/api/news/mcp",
+		"/api/news/daily/batches", "/api/news/daily/batches/**", "/api/news/daily/source",
 		"/api/news/refresh/file"
 	};
 	private static final String[] CONTROLLER_AUTH_OR_PUBLIC_PATTERNS = {
@@ -100,6 +100,8 @@ public class SecurityConfig {
 			.authorizeHttpRequests(authorize -> authorize
 				.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 				.requestMatchers(PUBLIC_PATTERNS).permitAll()
+                // MCP는 별도 OAuth 체인에서만 처리하며 사이트 인증으로 대체하지 않습니다.
+                .requestMatchers("/api/news/mcp", "/api/news/mcp/**").denyAll()
 				.requestMatchers(ADMIN_AUTH_REQUIRED_PATTERNS).authenticated()
 				.requestMatchers(CONTROLLER_AUTH_OR_PUBLIC_PATTERNS).permitAll()
 				.anyRequest().denyAll()
@@ -110,6 +112,13 @@ public class SecurityConfig {
 		return http.build();
 	}
 
+    // 사이트 JWT 필터가 OAuth 요청에 서블릿 필터로 중복 적용되지 않도록 합니다.
+    @Bean
+    public FilterRegistrationBean<JwtAuthenticationFilter> jwtFilterRegistration(JwtAuthenticationFilter filter) {
+        FilterRegistrationBean<JwtAuthenticationFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
 	@Bean
 	public PasswordEncoder passwordEncoder() {
 		// 비밀번호 인코더를 BCrypt로 제공합니다.

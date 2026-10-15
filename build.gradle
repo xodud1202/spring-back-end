@@ -25,6 +25,8 @@ repositories {
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-authorization-server'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-cache'
@@ -69,4 +71,13 @@ bootJar {
 bootRun {                                                                                                                
     jvmArgs "-Dfile.encoding=UTF-8", "-Dsun.jnu.encoding=UTF-8"
     systemProperty "spring.profiles.active", "local"
+}
+
+// 실제 비밀번호 입력은 Gradle 밖의 대화형 Java 콘솔에서만 수행합니다.
+tasks.register('newsOAuthAdminDistribution', Copy) {
+    dependsOn compileJava
+    from(configurations.runtimeClasspath) {
+        include 'spring-security-crypto-*.jar', 'spring-jcl-*.jar'
+    }
+    into layout.buildDirectory.dir('news-oauth-admin/lib')
 }

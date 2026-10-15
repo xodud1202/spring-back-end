@@ -75,8 +75,8 @@ async function check(name, expected, overrides = {}) {
     challenge: response.headers.get('www-authenticate') });
   return response;
 }
-await check('missing authentication', 403, { headers: { 'Content-Type': 'application/json' } });
-await check('invalid bearer', 403, { headers: { ...headers, Authorization: 'Bearer invalid-fixture' } });
+await check('missing authentication', 401, { headers: { 'Content-Type': 'application/json' } });
+await check('invalid bearer', 401, { headers: { ...headers, Authorization: 'Bearer invalid-fixture' } });
 await check('unsupported version', 400, { headers: { ...headers, 'MCP-Protocol-Version': '2099-01-01' } });
 await check('wrong Content-Type', 415, { headers: { ...headers, 'Content-Type': 'text/plain' } });
 await check('missing event-stream Accept', 406, { headers: { ...headers, Accept: 'application/json' } });
@@ -97,7 +97,7 @@ const notify = await check('write notification rejected', 400, { body: JSON.stri
 assert.equal((await notify.text()).length, 0);
 const anonymousClient = new Client({ name: 'unauthenticated-test', version: '1.0' });
 try {
-  await assert.rejects(anonymousClient.connect(new StreamableHTTPClientTransport(url)), error => error.code === 403);
+  await assert.rejects(anonymousClient.connect(new StreamableHTTPClientTransport(url)), error => error.code === 401);
 } finally { await anonymousClient.close(); }
 console.log(JSON.stringify({ sdk: '@modelcontextprotocol/sdk@1.32.1', result: 'PASS', observations }, null, 2));
 

@@ -15,3 +15,5 @@
 ### 일일 뉴스 요약
 - 원자적 묶음 저장, 조회, MCP 사용 및 운영 연결 조건: [news-daily-api.md](news-daily-api.md)
 - 자동 실행하지 않는 보조 테이블 제안: [news-daily-migration-proposal.sql](news-daily-migration-proposal.sql)
+
+- 뉴스 MCP 전용 OAuth와 운영 설정 절차: [news-oauth.md](news-oauth.md)

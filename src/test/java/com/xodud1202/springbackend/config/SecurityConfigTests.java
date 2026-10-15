@@ -33,6 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(
 	classes = SecurityConfigTests.TestApplication.class,
 	properties = {
+        "spring.config.location=optional:classpath:/news-oauth-isolated.properties",
 		"security.csrf.allowed-origins[0]=http://localhost:3014",
 		"security.csrf.allowed-origins[1]=http://127.0.0.1:3014"
 	}
@@ -47,7 +48,7 @@ class SecurityConfigTests {
         mockMvc.perform(post("/api/news/daily/batches/fail").contentType("application/json").content("{}")).andExpect(status().isForbidden());
         mockMvc.perform(get("/api/news/daily/batches/status")).andExpect(status().isForbidden());
         mockMvc.perform(get("/api/news/daily/source")).andExpect(status().isForbidden());
-        mockMvc.perform(post("/api/news/mcp").contentType("application/json").content("{}")).andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/news/mcp").contentType("application/json").content("{}")).andExpect(status().isServiceUnavailable());
     }
 	@Autowired
 	private MockMvc mockMvc;
@@ -166,7 +167,7 @@ class SecurityConfigTests {
 
 	@SpringBootConfiguration
 	@EnableAutoConfiguration
-	@Import({SecurityConfig.class, HealthCheckController.class, TestEndpointController.class})
+	@Import({SecurityConfig.class, com.xodud1202.springbackend.security.news.NewsOAuthConfiguration.class, HealthCheckController.class, TestEndpointController.class})
 	// 테스트에 필요한 MVC/Security 구성만 로딩하는 부트스트랩 설정입니다.
 	static class TestApplication {
 	}

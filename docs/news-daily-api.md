@@ -2,7 +2,7 @@
 
 ## 현재 계약
 
-Spring Boot 3.5.0 / Java 21 / 기존 MyBatis·관리자 JWT를 사용합니다. 사용자 제공 최신 NEWS_DAILY 정의에 따라 요약 항목은 **categoryNm, dispOrd, newsContent**만 받습니다. 한 항목은 사건별로 여러 기사를 종합한 요약입니다. 원본 meta의 언론사 식별자는 출처 조회에만 사용합니다. 실제 운영 테이블을 조회하거나 변경하지 않았습니다.
+Spring Boot 3.5.0 / Java 21 / 기존 MyBatis를 사용합니다. REST는 기존 관리자 JWT, MCP는 전용 OAuth를 사용합니다. 사용자 제공 최신 NEWS_DAILY 정의에 따라 요약 항목은 **categoryNm, dispOrd, newsContent**만 받습니다. 한 항목은 사건별로 여러 기사를 종합한 요약입니다. 원본 meta의 언론사 식별자는 출처 조회에만 사용합니다. 실제 운영 테이블을 조회하거나 변경하지 않았습니다.
 
 **SEQ는 당일 요약 시도 번호입니다.** 요약 시작 전에 별도 짧은 트랜잭션으로 예약하며, 실패해도 번호/이력이 남습니다. 한 시도의 기사 전체는 같은 SEQ를 사용합니다.
 
@@ -20,7 +20,7 @@ Spring Boot 3.5.0 / Java 21 / 기존 MyBatis·관리자 JWT를 사용합니다. 
 | 시도 상태 | GET /api/news/daily/batches/status?yyyymmdd=20261013&requestId=demo-20261013-001 | 동일 사용자 |
 | 최신 완료 | GET /api/news/daily/latest?yyyymmdd=20261013 | 공개 |
 | 원본 meta/shard | GET /api/news/daily/source | 기존 관리자 Bearer JWT |
-| MCP | POST /api/news/mcp | 기존 관리자 Bearer JWT |
+| MCP | POST /api/news/mcp | 전용 OAuth access token (news.read / 변경 도구는 news.write 추가) |
 
 REG_NO/UDT_NO는 인증 principal의 USR_NO에서 가져옵니다. 클라이언트 감사번호를 사용하지 않습니다. 기존 authenticated 정책을 재사용하며 새로운 역할·계정·비밀키를 만들지 않습니다. 무인증은 기존 필터에서 403입니다. 다른 사용자의 상태 조회는 NOT_FOUND, 변경 시도는 409입니다.
 
@@ -102,13 +102,15 @@ MCP도 같은 서비스 검증을 사용하며 result.isError=true, result.conte
 
 ## MCP 사용 / 원본 경계
 
+최초 연결은 [전용 OAuth 안내](news-oauth.md)를 따릅니다. news.oauth.enabled 기본값은 false이며 비활성 MCP는 503을 반환합니다. 기존 사이트 JWT로 MCP를 호출할 수 없습니다.
+
 지원: 2025-06-18 stateless Streamable HTTP JSON 응답. 요청 헤더:
 
 ```text
 Content-Type: application/json
 Accept: application/json, text/event-stream
 MCP-Protocol-Version: 2025-06-18
-Authorization: Bearer <existing access token>
+Authorization: Bearer <news OAuth access token>
 ```
 
 initialize → notifications/initialized → tools/list → tools/call 순서입니다. 초기화 후 협상 버전 헤더가 필수입니다.
@@ -142,6 +144,7 @@ node-batch 소스 기준 generatedAt은 KST 수집 시작시각이며 07시 고�
 | news.NEWS_DAILY_SEQUENCE | 날짜별 PK 잠금 행과 마지막 예약 시도 SEQ |
 | news.NEWS_DAILY_BATCH | 모든 예약 시도: PENDING/COMPLETED/FAILED, requestId, 소유자, 원본시각, 시작/종료시각, 완료 지문/기사 수, 실패 코드 |
 | news.daily.enabled | 기본 false. true일 때 REST/MCP 활성화 |
+| news.oauth.enabled | 기본 false. 전용 OAuth 준비·승인 후 활성화 |
 | news.mcp.allowed-origins | 기본 빈 문자열. 쉼표 구분 정확한 Origin 허용 목록 |
 | server.address | 로컬 시험은 127.0.0.1 |
 

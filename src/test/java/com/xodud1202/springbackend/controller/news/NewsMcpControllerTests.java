@@ -18,13 +18,16 @@ class NewsMcpControllerTests {
     private NewsDailyService daily;
     private NewsSourceService source;
     private MockMvc mvc;
-    private UsernamePasswordAuthenticationToken auth;
+    private org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthentication auth;
 
     @BeforeEach void setup() {
         daily=mock(NewsDailyService.class); source=mock(NewsSourceService.class);
         mvc=MockMvcBuilders.standaloneSetup(new NewsMcpController(daily,source,json,"https://allowed.example")).build();
-        UserBaseEntity user=new UserBaseEntity(); user.setUsrNo(42L);
-        auth=new UsernamePasswordAuthenticationToken(user,null,user.getAuthorities());
+        java.util.List<org.springframework.security.core.GrantedAuthority> authorities=List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("SCOPE_news.read"),
+            new org.springframework.security.core.authority.SimpleGrantedAuthority("SCOPE_news.write"));
+        var principal=new org.springframework.security.oauth2.core.DefaultOAuth2AuthenticatedPrincipal("fixture",Map.of("news_actor",42L),authorities);
+        auth=new org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthentication(principal,
+            new org.springframework.security.oauth2.core.OAuth2AccessToken(org.springframework.security.oauth2.core.OAuth2AccessToken.TokenType.BEARER,"fixture",java.time.Instant.now(),java.time.Instant.now().plusSeconds(60)),authorities);
     }
     private ResultActions rpc(String body) throws Exception {
         return mvc.perform(post("/api/news/mcp").principal(auth).contentType("application/json")

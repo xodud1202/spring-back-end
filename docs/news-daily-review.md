@@ -12,12 +12,12 @@ H2는 MySQL InnoDB와 동일하지 않습니다. 실제 MySQL 격리수준/잠�
 
 ## 실제 SDK
 
-공식 @modelcontextprotocol/sdk 1.32.1 / Node 22.16.0으로 실제 embedded Tomcat의 127.0.0.1 임의 포트에 접속합니다. 운영 SecurityConfig/JwtAuthenticationFilter/NewsMcpController를 쓰되 JWT 검증·사용자 조회·서비스 외부 IO는 대역입니다. 암호 검증·운영 JWT·운영 DB 연결 완료를 뜻하지 않습니다.
+공식 @modelcontextprotocol/sdk 1.32.1 / Node 22.16.0으로 실제 embedded Tomcat의 127.0.0.1 임의 포트에 접속합니다. 운영 OAuth Resource Server 체인/NewsMcpController를 쓰되 이 SDK 테스트의 토큰 introspection·서비스 외부 IO는 대역입니다. 실제 OAuth 발급·갱신·철회는 별도 NewsOAuthFlowTests에서 표준 서버와 H2로 검증합니다. 암호 검증·운영 JWT·운영 DB 연결 완료를 뜻하지 않습니다.
 
 - SDK 2025-11-25 제안 → 서버 2025-06-18 협상.
 - initialize 200 application/json, initialized 알림 202 빈 응답.
 - tools/list의 5개 도구, tools/call 원본/시작/실패/저장/상태 및 길이 상세 오류 파싱.
-- ping, GET SSE/DELETE 405, 미인증/잘못된 Bearer 403(WWW-Authenticate 없음).
+- ping, GET SSE/DELETE 405, 미인증/잘못된 Bearer 401(resource_metadata challenge 포함).
 - 미지원 버전/협상 후 헤더 누락 400, 잘못된 Content-Type 415, Accept 누락/q=0은 406, Origin 거절 403.
 - 잘못된 JSON/후행 토큰 400/-32700, JSON-RPC batch -32600, id 없는 저장 알림 거절.
 
@@ -37,20 +37,14 @@ $env:NEWS_MCP_SDK_TEST='true'
 
 SDK는 test harness의 devDependency이며 전역 CLI/서버 런타임 설치가 아닙니다. SDK HTTP 테스트는 NEWS_MCP_SDK_TEST=true로 opt-in입니다.
 
-## ChatGPT OAuth 연결: 필요한 최소 다음 단계
+## ChatGPT OAuth 연결
 
-**현재 관리자 JWT를 직접 전달하는 MCP 연결과 ChatGPT 사용자의 OAuth 계정 연결은 다릅니다.** 후자는 구현되지 않았습니다. 현재 403 응답에는 OAuth 발견 challenge가 없습니다.
-
-1. 사용할 기존 OAuth/OIDC 공급자와 뉴스 읽기/쓰기 권한·기존 USR_NO 매핑을 결정하고 승인받습니다. 임의 새 인증 서버/자격증명은 만들지 않습니다.
-2. 보호 리소스 메타데이터와 공급자 discovery, authorization/token endpoint, authorization-code + PKCE S256를 구성합니다. 클라이언트 등록 방식(CIMD/DCR/사전 등록)과 실제 연결 화면의 redirect URI를 확정합니다.
-3. 토큰 issuer/audience/만료/scope 검증, 최소 권한 도구 scope, 사용자 매핑 및 갱신/폐기 정책을 구현·검증합니다. 필요한 경우 MCP 경로 전용 401 WWW-Authenticate resource_metadata 및 도구 인증 메타데이터를 승인된 범위에서 추가합니다.
-4. DDL/실제 MySQL 검증 후 HTTPS 테스트 환경에 승인받아 배포하고 ChatGPT 연결에서 로그인·동의·읽기·쓰기·토큰 만료/권한 거절을 검증합니다. 그 후 운영 적용을 별도 승인받습니다.
-
-이 항목들은 [OpenAI 공식 인증 문서](https://developers.openai.com/plugins/build/auth)에 근거한 다음 작업 범위입니다. 계정별 기능 접근 가능 여부 및 정확한 callback URI는 연결 시 실제 UI/공급자 설정으로 확인해야 합니다. 현재 구현이나 이 문서 작성만으로 연결이 완료되지 않습니다.
-
-운영 DB/DDL/배포/방화벽/계정 연결/인증 생성/push/OCI CLI 설치는 계속 미실행입니다.
-
-
+2026-10-15 변경으로 전용 Spring Authorization Server/Resource Server를 구현했습니다.
+현재 인증, 안전한 비밀번호 설정, 승인 수명, DDL, 활성화 절차는 [뉴스 OAuth 안내](news-oauth.md)를 따릅니다.
+아래 2026-10-13 실행 수치는 이전 구현 검증 기록입니다. 최신 검증 결과는 OAuth 안내에 별도로 기록합니다.
+운영 계정/자격/DDL/배포/연결/commit/push는 실행하지 않았습니다.
 ## 최종 실행 결과
 
 2026-10-13: 관련 테스트 71개, 실패 0, 오류 0, 건너뜀 0. compileJava/processResources 및 build -x test 성공. 공식 SDK HTTP 테스트도 포함했습니다. 테스트 결과 XML과 SDK 관측 기록은 build/test-results/test 및 build/reports/news-mcp-sdk-client.json에 있습니다.
+
+2026-10-15: 전용 OAuth 구현 후 지정 JDK 21.0.9+10으로 전체 292개 중 290개 통과, 실패 0, 제외 2. OAuth 13개 및 공식 SDK HTTP 검증 포함. build 성공. 상세 조건은 news-oauth.md 참고.
