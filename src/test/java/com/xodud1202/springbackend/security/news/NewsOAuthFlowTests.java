@@ -165,6 +165,20 @@ class NewsOAuthFlowTests {
             .header("MCP-Protocol-Version","2025-06-18").header("Accept","application/json, text/event-stream")
             .contentType("application/json").content(body));
     }
+    @Test void latestUsesReadScopeAndRejectsMissingInvalidOrWriteOnlyToken() throws Exception {
+        String body="{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"news_daily_latest\",\"arguments\":{\"yyyymmdd\":\"20261015\"}}}";
+        when(daily.latest("20261015")).thenReturn(new com.xodud1202.springbackend.domain.news.NewsDailyResult("EMPTY","20261015",null,null,null,List.of()));
+        rpc(tokens("news.read").path("access_token").asText(),body)
+            .andExpect(status().isOk()).andExpect(jsonPath("$.result.isError").value(false));
+        rpc(tokens("news.write").path("access_token").asText(),body).andExpect(status().isForbidden());
+        rpc("invalid-token",body).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/news/mcp").secure(true).contentType("application/json")
+            .header("Accept","application/json, text/event-stream").header("MCP-Protocol-Version","2025-06-18").content(body))
+            .andExpect(status().isUnauthorized());
+        verify(daily,times(1)).latest("20261015");
+        verifyNoMoreInteractions(daily);
+    }
+
     @Test void discoveryAndChallengeDoNotRequireSiteLogin() throws Exception {
         mvc.perform(get("/.well-known/oauth-protected-resource/api/news/mcp").secure(true)).andExpect(status().isOk())
             .andExpect(jsonPath("$.resource").value(RESOURCE));
@@ -177,7 +191,7 @@ class NewsOAuthFlowTests {
     @Test void completeFlowPreservesActorAndRefreshRotationAndRevokesWholeGrant() throws Exception {
         JsonNode token=tokens("news.read news.write");
         rpc(token.path("access_token").asText(),"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}")
-            .andExpect(status().isOk()).andExpect(jsonPath("$.result.tools.length()").value(5));
+            .andExpect(status().isOk()).andExpect(jsonPath("$.result.tools.length()").value(6));
         rpc(token.path("access_token").asText(),"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{\"name\":\"news_save_status\",\"arguments\":{\"yyyymmdd\":\"20261015\",\"requestId\":\"request-test\"}}}")
             .andExpect(status().isOk());
         verify(daily).status("20261015","request-test",3L);

@@ -86,13 +86,14 @@ public class NewsMcpController {
                 case "tools/list" -> result = Map.of("tools", tools());
                 case "tools/call" -> {
                     String name = params.path("name").asText();
-                    if (!Set.of("news_source", "news_attempt_start", "news_attempt_fail", "news_summary_save", "news_save_status").contains(name))
+                    if (!Set.of("news_source", "news_attempt_start", "news_attempt_fail", "news_summary_save", "news_save_status", "news_daily_latest").contains(name))
                         return ResponseEntity.ok(error(id, -32602, "Unknown tool"));
                     JsonNode args = params.path("arguments");
                     if (!args.isObject()) throw new IllegalArgumentException("arguments must be an object");
                     try {
                         Object value = switch (name) {
                             case "news_source" -> source.read(optional(args, "pressId"), optional(args, "expectedGeneratedAt"));
+                            case "news_daily_latest" -> daily.latest(required(args, "yyyymmdd"));
                             case "news_save_status" -> daily.status(required(args, "yyyymmdd"), required(args, "requestId"), actor);
                             case "news_attempt_start" -> daily.start(json.readerFor(NewsDailyAttemptRequest.class).with(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).readValue(args), actor);
                             case "news_attempt_fail" -> daily.fail(json.readerFor(NewsDailyFailRequest.class).with(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).readValue(args), actor);
@@ -106,7 +107,9 @@ public class NewsMcpController {
                         result = content(Map.of("message", ex.getMessage()), true);
                     } catch (Exception ex) {
                         // No SQL, credentials or upstream response bodies in tool errors.
-                        result = content(Map.of("message", "처리 실패. 저장상태를 확인한 후 같은 requestId로 재시도하세요."), true);
+                        result = content(Map.of("message", "news_daily_latest".equals(name)
+                                ? "완료 요약 조회 실패. 없음으로 판단하지 말고 조회를 다시 시도하세요."
+                                : "처리 실패. 저장상태를 확인한 후 같은 requestId로 재시도하세요."), true);
                     }
                 }
                 default -> { return ResponseEntity.ok(error(id, -32601, "Method not found")); }
@@ -189,7 +192,9 @@ public class NewsMcpController {
                 "pressId", Map.of("type", "string"), "expectedGeneratedAt", Map.of("type", "string")), List.of(), true),
             tool("news_summary_save", "예약 시도에 사건별 여러 기사를 종합한 요약 20~25개 전체 저장. 미예약이면 먼저 예약. 완료 재시도는 멱등, 실패한 시도는 새 키 필요. 800자 초과는 전체 미저장.", save, List.copyOf(save.keySet()), false),
             tool("news_save_status", "자신의 시도 상태 PENDING/COMPLETED/FAILED 조회. NOT_FOUND는 미예약 또는 접근권한 없음. 네트워크 단절로 실패를 추정하지 마세요.", Map.of(
-                "yyyymmdd", Map.of("type", "string"), "requestId", Map.of("type", "string")), List.of("yyyymmdd", "requestId"), true));
+                "yyyymmdd", Map.of("type", "string"), "requestId", Map.of("type", "string")), List.of("yyyymmdd", "requestId"), true),
+            tool("news_daily_latest", "지정 날짜의 최신 COMPLETED 요약 조회. EMPTY만 완료 없음이며 오류는 없음이 아닙니다. 시작 및 저장 직전 중복 확인에 사용.",
+                Map.of("yyyymmdd", save.get("yyyymmdd")), List.of("yyyymmdd"), true));
     }
     private Map<String,Object> tool(String name, String description, Map<String,?> properties, List<String> required, boolean readOnly) {
         return Map.of("name", name, "description", description,
