@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.ResolverStyle;
 import java.util.*;
@@ -141,6 +142,26 @@ public class NewsDailyService {
         validateDate(date);
         NewsDailyBatch batch = mapper.latest(date);
         return batch == null ? new NewsDailyResult("EMPTY", date, null, null, null, List.of()) : result(batch);
+    }
+
+    /** 읽기 화면은 시도 이력과 별개로 실제 저장된 뉴스의 최대 시퀀스를 노출합니다. */
+    @Transactional(readOnly = true)
+    public NewsDailySummary summary(String date) {
+        // 기존 날짜 검증과 기사 정렬 쿼리를 재사용해 날짜별 최신 묶음을 조회합니다.
+        validateDate(date);
+        int seq = mapper.existingMax(date);
+        return seq == 0 ? new NewsDailySummary(date, null, List.of())
+                : new NewsDailySummary(date, seq, mapper.articles(date, seq));
+    }
+
+    /** 한국 시간 기준 최근 7일에서 실제 뉴스가 존재하는 날짜를 조회합니다. */
+    @Transactional(readOnly = true)
+    public NewsDailySummaryWeek summaryWeek() {
+        // 서버 기본 시간대에 영향받지 않도록 날짜 경계를 한국 시간으로 고정합니다.
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Seoul"));
+        String toDate = today.format(DateTimeFormatter.BASIC_ISO_DATE);
+        String fromDate = today.minusDays(6).format(DateTimeFormatter.BASIC_ISO_DATE);
+        return new NewsDailySummaryWeek(toDate, mapper.summaryDates(fromDate, toDate));
     }
 
     @Transactional(readOnly = true)

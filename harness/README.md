@@ -25,3 +25,9 @@
 - 검증 명령은 위 기본 명령 순서를 그대로 사용한다.
 - 공통 체크리스트는 `../../AGENTS/harness/checklists/backend-api-change.md`와 `../../AGENTS/harness/checklists/db-change.md`를 함께 참고한다.
 - DB 의존이나 환경 제약으로 `test` 전체를 실행하지 못하면, 미실행 사유와 영향 범위를 결과 보고에 반드시 남긴다.
+
+### 일일 뉴스 요약과 로컬 DB 터널
+- `NewsDailyServiceTests`는 실제 MyBatis 쿼리로 날짜별 최대 시퀀스, 노출 순서, 빈 날짜, 최근 7일의 포함 경계를 검증합니다.
+- `NewsDailyControllerTests`는 요약 공개 조회, 캐시 금지, 잘못되거나 누락된 날짜의 400 응답을 검증합니다.
+- `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start-local.ps1 -CheckOnly`로 기존 터널 재사용을 확인합니다.
+- 키 파일과 별도 로컬 포트를 지정한 `-CheckOnly`로 터널 생성·자동 종료를 확인합니다. 접속 절차와 IDE 실행은 `../docs/local-ssh-db.md`를 따릅니다.

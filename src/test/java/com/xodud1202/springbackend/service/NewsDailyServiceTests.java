@@ -69,6 +69,36 @@ class NewsDailyServiceTests {
     }
     int count(String table) { return jdbc.queryForObject("SELECT COUNT(*) FROM news."+table,Integer.class); }
 
+    /** 읽기 화면은 완료 이력 유무와 무관하게 해당 날짜의 최대 시퀀스만 순서대로 반환합니다. */
+    @Test void summaryReadsHighestStoredSequenceInDisplayOrder() {
+        // 다른 날짜의 큰 시퀀스와 이전 묶음을 섞어 날짜·시퀀스 경계를 확인합니다.
+        jdbc.update("INSERT INTO news.NEWS_DAILY(YYYYMMDD,SEQ,DISP_ORD,NEWS_CONTENT) VALUES('20261016',3,1,'이전 요약')");
+        jdbc.update("INSERT INTO news.NEWS_DAILY(YYYYMMDD,SEQ,DISP_ORD,NEWS_CONTENT) VALUES('20261015',99,1,'다른 날짜')");
+        jdbc.update("INSERT INTO news.NEWS_DAILY(YYYYMMDD,SEQ,DISP_ORD,NEWS_CONTENT) VALUES('20261016',4,2,'두 번째')");
+        jdbc.update("INSERT INTO news.NEWS_DAILY(YYYYMMDD,SEQ,DISP_ORD,NEWS_CONTENT) VALUES('20261016',4,1,'첫 번째')");
+        NewsDailySummary summary = service.summary("20261016");
+        assertThat(summary.seq()).isEqualTo(4);
+        assertThat(summary.articles()).extracting(NewsDailyArticle::newsContent).containsExactly("첫 번째", "두 번째");
+        assertThat(service.summary("20261014").articles()).isEmpty();
+        assertThat(service.summary("20261014").seq()).isNull();
+        assertThatThrownBy(() -> service.summary("20260230")).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    /** 날짜 선택 목록은 한국 시간 기준 오늘부터 6일 전까지만 실제 데이터로 구성합니다. */
+    @Test void summaryWeekIncludesOnlySevenDaysWithNews() {
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
+        java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.BASIC_ISO_DATE;
+        // 경계 전후의 날짜를 삽입해 오래된 날짜와 미래 날짜가 제외되는지 확인합니다.
+        for (int offset : new int[]{-7, -6, -1, 0, 1}) {
+            jdbc.update("INSERT INTO news.NEWS_DAILY(YYYYMMDD,SEQ,DISP_ORD,NEWS_CONTENT) VALUES(?,1,1,'날짜 검증')",
+                    today.plusDays(offset).format(formatter));
+        }
+        NewsDailySummaryWeek week = service.summaryWeek();
+        assertThat(week.today()).isEqualTo(today.format(formatter));
+        assertThat(week.dates()).extracting(NewsDailySummaryDate::yyyymmdd).containsExactly(
+                today.minusDays(6).format(formatter), today.minusDays(1).format(formatter), today.format(formatter));
+    }
+
     // 검증된 뉴스 전용 계정이 모든 기사와 시도에 기록되는지 실제 INSERT로 확인합니다.
     @Test void dedicatedActorThreeIsPersistedForEveryArticle() {
         service.save(request("actor-three"),3L);

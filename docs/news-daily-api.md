@@ -2,7 +2,7 @@
 
 ## 현재 계약
 
-Spring Boot 3.5.0 / Java 21 / 기존 MyBatis를 사용합니다. REST는 기존 관리자 JWT, MCP는 전용 OAuth를 사용합니다. 사용자 제공 최신 NEWS_DAILY 정의에 따라 요약 항목은 **categoryNm, dispOrd, newsContent**만 받습니다. 한 항목은 사건별로 여러 기사를 종합한 요약입니다. 원본 meta의 언론사 식별자는 출처 조회에만 사용합니다. 실제 운영 테이블을 조회하거나 변경하지 않았습니다.
+Spring Boot 3.5.0 / Java 21 / 기존 MyBatis를 사용합니다. REST는 기존 관리자 JWT, MCP는 전용 OAuth를 사용합니다. 사용자 제공 최신 NEWS_DAILY 정의에 따라 요약 항목은 **categoryNm, dispOrd, newsContent**만 받습니다. 한 항목은 사건별로 여러 기사를 종합한 요약입니다. 원본 meta의 언론사 식별자는 출처 조회에만 사용합니다. 2026-10-16 읽기 화면 구현에서 실제 NEWS_DAILY 구조와 데이터를 조회했으며, 운영 데이터와 스키마는 변경하지 않았습니다.
 
 **SEQ는 당일 요약 시도 번호입니다.** 요약 시작 전에 별도 짧은 트랜잭션으로 예약하며, 실패해도 번호/이력이 남습니다. 한 시도의 기사 전체는 같은 SEQ를 사용합니다.
 
@@ -19,10 +19,20 @@ Spring Boot 3.5.0 / Java 21 / 기존 MyBatis를 사용합니다. REST는 기존 
 | 명시적 실패 | POST /api/news/daily/batches/fail | 동일 사용자 |
 | 시도 상태 | GET /api/news/daily/batches/status?yyyymmdd=20261013&requestId=demo-20261013-001 | 동일 사용자 |
 | 최신 완료 | GET /api/news/daily/latest?yyyymmdd=20261013 | 공개 |
+| 읽기 화면의 최신 저장 뉴스 | GET /api/news/daily/summary?yyyymmdd=20261016 | 공개 |
+| 최근 일주일의 뉴스 보유 날짜 | GET /api/news/daily/summary/dates | 공개 |
 | 원본 meta/shard | GET /api/news/daily/source | 기존 관리자 Bearer JWT |
 | MCP | POST /api/news/mcp | 전용 OAuth access token (news.read / 변경 도구는 news.write 추가) |
 
 REG_NO/UDT_NO는 인증 principal의 USR_NO에서 가져옵니다. 클라이언트 감사번호를 사용하지 않습니다. 기존 authenticated 정책을 재사용하며 새로운 역할·계정·비밀키를 만들지 않습니다. 무인증은 기존 필터에서 403입니다. 다른 사용자의 상태 조회는 NOT_FOUND, 변경 시도는 409입니다.
+
+## 일일 요약 읽기 화면
+
+`GET /api/news/daily/summary/dates`는 한국 시간 기준 오늘(`today`)과 최근 7일 중 뉴스가 존재하는 날짜·최대 시퀀스(`dates: [{yyyymmdd, seq}]`)를 반환합니다.
+
+`GET /api/news/daily/summary?yyyymmdd=20261016`은 해당 날짜의 실제 `NEWS_DAILY.MAX(SEQ)`만 기존 기사 조회로 읽고 `DISP_ORD` 오름차순으로 반환합니다. 응답은 `{yyyymmdd, seq, articles: [{categoryNm, dispOrd, newsContent}]}`이며 뉴스가 없으면 `seq: null`, `articles: []`입니다. 잘못되거나 누락된 날짜는 400입니다. 두 조회는 공개 API이고 `Cache-Control: no-store`를 사용합니다.
+
+기존 `/latest`는 완료 이력을 검증하는 API로 유지됩니다. 읽기 화면은 사용자가 요청한 실제 저장 데이터의 최대 시퀀스를 노출하므로 완료 이력 테이블을 조건으로 삼지 않습니다. 읽음 기록은 프론트 브라우저에 저장하며 이 API는 DB에 쓰지 않습니다.
 
 ## 시작 → 요약 → 저장
 

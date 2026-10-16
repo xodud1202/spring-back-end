@@ -60,6 +60,11 @@ public interface NewsDailyMapper {
     @Select("SELECT CATEGORY_NM, DISP_ORD, NEWS_CONTENT FROM news.NEWS_DAILY "
           + "WHERE YYYYMMDD = #{date} AND SEQ = #{seq} ORDER BY DISP_ORD")
     List<NewsDailyArticle> articles(@Param("date") String date, @Param("seq") int seq);
+
+    /** 기존 날짜·시퀀스 인덱스로 기간 내 뉴스가 있는 날짜와 최대 시퀀스를 조회합니다. */
+    @Select("SELECT YYYYMMDD, MAX(SEQ) AS SEQ FROM news.NEWS_DAILY "
+          + "WHERE YYYYMMDD BETWEEN #{fromDate} AND #{toDate} GROUP BY YYYYMMDD ORDER BY YYYYMMDD")
+    List<NewsDailySummaryDate> summaryDates(@Param("fromDate") String fromDate, @Param("toDate") String toDate);
 }
 
 

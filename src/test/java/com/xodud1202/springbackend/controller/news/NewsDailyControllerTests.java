@@ -57,6 +57,25 @@ class NewsDailyControllerTests {
         mvc.perform(post("/api/news/daily/batches").principal(auth).contentType("application/json").content("{}"))
             .andExpect(status().isConflict());
     }
+
+    /** 요약 읽기 API는 로그인 없이 날짜별 뉴스와 선택 가능한 날짜를 반환합니다. */
+    @Test void summaryAndDatesArePublicReadEndpoints() throws Exception {
+        // 인증 주체 없이 호출하고 화면에서 사용하는 응답 필드와 캐시 정책을 확인합니다.
+        when(daily.summary("20261016")).thenReturn(new com.xodud1202.springbackend.domain.news.NewsDailySummary(
+                "20261016", 4, java.util.List.of(new com.xodud1202.springbackend.domain.news.NewsDailyArticle("사회", 1, "뉴스 요약"))));
+        when(daily.summaryWeek()).thenReturn(new com.xodud1202.springbackend.domain.news.NewsDailySummaryWeek(
+                "20261016", java.util.List.of(new com.xodud1202.springbackend.domain.news.NewsDailySummaryDate("20261016", 4))));
+        mvc.perform(get("/api/news/daily/summary").param("yyyymmdd", "20261016"))
+                .andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.seq").value(4))
+                .andExpect(jsonPath("$.articles[0].newsContent").value("뉴스 요약"));
+        mvc.perform(get("/api/news/daily/summary/dates"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.today").value("20261016"))
+                .andExpect(jsonPath("$.dates[0].seq").value(4));
+        when(daily.summary("20260230")).thenThrow(new IllegalArgumentException("존재하지 않는 날짜입니다."));
+        mvc.perform(get("/api/news/daily/summary").param("yyyymmdd", "20260230")).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/news/daily/summary")).andExpect(status().isBadRequest());
+    }
 }
 
 

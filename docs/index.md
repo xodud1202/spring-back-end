@@ -13,6 +13,7 @@
 - 배송비 계산 기준은 `../../AGENTS/references/DELIVERY_FEE.md`를 따른다.
 
 ### 일일 뉴스 요약
+- SSH 터널을 통한 로컬 DB 연결과 앱 실행: [local-ssh-db.md](local-ssh-db.md)
 - 원자적 묶음 저장, 조회, MCP 사용 및 운영 연결 조건: [news-daily-api.md](news-daily-api.md)
 - 자동 실행하지 않는 보조 테이블 제안: [news-daily-migration-proposal.sql](news-daily-migration-proposal.sql)
 

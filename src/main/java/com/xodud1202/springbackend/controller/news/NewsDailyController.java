@@ -7,6 +7,7 @@ import com.xodud1202.springbackend.service.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.CacheControl;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import java.util.Map;
@@ -46,6 +47,20 @@ public class NewsDailyController {
 
     @GetMapping("/latest")
     public NewsDailyResult latest(@RequestParam String yyyymmdd) { return daily.latest(yyyymmdd); }
+
+    /** 공개 읽기 화면에 선택 날짜의 최대 시퀀스 뉴스를 반환합니다. */
+    @GetMapping("/summary")
+    public ResponseEntity<NewsDailySummary> summary(@RequestParam String yyyymmdd) {
+        // 기존 저장·시도 상태 API의 계약을 유지하고 읽기 화면의 조회를 위임합니다.
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(daily.summary(yyyymmdd));
+    }
+
+    /** 최근 일주일의 날짜 선택에 필요한 뉴스 존재 여부를 공개합니다. */
+    @GetMapping("/summary/dates")
+    public ResponseEntity<NewsDailySummaryWeek> summaryDates() {
+        // 한국 시간 기준 오늘과 선택 가능한 날짜를 함께 반환합니다.
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(daily.summaryWeek());
+    }
 
     @GetMapping("/source")
     public JsonNode source(@RequestParam(required = false) String pressId,
