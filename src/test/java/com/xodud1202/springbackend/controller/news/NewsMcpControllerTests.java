@@ -33,12 +33,54 @@ class NewsMcpControllerTests {
         return mvc.perform(post("/api/news/mcp").principal(auth).contentType("application/json")
                 .header("Accept","application/json, text/event-stream").header("MCP-Protocol-Version","2025-06-18").content(body));
     }
+    private String latestCall(String date) {
+        return "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"news_daily_latest\",\"arguments\":{\"yyyymmdd\":\""+date+"\"}}}";
+    }
+    @Test void latestCompletedAndEmptyAreNormalResults() throws Exception {
+        String today=java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE);
+        when(daily.latest(today)).thenReturn(new NewsDailyResult("COMPLETED",today,3,"manual-today","2026-10-15 17:30:00",
+                List.of(new NewsDailyArticle("사회",1,"완료된 요약"))));
+        var response=rpc(latestCall(today)).andExpect(jsonPath("$.result.isError").value(false)).andReturn();
+        JsonNode result=json.readTree(json.readTree(response.getResponse().getContentAsString()).at("/result/content/0/text").asText());
+        org.assertj.core.api.Assertions.assertThat(result.path("status").asText()).isEqualTo("COMPLETED");
+        org.assertj.core.api.Assertions.assertThat(result.path("seq").asInt()).isEqualTo(3);
+        when(daily.latest(today)).thenReturn(new NewsDailyResult("EMPTY",today,null,null,null,List.of()));
+        response=rpc(latestCall(today)).andExpect(jsonPath("$.result.isError").value(false)).andReturn();
+        result=json.readTree(json.readTree(response.getResponse().getContentAsString()).at("/result/content/0/text").asText());
+        org.assertj.core.api.Assertions.assertThat(result.path("status").asText()).isEqualTo("EMPTY");
+        org.assertj.core.api.Assertions.assertThat(result.path("articles").size()).isZero();
+        verify(daily,times(2)).latest(today);
+    }
+    @Test void latestErrorsAreNeverEmptyAndDateValidationUsesRealService() throws Exception {
+        var mapper=mock(com.xodud1202.springbackend.mapper.NewsDailyMapper.class);
+        var real=new NewsDailyService(mapper,json,mock(org.springframework.transaction.PlatformTransactionManager.class));
+        mvc=MockMvcBuilders.standaloneSetup(new NewsMcpController(real,source,json,"")).build();
+        rpc(latestCall("20260230")).andExpect(jsonPath("$.result.isError").value(true));
+        verifyNoInteractions(mapper);
+        when(mapper.latest("20261015")).thenThrow(new org.springframework.dao.DataAccessResourceFailureException("private-db-detail"));
+        var response=rpc(latestCall("20261015")).andExpect(jsonPath("$.result.isError").value(true)).andReturn();
+        org.assertj.core.api.Assertions.assertThat(response.getResponse().getContentAsString()).doesNotContain("EMPTY","private-db-detail");
+        doThrow(new IllegalStateException("private-internal-detail")).when(mapper).latest("20261015");
+        rpc(latestCall("20261015")).andExpect(jsonPath("$.result.isError").value(true));
+    }
+    @Test void latestSchemaIsReadOnlyAndRequiresDate() throws Exception {
+        rpc("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}")
+            .andExpect(jsonPath("$.result.tools[5].name").value("news_daily_latest"))
+            .andExpect(jsonPath("$.result.tools[5].annotations.readOnlyHint").value(true))
+            .andExpect(jsonPath("$.result.tools[5].inputSchema.required[0]").value("yyyymmdd"))
+            .andExpect(jsonPath("$.result.tools[5].securitySchemes[0].scopes.length()").value(1))
+            .andExpect(jsonPath("$.result.tools[5].securitySchemes[0].scopes[0]").value("news.read"));
+        rpc("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"news_daily_latest\",\"arguments\":{}}}")
+            .andExpect(jsonPath("$.result.isError").value(true));
+        verifyNoInteractions(daily);
+    }
+
     @Test void initializeListAndNotification() throws Exception {
         rpc("""
             {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}
             """).andExpect(status().isOk()).andExpect(jsonPath("$.result.protocolVersion").value("2025-06-18"));
         rpc("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}")
-                .andExpect(jsonPath("$.result.tools.length()").value(5))
+                .andExpect(jsonPath("$.result.tools.length()").value(6))
                 .andExpect(jsonPath("$.result.tools[3].name").value("news_summary_save"));
         rpc("{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}").andExpect(status().isAccepted()).andExpect(content().string(""));
         verifyNoInteractions(daily,source);

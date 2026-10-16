@@ -24,7 +24,10 @@ try {
   await client.connect(transport);
   assert.equal(client.getServerVersion().name, 'news-daily');
   const listed = await client.listTools();
-  assert.deepEqual(listed.tools.map(t => t.name), ['news_attempt_start', 'news_attempt_fail', 'news_source', 'news_summary_save', 'news_save_status']);
+  assert.deepEqual(listed.tools.map(t => t.name), ['news_attempt_start', 'news_attempt_fail', 'news_source', 'news_summary_save', 'news_save_status', 'news_daily_latest']);
+  const latest = await client.callTool({ name: 'news_daily_latest', arguments: { yyyymmdd: '20261013' } });
+  assert.equal(latest.isError, false);
+  assert.equal(JSON.parse(latest.content[0].text).status, 'EMPTY');
   const begun = await client.callTool({ name: 'news_attempt_start', arguments: {
     yyyymmdd: '20261013', requestId: 'client-test', sourceGeneratedAt: '2026-10-13 09:12:00'
   } });

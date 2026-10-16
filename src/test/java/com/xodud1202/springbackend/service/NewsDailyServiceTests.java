@@ -105,6 +105,24 @@ class NewsDailyServiceTests {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM news.NEWS_DAILY WHERE REG_NO=3 AND UDT_NO=3",Integer.class)).isEqualTo(20);
         assertThat(jdbc.queryForObject("SELECT REG_NO FROM news.NEWS_DAILY_BATCH",Long.class)).isEqualTo(3L);
     }
+    // 오늘 오후 원본도 허용하며 실패/진행 중 시도보다 최신 완료만 조회합니다.
+    @Test void latestTodaySelectsCompletedSequenceAndIgnoresPendingAndFailed() {
+        var today=java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
+        String date=today.format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE);
+        String generated=today+" 17:30:00";
+        assertThat(service.latest(date).status()).isEqualTo("EMPTY");
+        service.start(new NewsDailyAttemptRequest(date,"manual-today-01",generated),3L);
+        assertThat(service.latest(date).status()).isEqualTo("EMPTY");
+        service.save(new NewsDailySaveRequest(date,"manual-today-01",generated,request("fixture-key").articles()),3L);
+        service.save(new NewsDailySaveRequest(date,"manual-today-02",generated,request("fixture-key").articles()),3L);
+        service.start(new NewsDailyAttemptRequest(date,"manual-today-03",generated),3L);
+        service.fail(new NewsDailyFailRequest(date,"manual-today-03","SUMMARY_FAILED"),3L);
+        service.start(new NewsDailyAttemptRequest(date,"manual-today-04",generated),3L);
+        assertThat(service.latest(date).status()).isEqualTo("COMPLETED");
+        assertThat(service.latest(date).seq()).isEqualTo(2);
+        assertThat(service.latest(date).articles()).hasSize(20);
+    }
+
     @Test void startIsDurableIdempotentAndOwned() {
         NewsDailyResult first=service.start(attempt("start-001"),7L);
         assertThat(first.status()).isEqualTo("PENDING"); assertThat(first.seq()).isEqualTo(1);
