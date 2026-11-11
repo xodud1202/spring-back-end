@@ -14,8 +14,15 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+/** 게시판 조회와 관리 기능을 제공합니다. */
 public class BoardService {
 	private final BoardMapper boardMapper;
+
+	/** 게시판 구분에 해당하는 최신 공개 게시글을 반환합니다. */
+	public BoardVO getLatestVisibleBoard(String boardDivCd) {
+		// 공개 여부와 삭제 여부는 공용 게시판 조회 쿼리에서 함께 확인합니다.
+		return boardMapper.getLatestVisibleBoard(boardDivCd);
+	}
 
 	// 관리자 게시판 목록을 페이징 조건으로 조회합니다.
 	public Map<String, Object> getAdminBoardList(BoardPO param) {
