@@ -5,7 +5,8 @@ import com.xodud1202.springbackend.service.BoardService;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mybatis.spring.SqlSessionFactoryBean;
 import org.mybatis.spring.SqlSessionTemplate;
 import org.springframework.core.io.ClassPathResource;
@@ -20,7 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** 실제 게시판 매퍼 SQL부터 공개 처리방침 응답까지 검증합니다. */
+/** 실제 게시판 매퍼 SQL부터 공개 처리방침과 서비스 약관 응답까지 검증합니다. */
 class ResumeBoardControllerTests {
 	private JdbcTemplate jdbc;
 	private MockMvc mvc;
@@ -46,36 +47,39 @@ class ResumeBoardControllerTests {
 	}
 
 	/** 더 큰 번호의 비공개·삭제·다른 구분 게시글을 제외한 최신 공개 글만 반환합니다. */
-	@Test
-	void returnsLatestVisibleKkugitPrivacy() throws Exception {
+	@ParameterizedTest
+	@CsvSource({"privacy, KKUGIT_PRIVACY, KKUGIT_TERMS", "terms, KKUGIT_TERMS, KKUGIT_PRIVACY"})
+	void returnsLatestVisibleKkugitNotice(String noticeType, String boardDivCd, String otherBoardDivCd) throws Exception {
 		// 서브쿼리 없이 정렬해도 공개 조건을 먼저 적용하는지 확인합니다.
 		jdbc.update("INSERT INTO BOARD_INFO VALUES "
-			+ "(1, 'KKUGIT_PRIVACY', '이전 방침', '이전 내용', 'N', 'Y'), "
-			+ "(2, 'KKUGIT_PRIVACY', '현재 방침', '첫째 줄' || CHAR(10) || '둘째 줄', 'N', 'Y'), "
-			+ "(3, 'KKUGIT_PRIVACY', '비공개', '숨김', 'N', 'N'), "
-			+ "(4, 'KKUGIT_PRIVACY', '삭제', '삭제 내용', 'Y', 'Y'), "
-			+ "(5, 'APP_PRIVACY', '다른 방침', '다른 내용', 'N', 'Y')");
-		mvc.perform(get("/api/resume/notice/kkugit/privacy"))
+			+ "(1, ?, '이전 문서', '이전 내용', 'N', 'Y'), "
+			+ "(2, ?, '현재 문서', '첫째 줄' || CHAR(10) || '둘째 줄', 'N', 'Y'), "
+			+ "(3, ?, '비공개', '숨김', 'N', 'N'), "
+			+ "(4, ?, '삭제', '삭제 내용', 'Y', 'Y'), "
+			+ "(5, ?, '다른 문서', '다른 내용', 'N', 'Y')",
+			boardDivCd, boardDivCd, boardDivCd, boardDivCd, otherBoardDivCd);
+		mvc.perform(get("/api/resume/notice/kkugit/" + noticeType))
 			.andExpect(status().isOk())
 			.andExpect(header().string("Cache-Control", "no-store"))
 			.andExpect(jsonPath("$.boardNo").value(2))
-			.andExpect(jsonPath("$.title").value("현재 방침"))
+			.andExpect(jsonPath("$.title").value("현재 문서"))
 			.andExpect(jsonPath("$.content").value("첫째 줄\n둘째 줄"));
 	}
 
-	/** 처리방침이 없는 경우와 공개 글이 없는 경우를 모두 빈 결과로 처리합니다. */
-	@Test
-	void returnsNotFoundWithoutVisiblePrivacy() throws Exception {
+	/** 공개 문서가 없는 경우와 공개 글이 없는 경우를 모두 빈 결과로 처리합니다. */
+	@ParameterizedTest
+	@CsvSource({"privacy, KKUGIT_PRIVACY", "terms, KKUGIT_TERMS"})
+	void returnsNotFoundWithoutVisibleNotice(String noticeType, String boardDivCd) throws Exception {
 		// 빈 테이블에서도 예외 대신 캐시하지 않는 404 응답을 반환합니다.
-		mvc.perform(get("/api/resume/notice/kkugit/privacy"))
+		mvc.perform(get("/api/resume/notice/kkugit/" + noticeType))
 			.andExpect(status().isNotFound())
 			.andExpect(header().string("Cache-Control", "no-store"));
 
 		// 게시글이 있어도 삭제되었거나 비공개이면 노출하지 않습니다.
 		jdbc.update("INSERT INTO BOARD_INFO VALUES "
-			+ "(1, 'KKUGIT_PRIVACY', '비공개', '숨김', 'N', 'N'), "
-			+ "(2, 'KKUGIT_PRIVACY', '삭제', '삭제 내용', 'Y', 'Y')");
-		mvc.perform(get("/api/resume/notice/kkugit/privacy"))
+			+ "(1, ?, '비공개', '숨김', 'N', 'N'), "
+			+ "(2, ?, '삭제', '삭제 내용', 'Y', 'Y')", boardDivCd, boardDivCd);
+		mvc.perform(get("/api/resume/notice/kkugit/" + noticeType))
 			.andExpect(status().isNotFound());
 	}
 }
