@@ -35,15 +35,33 @@ class ReadingRecordMapperTests {
 			var content = "가".repeat(200);
 			mapper.insert(1L, new ReadingRecordRequest("책", "작가", "역자", date, date, content, new BigDecimal("4.5"), "소감"));
 			mapper.insert(2L, new ReadingRecordRequest("다른 독서", "다른 작가", null, null, null, null, null, null));
-			var rows = mapper.selectByOwner(1L);
+			var rows = mapper.selectByOwner(1L, null, null, null, null);
 			assertEquals(1, rows.size());
 			assertNotNull(rows.getFirst().id());
 			assertEquals("책", rows.getFirst().title());
 			assertEquals(date, rows.getFirst().startedOn());
 			assertEquals(content, rows.getFirst().content());
 			assertEquals(new BigDecimal("4.5"), rows.getFirst().rating());
-			assertEquals("다른 독서", mapper.selectByOwner(2L).getFirst().title());
-			assertTrue(mapper.selectByOwner(3L).isEmpty());
+			assertEquals("다른 독서", mapper.selectByOwner(2L, null, null, null, null).getFirst().title());
+			assertTrue(mapper.selectByOwner(3L, null, null, null, null).isEmpty());
+			long id = rows.getFirst().id();
+			assertNull(mapper.selectOne(2L, id));
+			assertEquals(0, mapper.delete(2L, id));
+			var changed = new ReadingRecordRequest("50%_책", "AUTHOR", null, date.minusDays(3), date, content, null, null);
+			assertEquals(0, mapper.update(2L, id, changed));
+			assertEquals(1, mapper.update(1L, id, changed));
+			assertEquals("50%_책", mapper.selectOne(1L, id).title());
+			assertEquals(1, mapper.selectByOwner(1L, "%_", "author", date, date).size());
+			assertTrue(mapper.selectByOwner(1L, "missing%", null, null, null).isEmpty());
+			assertTrue(mapper.selectByOwner(1L, null, null, date.plusDays(1), null).isEmpty());
+			assertTrue(mapper.selectByOwner(2L, null, null, date, null).isEmpty());
+			mapper.insert(1L, new ReadingRecordRequest("진행 중", "작가", null, date, null, null, null, null));
+			mapper.insert(1L, new ReadingRecordRequest("완료만", "작가", null, null, date, null, null, null));
+			assertEquals(3, mapper.selectByOwner(1L, null, null, date, date).size());
+			assertEquals(1, mapper.selectByOwner(1L, null, null, date.plusDays(1), null).size());
+			assertEquals(1, mapper.delete(1L, id));
+			assertNull(mapper.selectOne(1L, id));
+
 		}
 	}
 }

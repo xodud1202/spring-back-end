@@ -46,14 +46,14 @@ class WorkReadingRecordControllerTests {
 
 	@Test
 	void authenticatedUserListsAndCreatesOnlyWithOwnSessionId() throws Exception {
-		when(mapper.selectByOwner(7L)).thenReturn(List.of());
+		when(mapper.selectByOwner(7L, null, null, null, null)).thenReturn(List.of());
 		mvc.perform(get(PATH).session(session())).andExpect(status().isOk())
 			.andExpect(header().string("Cache-Control", "no-store")).andExpect(content().json("[]"));
 		String value = "가".repeat(200);
 		mvc.perform(post(PATH).session(session()).contentType(MediaType.APPLICATION_JSON)
 			.content("{\"title\":\" 책 \",\"author\":\"작가\",\"rating\":4.5,\"content\":\"" + value + "\"}"))
 			.andExpect(status().isCreated());
-		verify(mapper).selectByOwner(7L);
+		verify(mapper).selectByOwner(7L, null, null, null, null);
 		verify(mapper).insert(eq(7L), argThat(row -> row.title().equals("책")
 			&& row.rating().toPlainString().equals("4.5") && row.content().equals(value)));
 	}
@@ -79,8 +79,35 @@ class WorkReadingRecordControllerTests {
 		mvc.perform(get(PATH).cookie(new Cookie(WorkSessionPolicy.COOKIE_WORK_USER_NO, wrongKey)))
 			.andExpect(status().isUnauthorized());
 		mvc.perform(get(PATH).session(session()).param("owner", "8")).andExpect(status().isOk());
-		verify(mapper).selectByOwner(7L);
+		verify(mapper).selectByOwner(7L, null, null, null, null);
 		verifyNoMoreInteractions(mapper);
+	}
+
+	@Test
+	void validatesAndScopesDetailUpdateAndDelete() throws Exception {
+		String json = "{\"title\":\"책\",\"author\":\"작가\"}";
+		mvc.perform(get(PATH + "/42")).andExpect(status().isUnauthorized());
+		mvc.perform(put(PATH + "/42").contentType(MediaType.APPLICATION_JSON).content(json))
+			.andExpect(status().isUnauthorized());
+		mvc.perform(delete(PATH + "/42")).andExpect(status().isUnauthorized());
+		verifyNoInteractions(mapper);
+
+		mvc.perform(get(PATH).session(session()).param("from", "2026-11-20").param("to", "2026-11-19"))
+			.andExpect(status().isBadRequest());
+		mvc.perform(delete(PATH + "/0").session(session())).andExpect(status().isBadRequest());
+		verifyNoInteractions(mapper);
+
+		mvc.perform(get(PATH + "/42").session(session())).andExpect(status().isNotFound());
+		mvc.perform(put(PATH + "/42").session(session()).contentType(MediaType.APPLICATION_JSON).content(json))
+			.andExpect(status().isNotFound());
+		mvc.perform(delete(PATH + "/42").session(session())).andExpect(status().isNotFound());
+		verify(mapper).update(eq(7L), eq(42L), any());
+		verify(mapper).delete(7L, 42L);
+		when(mapper.update(eq(7L), eq(42L), any())).thenReturn(1);
+		when(mapper.delete(7L, 42L)).thenReturn(1);
+		mvc.perform(put(PATH + "/42").session(session()).contentType(MediaType.APPLICATION_JSON).content(json))
+			.andExpect(status().isOk());
+		mvc.perform(delete(PATH + "/42").session(session())).andExpect(status().isNoContent());
 	}
 
 	private SignedLoginTokenService tokenService(String testSeed) {

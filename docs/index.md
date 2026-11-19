@@ -23,3 +23,6 @@
 
 - 배포 전에 기존 업무 API의 MySQL 스키마에서 [독서 기록 테이블 DDL](work-reading-record-schema.sql)을 적용합니다. 운영 DB에 자동 적용하지 않습니다.
 - `GET /api/work/reading-records`는 로그인한 사용자의 기록만 최신 등록 순서로 반환합니다. `POST`는 새 기록을 등록합니다.
+
+- 목록 검색은 `title`, `author`의 부분 일치와 `from`, `to`(ISO 날짜)의 독서기간 겹침을 지원합니다. 양쪽 경계를 포함합니다. 시작일만 있으면 진행 중, 완료일만 있으면 완료일 하루로 해석하며, 날짜가 없으면 기간 검색에서만 제외합니다.
+- `GET /api/work/reading-records/{id}`로 상세, `PUT`으로 수정, `DELETE`로 삭제합니다. 자신의 기록만 접근할 수 있습니다.
