@@ -46,14 +46,14 @@ class WorkReadingRecordControllerTests {
 
 	@Test
 	void authenticatedUserListsAndCreatesOnlyWithOwnSessionId() throws Exception {
-		when(mapper.selectByOwner(7L, null, null, null, null)).thenReturn(List.of());
+		when(mapper.selectByOwner(7L, null, null, null, null, null)).thenReturn(List.of());
 		mvc.perform(get(PATH).session(session())).andExpect(status().isOk())
 			.andExpect(header().string("Cache-Control", "no-store")).andExpect(content().json("[]"));
 		String value = "가".repeat(200);
 		mvc.perform(post(PATH).session(session()).contentType(MediaType.APPLICATION_JSON)
 			.content("{\"title\":\" 책 \",\"author\":\"작가\",\"rating\":4.5,\"content\":\"" + value + "\"}"))
 			.andExpect(status().isCreated());
-		verify(mapper).selectByOwner(7L, null, null, null, null);
+		verify(mapper).selectByOwner(7L, null, null, null, null, null);
 		verify(mapper).insert(eq(7L), argThat(row -> row.title().equals("책")
 			&& row.rating().toPlainString().equals("4.5") && row.content().equals(value)));
 	}
@@ -79,7 +79,7 @@ class WorkReadingRecordControllerTests {
 		mvc.perform(get(PATH).cookie(new Cookie(WorkSessionPolicy.COOKIE_WORK_USER_NO, wrongKey)))
 			.andExpect(status().isUnauthorized());
 		mvc.perform(get(PATH).session(session()).param("owner", "8")).andExpect(status().isOk());
-		verify(mapper).selectByOwner(7L, null, null, null, null);
+		verify(mapper).selectByOwner(7L, null, null, null, null, null);
 		verifyNoMoreInteractions(mapper);
 	}
 
@@ -108,6 +108,22 @@ class WorkReadingRecordControllerTests {
 		mvc.perform(put(PATH + "/42").session(session()).contentType(MediaType.APPLICATION_JSON).content(json))
 			.andExpect(status().isOk());
 		mvc.perform(delete(PATH + "/42").session(session())).andExpect(status().isNoContent());
+	}
+
+	@Test
+	void validatesReadingRoundAndPassesRereadFilter() throws Exception {
+		mvc.perform(get(PATH).session(session()).param("reread", "true")).andExpect(status().isOk());
+		verify(mapper).selectByOwner(7L, null, null, null, null, true);
+		for (String round : List.of("0", "-1", "1.5", "2147483648")) {
+			mvc.perform(post(PATH).session(session()).contentType(MediaType.APPLICATION_JSON)
+				.content("{\"title\":\"책\",\"author\":\"작가\",\"readingRound\":" + round + "}"))
+				.andExpect(status().isBadRequest());
+		}
+		mvc.perform(post(PATH).session(session()).contentType(MediaType.APPLICATION_JSON)
+			.content("{\"title\":\"책\",\"author\":\"작가\",\"readingRound\":3,\"reread\":true}"))
+			.andExpect(status().isCreated());
+		verify(mapper).insert(eq(7L), argThat(record -> record.readingRound().intValueExact() == 3 && record.reread()));
+		verifyNoMoreInteractions(mapper);
 	}
 
 	private SignedLoginTokenService tokenService(String testSeed) {

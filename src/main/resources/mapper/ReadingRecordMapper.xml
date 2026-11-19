@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.xodud1202.springbackend.mapper.ReadingRecordMapper">
-	<sql id="recordColumns">ID, TITLE, AUTHOR, TRANSLATOR, STARTED_ON, COMPLETED_ON, CONTENT, RATING, NOTES</sql>
+	<sql id="recordColumns">ID, TITLE, AUTHOR, TRANSLATOR, STARTED_ON, COMPLETED_ON, CONTENT, RATING, NOTES, READING_ROUND, REREAD</sql>
 	<select id="selectByOwner" resultType="com.xodud1202.springbackend.domain.work.reading.ReadingRecord">
 		SELECT <include refid="recordColumns"/>
 		FROM WORK_READING_RECORD
 		WHERE WORK_USER_NO = #{owner}
+		<if test="reread != null">AND REREAD = #{reread}</if>
 		<if test="title != null">AND LOCATE(LOWER(#{title}), LOWER(TITLE)) &gt; 0</if>
 		<if test="author != null">AND LOCATE(LOWER(#{author}), LOWER(AUTHOR)) &gt; 0</if>
 		<if test="from != null or to != null">AND (STARTED_ON IS NOT NULL OR COMPLETED_ON IS NOT NULL)</if>
@@ -23,6 +24,8 @@
 			TRANSLATOR = #{record.translator,jdbcType=VARCHAR}, STARTED_ON = #{record.startedOn,jdbcType=DATE},
 			COMPLETED_ON = #{record.completedOn,jdbcType=DATE}, CONTENT = #{record.content,jdbcType=VARCHAR},
 			RATING = #{record.rating,jdbcType=DECIMAL}, NOTES = #{record.notes,jdbcType=VARCHAR}
+			<if test="record.readingRound != null">, READING_ROUND = #{record.readingRound}</if>
+			<if test="record.reread != null">, REREAD = #{record.reread}</if>
 		WHERE WORK_USER_NO = #{owner} AND ID = #{id}
 	</update>
 	<delete id="delete">
@@ -30,10 +33,11 @@
 	</delete>
 	<insert id="insert">
 		INSERT INTO WORK_READING_RECORD
-			(WORK_USER_NO, TITLE, AUTHOR, TRANSLATOR, STARTED_ON, COMPLETED_ON, CONTENT, RATING, NOTES)
+			(WORK_USER_NO, TITLE, AUTHOR, TRANSLATOR, STARTED_ON, COMPLETED_ON, CONTENT, RATING, NOTES, READING_ROUND, REREAD)
 		VALUES
 			(#{owner}, #{record.title}, #{record.author}, #{record.translator,jdbcType=VARCHAR},
 			#{record.startedOn,jdbcType=DATE}, #{record.completedOn,jdbcType=DATE},
-			#{record.content,jdbcType=VARCHAR}, #{record.rating,jdbcType=DECIMAL}, #{record.notes,jdbcType=VARCHAR})
+			#{record.content,jdbcType=VARCHAR}, #{record.rating,jdbcType=DECIMAL}, #{record.notes,jdbcType=VARCHAR},
+			COALESCE(#{record.readingRound,jdbcType=INTEGER}, 1), COALESCE(#{record.reread,jdbcType=BOOLEAN}, FALSE))
 	</insert>
 </mapper>

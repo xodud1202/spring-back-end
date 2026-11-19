@@ -11,7 +11,7 @@ import java.util.List;
 @Mapper
 public interface ReadingRecordMapper {
 	List<ReadingRecord> selectByOwner(@Param("owner") Long owner, @Param("title") String title,
-		@Param("author") String author, @Param("from") LocalDate from, @Param("to") LocalDate to);
+		@Param("author") String author, @Param("from") LocalDate from, @Param("to") LocalDate to, @Param("reread") Boolean reread);
 
 	ReadingRecord selectOne(@Param("owner") Long owner, @Param("id") long id);
 

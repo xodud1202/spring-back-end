@@ -27,11 +27,12 @@ public class WorkReadingRecordController extends WorkControllerSupport {
 		@RequestParam(name = "title", required = false) String title,
 		@RequestParam(name = "author", required = false) String author,
 		@RequestParam(name = "from", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-		@RequestParam(name = "to", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
+		@RequestParam(name = "to", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+		@RequestParam(name = "reread", required = false) Boolean reread
 	) {
 		Long owner = resolveRequiredWorkUserNo(request);
 		return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-			.body(readingRecordService.getReadingRecords(owner, title, author, from, to));
+			.body(readingRecordService.getReadingRecords(owner, title, author, from, to, reread));
 	}
 
 	@GetMapping("/{id}")

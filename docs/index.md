@@ -26,3 +26,6 @@
 
 - 목록 검색은 `title`, `author`의 부분 일치와 `from`, `to`(ISO 날짜)의 독서기간 겹침을 지원합니다. 양쪽 경계를 포함합니다. 시작일만 있으면 진행 중, 완료일만 있으면 완료일 하루로 해석하며, 날짜가 없으면 기간 검색에서만 제외합니다.
 - `GET /api/work/reading-records/{id}`로 상세, `PUT`으로 수정, `DELETE`로 삭제합니다. 자신의 기록만 접근할 수 있습니다.
+
+- 기존 설치에 [회차·다시 읽기 컬럼 추가 SQL](work-reading-record-v3-migration.sql)을 배포 전에 한 번 적용합니다. 새 설치는 상단의 최신 DDL만 사용합니다.
+- 새 기록의 `readingRound` 기본값은 1, `reread` 기본값은 false입니다. 수정에서 생략된 신규 필드는 기존 값을 유지합니다. 목록 `reread=true`는 다시 읽을 책만, `reread=false`는 미표시 기록만 반환합니다.
