@@ -18,3 +18,8 @@
 - 자동 실행하지 않는 보조 테이블 제안: [news-daily-migration-proposal.sql](news-daily-migration-proposal.sql)
 
 - 뉴스 MCP 전용 OAuth와 운영 설정 절차: [news-oauth.md](news-oauth.md)
+
+### 독서 기록
+
+- 배포 전에 기존 업무 API의 MySQL 스키마에서 [독서 기록 테이블 DDL](work-reading-record-schema.sql)을 적용합니다. 운영 DB에 자동 적용하지 않습니다.
+- `GET /api/work/reading-records`는 로그인한 사용자의 기록만 최신 등록 순서로 반환합니다. `POST`는 새 기록을 등록합니다.

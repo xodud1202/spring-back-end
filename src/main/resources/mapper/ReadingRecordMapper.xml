@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xodud1202.springbackend.mapper.ReadingRecordMapper">
+	<select id="selectByOwner" resultType="com.xodud1202.springbackend.domain.work.reading.ReadingRecord">
+		SELECT ID, TITLE, AUTHOR, TRANSLATOR, STARTED_ON, COMPLETED_ON, CONTENT, RATING, NOTES
+		FROM WORK_READING_RECORD
+		WHERE WORK_USER_NO = #{owner}
+		ORDER BY ID DESC
+	</select>
+	<insert id="insert">
+		INSERT INTO WORK_READING_RECORD
+			(WORK_USER_NO, TITLE, AUTHOR, TRANSLATOR, STARTED_ON, COMPLETED_ON, CONTENT, RATING, NOTES)
+		VALUES
+			(#{owner}, #{record.title}, #{record.author}, #{record.translator,jdbcType=VARCHAR},
+			#{record.startedOn,jdbcType=DATE}, #{record.completedOn,jdbcType=DATE},
+			#{record.content,jdbcType=VARCHAR}, #{record.rating,jdbcType=DECIMAL}, #{record.notes,jdbcType=VARCHAR})
+	</insert>
+</mapper>
